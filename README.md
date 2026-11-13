@@ -1,10 +1,10 @@
 # AdsBookCMS
 
-> Verified against disk: 2026-11-13 @ `1403298` (test command and count, migration count, documentation repository). Previously: 2026-11-02 @ `f53486c` (test count only; the rest retains its recorded evidence and links to the owning documents)
+> Verified against disk: 2026-11-13 @ `1403298` (test command and count, migration count, documentation repository, multi-tenant direction note). Previously: 2026-11-02 @ `f53486c` (test count only; the rest retains its recorded evidence and links to the owning documents)
 
 A self-contained direct-response commerce CMS that installs onto Cloudflare Workers. One install runs one store: storefront, landing-page builder, checkout with COD and online payment, order management, courier dispatch, ad-signal tracking, and an admin dashboard — in a single Worker with its own database.
 
-> **adsbook.id** — a new project started from the AdsBookCMS code base (ADR-038). **Documentation lives in a separate private repository, adsbook.id-docs**, cloned beside this one: `../adsbook.id-docs/docs/`. Every `docs/...` path below is relative to that repository's root. This repository has the code, `AGENTS.md` and the generated `doc/ROUTE-MAP.md`.
+> **adsbook.id** — a new **multi-tenant SaaS** built from the AdsBookCMS code base (ADR-038): many merchants on one platform Worker, one SQLite Durable Object per tenant in Asia-Pacific, merchant domains through Cloudflare for SaaS (PRD A49, ADR-039 Option D Proposed). **The code in this repository is still the single-tenant base**; the sections below describe it as it is today and change as the platform tasks land. **Documentation lives in a separate private repository, adsbook.id-docs**, cloned beside this one: `../adsbook.id-docs/docs/`. Every `docs/...` path below is relative to that repository's root. Start at `../adsbook.id-docs/docs/operations/STATUS.md`.
 
 **Install model: 1 installer = 1 Worker = 1 store.** Isolation comes from the deployment boundary, not from tenant routing inside the application (`docs/architecture/DECISIONS.md` ADR-001).
 
@@ -12,7 +12,7 @@ A self-contained direct-response commerce CMS that installs onto Cloudflare Work
 
 ## Install in one click
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ongkipro/adsbookcms)
+> The inherited "Deploy to Cloudflare" one-click install (one Worker per store) does not apply to adsbook.id: merchants will sign up on the platform instead (PRD A49 REQ-290). The steps below are kept as the single-tenant reference.
 
 Like a WordPress installer, with Cloudflare doing the hosting part:
 

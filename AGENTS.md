@@ -21,7 +21,7 @@ This file is the contract for any AI coding agent or contributor working in this
 
 Exactly one document owns each subject. Do not restate another document's truth; link to it.
 
-Product documentation lives in a separate repository, **adsbook.id-docs**, cloned beside this one (`../adsbook.id-docs/`, i.e. `~/Projects/adsbook.id-docs/`; ADR-038). Paths below starting with `docs/` are relative to that repository's root; `README.md`, `AGENTS.md` and `doc/` are in this repository. Never create `PRD.md`, `TASKS.md`, `STATUS.md`, `DECISIONS.md`, `PLAN.md` or another product document here: extend its owner in `../adsbook.id-docs/docs/` (index: `../adsbook.id-docs/README.md`). `src/**/README.md` files outside `src/pages/` are local boundary notes, subordinate to the document they name. This project is new: never commit, push or add a remote toward `ongkipro/adsbookcms`, and never touch a store of the old fleet.
+Product documentation lives in a separate repository, **adsbook.id-docs**, cloned beside this one (`../adsbook.id-docs/`, i.e. `~/Projects/adsbook.id-docs/`; ADR-038). Paths below starting with `docs/` are relative to that repository's root; `README.md`, `AGENTS.md` and `doc/` are in this repository. Never create `PRD.md`, `TASKS.md`, `STATUS.md`, `DECISIONS.md`, `PLAN.md` or another product document here: extend its owner in `../adsbook.id-docs/docs/` (index: `../adsbook.id-docs/README.md`). `src/**/README.md` files outside `src/pages/` are local boundary notes, subordinate to the document they name. This project is new: never commit, push or add a remote toward `ongkipro/adsbookcms`, and never touch a store of the old fleet. **Direction:** adsbook.id is becoming a multi-tenant SaaS (PRD A49, ADR-039 Option D Proposed: one Worker, one SQLite Durable Object per tenant in APAC, Cloudflare for SaaS; see the `cloudflare` skill reference `references/cloudflare-for-saas.md`). Until the platform tasks land, the code is the single-tenant base and the invariants below describe it; any change that adds tenant routing, a tenant database handle or shared-resource keys follows ADR-039 and needs its cross-tenant test.
 
 | Document | Owns |
 | --- | --- |
@@ -29,14 +29,15 @@ Product documentation lives in a separate repository, **adsbook.id-docs**, clone
 | `AGENTS.md` | Working rules for anyone editing this repository, including this table |
 | `docs/architecture/ARCHITECTURE.md` | System structure, data layer, config resolution, gap register §10 |
 | `docs/architecture/DECISIONS.md` | The one decision index (ADR-001…), status per decision; full text in `adr/`. Append-only |
-| `docs/operations/RELEASE.md` | Deploy, migrations, versioning, rollback, approval boundary |
+| `docs/operations/RELEASE.md` | Single-tenant deploy, migrations, versioning, rollback, approval boundary (scope note: the old fleet; the platform runbook comes with TASK-028) |
 | `docs/architecture/OBSERVABILITY.md` | Logging, failure visibility, what to enable |
 | `docs/operations/INSTALLATION.md` | Standing up a new install |
 | `docs/operations/STATUS.md` | Current state: Now / Next / Blockers, under 12 KB. History up to 2026-11-10 is frozen in `docs/archive/STATUS-2026-11-10.md` |
 | `docs/operations/FLEET.md` | The install fleet: which stores run AdsBookCMS, their version, repository, visibility, infrastructure and per-install merge rules |
 | `docs/product/UNIMPLEMENTED_SPECS.md` | Remaining work and external blockers |
 | `docs/product/PRD.md` | Product requirements |
-| `docs/product/TASKS.md` | Open-task queue, under 50 KB. Finished and full contracts are frozen in `docs/archive/TASKS-<date>.md` |
+| `docs/product/TASKS.md` | Active plan (release 1.10.1, multi-tenant platform), under 50 KB. Finished contracts are frozen in `docs/archive/TASKS-<date>.md` |
+| `docs/product/TASKS-LEGACY-INDEX.md` | Untriaged open rows inherited from the AdsBookCMS ledger |
 | `docs/history/BUILD-LOG.md` | Chronological history. Append-only |
 | `docs/design/DESIGN-SYSTEM.md` | Visual contract |
 | `docs/contracts/STOREFRONT_INTEGRATION.md` | Headless `/api/v1/*` contract |
