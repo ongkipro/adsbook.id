@@ -1,0 +1,19 @@
+---
+import { ProductForm } from '../../../components/admin/ProductForm';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+export const prerender = false;
+
+const productId = Astro.url.searchParams.get('id')?.trim() || '';
+if (!/^\d+$/.test(productId)) return Astro.redirect('/admin/products', 302);
+---
+
+<AdminLayout title="Edit produk" activeMenu="products">
+  <div class="space-y-5">
+    <AdminPageHeader
+      title="Edit produk"
+      description="Perbarui identitas produk dan varian. Product ID tersedia di ringkasan; varian yang sudah dipakai order tidak dapat dihapus."
+    />
+    <ProductForm productId={productId} storeName={Astro.locals.tenant.name} client:load />
+  </div>
+</AdminLayout>

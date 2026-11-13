@@ -1,0 +1,212 @@
+import { POST as POST_RETENTION } from "../pages/api/admin/orders/retention.ts";
+import assert from "node:assert/strict";
+import test from "node:test";
+import { POST } from "../pages/api/record-abandoned-order.ts";
+
+type QueryValue = null | number | string | Uint8Array;
+
+function abandonedRequest(body: Record<string, unknown>) {
+  return new Request("https://shop.example/api/record-abandoned-order", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "cf-connecting-ip": "203.0.113.10",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+const qualifiedLead = {
+  customer_name: "Siti Rahayu",
+  customer_phone: "081234567890",
+};
+
+test("abandoned capture rejects a filled honeypot before any D1 operation", async () => {
+  let databaseOperations = 0;
+  const response = await POST({
+    request: abandonedRequest({
+      ...qualifiedLead,
+      website: "https://spam.example",
+    }),
+    locals: {
+      runtimeEnv: {
+        OMS_DB: {
+          prepare() {
+            databaseOperations += 1;
+            throw new Error("honeypot reached D1");
+          },
+        },
+      },
+    },
+  } as never);
+
+  assert.equal(response.status, 400);
+  // Deliberately indistinguishable from a generic invalid payload: naming the
+  // control tells a bot which field to leave empty next time. The hit is
+  // recorded server-side instead.
+  assert.equal((await response.json() as { code?: string }).code, "VALIDATION_ERROR");
+  assert.equal(databaseOperations, 0);
+});
+
+test("a qualified human lead inside the rate-limit window is recorded", async () => {
+  let spentSlots = 0;
+  // Captures the operator-notification write. Without a `run()` here the
+  // fail-open recorder swallowed its own failure and the lead call site was
+  // never actually exercised.
+  const notificationWrites: QueryValue[][] = [];
+  const database = {
+    prepare(sql: string) {
+      const statement = {
+        bound: [] as QueryValue[],
+        bind(...values: QueryValue[]) {
+          statement.bound = values;
+          return statement;
+        },
+        async run() {
+          if (sql.includes("INSERT OR IGNORE INTO notifications")) {
+            notificationWrites.push(statement.bound);
+          }
+          return { success: true, meta: { changes: 1 } };
+        },
+        async first() {
+          if (
+            sql.includes("FROM orders") &&
+            sql.includes("shipping_status = 'abandoned'")
+          ) {
+            return null;
+          }
+          if (sql.includes("SELECT id FROM stores")) return { id: 1 };
+          if (sql.includes("UPDATE order_number_counters")) {
+            return { last_value: 10001 };
+          }
+          if (sql.includes("SELECT count FROM rate_limits")) return null;
+          if (sql.includes("INSERT INTO rate_limits")) {
+            spentSlots += 1;
+            return { count: spentSlots };
+          }
+          throw new Error(`Unexpected query: ${sql}`);
+        },
+      };
+      return statement;
+    },
+    async batch(statements: unknown[]) {
+      return statements.map((_, index) => ({
+        results:
+          index === statements.length - 1
+            ? [{ id: 1, order_number: "ABN-10001" }]
+            : [],
+      }));
+    },
+  };
+  const response = await POST({
+    request: abandonedRequest({ ...qualifiedLead, website: "" }),
+    locals: {
+      runtimeEnv: {
+        OMS_DB: database,
+      },
+    },
+  } as never);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    action: "created",
+    order_number: "ABN-10001",
+  });
+  assert.equal(spentSlots, 1);
+
+  // An abandoned capture writes no notification. It is a lead to work through
+  // in the abandoned workspace, and it is the one type that arrives in volume —
+  // ringing for it buried the notifications that do matter, a new order and a
+  // payment landing. The row itself is still recorded; only the bell is silent.
+  assert.equal(notificationWrites.length, 0);
+});
+
+test("abandoned capture is rejected when the rate-limit window is exhausted", async () => {
+  let databaseOperations = 0;
+  const response = await POST({
+    request: abandonedRequest(qualifiedLead),
+    locals: {
+      runtimeEnv: {
+        OMS_DB: {
+          prepare(sql: string) {
+            if (sql.includes("SELECT count FROM rate_limits")) {
+              return {
+                bind(...values: QueryValue[]) {
+                  assert.match(String(values[0]), /^record-abandoned-order:203\.0\.113\.10:/);
+                  return { first: async () => ({ count: 10 }) };
+                },
+              };
+            }
+            if (sql.includes("INSERT INTO rate_limits")) {
+              throw new Error("exhausted window was incremented");
+            }
+            databaseOperations += 1;
+            throw new Error("rate-limited request reached D1");
+          },
+        },
+      },
+    },
+  } as never);
+
+  assert.equal(response.status, 429);
+  assert.equal((await response.json() as { code?: string }).code, "RATE_LIMITED");
+  assert.ok(Number(response.headers.get("retry-after")) >= 1);
+  assert.equal(databaseOperations, 0);
+});
+
+test("authenticated retention POST executes the write-side purge", async () => {
+  const statements: string[] = [];
+  const database = {
+    prepare(sql: string) {
+      statements.push(sql);
+      const statement = {
+        bind() {
+          return statement;
+        },
+      };
+      return statement;
+    },
+    async batch() {
+      return [
+        { meta: { changes: 1 } },
+        { meta: { changes: 1 } },
+        { meta: { changes: 2 } },
+      ];
+    },
+  };
+
+  const response = await POST_RETENTION({
+    locals: {
+      admin: { username: "owner", role: "owner" },
+      runtimeEnv: { OMS_DB: database },
+    },
+  } as never);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    deleted_count: 2,
+    retention_days: 14,
+  });
+  assert.equal(statements.length, 3);
+  assert.ok(statements.every((sql) => sql.startsWith("DELETE FROM")));
+});
+
+test("only the retention purge and the guarded lifecycle delete remove an orders row", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const sources: string[] = [];
+  const walk = (dir: URL) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const next = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
+      if (entry.isDirectory()) walk(next);
+      else if (/\.(ts|astro)$/.test(entry.name) && !entry.name.endsWith(".test.ts")) sources.push(next.pathname);
+    }
+  };
+  walk(new URL("../", import.meta.url));
+  const deleters = sources
+    .filter((file) => /DELETE FROM orders\b/.test(readFileSync(file, "utf8")))
+    .map((file) => file.replace(/^.*\/src\//, "src/"))
+    .sort();
+  assert.deepEqual(deleters, ["src/lib/order-lifecycle.ts", "src/lib/order-persistence.ts"]);
+});

@@ -1,0 +1,1032 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import MetaThanksTracker from '../components/storefront/tracking/MetaThanksTracker.astro';
+import { getStorefrontProducts } from '../lib/catalog';
+import { getThanksWhatsappSettings } from '../lib/public-store';
+import Icon from '../components/storefront/shared/Icon.astro';
+import { SELLER_BANK_OPTIONS } from '../lib/payment-brand';
+import {
+  ORDER_STATUS_LABELS,
+  PAYMENT_CHANNEL_LABELS,
+  PAYMENT_STATUS_LABELS,
+  paymentChannelLabel,
+} from '../lib/payment-display';
+
+if (
+  Astro.url.searchParams.has('order_id') ||
+  Astro.url.searchParams.has('order_pk') ||
+  Astro.url.searchParams.has('status_token')
+) return Astro.redirect('/thanks', 303);
+Astro.response.headers.set('Cache-Control', 'no-store');
+
+const products = await getStorefrontProducts(Astro.locals);
+const { phones: csPhones, autoRedirect: thanksWhatsappRedirect } = await getThanksWhatsappSettings(Astro.locals);
+// This store's own logo. It used to be a hardcoded `/images/logo.webp` — the
+// demo store's wordmark — so every install's confirmation page carried another
+// merchant's brand at the moment the customer trusts it most.
+// The image slot's first paint until the script sets the product photo; an
+// empty src would request this page again.
+const storeLogo = Astro.locals.tenant.logo || '/favicon-192.png';
+// The inline script cannot import, so it gets the buyer-facing words as data:
+// every channel this store can hand out, and the two status vocabularies.
+const channelLabels = Object.fromEntries([
+  ...Object.entries(PAYMENT_CHANNEL_LABELS),
+  ...SELLER_BANK_OPTIONS.map(({ code }) => [code, paymentChannelLabel(code, { manualTransfer: true })]),
+]);
+const statusLabels = { payment: PAYMENT_STATUS_LABELS, order: ORDER_STATUS_LABELS };
+const productCatalog = products.map((item) => ({
+  slug: item.slug,
+  productName: item.productName,
+  headline: item.headline,
+  image: item.image,
+  variants: item.variants.map((variant) => ({
+    id: variant.id,
+    label: variant.label,
+    price: variant.price,
+    comparePrice: variant.comparePrice ?? item.comparePrice,
+  })),
+}));
+---
+
+<BaseLayout
+  title={`Terima Kasih - ${Astro.locals.tenant.name}`}
+  description={`Halaman konfirmasi pesanan ${Astro.locals.tenant.name}.`}
+  hideHeader={true}
+  hideFooter={true}
+  noindex
+>
+  <script is:inline slot="head">
+    if (window.location.search) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`);
+    }
+    // A locator in the fragment (`#o=<order>&t=<token>`) wins over whatever this
+    // tab remembers, exactly as it already does on `/payment`. It is what lets a
+    // buyer reach their confirmation when the `sessionStorage` write never
+    // landed — Safari's private mode has historically thrown on any write — and
+    // it matters more here than there, because the server Purchase is only ever
+    // triggered from this page. The fragment is never sent to a server or a
+    // referrer, and it is copied into storage and removed from the address bar
+    // so it is neither on screen nor in history.
+    try {
+      const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const linkedOrder = (fragment.get('o') || '').trim();
+      const linkedToken = (fragment.get('t') || '').trim();
+      if (linkedOrder && linkedToken) {
+        let stored = {};
+        try {
+          stored = JSON.parse(sessionStorage.getItem('thanks_state') || '{}') || {};
+        } catch {
+          stored = {};
+        }
+        if (String(stored.order_pk || '') !== linkedOrder) stored = {};
+        stored = { ...stored, order_pk: linkedOrder, status_token: linkedToken };
+        sessionStorage.setItem('thanks_state', JSON.stringify(stored));
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    } catch {
+      // Storage or history unavailable: the page falls back to whatever this
+      // tab already holds, which is the behaviour that shipped before.
+    }
+    // `MetaPixelBase` gets exactly one `fbq('init')` per pixel id — fbevents
+    // discards every later one in silence — and on this page the eight keys
+    // worth matching on are only known once `/api/order-status` has answered.
+    // BaseLayout renders this head slot ahead of the pixel, so declaring the
+    // wait here is what leaves that single init unspent for the Purchase.
+    // The wait is bounded inside the pixel: a failed fetch costs the matching,
+    // never the PageView.
+    window.__PS_META_AWAIT_MATCHING__ = true;
+  </script>
+  <main id="thanks-shell" hidden class="min-h-screen bg-white py-4 font-sans text-[14px] text-[#111111] antialiased sm:py-8">
+    <MetaThanksTracker tenantName={Astro.locals.tenant.name} />
+    <div class="mx-auto w-full max-w-[480px] overflow-hidden rounded-none border border-[#E5E5E5] bg-white">
+      <header
+        class="relative z-30 flex items-center justify-center border-b border-[#E5E5E5] bg-white px-5 py-4"
+      >
+        <!-- The store's own name. The script used to overwrite this with the
+             product name, so the page the customer trusts most was branded by
+             whatever they happened to buy rather than by the shop. -->
+        <span
+          id="brand-logo"
+          class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#767676]">{Astro.locals.tenant.name}</span
+        >
+      </header>
+    <section class="px-5 pb-5 pt-7 text-center" data-motion="hero">
+      <div
+        class="mx-auto mb-4 grid size-16 place-items-center rounded-full bg-[#121212] text-white"
+        data-motion="success-icon"
+      >
+        <!-- An unpaid online order is not a success yet: it gets the clock and
+             the words "selesaikan pembayaran", never the check mark. -->
+        <span id="hero-icon-done"><Icon name="lucide:circle-check" class="size-9" aria-hidden="true" /></span>
+        <span id="hero-icon-pending" hidden><Icon name="lucide:clock" class="size-9" aria-hidden="true" /></span>
+      </div>
+      <h1
+        id="thanks-title"
+        class="mx-auto mt-2 max-w-[320px] text-[22px] font-semibold leading-tight tracking-[-0.03em] text-[#111111]"
+      >
+        Pesanan berhasil dibuat
+      </h1>
+      <p id="thanks-subtitle" class="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-[#555555]">
+        Pesanan sudah kami terima. Konfirmasi ke admin agar proses verifikasi dan pengiriman lebih cepat.
+      </p>
+    </section>
+
+    <section class="border-y border-[#E5E5E5] bg-[#F5F5F5] px-5 py-5 text-center" data-motion="summary">
+      <!-- #555555, not the #767676 used on white: on the #F5F5F5 panel that
+           lighter grey measures 4.16:1, under the 4.5 AA floor. -->
+      <p id="payment-title" class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#555555]">
+        Bayar saat paket tiba
+      </p>
+      <p id="total-payment-hero" class="mt-1.5 text-[32px] font-bold leading-none tracking-[-0.04em] text-[#111111]">
+        —
+      </p>
+      <span
+        id="payment-badge"
+        class="mt-3 inline-flex items-center rounded-none border border-[#E5E5E5] bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#555555]"
+      >
+        COD · Bayar di Tempat
+      </span>
+    </section>
+
+    <section class="px-5 py-5" data-motion="section">
+      <div class="mb-3 flex items-center justify-between">
+        <h2 class="text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Produk dipesan</h2>
+        <span
+          id="quantity-badge"
+          class="rounded-none border border-[#E5E5E5] bg-[#F5F5F5] px-2.5 py-1 text-[11px] font-normal text-[#555555]"
+          >Qty 1</span
+        >
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="relative grid size-[84px] shrink-0 place-items-center overflow-hidden border border-[#E5E5E5] bg-[#F5F5F5]">
+          <img
+            id="product-image"
+            src={storeLogo}
+            alt=""
+            width="84"
+            height="84"
+            class="h-full w-full object-contain"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3
+            id="product-name"
+            class="line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.02em] text-[#111111]"
+          >
+            —
+          </h3>
+          <p id="variant-label" class="mt-1 text-[14px] font-normal leading-5 text-[#333333]">—</p>
+          <p id="product-headline" class="mt-1 line-clamp-2 text-[12px] leading-5 text-[#767676]"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-[#E5E5E5] px-5 py-5" data-motion="section">
+      <h2 class="mb-3 text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Ringkasan pembayaran</h2>
+      <div class="divide-y divide-[#E5E5E5] overflow-hidden rounded-none border border-[#E5E5E5]">
+        <div class="flex justify-between gap-3 px-4 py-3 text-[13px]">
+          <span class="text-[#555555]">Harga produk</span><span id="product-price" class="font-normal text-[#111111]"
+            >—</span
+          >
+        </div>
+        <div id="discount-row" class="flex justify-between gap-3 px-4 py-3 text-[13px]">
+          <span class="text-[#555555]">Diskon promo</span><span id="discount-display" class="font-normal text-[#a12626]"
+            >—</span
+          >
+        </div>
+        <div id="product-subtotal-row" hidden>
+          <span>Subtotal produk</span><span id="product-subtotal">—</span>
+        </div>
+        <div class="flex justify-between gap-3 px-4 py-3 text-[13px]">
+          <span class="text-[#555555]">Ongkos kirim</span><span id="shipping-cost" class="font-normal text-[#111111]"
+            >—</span
+          >
+        </div>
+        <!-- Without this row the lines above did not add up to the total: the
+             COD service fee or the payment admin fee was in the total and
+             nowhere else (65.000 − 16.000 + 15.000 shown beside 70.500). -->
+        <div id="fee-row" class="flex justify-between gap-3 px-4 py-3 text-[13px]" hidden>
+          <span id="fee-label" class="text-[#555555]">Biaya admin</span><span id="fee-display" class="font-normal text-[#111111]"
+            >—</span
+          >
+        </div>
+        <div class="flex items-center justify-between gap-3 bg-[#F5F5F5] px-4 py-4">
+          <div>
+            <p id="total-label" class="text-[13px] font-normal text-[#111111]">Total COD</p>
+            <p id="total-note" class="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#555555]">
+              Siapkan uang pas saat kurir tiba
+            </p>
+          </div>
+          <strong id="total-payment" class="text-[21px] font-bold tracking-[-0.03em] text-[#111111]"
+            >—</strong
+          >
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-[#E5E5E5] px-5 py-5" data-motion="section">
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <h2 class="text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Data pengiriman</h2>
+      </div>
+      <div class="divide-y divide-[#E5E5E5] text-[13px]">
+        <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
+          <span class="text-[#555555]">No. Pesanan</span><span
+            id="order-id"
+            class="text-right font-normal text-[#111111]">—</span
+          >
+        </div>
+        <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
+          <span class="text-[#555555]">Nama</span><span id="customer-name" class="text-right font-normal text-[#111111]"
+            >—</span
+          >
+        </div>
+        <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
+          <span class="text-[#555555]">WhatsApp</span><span
+            id="customer-phone"
+            data-format="phone"
+            class="text-right font-normal text-[#111111]">—</span
+          >
+        </div>
+        <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
+          <span class="text-[#555555]">Alamat</span><span id="full-address" class="text-right leading-6 text-[#111111]"
+            >—</span
+          >
+        </div>
+        <div id="area-row" class="grid grid-cols-[112px_1fr] gap-3 py-3">
+          <span class="text-[#555555]">Area</span><span id="area-display" class="text-right font-normal text-[#111111]"
+            >—</span
+          >
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-[#E5E5E5] bg-[#F5F5F5] px-5 py-5" data-motion="section">
+      <h2 id="status-title" class="mb-4 text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Status pesanan</h2>
+      <div class="space-y-4">
+        <div class="grid grid-cols-[18px_1fr] gap-3">
+          <span class="mt-0.5 size-4 rounded-full bg-[#121212] ring-4 ring-[#F3F3F3]"></span>
+          <div>
+            <p id="step-one-title" class="text-[13px] font-normal text-[#111111]">Pesanan diterima</p><p
+              id="step-one-copy"
+              class="mt-0.5 text-xs text-[#555555]"
+            >
+              Data order berhasil masuk.
+            </p>
+          </div>
+        </div>
+        <div class="grid grid-cols-[18px_1fr] gap-3">
+          <span class="mt-1 size-3 rounded-full bg-white ring-2 ring-[#121212] ring-offset-2 ring-offset-[#F5F5F5]"
+          ></span>
+          <div>
+            <p id="step-two-title" class="text-[13px] font-normal text-[#111111]">Verifikasi admin</p><p
+              id="step-two-copy"
+              class="mt-0.5 text-xs text-[#555555]"
+            >
+              Konfirmasi WhatsApp membantu proses lebih cepat.
+            </p>
+          </div>
+        </div>
+        <!-- The future step is de-emphasised by colour, not by `opacity-60`.
+             Fading the whole row dragged its copy to an effective #959595 on
+             the #F5F5F5 panel — 2.74:1, well under the AA floor — so the step a
+             customer most wants to read was the least legible one. -->
+        <div class="grid grid-cols-[18px_1fr] gap-3">
+          <span class="mt-0.5 size-4 rounded-full bg-[#E5E5E5] ring-1 ring-[#E5E5E5]"></span>
+          <div>
+            <p id="step-three-title" class="text-[13px] font-normal text-[#555555]">Packing & pengiriman</p><p
+              id="step-three-copy"
+              class="mt-0.5 text-xs text-[#555555]"
+            >
+              Paket dikirim setelah data valid.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="payment-note" class="border-t border-[#E5E5E5] bg-[#F5F5F5] px-5 py-5" data-motion="section">
+      <div class="rounded-none border border-[#E5E5E5] bg-white p-4">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <h2 id="note-title" class="text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">
+            Catatan pembayaran COD
+          </h2>
+          <span id="note-badge" class="shrink-0 rounded-none border border-[#E5E5E5] bg-[#F5F5F5] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#555555]">Wajib dibaca</span>
+        </div>
+        <div id="payment-details" class="mb-4 divide-y divide-[#E5E5E5] rounded-none border border-[#E5E5E5] bg-white" hidden>
+          <div class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
+            <span class="text-[#555555]">Channel</span><strong id="payment-channel" class="text-right font-semibold text-[#111111]">-</strong>
+          </div>
+          <div class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
+            <span class="text-[#555555]">Nominal order</span><strong id="payment-amount" class="text-right font-semibold text-[#111111]">-</strong>
+          </div>
+          <div id="payment-admin-fee-row" class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
+            <span class="text-[#555555]">Biaya admin</span><strong id="payment-admin-fee" class="text-right font-semibold text-[#111111]">-</strong>
+          </div>
+          <div class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
+            <span class="text-[#555555]">Total tagihan</span><strong id="payment-billed-total" class="text-right font-semibold text-[#111111]">-</strong>
+          </div>
+          <div id="payment-va-row" class="flex justify-between gap-3 px-3 py-2.5 text-[13px]" hidden>
+            <span class="text-[#555555]">Virtual Account</span><strong id="payment-va" data-format="account" class="text-right font-mono font-bold tabular-nums text-[#111111]"></strong>
+          </div>
+          <div id="payment-code-row" class="flex justify-between gap-3 px-3 py-2.5 text-[13px]" hidden>
+            <span class="text-[#555555]">Kode pembayaran</span><strong id="payment-code" class="break-all text-right font-mono font-bold text-[#111111]"></strong>
+          </div>
+          <!-- The QRIS payload used to be printed here as raw text. A customer
+               cannot pay a 150-character string; it needs to be the code their
+               banking app scans, which is what this canvas renders. -->
+          <div id="payment-qr-row" class="px-3 py-3.5 text-center" hidden>
+            <span class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-[#767676]">Scan QRIS untuk membayar</span>
+            <div class="mx-auto mt-2.5 grid size-[220px] max-w-full place-items-center rounded-none border border-[#E5E5E5] bg-white p-2.5">
+              <canvas id="payment-qr-canvas" class="h-auto max-h-[200px] w-auto max-w-full" aria-label="QR code pembayaran"></canvas>
+              <img id="payment-qr-image" class="h-auto max-h-[200px] w-auto max-w-full" alt="QR code pembayaran" hidden />
+            </div>
+            <p class="mx-auto mt-2 max-w-[300px] text-[11px] leading-5 text-[#555555]">
+              Buka m-Banking atau e-Wallet, pilih menu Scan / QRIS, lalu arahkan ke kode di atas.
+            </p>
+          </div>
+          <div id="payment-expiry-row" class="flex justify-between gap-3 px-3 py-2.5 text-[13px]" hidden>
+            <span class="text-[#555555]">Batas pembayaran</span><strong id="payment-expiry" class="text-right font-semibold text-[#111111]"></strong>
+          </div>
+        </div>
+        <p id="payment-failure" class="mb-4 rounded-none border border-[#f2c4c4] bg-[#fdf1f1] p-3 text-[13px] leading-5 text-[#a12626]" hidden></p>
+        <div id="note-list" class="space-y-3 text-[13px] leading-6 text-[#555555]">
+          <div class="grid grid-cols-[18px_1fr] gap-2.5">
+            <span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>
+              Siapkan uang tunai sesuai total tagihan: <span id="note-total" class="font-bold text-[#111111]"
+                >—</span
+              >.
+            </p>
+          </div>
+          <div class="grid grid-cols-[18px_1fr] gap-2.5">
+            <span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>
+              Pastikan nomor WhatsApp <span id="note-phone" data-format="phone" class="font-normal text-[#111111]">—</span> tetap
+              aktif untuk konfirmasi admin atau kurir.
+            </p>
+          </div>
+          <div class="grid grid-cols-[18px_1fr] gap-2.5">
+            <span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>
+              Mohon terima paket saat kurir datang. Jika alamat sulit ditemukan, kurir dapat menghubungi nomor tersebut.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="whatsapp-section" class="px-5 py-6 text-center" data-motion="cta">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#767676]">Langkah berikutnya</p>
+      <h2 id="cta-title" class="mt-1.5 text-[20px] font-semibold tracking-[-0.03em] text-[#111111]">
+        Konfirmasi ke admin
+      </h2>
+      <p id="cta-copy" class="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-[#555555]">
+        Kirim pesan konfirmasi supaya admin segera validasi order dan menyiapkan pengiriman.
+      </p>
+
+      <!-- Two separate ways back to paying. `payment-link` opens the provider's
+           own page when the channel has one; `payment-page-link` returns to
+           /payment, which is the only route that shows a QRIS code or a VA
+           number. Without the second, a customer who landed here with an unpaid
+           QRIS order had nothing to act on at all. -->
+      <a
+        id="payment-link"
+        href="#"
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        title={`Lanjutkan pembayaran pesanan ${Astro.locals.tenant.name}`}
+        hidden
+        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-none bg-[var(--sf-accent,#C2410C)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-[var(--sf-accent-strong,#9A3412)]"
+        >Lanjutkan Pembayaran</a
+      >
+      <a
+        id="payment-page-link"
+        href="/payment"
+        title={`Lihat instruksi pembayaran pesanan ${Astro.locals.tenant.name}`}
+        hidden
+        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-none bg-[var(--sf-accent,#C2410C)] px-4 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#9A3412)]"
+      >
+        <Icon name="lucide:wallet" class="size-4" aria-hidden="true" />
+        <span id="payment-page-label">Lihat Instruksi Pembayaran</span>
+      </a>
+      <a
+        id="wa-confirm"
+        href="#"
+        target="_blank"
+        rel="nofollow noopener noreferrer"
+        title={`Konfirmasi pesanan ${Astro.locals.tenant.name} melalui WhatsApp`}
+        data-auto-redirect={thanksWhatsappRedirect ? '1' : '0'}
+        data-store-name={Astro.locals.tenant.name}
+        class="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-none border border-[var(--sf-accent,#C2410C)] bg-[var(--sf-accent,#C2410C)] px-4 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#9A3412)] data-[tone=secondary]:bg-white data-[tone=secondary]:text-[#111111] data-[tone=secondary]:hover:bg-[#F5F5F5]"
+      >
+        <Icon name="lucide:message-circle" class="size-5" aria-hidden="true" />
+        <span id="wa-label">Konfirmasi via WhatsApp</span>
+      </a>
+      <p id="wa-redirect-note" hidden role="status" aria-live="polite" class="mt-3 text-[12px] leading-5 text-[#555555]">
+        Mengalihkan ke WhatsApp admin<span id="wa-redirect-count"></span>…
+        <button id="wa-redirect-cancel" type="button" class="ml-1 font-semibold text-[#121212] underline underline-offset-2">Tetap di halaman ini</button>
+      </p>
+    </section>
+
+    <footer class="border-t border-[#E5E5E5] px-5 py-5 text-center text-xs text-[#767676]">
+      Terima kasih telah berbelanja di {Astro.locals.tenant.name}.
+    </footer>
+    </div>
+  </main>
+
+  <style>
+    /* The gradient `.logo-text` wordmark that used to live here is gone with the
+       product-name header it styled. The store name renders in the storefront's
+       own micro-label style instead, so this page reads as the same shop the
+       customer just bought from. */
+    @media (prefers-reduced-motion: no-preference) {
+      [data-motion] {
+        animation: thanks-fade-up 360ms ease-out both;
+        will-change: opacity, transform;
+      }
+
+      [data-motion='success-icon'] {
+        animation-name: thanks-pop-in;
+        animation-duration: 420ms;
+      }
+
+      [data-motion='hero'] {
+        animation-delay: 40ms;
+      }
+
+      [data-motion='summary'] {
+        animation-delay: 100ms;
+      }
+
+      [data-motion='section']:nth-of-type(3) {
+        animation-delay: 160ms;
+      }
+
+      [data-motion='section']:nth-of-type(4) {
+        animation-delay: 205ms;
+      }
+
+      [data-motion='section']:nth-of-type(5) {
+        animation-delay: 250ms;
+      }
+
+      [data-motion='section']:nth-of-type(6) {
+        animation-delay: 295ms;
+      }
+
+      [data-motion='section']:nth-of-type(7) {
+        animation-delay: 340ms;
+      }
+
+      [data-motion='cta'] {
+        animation-delay: 385ms;
+      }
+    }
+
+    @keyframes thanks-fade-up {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes thanks-pop-in {
+      from {
+        opacity: 0;
+        transform: scale(0.92);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+  </style>
+
+  <script is:inline define:vars={{ csPhones, productCatalog, storeLogo, channelLabels, statusLabels }}>
+    const fmt = (n) =>
+      `Rp${Math.round(Number(n || 0))
+        .toLocaleString('id-ID')
+        .replace(/,/g, '.')}`;
+    const escapeHtml = (value) =>
+      String(value ?? '').replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[character] ?? character);
+    let clientState = null;
+    try {
+      clientState = JSON.parse(sessionStorage.getItem('thanks_state') || 'null');
+    } catch {
+      clientState = null;
+    }
+
+    const hasClientState = Boolean(clientState);
+    if (!hasClientState) {
+      document.documentElement.hidden = true;
+      window.location.replace('/produk');
+    }
+
+    const activeState = clientState || {};
+    const pick = (key, fallback = '') => String(activeState?.[key] ?? fallback);
+    const pickNum = (key, fallback = 0) => Number(activeState?.[key] ?? fallback);
+
+    const orderId = pick('order_id', '');
+    const orderPk = pick('order_pk', orderId);
+    const statusToken = pick('status_token', '');
+    const paymentMethod = pick('payment_method', pick('pm', 'cod')).toLowerCase();
+    const paymentUrl = pick('payment_url', '');
+    const leadOnly = ['1', 'true'].includes(pick('lead_only', '').toLowerCase());
+    const paymentStatus = pick('payment_status', 'unpaid').toLowerCase();
+    const paymentChannel = pick('payment_channel', '');
+    const paymentAmount = pickNum('payment_amount', 0);
+    const paymentAdminFee = pickNum('payment_admin_fee', 0);
+    // A QRIS/VA fee the seller bears is between the store and AutoLaris
+    // (Paduka, 2026-11-02): the buyer is not shown it. Same rule as /payment
+    // and paymentFeeIsSellers(): a bill that did not grow is the seller's.
+    const sellerBearsPaymentFee = pick('payment_fee_bearer', 'buyer') === 'seller'
+      || (paymentAdminFee > 0 && Math.round(pickNum('total_payment', 0)) === Math.round(pickNum('payment_amount', 0)));
+    const paymentVirtualAccount = pick('payment_virtual_account', '');
+    const paymentQrPayload = pick('payment_qr_payload', '');
+    const paymentCode = pick('payment_code', '');
+    const paymentExpiresAt = pick('payment_expires_at', '');
+    const paymentError = pick('payment_error', '');
+    const name = pick('name', 'Bapak/Ibu');
+    const phone = pick('phone', '-');
+    const address = pick('address', '-');
+    const district = pick('district', '');
+    const city = pick('city', '');
+    const province = pick('province', '');
+    const postalCode = pick('postal_code', '');
+    const rawProductName = pick('product_name', '');
+    const rawVariantLabel = pick('variant_label', rawProductName);
+    const variantUniqueId = pick('variant_unique_id', '');
+    const catalogProduct = productCatalog.find(
+      (item) =>
+        item.productName.toLowerCase() === rawProductName.toLowerCase() ||
+        item.slug.toLowerCase() === rawProductName.toLowerCase(),
+    );
+    const catalogVariant = catalogProduct?.variants.find(
+      (variant) => variant.id === variantUniqueId || variant.label.toLowerCase() === rawVariantLabel.toLowerCase(),
+    );
+    const productName = catalogProduct?.productName || rawProductName;
+    const variantLabel = catalogVariant?.label || rawVariantLabel;
+    const productImage = pick('product_image', catalogProduct?.image || '');
+    const productHeadline = pick('product_headline', catalogProduct?.headline || '');
+    const quantity = Math.max(1, pickNum('quantity', 1));
+    const productPrice = pickNum('product_price', pickNum('value', catalogVariant?.price || 0));
+    const productTotal = productPrice * quantity;
+    const comparePrice = pickNum('compare_price', catalogVariant?.comparePrice || 0);
+    const shippingCost = pickNum('shipping_cost', 0);
+    const totalPayment = pickNum('total_payment', productTotal + shippingCost);
+    const discount = Math.max(0, (comparePrice - productPrice) * quantity);
+    const isCod = paymentMethod === 'cod';
+    const isOnlinePayment = !isCod && !leadOnly;
+    // A person checks a manual transfer; the provider confirms a VA or QRIS.
+    // Only the first ever needs a proof of payment sent to the store.
+    const isManualTransfer =
+      paymentMethod === 'manual_transfer' || ['1', 'true'].includes(pick('payment_manual_transfer', '').toLowerCase());
+    const channelName =
+      channelLabels[paymentChannel.toUpperCase()] || paymentChannel || (paymentMethod === 'qris' ? 'QRIS' : 'Pembayaran online');
+    const paymentWords = (status) => statusLabels.payment[String(status).toLowerCase()] || String(status).replace(/_/g, ' ');
+    const orderWords = (status) => statusLabels.order[String(status).toLowerCase()] || String(status).replace(/_/g, ' ');
+    const isPaid = ['paid', 'settled', 'success'].includes(paymentStatus);
+    const area = [district, city, province, postalCode].filter(Boolean).join(', ') || '-';
+    const setPaymentDetail = (rowId, valueId, value) => {
+      const row = document.getElementById(rowId);
+      const target = document.getElementById(valueId);
+      if (!row || !target || !value) return;
+      row.hidden = false;
+      target.textContent = value;
+    };
+
+    // The header keeps the store name the server rendered. It used to be
+    // overwritten with the product name here.
+    document.getElementById('order-id').textContent = orderId.startsWith('#') ? orderId : `#${orderId}`;
+    document.getElementById('customer-name').textContent = name;
+    document.getElementById('customer-phone').textContent = phone;
+    document.getElementById('full-address').textContent = address;
+    const areaRow = document.getElementById('area-row');
+    document.getElementById('area-display').textContent = area;
+    if (!area || area === '-') areaRow.hidden = true;
+    document.getElementById('product-name').textContent = productName;
+    document.getElementById('variant-label').textContent = variantLabel;
+    document.getElementById('quantity-badge').textContent = `Qty ${quantity}`;
+    const headlineEl = document.getElementById('product-headline');
+    if (productHeadline && productHeadline.trim().toLowerCase() !== productName.trim().toLowerCase())
+      headlineEl.textContent = productHeadline;
+    else headlineEl.hidden = true;
+    const productImageElement = document.getElementById('product-image');
+    if (productImage) {
+      productImageElement.setAttribute('src', productImage);
+      productImageElement.setAttribute('alt', productName);
+    } else {
+      productImageElement.hidden = true;
+    }
+    const productDisplayTotal = comparePrice > productPrice ? comparePrice * quantity : productTotal;
+    document.getElementById('product-price').textContent = fmt(productDisplayTotal);
+    document.getElementById('product-subtotal').textContent = fmt(productTotal);
+    document.getElementById('shipping-cost').textContent = leadOnly
+      ? 'Dikonfirmasi admin'
+      : shippingCost > 0
+        ? fmt(shippingCost)
+        : 'Dikonfirmasi admin';
+    // Whatever the total carries beyond product and shipping is a fee the buyer
+    // pays; it gets its own line so the summary adds up.
+    const feeAmount = Math.round((totalPayment || 0) - productTotal - shippingCost);
+    if (!leadOnly && shippingCost > 0 && feeAmount > 0) {
+      document.getElementById('fee-row').hidden = false;
+      document.getElementById('fee-label').textContent = isCod ? 'Biaya layanan COD' : 'Biaya admin pembayaran';
+      document.getElementById('fee-display').textContent = fmt(feeAmount);
+    }
+    if (discount > 0) document.getElementById('discount-display').textContent = `-${fmt(discount)}`;
+    else {
+      document.getElementById('discount-row')?.remove();
+      document.getElementById('product-subtotal-row')?.remove();
+    }
+    document.getElementById('total-payment').textContent = fmt(totalPayment || productPrice || 0);
+    document.getElementById('total-payment-hero').textContent = fmt(totalPayment || productPrice || 0);
+    document.getElementById('note-total').textContent = fmt(totalPayment || productPrice || 0);
+    document.getElementById('note-phone').textContent = phone;
+
+
+    if (leadOnly) {
+      document.getElementById('thanks-title').textContent = 'Pesanan berhasil dibuat';
+      document.getElementById('thanks-subtitle').textContent =
+        'Order Anda sudah masuk. Customer Service akan menghubungi untuk mengonfirmasi biaya admin, ongkir, dan detail pengiriman.';
+      document.getElementById('payment-title').textContent = 'Estimasi harga produk';
+      document.getElementById('payment-badge').textContent = 'COD · Total Menyusul';
+      document.getElementById('total-label').textContent = 'Estimasi produk';
+      document.getElementById('total-note').textContent = 'Belum termasuk biaya admin dan pengiriman';
+      document.getElementById('status-title').textContent = 'Status pesanan';
+      document.getElementById('step-one-title').textContent = 'Order diterima';
+      document.getElementById('step-one-copy').textContent = 'Pesanan berhasil masuk ke sistem.';
+      document.getElementById('step-two-title').textContent = 'Konfirmasi admin';
+      document.getElementById('step-two-copy').textContent =
+        'Customer Service menghubungi untuk mengonfirmasi biaya admin, ongkir, dan detail pengiriman.';
+      document.getElementById('step-three-title').textContent = 'Order diproses';
+      document.getElementById('step-three-copy').textContent = 'Pesanan diproses setelah detail akhir disetujui.';
+      document.getElementById('note-title').textContent = 'Catatan konfirmasi COD';
+      document.getElementById('note-list').innerHTML = `
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Nominal saat ini hanya estimasi harga produk: <span class="font-bold text-[#111111]">${fmt(productTotal || productPrice || 0)}</span>.</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Biaya admin, ongkir, dan total akhir dikonfirmasi Customer Service ke WhatsApp Anda di nomor <span class="font-normal text-[#111111]">${escapeHtml(phone)}</span>.</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Pastikan nomor aktif agar pesanan COD bisa segera diproses.</p></div>`;
+      document.getElementById('cta-title').textContent = 'Hubungi admin';
+      document.getElementById('cta-copy').textContent =
+        'Jika ingin mempercepat proses, hubungi Customer Service untuk konfirmasi biaya dan pengiriman.';
+    } else if (isOnlinePayment && isPaid) {
+      document.getElementById('thanks-title').textContent = 'Pembayaran berhasil';
+      document.getElementById('thanks-subtitle').textContent =
+        'Pembayaran sudah terkonfirmasi. Pesanan Anda segera diperiksa untuk proses pengiriman.';
+      document.getElementById('payment-title').textContent = 'Total pembayaran';
+      const paidBadge = document.getElementById('payment-badge');
+      paidBadge.textContent = `${paymentMethod === 'qris' ? 'QRIS' : channelName} · Lunas`;
+      // Swap only the three colour classes; the shape and layout stay as the
+      // server rendered them.
+      paidBadge.classList.remove('border-[#E5E5E5]', 'bg-white', 'text-[#555555]');
+      paidBadge.classList.add('border-[#121212]', 'bg-[#F3F3F3]', 'text-[#333333]');
+      document.getElementById('total-label').textContent = 'Total lunas';
+      document.getElementById('total-note').textContent = 'Pembayaran berhasil diverifikasi';
+      document.getElementById('status-title').textContent = 'Status pesanan';
+      document.getElementById('step-one-title').textContent = 'Pesanan dibuat';
+      document.getElementById('step-one-copy').textContent = 'Data order berhasil masuk.';
+      document.getElementById('step-two-title').textContent = 'Pembayaran berhasil';
+      document.getElementById('step-two-copy').textContent = 'Pembayaran telah diterima dan dikonfirmasi.';
+      document.getElementById('step-three-title').textContent = 'Menunggu proses pengiriman';
+      document.getElementById('step-three-copy').textContent = 'Admin akan memeriksa pesanan sebelum menyiapkan pengiriman.';
+      document.getElementById('note-title').textContent = 'Pembayaran terkonfirmasi';
+      document.getElementById('note-badge').textContent = 'Lunas';
+      document.getElementById('payment-details').hidden = false;
+      document.getElementById('payment-channel').textContent = channelName;
+      document.getElementById('payment-amount').textContent = fmt(paymentAmount || totalPayment);
+      document.getElementById('payment-admin-fee').textContent = fmt(paymentAdminFee);
+      document.getElementById('payment-admin-fee-row').hidden = sellerBearsPaymentFee || !paymentAdminFee;
+      document.getElementById('payment-billed-total').textContent = fmt(totalPayment);
+      document.getElementById('note-list').innerHTML = `
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Pembayaran sebesar <span class="font-bold text-[#111111]">${fmt(totalPayment || productTotal || productPrice || 0)}</span> sudah diterima.</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Simpan nomor pesanan <span class="font-semibold text-[#111111]">${escapeHtml(orderId)}</span> untuk mengecek proses berikutnya.</p></div>`;
+      document.getElementById('cta-title').textContent = 'Butuh bantuan?';
+      document.getElementById('cta-copy').textContent =
+        'Hubungi admin jika ada pertanyaan tentang pembayaran atau pengiriman.';
+      document.getElementById('wa-label').textContent = 'Hubungi Admin';
+      document.getElementById('wa-confirm').dataset.tone = 'secondary';
+    } else if (isOnlinePayment) {
+      // Not paid yet: this is a to-do page, not a success page.
+      document.getElementById('hero-icon-done').hidden = true;
+      document.getElementById('hero-icon-pending').hidden = false;
+      document.getElementById('thanks-title').textContent = 'Selesaikan pembayaran';
+      document.getElementById('thanks-subtitle').textContent = isManualTransfer
+        ? 'Pesanan sudah tercatat. Transfer sesuai total, lalu kirim bukti transfer ke admin agar segera diproses.'
+        : 'Pesanan sudah tercatat. Bayar sebelum batas waktu; status berubah otomatis setelah pembayaran diterima.';
+      document.getElementById('payment-title').textContent = 'Total yang harus dibayar';
+      document.getElementById('payment-badge').textContent = `${channelName} · Belum dibayar`;
+      document.getElementById('total-label').textContent = 'Total pembayaran';
+      document.getElementById('total-note').textContent = 'Bayar sesuai nominal agar mudah diverifikasi';
+      document.getElementById('status-title').textContent = 'Status pembayaran';
+      document.getElementById('step-one-title').textContent = 'Pesanan dibuat';
+      document.getElementById('step-one-copy').textContent = 'Data order berhasil masuk.';
+      document.getElementById('step-two-title').textContent = 'Menunggu pembayaran';
+      document.getElementById('step-two-copy').textContent = isManualTransfer
+        ? 'Setelah transfer, kirim bukti pembayaran ke admin.'
+        : 'Bayar sesuai instruksi; konfirmasi berjalan otomatis.';
+      document.getElementById('step-three-title').textContent = 'Pesanan diproses';
+      document.getElementById('step-three-copy').textContent = isManualTransfer
+        ? 'Admin memproses pesanan setelah transfer dicek.'
+        : 'Pesanan masuk antrean proses setelah pembayaran lunas.';
+      document.getElementById('note-title').textContent = 'Detail pembayaran';
+      document.getElementById('note-badge').textContent = 'Penting';
+      document.getElementById('payment-details').hidden = false;
+      document.getElementById('payment-channel').textContent = channelName;
+      document.getElementById('payment-amount').textContent = fmt(paymentAmount || totalPayment);
+      document.getElementById('payment-admin-fee').textContent = fmt(paymentAdminFee);
+      document.getElementById('payment-admin-fee-row').hidden = sellerBearsPaymentFee || !paymentAdminFee;
+      document.getElementById('payment-billed-total').textContent = fmt(totalPayment);
+      setPaymentDetail('payment-va-row', 'payment-va', paymentVirtualAccount);
+      setPaymentDetail('payment-code-row', 'payment-code', paymentCode);
+      // Hand the payload to the module script below, which owns the QR renderer.
+      // This script is `is:inline` and so cannot import one itself.
+      if (paymentQrPayload) {
+        const qrRow = document.getElementById('payment-qr-row');
+        qrRow.hidden = false;
+        qrRow.dataset.payload = paymentQrPayload;
+      }
+      if (paymentExpiresAt) {
+        const expiry = new Date(paymentExpiresAt);
+        setPaymentDetail(
+          'payment-expiry-row',
+          'payment-expiry',
+          Number.isNaN(expiry.getTime())
+            ? paymentExpiresAt
+            : new Intl.DateTimeFormat('id-ID', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+                timeZone: 'Asia/Jakarta',
+              }).format(expiry) + ' WIB',
+        );
+      }
+      if (paymentStatus === 'failed' || paymentError) {
+        const failure = document.getElementById('payment-failure');
+        failure.hidden = false;
+        failure.textContent =
+          paymentError || 'Instruksi pembayaran belum berhasil dibuat. Jangan melakukan transfer sebelum menerima instruksi resmi.';
+      }
+      document.getElementById('note-list').innerHTML = `
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Bayar sesuai total tagihan: <span class="font-bold text-[#111111]">${fmt(totalPayment || productTotal || productPrice || 0)}</span>.</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>${isManualTransfer
+          ? 'Simpan bukti transfer, lalu kirim ke admin lewat tombol WhatsApp di bawah.'
+          : 'Tidak perlu kirim bukti: status berubah otomatis setelah pembayaran diterima.'}</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Pesanan diproses setelah pembayaran ${isManualTransfer ? 'dicek admin' : 'lunas'}.</p></div>`;
+      document.getElementById('cta-title').textContent = 'Selesaikan pembayaran';
+      document.getElementById('cta-copy').textContent = isManualTransfer
+        ? 'Buka rekening tujuan untuk menyalin nomornya, lalu kirim bukti transfer ke admin.'
+        : 'Buka instruksi pembayaran untuk menyalin nomor atau memindai kode, lalu bayar dari aplikasi bank Anda.';
+      document.getElementById('payment-page-label').textContent = isManualTransfer
+        ? 'Lihat Rekening Tujuan'
+        : 'Lihat Instruksi Pembayaran';
+      document.getElementById('wa-label').textContent = isManualTransfer ? 'Kirim Bukti Transfer' : 'Tanya Admin';
+      // A VA or QRIS buyer's next step is paying, not messaging the store.
+      if (!isManualTransfer) document.getElementById('wa-confirm').dataset.tone = 'secondary';
+      if (paymentUrl) {
+        const paymentLink = document.getElementById('payment-link');
+        paymentLink.hidden = false;
+        paymentLink.href = paymentUrl;
+      }
+      // /payment is the only route that renders a scannable QRIS code or a
+      // copyable VA number, and it reads the same sessionStorage this page did.
+      // Offer it whenever there is still something to pay.
+      if (orderPk && statusToken) {
+        document.getElementById('payment-page-link').hidden = false;
+      }
+    }
+
+    // The module script below builds the WhatsApp message and link from these
+    // (src/lib/thanks-whatsapp.ts) and, when the store enabled it, hands a COD
+    // buyer over once the Purchase has gone out.
+    const wa = document.getElementById('wa-confirm');
+    // Every active support number; the module script picks one per order
+    // (PRD A35, pickThanksWhatsapp).
+    if (csPhones.length) {
+      wa.dataset.phones = JSON.stringify(csPhones);
+      wa.dataset.orderNumber = orderId;
+      wa.dataset.customerName = activeState?.name || '';
+      wa.dataset.productName = productName || '';
+      wa.dataset.variantLabel = variantLabel || '';
+      wa.dataset.quantity = String(quantity);
+      wa.dataset.paymentMethod = paymentMethod;
+      wa.dataset.leadOnly = leadOnly ? '1' : '0';
+    } else {
+      wa.hidden = true;
+    }
+
+    document.getElementById('thanks-shell').hidden = false;
+
+    if (!leadOnly && orderPk && statusToken) {
+      fetch('/api/order-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_pk: orderPk, status_token: statusToken }),
+        cache: 'no-store',
+      })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.success === false) return;
+          // Only when it says something the step title does not already say.
+          const paymentNow = data?.payment_status ? paymentWords(data.payment_status) : '';
+          if (paymentNow && !isCod && paymentNow !== document.getElementById('step-two-title').textContent)
+            document.getElementById('step-two-copy').textContent = `Status pembayaran: ${paymentNow}`;
+          if (data?.status)
+            document.getElementById('step-three-copy').textContent =
+              `Status pesanan: ${orderWords(data.status)}`;
+
+          // A buyer who arrived on the fragment locator alone — a lost tab, or
+          // a `sessionStorage` write that never landed — has no local copy of
+          // the money figures, and the summary rendered `Rp0` beside a real
+          // order. Showing a wrong number is worse than showing none, and the
+          // server already answered with the right ones. Only fills what the
+          // local state could not: the normal path is untouched.
+          const serverTotal = Number(data?.total_amount || 0);
+          const serverProduct = Number(data?.product_value || 0);
+          if (!Number(totalPayment) && serverTotal > 0) {
+            const formatted = fmt(serverTotal);
+            document.getElementById('total-payment-hero').textContent = formatted;
+            document.getElementById('total-payment').textContent = formatted;
+          }
+          if (!Number(productPrice) && serverProduct > 0) {
+            document.getElementById('product-price').textContent = fmt(serverProduct);
+          }
+
+          // A transaction can expire or fail after this page was first opened,
+          // and sessionStorage still says "unpaid". /payment already treats
+          // both as terminal; this page did not, so it kept presenting a code
+          // and a bill for an instruction that no longer works. `payment.status`
+          // is the transaction's own status, which is where `expired` lives —
+          // the order's `payment_status` never carries it.
+          const transactionStatus = String(data?.payment?.status || '').toLowerCase();
+          if (isOnlinePayment && ['expired', 'failed'].includes(transactionStatus)) {
+            document.getElementById('payment-qr-row').hidden = true;
+            document.getElementById('payment-page-link').hidden = true;
+            document.getElementById('payment-link').hidden = true;
+            const failure = document.getElementById('payment-failure');
+            failure.hidden = false;
+            failure.textContent =
+              transactionStatus === 'expired'
+                ? 'Batas waktu pembayaran sudah lewat, jadi instruksi di atas tidak berlaku lagi. Hubungi admin untuk membuat instruksi pembayaran baru.'
+                : 'Pembayaran gagal diproses. Jangan melakukan transfer dengan instruksi di atas; hubungi admin untuk penggantinya.';
+            document.getElementById('cta-title').textContent =
+              transactionStatus === 'expired' ? 'Pembayaran kedaluwarsa' : 'Pembayaran gagal';
+            document.getElementById('cta-copy').textContent =
+              'Hubungi admin agar pesanan ini dibuatkan instruksi pembayaran yang baru.';
+            document.getElementById('wa-label').textContent = 'Hubungi Admin';
+          }
+        })
+        .catch(() => {});
+    }
+  </script>
+
+  <script>
+    import {
+      buildThanksWhatsappMessage,
+      shouldAutoRedirectToWhatsapp,
+      pickThanksWhatsapp,
+      thanksWhatsappUrl,
+      THANKS_WHATSAPP_REDIRECT,
+    } from '../lib/thanks-whatsapp';
+
+    const wa = document.getElementById('wa-confirm') as HTMLAnchorElement | null;
+    if (wa?.dataset.phones) {
+      const d = wa.dataset;
+      let phones: string[] = [];
+      try {
+        phones = JSON.parse(d.phones || '[]');
+      } catch {
+        phones = [];
+      }
+      // One fixed number per order: a reload keeps the buyer with the same agent.
+      const phone = pickThanksWhatsapp(phones, d.orderNumber || '');
+      if (phone) d.phone = phone;
+      const url = thanksWhatsappUrl(
+        phone || '',
+        buildThanksWhatsappMessage({
+          storeName: d.storeName || '',
+          orderNumber: d.orderNumber || '',
+          customerName: d.customerName || '',
+          productName: d.productName || '',
+          variantLabel: d.variantLabel || '',
+          quantity: Number(d.quantity) || 1,
+        }),
+      );
+      if (url) wa.href = url;
+      else wa.hidden = true;
+
+      if (
+        shouldAutoRedirectToWhatsapp({
+          enabled: d.autoRedirect === '1',
+          paymentMethod: d.paymentMethod || '',
+          leadOnly: d.leadOnly === '1',
+          orderNumber: d.orderNumber || '',
+          url,
+        })
+      ) {
+        // Leave only after the Purchase is out: the tracker signals when it has
+        // handed the event to the Pixel and the CAPI leg, and the Pixel library
+        // must be loaded for its request to leave at all. Bounded both ways.
+        const note = document.getElementById('wa-redirect-note');
+        const count = document.getElementById('wa-redirect-count');
+        const started = performance.now();
+        let cancelled = false;
+        let timer = 0;
+        const go = () => {
+          if (!cancelled) window.location.assign(url as string);
+        };
+        const schedule = (delay: number) => {
+          window.clearTimeout(timer);
+          timer = window.setTimeout(go, Math.max(0, delay));
+          const seconds = Math.max(1, Math.ceil(Math.max(0, delay) / 1000));
+          if (count) count.textContent = ` dalam ${seconds} detik`;
+        };
+        const pixelReady = () => {
+          const fbq = (window as unknown as { fbq?: { instance?: unknown } }).fbq;
+          return !fbq || Boolean(fbq.instance);
+        };
+        const whenReady = () => {
+          const poll = () => {
+            if (cancelled) return;
+            const elapsed = performance.now() - started;
+            if (pixelReady()) {
+              schedule(Math.max(THANKS_WHATSAPP_REDIRECT.minMs - elapsed, THANKS_WHATSAPP_REDIRECT.afterPixelMs));
+            } else if (elapsed < THANKS_WHATSAPP_REDIRECT.maxMs) {
+              window.setTimeout(poll, 200);
+            }
+          };
+          poll();
+        };
+        if (note) note.hidden = false;
+        schedule(THANKS_WHATSAPP_REDIRECT.maxMs);
+        if ((window as unknown as { __PS_PURCHASE_DONE__?: boolean }).__PS_PURCHASE_DONE__) whenReady();
+        else window.addEventListener('ps:purchase-done', whenReady, { once: true });
+        document.getElementById('wa-redirect-cancel')?.addEventListener('click', () => {
+          cancelled = true;
+          window.clearTimeout(timer);
+          if (note) note.hidden = true;
+        });
+      }
+    }
+  </script>
+
+  <script>
+    /* Phone and account numbers in the shape a buyer reads them. The inline
+       script above fills the raw values; this one cannot run before it
+       (module scripts are deferred) and, unlike it, can import. */
+    import { formatWhatsappDisplay, groupAccountNumber } from '../lib/payment-display';
+
+    document.querySelectorAll<HTMLElement>('[data-format="phone"]').forEach((node) => {
+      node.textContent = formatWhatsappDisplay(node.textContent);
+    });
+    document.querySelectorAll<HTMLElement>('[data-format="account"]').forEach((node) => {
+      node.textContent = groupAccountNumber(node.textContent);
+    });
+  </script>
+
+  <script>
+    /* Renders the QRIS payload the inline script above parked on the row. A
+       module script cannot read that script's variables, and the inline one
+       cannot import a QR library, so the payload travels between them on a data
+       attribute. Runs after the inline script because module scripts are
+       deferred. */
+    import QRCode from 'qrcode';
+
+    const row = document.getElementById('payment-qr-row');
+    const payload = row?.dataset.payload || '';
+    if (row && payload) {
+      const canvas = document.getElementById('payment-qr-canvas') as HTMLCanvasElement | null;
+      const image = document.getElementById('payment-qr-image') as HTMLImageElement | null;
+      // Some providers hand back a hosted image rather than the raw payload.
+      const isImage =
+        payload.startsWith('data:image/') ||
+        /^https?:\/\/[^?#]+\.(png|jpe?g|webp|svg)(?:[?#]|$)/i.test(payload);
+      if (isImage && canvas && image) {
+        canvas.hidden = true;
+        image.hidden = false;
+        image.src = payload;
+      } else if (canvas) {
+        QRCode.toCanvas(canvas, payload, {
+          width: 200,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#111111', light: '#ffffff' },
+        }).catch(() => {
+          // A payload that will not encode is worse than useless on this page:
+          // it would leave an empty white square where a payable code belongs.
+          row.hidden = true;
+        });
+      }
+    }
+  </script>
+</BaseLayout>

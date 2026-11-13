@@ -1,0 +1,46 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { OrdersTable, mapOrder, type OrderItem } from '../../../components/admin/OrdersTable';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import { initialOrderListFilters, orderListQuery } from '../../../lib/admin-orders-initial';
+import { GET as listOrders, ORDER_LIST_PREFETCH_HEADER } from '../../api/admin/orders/index';
+
+export const prerender = false;
+
+const legacyStatus = Astro.url.searchParams.get('status') ?? Astro.url.searchParams.get('shipping_status');
+if (legacyStatus === 'abandoned') {
+  const target = new URL('/admin/orders/abandoned', Astro.url.origin);
+  const search = Astro.url.searchParams.get('search');
+  if (search) target.searchParams.set('search', search);
+  return Astro.redirect(`${target.pathname}${target.search}`, 302);
+}
+
+let initialOrders: OrderItem[] | undefined;
+try {
+  // The first rows are the list API's own answer to the request the island
+  // makes from this link, so the two cannot disagree on a status, a date
+  // range or a buyer link. A failure leaves the island to fetch them.
+  const url = new URL(`/api/admin/orders?${orderListQuery(initialOrderListFilters(Astro.url.searchParams), 1, false)}`, Astro.url);
+  const request = new Request(url, { headers: { [ORDER_LIST_PREFETCH_HEADER]: '1' } });
+  const response = await listOrders({ url, request, locals: Astro.locals } as Parameters<typeof listOrders>[0]);
+  const payload = (await response.json()) as { success?: boolean; data?: Parameters<typeof mapOrder>[0][] };
+  if (response.ok && payload.success && Array.isArray(payload.data)) initialOrders = payload.data.map(mapOrder);
+} catch (error) {
+  console.error('admin-orders-initial-load', error);
+}
+---
+
+<AdminLayout title="Pesanan" activeMenu="orders">
+  <div class="space-y-5">
+    <AdminPageHeader
+      title="Pesanan"
+      description="Validasi pembayaran, alamat, risiko RTS, kurir, dan gudang. Konfirmasi order yang siap agar masuk ke antrean Pengiriman."
+    >
+      <div slot="actions" class="grid grid-cols-2 gap-2 sm:flex">
+        <a href="/admin/check" class="btn-secondary">Cek risiko</a>
+        <a href="/admin/shipping" class="btn-primary">Pengiriman</a>
+      </div>
+    </AdminPageHeader>
+    <OrdersTable initialOrders={initialOrders} initialQuery={Astro.url.search} client:load />
+  </div>
+</AdminLayout>

@@ -1,0 +1,382 @@
+---
+import { geoHeadersFromCf } from '../../lib/geo';
+import Breadcrumb from '../../components/storefront/shared/Breadcrumb.astro';
+import MetaLandingTracker from '../../components/storefront/tracking/MetaLandingTracker.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getStorefrontProduct } from '../../lib/catalog';
+import { getProductPageLanding } from '../../lib/landing-pages';
+import Icon from '../../components/storefront/shared/Icon.astro';
+import RatingStars from '../../components/storefront/shared/RatingStars.astro';
+import GeoIpResolvedForm from '../../components/storefront/forms/GeoIpResolvedForm.astro';
+import ProductImageGallery from '../../components/storefront/ProductImageGallery.astro';
+import SocialProofToast from '../../components/storefront/shared/SocialProofToast.astro';
+import { recentOrderCount } from '../../lib/social-proof';
+import { getRuntimeEnv } from '../../lib/env';
+import { resolveFormModeContext } from '../../lib/form-mode';
+import '../../styles/form-hybrid.css';
+import { defaultCatalogContentId } from '../../lib/catalog-feed';
+import { buildProductJsonLd } from '../../lib/json-ld';
+
+export const prerender = false;
+
+const product = await getStorefrontProduct(Astro.locals, Astro.params.slug || '');
+const formContext = await resolveFormModeContext(Astro.request);
+if (!product) {
+  return Astro.rewrite('/404');
+}
+
+// A landing page may have taken this product's page over (A21). The landing
+// route owns the whole rendering path already, so this hands off to it rather
+// than growing a second copy here. The URL stays `/produk/<slug>`: that is the
+// product's address, and the landing page's own slug redirects to it, so the
+// two never compete as duplicate content.
+// `astro check` does not count a value used only in a frontmatter `return` as
+// read, so the geo helper is named once here to keep that check clean.
+void geoHeadersFromCf;
+
+// Read beside the landing claim, not after it: a D1 round trip is a Pacific
+// crossing when a US colo serves the page. Unused when the claim rewrites.
+const [productPageLanding, socialProofOrders] = await Promise.all([
+  getProductPageLanding(Astro.locals, String(product.productId)),
+  // The store's real orders (A-300); under the threshold the toast renders nothing.
+  recentOrderCount(getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined),
+]);
+if (productPageLanding) {
+  // The rewritten route does NOT see this route's `Astro.url` — it sees the
+  // landing slug — so the hand-off is signalled on the request itself.
+  // Without it the landing route reads a direct visit, redirects back here,
+  // and the two bounce forever.
+  return Astro.rewrite(
+    new Request(new URL(`/${productPageLanding.slug}`, Astro.url), {
+      headers: new Headers({
+        ...Object.fromEntries(Astro.request.headers),
+        // The rebuilt request loses `request.cf`; without the visitor's
+        // province the landing's hybrid form showed everyone the full form.
+        ...geoHeadersFromCf(Astro.request),
+        'x-adsbook-product-page': product.slug,
+      }),
+    }),
+  );
+}
+
+const cheapestVariant = [...product.variants].sort((a, b) => a.price - b.price)[0] ?? null;
+const displayPrice = cheapestVariant?.price ?? product.price;
+const displayComparePrice = cheapestVariant?.comparePrice ?? product.comparePrice ?? 0;
+const displayDiscount =
+  displayComparePrice > displayPrice ? Math.round((1 - displayPrice / displayComparePrice) * 100) : 0;
+
+const ratingValue = product.ratingValue;
+const reviewCount = product.reviewCount;
+const soldCount = product.soldCount;
+const hasAggregateRating =
+  typeof ratingValue === 'number' && typeof reviewCount === 'number' && reviewCount > 0;
+const hasSoldCount = typeof soldCount === 'number' && soldCount > 0;
+const formattedRating = hasAggregateRating ? ratingValue.toFixed(1) : null;
+const soldLabel = hasSoldCount
+  ? soldCount >= 1000
+    ? `${(soldCount / 1000).toFixed(1).replace('.0', '')}rb+ terjual`
+    : `${soldCount} terjual`
+  : null;
+
+const hasPriceRange = new Set(product.variants.map((v) => v.price)).size > 1;
+
+const productImages = product.images && product.images.length > 0 ? product.images : [product.heroImage];
+
+const canonical = `${Astro.locals.tenant.siteUrl}/produk/${product.slug}`;
+const productTitle = product.seoTitle;
+const productDescription = product.seoDescription;
+// One builder for every Product JSON-LD (lib/json-ld.ts). This page and the
+// landing route used to hand-write their own, and disagreed: an AggregateOffer
+// here, a different brand fallback there.
+const productSchema = buildProductJsonLd({
+  siteUrl: Astro.locals.tenant.siteUrl,
+  organization: { name: Astro.locals.tenant.name },
+  defaultBrand: Astro.locals.tenant.defaultBrand,
+  product: {
+    name: product.productName,
+    description: product.description,
+    image: productImages,
+    url: canonical,
+    sku: product.productId,
+    category: product.category,
+    ...(product.brand ? { brand: product.brand } : {}),
+    ...(hasAggregateRating ? { ratingValue: Number(formattedRating), reviewCount } : {}),
+    reviews: product.reviews.map((review) => ({ name: review.name, rating: review.rating, comment: review.comment })),
+    offers: product.variants.map((variant) => ({
+      price: variant.price,
+      availability: 'InStock',
+      name: variant.label,
+      ...(variant.sku ? { sku: variant.sku } : {}),
+    })),
+  },
+});
+
+const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c');
+---
+
+<BaseLayout
+  title={productTitle}
+  description={productDescription}
+  image={product.heroImage}
+  preloadImages={product.heroImage}
+  canonical={canonical}
+  ogType="product"
+  hideHeader={false}
+  hideFooter={false}
+  breadcrumbs={[
+    { name: 'Beranda', url: '/' },
+    { name: 'Produk', url: '/produk' },
+    { name: product.productName, url: canonical },
+  ]}
+>
+  <MetaLandingTracker
+    slug={product.slug}
+    contentId={defaultCatalogContentId(product)}
+    contentName={product.productName}
+    price={displayPrice}
+  />
+  {/* The page's only Product JSON-LD: BaseLayout is deliberately given no
+      `product`, which would emit a second, conflicting Product block. */}
+  <script is:inline type="application/ld+json" set:html={productSchemaJson} />
+
+  <main class="bg-white pb-24">
+    <Breadcrumb
+      items={[
+        { label: 'Produk', href: '/produk' },
+        { label: product.category, href: '/produk' },
+        { label: product.productName },
+      ]}
+    />
+    <!-- Edge to edge on purpose: the photo is the first thing the page says. -->
+    <div class="mt-2">
+      <ProductImageGallery
+        images={productImages}
+        productName={product.productName}
+      />
+    </div>
+
+    <!-- Offer: name, proof, price, the choices, and the way to order. -->
+    <section class="px-4 pb-6 pt-4">
+      <h1 class="text-xl font-bold leading-snug tracking-[-0.02em] text-[#111111]">
+        {product.productName}
+      </h1>
+      {(hasAggregateRating || hasSoldCount) && (
+        <div class="mt-1.5 flex items-center gap-2 text-[13px] text-[#555555]">
+          {hasAggregateRating && (
+            <span class="flex items-center gap-1">
+              <RatingStars
+                rating={ratingValue}
+                starClass="h-[13px] w-[13px]"
+                label={`Rating produk ${formattedRating} dari 5 bintang`}
+              />
+              <span class="font-semibold text-[#111111]">{formattedRating}</span>
+              <span>({reviewCount})</span>
+            </span>
+          )}
+          {hasAggregateRating && hasSoldCount && <span aria-hidden="true">·</span>}
+          {hasSoldCount && <span>{soldLabel}</span>}
+        </div>
+      )}
+
+      <div class="mt-3 flex flex-wrap items-baseline gap-x-2">
+        {hasPriceRange && <span class="text-sm text-[#555555]">Mulai</span>}
+        <span class="text-[26px] font-bold leading-none tracking-tight text-[#111111]">
+          Rp{Math.round(displayPrice).toLocaleString('id-ID')}
+        </span>
+        {
+          displayComparePrice > displayPrice && (
+            <span class="text-sm text-[#767676] line-through">
+              Rp{Math.round(displayComparePrice).toLocaleString('id-ID')}
+            </span>
+          )
+        }
+        {
+          displayDiscount > 0 && (
+            <span class="rounded-full bg-[#334FB4] px-2 py-0.5 text-xs font-bold leading-5 text-white">
+              -{displayDiscount}%
+            </span>
+          )
+        }
+      </div>
+
+      {(product.subheadline || product.description) && (
+        <p class="mt-3 text-sm leading-6 text-[#555555]">{product.subheadline || product.description}</p>
+      )}
+
+      {product.variants.length > 1 && (
+        <p class="mt-3 text-sm text-[#111111]">
+          <span class="text-[#555555]">{product.variants.length} pilihan:</span> {product.variants.map((v) => v.label).join(', ')}
+        </p>
+      )}
+    </section>
+
+    {(product.description || product.benefits?.length || product.keyPoints?.length || product.idealFor?.length) && (
+      <section class="border-t-8 border-[#F3F3F3] px-4 py-6">
+        <h2 class="text-base font-bold text-[#111111]">Tentang produk</h2>
+        {product.description && product.description !== product.subheadline && (
+          <p class="mt-2 text-sm leading-6 text-[#555555]">{product.description}</p>
+        )}
+
+        {product.benefits && product.benefits.length > 0 && (
+          <div class="mt-5">
+            <h3 class="text-sm font-semibold text-[#111111]">Manfaat utama</h3>
+            <ul class="mt-2 space-y-2">
+              {product.benefits.map((benefit) => (
+                <li class="flex items-start gap-2.5 text-sm leading-6 text-[#555555]">
+                  <Icon name="lucide:check" class="mt-1 h-4 w-4 shrink-0 text-[#15803D]" aria-hidden="true" />
+                  <span class="min-w-0">{benefit}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {product.keyPoints && product.keyPoints.length > 0 && (
+          <div class="mt-5">
+            <h3 class="text-sm font-semibold text-[#111111]">Poin penting</h3>
+            <ul class="mt-2 space-y-2">
+              {product.keyPoints.map((point) => (
+                <li class="flex items-start gap-2.5 text-sm leading-6 text-[#555555]">
+                  <span class="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#111111]" aria-hidden="true" />
+                  <span class="min-w-0">{point}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {product.idealFor && product.idealFor.length > 0 && (
+          <div class="mt-5">
+            <h3 class="text-sm font-semibold text-[#111111]">Cocok untuk</h3>
+            <ul class="mt-2 flex flex-wrap gap-2">
+              {product.idealFor.map((item) => (
+                <li class="rounded-full bg-[#F3F3F3] px-3 py-1.5 text-[13px] text-[#111111]">{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+    )}
+
+    {
+      (hasAggregateRating || product.reviews.length > 0) && (
+        <section class="border-t-8 border-[#F3F3F3] px-4 py-6">
+          <div class="flex items-baseline justify-between gap-3">
+            <h2 class="text-base font-bold text-[#111111]">Ulasan pembeli</h2>
+            {hasAggregateRating && (
+              <span class="text-sm text-[#555555]"><span class="font-semibold text-[#111111]">★ {formattedRating}</span> · {reviewCount} ulasan</span>
+            )}
+          </div>
+
+          {product.reviews.length > 0 && (
+            <ul class="mt-4 space-y-4">
+              {product.reviews.map((review) => (
+                <li class="rounded-2xl bg-[#F3F3F3] p-4">
+                  <div class="flex items-center gap-3">
+                    <span
+                      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold uppercase text-[#111111]"
+                      aria-hidden="true"
+                    >
+                      {review.name.charAt(0)}
+                    </span>
+                    <div class="min-w-0 flex-1">
+                      <p class="flex items-center gap-1.5 text-sm font-semibold text-[#111111]">
+                        <span class="truncate">{review.name}</span>
+                        {review.verified && (
+                          <span class="inline-flex shrink-0 items-center gap-0.5 text-xs font-normal text-[#15803D]">
+                            <Icon name="lucide:circle-check" class="h-3.5 w-3.5" aria-hidden="true" />
+                            Pembeli terverifikasi
+                          </span>
+                        )}
+                      </p>
+                      <p class="text-xs text-[#555555]">{[review.location, review.date].filter(Boolean).join(' · ')}</p>
+                    </div>
+                  </div>
+                  <RatingStars rating={review.rating} class="mt-2.5" starClass="h-3 w-3" />
+                  <p class="mt-1.5 text-sm leading-6 text-[#333333]">{review.comment}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )
+    }
+
+    <!-- Direct order form -->
+    <section id="form-pemesanan" class="scroll-mt-2 border-t-8 border-[#F3F3F3] px-2 pb-2 pt-4">
+      <GeoIpResolvedForm mode={formContext.mode} province={formContext.province} productSlug={product.slug} embedded={true} />
+    </section>
+
+    <SocialProofToast
+      orderCount={socialProofOrders}
+    />
+
+    <!-- Sticky purchase bar. Hidden while the photo or the order form is on
+         screen: over the photo it covers what the buyer came to look at, and
+         over the form its button points at a form already in view. -->
+    <div id="sticky-purchase-bar" class="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full max-w-[480px] items-center justify-between gap-3 border-t border-[#EDEDED] bg-white/95 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300" style="transform: translateY(100%); opacity: 0; pointer-events: none;" inert>
+      <div class="min-w-0">
+        <p class="truncate text-xs text-[#555555]">{product.productName}</p>
+        <p class="text-base font-bold leading-tight text-[#111111]">{hasPriceRange && <span class="text-xs font-normal text-[#555555]">Mulai </span>}Rp{Math.round(displayPrice).toLocaleString('id-ID')}</p>
+      </div>
+      <a
+        href="#form-pemesanan"
+        class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-[var(--sf-accent,#C2410C)] px-6 text-sm font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#9A3412)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--sf-accent,#C2410C)]"
+      >
+        Pesan sekarang
+      </a>
+    </div>
+  </main>
+
+  <script>
+    function initStickyBarObserver() {
+      const stickyBar = document.getElementById('sticky-purchase-bar');
+      const orderForm = document.getElementById('form-pemesanan');
+      const hero = document.querySelector('[data-gallery]');
+      if (!stickyBar || !orderForm) return;
+
+      // The bar hides while EITHER blocker is on screen. It also starts hidden
+      // in the markup, because the hero fills the first viewport — waiting for
+      // the observer's first callback used to flash the bar over the photo.
+      let heroVisible = true;
+      let formVisible = false;
+
+      const applyStickyVisibility = () => {
+        if (heroVisible || formVisible) {
+          stickyBar.style.transform = 'translateY(100%)';
+          stickyBar.style.opacity = '0';
+          stickyBar.style.pointerEvents = 'none';
+          // Out of sight is out of the tab order too.
+          stickyBar.inert = true;
+        } else {
+          stickyBar.style.transform = 'translateY(0)';
+          stickyBar.style.opacity = '1';
+          stickyBar.style.pointerEvents = 'auto';
+          stickyBar.inert = false;
+        }
+      };
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.target === hero) heroVisible = entry.isIntersecting;
+            if (entry.target === orderForm) formVisible = entry.isIntersecting;
+          });
+          applyStickyVisibility();
+        },
+        { threshold: 0, rootMargin: '0px 0px -40px 0px' }
+      );
+
+      if (hero) observer.observe(hero);
+      else heroVisible = false;
+      observer.observe(orderForm);
+      applyStickyVisibility();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initStickyBarObserver);
+    } else {
+      initStickyBarObserver();
+    }
+  </script>
+</BaseLayout>

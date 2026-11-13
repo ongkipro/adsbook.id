@@ -1,0 +1,230 @@
+---
+import GeoIpResolvedForm from '../components/storefront/forms/GeoIpResolvedForm.astro';
+import MetaLandingTracker from '../components/storefront/tracking/MetaLandingTracker.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getStorefrontProduct } from '../lib/catalog';
+import { deferOffscreenImages, demoteExtraH1, getLandingPageBySlug, parseShortcodes } from '../lib/landing-pages';
+import { productPageRedirect } from '../lib/native-landing-pages';
+import { getStoreSupportWhatsapp } from '../lib/public-store';
+import { resolveAdminSession } from '../lib/admin-session';
+import { resolveAuthSecret } from '../lib/auth-secret';
+import { getRuntimeEnv } from '../lib/env';
+import '../styles/form-hybrid.css';
+import '../styles/landing-pages/landing.css';
+import { defaultCatalogContentId } from '../lib/catalog-feed';
+import SocialProofToast from '../components/storefront/shared/SocialProofToast.astro';
+import { recentOrderCount } from '../lib/social-proof';
+import { buildProductJsonLd } from '../lib/json-ld';
+
+export const prerender = false;
+
+// `astro check` does not count a value used only in a frontmatter `return` as
+// read, so the redirect helper is named once here to keep that check clean.
+void productPageRedirect;
+
+const slug = Astro.params.slug || '';
+const page = await getLandingPageBySlug(Astro.locals, slug);
+
+if (!page) {
+  const product = await getStorefrontProduct(Astro.locals, slug);
+  if (product) return productPageRedirect(`/produk/${product.slug}${Astro.url.search}`);
+
+  return Astro.rewrite('/404');
+}
+
+const previewRequested = Astro.url.searchParams.get('preview') === '1';
+let isPreview = false;
+if (previewRequested) {
+  if (Astro.locals.admin) {
+    isPreview = true;
+  } else {
+    const env = getRuntimeEnv(Astro.locals);
+    const database = env?.OMS_DB as D1Database | undefined;
+    const session = await resolveAdminSession(
+      database,
+      Astro.request,
+      await resolveAuthSecret(env, database),
+    );
+    isPreview = session !== null && !session.mustChangePassword;
+  }
+}
+if (isPreview) Astro.response.headers.set('Cache-Control', 'no-store');
+if (!page.is_active && !isPreview) {
+  return Astro.rewrite('/404');
+}
+
+const product = await getStorefrontProduct(Astro.locals, page.product_id);
+if (!product) {
+  return Astro.rewrite('/404');
+}
+// The store's real orders (A-300); under the threshold the toast renders nothing.
+const socialProofOrders = await recentOrderCount(getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined);
+
+// When this page has taken over the product's page, the product URL is its
+// only address, so a direct visit to the landing slug is sent there.
+//
+// The hand-off is detected by a header the product route sets, NOT by
+// `Astro.url`: a rewrite does not carry the original path here, so this route
+// sees the landing slug either way. Reading `Astro.url` made `/produk/<slug>`
+// rewrite here, redirect straight back, and loop until the browser gave up —
+// measured at 50 redirects before it was changed.
+const productPagePath = `/produk/${product.slug}`;
+const servedAsProductPage =
+  Astro.request.headers.get('x-adsbook-product-page') === product.slug;
+if (page.is_product_page && !servedAsProductPage && !isPreview) {
+  // The query string travels: an ad's fbclid and UTM tags arrive on this URL,
+  // and a redirect that drops them loses the click it was paid for.
+  return productPageRedirect(`${productPagePath}${Astro.url.search}`);
+}
+
+const csPhone = await getStoreSupportWhatsapp(Astro.locals);
+const formSections = page.sections.filter((section) => section.type === 'form');
+const firstFormSectionId = formSections[0]?.id;
+// The page's own title. The layout renders no <h1> on a landing page, so the
+// first headline section that will actually render is the one; every later
+// headline stays an <h2>. An html section that already carries an <h1> keeps
+// it, and no typed headline is promoted beside it.
+const htmlCarriesH1 = page.sections.some(
+  (section) => section.type === 'html' && /<h1[\s>]/i.test(section.content_html ?? ''),
+);
+const firstHeadlineSectionId = htmlCarriesH1
+  ? undefined
+  : page.sections.find(
+      (section) =>
+        section.type === 'headline' &&
+        section.content_config !== null &&
+        'text' in section.content_config,
+    )?.id;
+
+// A page built only from html sections that never write an <h1> would have
+// none at all; it gets its title as a visually hidden one. Html sections that
+// do write one keep only the first (`demoteExtraH1`), threaded across them.
+const needsHiddenH1 = !htmlCarriesH1 && firstHeadlineSectionId === undefined;
+let htmlH1Written = false;
+
+// Clean title and description: focus strictly on product name without redundant "landing page" text
+const rawTitle = page.meta_title || page.title || product.seoTitle || product.productName;
+const metaTitle = rawTitle.replace(/\s*\(?\s*landing\s*page\s*\)?/gi, '').trim();
+const rawDesc = page.meta_description || product.seoDescription || `Lihat pilihan varian, harga, dan ketersediaan ${product.productName}.`;
+const metaDescription = rawDesc.replace(/\s*landing\s*page\s*/gi, ' ').trim();
+// Canonical follows the address that is actually live for this page.
+const canonicalPath = page.is_product_page ? productPagePath : `/${page.slug}`;
+const canonical = `${Astro.locals.tenant.siteUrl}${canonicalPath}`;
+
+// Same builder as the product page (lib/json-ld.ts), so both describe the
+// product identically — including its own brand, not the store's name.
+const productSchema = buildProductJsonLd({
+  siteUrl: Astro.locals.tenant.siteUrl,
+  organization: { name: Astro.locals.tenant.name },
+  defaultBrand: Astro.locals.tenant.defaultBrand,
+  product: {
+    name: product.productName,
+    description: product.description || metaDescription,
+    image: product.heroImage,
+    url: canonical,
+    sku: product.productId,
+    category: product.category,
+    ...(product.brand ? { brand: product.brand } : {}),
+    offers: product.variants.map((variant) => ({
+      price: variant.price,
+      availability: 'InStock',
+      name: variant.label,
+      ...(variant.sku ? { sku: variant.sku } : {}),
+    })),
+  },
+});
+const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c');
+---
+
+<BaseLayout
+  title={metaTitle}
+  description={metaDescription}
+  image={product.heroImage}
+  preloadImages={product.heroImage}
+  canonical={canonical}
+  hideHeader={true}
+  hideFooter={true}
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" is:inline set:html={productSchemaJson} />
+  </Fragment>
+  <MetaLandingTracker
+    slug={page.slug}
+    contentId={defaultCatalogContentId(product)}
+    contentName={product.contentName}
+    price={product.price}
+  />
+
+  {/* A landing page is an ad destination, so it wants the proof more than the
+      catalogue page does. It stays off the first screen and off the checkout
+      form, like the sticky bar. The hero is the first screen rather than the
+      first section: merchants often paste a whole page into one HTML section,
+      and treating that as the hero kept the toast hidden everywhere. */}
+  <div data-landing-hero aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 h-screen"></div>
+  <SocialProofToast
+    orderCount={socialProofOrders}
+    heroSelector="[data-landing-hero]"
+    formSelector="#checkout-form"
+  />
+
+  {needsHiddenH1 && <h1 class="sr-only">{metaTitle}</h1>}
+
+  {
+    page.sections.map((section, index) => {
+      if (section.type === 'html') {
+        // Only the page's first section may hold the LCP image; every image
+        // after it waits for the scroll.
+        const single = demoteExtraH1(
+          parseShortcodes(section.content_html ?? '', product, csPhone),
+          htmlH1Written,
+        );
+        htmlH1Written = single.pageHasH1;
+        const parsedHtml = deferOffscreenImages(single.html, index === 0);
+        return <section class="lp-section" set:html={parsedHtml} />;
+      }
+      const config = section.content_config;
+      if (section.type === 'headline' && config && 'text' in config) {
+        const Heading = section.id === firstHeadlineSectionId ? 'h1' : 'h2';
+        return <section class={`lp-section lp-align-${config.align ?? 'left'}`}><Heading class={`lp-headline-${config.size ?? 'medium'}`}>{config.text}</Heading></section>;
+      }
+      if (section.type === 'paragraph' && config && 'text' in config) return <section class={`lp-section lp-align-${config.align ?? 'left'}`}><p class="lp-body">{config.text}</p></section>;
+      if ((section.type === 'numbered_list' || section.type === 'bullet_list') && config && 'items' in config) {
+        return <section class="lp-section">{section.type === 'numbered_list' ? <ol>{config.items.map((item) => <li>{item}</li>)}</ol> : <ul>{config.items.map((item) => <li>{item}</li>)}</ul>}</section>;
+      }
+      // Same rule as an html section: an image opening the page is the likely
+      // LCP and loads at once; every later image waits for the scroll.
+      if (section.type === 'image' && config && 'src' in config) {
+        return index === 0
+          ? <section class="lp-section"><img src={config.src} alt={config.alt} loading="eager" fetchpriority="high" decoding="async" /></section>
+          : <section class="lp-section"><img src={config.src} alt={config.alt} loading="lazy" decoding="async" /></section>;
+      }
+      // Only a form section renders a form. While `type` was `'html' | 'form'`
+      // the final `return` was a safe else; with seven kinds it is a trap —
+      // any typed section whose stored config failed to parse would fall
+      // through and inject a second checkout form into the page instead of
+      // rendering nothing.
+      if (section.type !== 'form') return null;
+      const formConfig = section.form_config ?? {};
+      return <div id={section.id === firstFormSectionId ? 'checkout-form' : `checkout-form-${section.id}`} class="scroll-mt-8"><GeoIpResolvedForm productSlug={product.slug} mode={formConfig.mode} embedded={true} selectedVariantId={formConfig.selected_variant_id} /></div>;
+    })
+  }
+  {
+    formSections.length === 0 && (
+      <div id="checkout-form" class="scroll-mt-8">
+        <GeoIpResolvedForm productSlug={product.slug} mode="hybrid" embedded={true} />
+      </div>
+    )
+  }
+
+  <script slot="head" is:inline>
+    document.addEventListener('click', (e) => {
+      const target = e.target instanceof Element
+        ? e.target.closest('a[href="#checkout-form"], a[href="#form"]')
+        : null;
+      if (!target) return;
+
+      e.preventDefault();
+      document.getElementById('checkout-form')?.scrollIntoView({ behavior: 'smooth' });
+    });
+  </script>
+</BaseLayout>

@@ -1,0 +1,66 @@
+---
+interface Props {
+  slug: string;
+  contentId: string | undefined;
+  contentName: string;
+  price: number;
+}
+
+const { slug, contentId, contentName, price } = Astro.props;
+---
+
+<script is:inline define:vars={{ slug, contentId, contentName, price }}>
+  (() => {
+    if (typeof window === 'undefined') return;
+
+    const createEventId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // GtmBase.astro (BaseLayout <head>) owns the ecommerce shape; see src/lib/gtm.ts.
+    const pushGtmEcomEvent = (event, payload) => window.__PS_PUSH_GTM_ECOM__?.(event, payload);
+    const postMeta = (payload) => {
+      fetch('/api/meta-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    };
+    const track = (eventName, eventId) => {
+      const data = {
+        content_name: contentName,
+        content_ids: contentId ? [contentId] : undefined,
+        // Meta matches a catalogue item on `contents` as well as `content_ids`.
+        contents: contentId
+          ? [{ id: contentId, quantity: 1, item_price: Number(price || 1) }]
+          : undefined,
+        content_type: 'product',
+        value: Number(price || 1),
+        currency: 'IDR',
+      };
+      // Never the pixel's track call directly: this runs during body parse, before
+      // MetaPixelBase's single init has been issued, and fbevents discards a
+      // track it replays ahead of the init.
+      window.__PS_META_TRACK__?.(eventName, data, { eventID: eventId });
+      postMeta({
+        event_name: eventName,
+        event_id: eventId,
+        lp_name: slug,
+        product_id: contentId,
+        content_name: contentName,
+        value: Number(price || 1),
+        currency: 'IDR',
+        content_type: 'product',
+        event_source_url: window.location.href,
+      });
+      if (eventName === 'ViewContent') {
+        pushGtmEcomEvent('view_item', {
+          currency: 'IDR',
+          value: Number(price || 1),
+          item_id: contentId,
+          item_name: contentName,
+          event_id: eventId,
+        });
+      }
+    };
+
+    track('ViewContent', createEventId(`vc_${slug}`));
+  })();
+</script>

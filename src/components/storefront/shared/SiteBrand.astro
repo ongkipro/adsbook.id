@@ -1,0 +1,57 @@
+---
+import { DEFAULT_TENANT_LOGO } from '../../../lib/tenant';
+
+interface Props {
+  href?: string;
+  class?: string;
+}
+
+const { href = '/', class: className = '' } = Astro.props;
+// Always the tenant's own name. The wordmark once spelled out the reference
+// store's name on every install (LOGIN-10/18); it reads the tenant or nothing.
+// Set in the body face, not a display serif: a default storefront has to suit
+// a kitchenware shop as well as a perfume one.
+const storeName = Astro.locals.tenant.name.trim();
+// The store's uploaded logo (Settings → Store) when there is one; until then
+// the name alone, set as a wordmark. No placeholder mark: the product's own
+// emblem is not the store's brand, and a letter tile added nothing the name
+// did not already say.
+const logo = Astro.locals.tenant.logo?.trim();
+const uploadedLogo = logo && logo !== DEFAULT_TENANT_LOGO ? logo : '';
+const brandMark = Astro.locals.tenant.brandMark;
+---
+
+<a
+  href={href}
+  class={`inline-flex min-h-11 min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] ${className}`}
+  aria-label={Astro.locals.tenant.name}
+  title={Astro.locals.tenant.defaultTitle}
+>
+  {
+    uploadedLogo ? (
+      /* The logo is the brand; the link's name comes from aria-label, so the
+         image is decorative here. Height-bound, any aspect up to 168px wide.
+         Sized inline, not by utilities: with h-8 and then h-[32px] the image
+         still rendered 0x0 inside this flex link on a dev store (2026-10-31);
+         an inline height cannot be lost to the page's CSS. */
+      <img
+        src={uploadedLogo}
+        alt=""
+        height="32"
+        style="display:block;height:32px;width:auto;max-width:168px;flex-shrink:0;object-fit:contain"
+        loading="eager"
+        decoding="async"
+      />
+    ) : (
+      <>
+        {brandMark && (
+          <img src={brandMark} alt="" width="28" height="28" class="shrink-0 object-contain" loading="eager" decoding="async" />
+        )}
+        {/* Text wordmark, Shopify-theme style: the name in capitals, slightly
+            tracked, one line; leading-tight keeps the glyphs inside the
+            truncation box. */}
+        <span class="min-w-0 truncate text-[15px] font-bold uppercase leading-tight tracking-[0.08em] text-[#111111]">{storeName}</span>
+      </>
+    )
+  }
+</a>

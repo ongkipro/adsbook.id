@@ -1,0 +1,343 @@
+---
+import { META_EXTERNAL_ID_COOKIE } from '../../../lib/click-ids';
+interface Props {
+  tenantName: string;
+}
+
+const { tenantName } = Astro.props;
+---
+
+<script
+  is:inline
+  define:vars={{
+    tenantName,
+    metaExternalIdCookie: META_EXTERNAL_ID_COOKIE,
+  }}
+>
+  (() => {
+    if (typeof window === 'undefined') return;
+
+    // GtmBase.astro (BaseLayout <head>) owns the ecommerce shape; see src/lib/gtm.ts.
+    const pushGtmEcomEvent = (event, payload) => window.__PS_PUSH_GTM_ECOM__?.(event, payload);
+
+    const hashSha256Hex = async (input) => {
+      const normalized = String(input || '')
+        .trim()
+        .toLowerCase();
+      // undefined, never '': an empty string travels as a present-but-blank
+      // match key (sha256_phone_number: "") on both the Pixel and Google
+      // enhanced conversions, where an omitted key is simply not matched on.
+      // Web Crypto is absent outside a secure context.
+      if (!normalized || !globalThis.crypto?.subtle) return undefined;
+      try {
+        const bytes = new TextEncoder().encode(normalized);
+        const digest = await crypto.subtle.digest('SHA-256', bytes);
+        return Array.from(new Uint8Array(digest))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('');
+      } catch {
+        return undefined;
+      }
+    };
+
+    if (new URLSearchParams(window.location.search).get('preview') === '1') return;
+    let state = null;
+    try {
+      state = JSON.parse(sessionStorage.getItem('thanks_state') || 'null');
+    } catch {}
+
+    const pick = (key, fallback = '') => String(state?.[key] ?? fallback);
+    const pickNum = (key, fallback = 0) => Number(state?.[key] ?? fallback);
+    // Storage that throws (blocked site data, quota) must not cost the
+    // Purchase: for COD the server leg below is the only one. Meta still
+    // deduplicates a repeat on event_id.
+    const once = (key) => {
+      const fullKey = `meta_once_${key}`;
+      try {
+        if (localStorage.getItem(fullKey) === '1') return false;
+        localStorage.setItem(fullKey, '1');
+        sessionStorage.setItem(fullKey, '1');
+      } catch {}
+      return true;
+    };
+    const getCookieValue = (name) =>
+      document.cookie
+        .split('; ')
+        .find((row) => row.startsWith(`${name}=`))
+        ?.split('=')[1] || '';
+
+    const postMeta = (payload) => {
+      fetch('/api/meta-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        // /thanks may hand the buyer to WhatsApp moments later; keepalive lets
+        // the request finish after the page is gone.
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    // event_id dipakai untuk event funnel awal (ViewContent/AddToCart/InitiateCheckout).
+    // Purchase TIDAK memakai id buatan browser: server CAPI selalu memakai
+    // order_number sebagai event_id (lihat resolveMetaEventId), jadi leg browser
+    // wajib memakai order_number yang sama - dibaca ulang dari /api/order-status
+    // di dalam fire() supaya dua leg mengutip baris order yang sama.
+    const orderId = pick('order_id', '');
+    const productName = pick('product_name', tenantName);
+    // Product ID is the catalog identity published by both feeds. Variant ID is
+    // retained separately for checkout and reporting, never folded into it.
+    const productId = pick('product_id', '');
+    const contentId = productId;
+    const phone = pick('phone', '');
+    const name = pick('name', '');
+    const province = pick('province', '');
+    const city = pick('city', '');
+    const district = pick('district', '');
+    const postalCode = pick('postal_code', '');
+    const productPrice = pickNum('product_price', pickNum('value', 1));
+    const quantity = Math.max(1, pickNum('quantity', 1));
+    let conversionValue = productPrice * quantity;
+    let verifiedPaymentStatus = pick('payment_status', '').toLowerCase();
+    const eventName = 'Purchase';
+
+
+    const paymentMethod = pick('pm', pick('payment_method', 'cod')).toLowerCase();
+
+    const data = {
+      content_name: productName,
+      content_ids: contentId ? [contentId] : undefined,
+      content_type: 'product',
+      value: Number(conversionValue || 1),
+      currency: 'IDR',
+    };
+
+    const fire = async () => {
+      // Every Purchase must resolve to a server-known order. Online orders must
+      // additionally be paid; browser state is never authoritative.
+      const orderPk = pick('order_pk', '');
+      const statusToken = pick('status_token', '');
+      if (!orderPk || !statusToken) return;
+      // Start the 105 KB fbevents download now, in parallel with the status
+      // fetch, rather than after it: on a slow in-app browser the two were
+      // sequential and the WhatsApp hand-off could leave before the Pixel
+      // Purchase did (audit 2026-11-10). Only the download moves; the stub
+      // still holds the track until MetaPixelBase's single init is issued.
+      window.__PS_LOAD_META_PIXEL__?.();
+      let finalEventId = '';
+      try {
+        const resp = await fetch('/api/order-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_pk: orderPk, status_token: statusToken }),
+          cache: 'no-store',
+        });
+        const statusData = await resp.json().catch(() => ({}));
+        if (!resp.ok || !statusData?.success) return;
+        // The event_id for both legs. The server CAPI leg substitutes this exact
+        // column, so an order that cannot be resolved gets no Purchase at all -
+        // firing a browser-minted id here would be an undeduplicatable double count.
+        finalEventId = String(statusData.order_number || '').trim();
+        if (!finalEventId) return;
+        verifiedPaymentStatus = String(statusData.payment_status || verifiedPaymentStatus).toLowerCase();
+        // The order's own method and state, never this tab's storage: opened
+        // in a fresh tab the storage is empty and used to default to COD, so
+        // an unpaid QRIS/VA or a cancelled order fired a Purchase (audit
+        // 2026-10-31 tracking H-1). Same rule as isMetaPurchaseOrderEligible.
+        const orderMethod = String(statusData.payment_method || paymentMethod).toLowerCase();
+        const orderShipping = String(statusData.status || '').toLowerCase();
+        if (['failed', 'refunded', 'cancelled'].includes(verifiedPaymentStatus)) return;
+        if (['abandoned', 'failed', 'cancelled', 'returned'].includes(orderShipping)) return;
+        if (orderMethod !== 'cod' && !statusData.is_paid) return;
+        // Report the goods, not the invoice. `product_value` is the chosen
+        // variant's price times its quantity, summed from `order_items` — it
+        // excludes shipping, the COD service fee and its VAT, and the payment
+        // channel's admin fee. Optimising on those would have the platform
+        // bidding on the courier's price list as if it were margin.
+        //
+        // Still taken from the server rather than the browser: a tampered
+        // sessionStorage must not be able to dictate reported revenue.
+        const serverProductValue = Number(statusData.product_value || 0);
+        if (serverProductValue > 0) {
+          conversionValue = serverProductValue;
+          // `data` was built before this fetch, so the pixel payload has to be
+          // corrected too or the two legs would report different revenue.
+          data.value = serverProductValue;
+        }
+      } catch {
+        return;
+      }
+      // Guard 1: cegah event success dobel untuk event yang sama.
+      if (!once(`${eventName}_${finalEventId}`)) return;
+      // Guard 2: cegah success event dobel untuk order yang sama walau thanks page dibuka/refresh lagi.
+      if (orderId && !once(`${eventName}_order_${orderId}`)) return;
+
+      // Kept byte-identical to `src/lib/meta-identity.ts`, which the server CAPI
+      // leg uses. This script cannot import it — `define:vars` forces
+      // `is:inline`, which Astro never bundles — so `meta-identity.test.ts`
+      // reads this file and fails if the two drift apart.
+      const normalizeMetaText = (value) => {
+        const cleaned = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        return cleaned || undefined;
+      };
+      const toE164Digits = (value) => {
+        let digits = String(value || '').replace(/\D/g, '');
+        if (!digits) return undefined;
+        if (digits.startsWith('00')) digits = digits.slice(2);
+        if (digits.startsWith('620')) digits = `62${digits.slice(3)}`;
+        else if (digits.startsWith('0')) digits = `62${digits.slice(1)}`;
+        else if (digits.startsWith('8')) digits = `62${digits}`;
+        return digits.length >= 8 && digits.length <= 15 ? digits : undefined;
+      };
+      const nameParts = String(name || '').trim().split(/\s+/).filter(Boolean);
+      const normalizedPhone = toE164Digits(phone);
+      const storedExternalId = getCookieValue(metaExternalIdCookie);
+      const externalId = /^[a-f0-9]{32}$/.test(storedExternalId)
+        ? storedExternalId
+        : normalizedPhone;
+      const firstName = normalizeMetaText(nameParts[0]);
+      const lastName = nameParts.length > 1 ? normalizeMetaText(nameParts.slice(1).join('')) : undefined;
+      // The CAPI leg below (postMeta's user_data) hashes ct/st/zp/country on
+      // this exact Purchase already. Dropping them from the browser Pixel leg
+      // — as this used to — sent Meta two different match keys for the same
+      // order: a full one server-side, a phone-and-name-only one client-side.
+      const metaCity = normalizeMetaText(city);
+      const metaState = normalizeMetaText(province);
+      const metaZip = normalizeMetaText(postalCode);
+      const metaCountry = normalizeMetaText('id');
+      try {
+        if (typeof window.__PS_META_TRACK__ === 'function') {
+          // Handed to the ONE init `MetaPixelBase` owns, never to a second
+          // `fbq('init')` of our own: fbevents honours advanced matching once
+          // per pixel id and silently discards every later call, so this
+          // Purchase used to reach Meta matched on `external_id` alone while
+          // the server leg matched on eight keys. `/thanks` sets
+          // `__PS_META_AWAIT_MATCHING__` in the head slot BaseLayout renders
+          // ahead of the pixel, which is what leaves the single init still
+          // unspent by the time these hashes exist.
+          //
+          // `client_user_agent` is deliberately absent. It is a Conversions
+          // API field; Meta's Pixel advanced-matching reference does not list
+          // it, and the browser sends its own user agent with the request
+          // regardless.
+          const advancedMatching = {
+            ph: normalizedPhone ? await hashSha256Hex(normalizedPhone) : undefined,
+            fn: firstName ? await hashSha256Hex(firstName) : undefined,
+            ln: lastName ? await hashSha256Hex(lastName) : undefined,
+            ct: metaCity ? await hashSha256Hex(metaCity) : undefined,
+            st: metaState ? await hashSha256Hex(metaState) : undefined,
+            zp: metaZip ? await hashSha256Hex(metaZip) : undefined,
+            country: metaCountry ? await hashSha256Hex(metaCountry) : undefined,
+            external_id: externalId ? await hashSha256Hex(externalId) : undefined,
+          };
+          if (typeof window.__PS_META_INIT__ === 'function') {
+            window.__PS_META_INIT__(advancedMatching);
+          }
+          // Through the ordered hook: the init above is issued a digest later,
+          // and a Purchase replayed ahead of it is discarded without a word.
+          window.__PS_META_TRACK__?.(eventName, data, { eventID: finalEventId });
+        }
+      } catch (error) {
+        console.error('meta-browser-purchase', error);
+      }
+
+      try {
+        pushGtmEcomEvent('purchase', {
+          currency: 'IDR',
+          value: Number(conversionValue || 1),
+          // The unit price is derived from the server's value, never from browser state.
+          quantity,
+          item_id: productId,
+          item_name: productName,
+          item_variant: pick('variant_unique_id', '') || undefined,
+          // The server's order number: it is the dedup key, and a fresh tab has no stored one.
+          transaction_id: finalEventId || orderId || undefined,
+          event_id: finalEventId,
+        });
+      } catch (error) {
+        console.error('gtm-purchase', error);
+      }
+
+      try {
+        if (typeof window.__PS_PUSH_GOOGLE_CONVERSION__ === 'function') {
+          // Google normalises differently from Meta: trim and lowercase only.
+          // Meta additionally strips every non-alphanumeric, which collapses a
+          // multi-word Indonesian family name ("Nur Aisyah" -> "nuraisyah") into
+          // something no Google account carries. Reusing the Meta values here is
+          // what this leg used to do.
+          const googleText = (value) => {
+            const cleaned = String(value || '').trim().toLowerCase();
+            return cleaned || undefined;
+          };
+          const googleFirstName = googleText(nameParts[0]);
+          const googleLastName = nameParts.length > 1 ? googleText(nameParts.slice(1).join(' ')) : undefined;
+          const googleUserData = {
+            // Google matches on E.164 including the leading '+'; Meta matches on
+            // digits only. Same number, two different hashes — do not share one.
+            sha256_phone_number: normalizedPhone ? await hashSha256Hex(`+${normalizedPhone}`) : undefined,
+            // Names belong inside `address`. Sent at the top level — as they were
+            // — gtag ignores them, so the hashes cost work and match nobody.
+            // `postal_code` and `country` travel unhashed beside them, and Google
+            // treats name plus those two as one address match key.
+            address: {
+              sha256_first_name: googleFirstName ? await hashSha256Hex(googleFirstName) : undefined,
+              sha256_last_name: googleLastName ? await hashSha256Hex(googleLastName) : undefined,
+              city: googleText(city),
+              region: googleText(province),
+              postal_code: googleText(postalCode),
+              // ISO 3166-1 alpha-2, uppercase per Google's enhanced-conversions
+              // documentation (support.google.com/google-ads/answer/13258081,
+              // whose own example is 'UK') — unlike Meta's `country`, which wants
+              // lowercase. Two different ad platforms, two different cases; do
+              // not let one leg's normaliser bleed into the other's.
+              country: 'ID',
+            },
+          };
+          window.__PS_PUSH_GOOGLE_CONVERSION__(Number(conversionValue || 1), finalEventId || orderId || undefined, googleUserData);
+        }
+      } catch (error) {
+        console.error('google-ads-purchase', error);
+      }
+
+      postMeta({
+        event_name: eventName,
+        event_id: finalEventId,
+        // The order reference the server re-resolves the Purchase from. Sent
+        // explicitly instead of leaving the route to parse the address bar.
+        order_number: finalEventId,
+        status_token: statusToken,
+        lp_name: pick('lp_name', ''),
+        product_id: productId || undefined,
+        content_name: productName,
+        value: Number(conversionValue || 1),
+        currency: 'IDR',
+        content_type: 'product',
+        event_source_url: window.location.href,
+        user_data: {
+          customer_name: name,
+          customer_phone: phone,
+          country: 'id',
+          postal_code: postalCode,
+          province,
+          city,
+          district,
+          // Stable first-party visitor ID when available; normalized phone only
+          // keeps an upgrading session matchable before the cookie exists.
+          external_id: externalId || undefined,
+          fbp: getCookieValue('_fbp'),
+          fbc: getCookieValue('_fbc'),
+        },
+        payment_status: verifiedPaymentStatus,
+      });
+    };
+
+    // Tells /thanks the Purchase has been handed to the Pixel and the CAPI leg
+    // (or that there was none to send), so a WhatsApp hand-off can follow
+    // without cutting either request short. Fired on every exit of fire().
+    void fire().finally(() => {
+      window.__PS_PURCHASE_DONE__ = true;
+      if (typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+        window.dispatchEvent(new Event('ps:purchase-done'));
+      }
+    });
+  })();
+</script>

@@ -1,0 +1,8 @@
+---
+export const prerender = false;
+// "Solusi terbaru" is the list of solution (landing) pages, which lives at
+// /landing-page. This pointed at the catalogue while that route did not exist;
+// it does now, and sending a visitor who asked for solutions to the product
+// grid answered a different question.
+return Astro.redirect(`/landing-page${Astro.url.search}`, 301);
+---

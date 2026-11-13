@@ -1,0 +1,236 @@
+---
+/**
+ * Purchase social-proof toast, top center.
+ *
+ * Adapted from petanisejahtera's SocialProof.astro — the same discipline
+ * carries over: aria-hidden because the content is marketing persuasion, not
+ * functional information, and repeated announcements would harass a screen
+ * reader user; because it is aria-hidden, nothing focusable may live inside;
+ * pointer-events-none is PERMANENT so the toast can never intercept a tap on
+ * the top of the screen.
+ *
+ * It stays hidden while the hero or the order form is on screen and while a
+ * form field holds focus: over the hero it competes with the product photo,
+ * and over the form it competes with the thing it exists to cause.
+ *
+ * It states one real aggregate — the store's orders in the last 24 hours,
+ * counted server-side by `src/lib/social-proof.ts`, naming no product (the
+ * same number is true on every landing page) — and renders nothing when
+ * that count is under the threshold. It once rotated twenty invented buyers
+ * under a verified badge (A-300); that was a fabricated purchase claim.
+ */
+
+import Icon from './Icon.astro';
+import { socialProofMessage } from '../../../lib/social-proof';
+
+interface Props {
+  /** The store's real orders in the last 24 hours (`recentOrderCount`). */
+  orderCount: number;
+  /** Selector for the hero element that blocks the toast. Empty = no hero
+   *  blocker, for a page (a landing page) that has no gallery of its own. */
+  heroSelector?: string;
+  /** Selector for the order-form section that blocks the toast. */
+  formSelector?: string;
+}
+
+const {
+  orderCount,
+  heroSelector = '[data-gallery]',
+  formSelector = '#form-pemesanan',
+} = Astro.props;
+const message = socialProofMessage(orderCount);
+// The same sentence as `message`, set in two lines so the number carries it.
+const countLabel = orderCount.toLocaleString('id-ID');
+---
+
+{message && (
+<div
+  data-social-proof
+  data-hero-selector={heroSelector}
+  data-form-selector={formSelector}
+  aria-hidden="true"
+  class="pointer-events-none fixed left-1/2 top-4 z-40 w-[calc(100%-2rem)] max-w-[360px] -translate-x-1/2 -translate-y-16 scale-95 opacity-0"
+>
+  <div
+    class="flex items-center gap-3 rounded-2xl border border-[#E5E5E5] bg-white py-2.5 pl-2.5 pr-4 shadow-[0_10px_28px_rgba(17,17,17,0.14),0_2px_6px_rgba(17,17,17,0.06)]"
+  >
+    <div class="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#F3F3F3] text-[#121212]">
+      <Icon name="lucide:shopping-bag" class="h-5 w-5" />
+      {/* "Live" marker: these are real orders, so it may say so. */}
+      <span class="absolute -right-0.5 -top-0.5 grid h-3 w-3 place-items-center">
+        <span data-social-proof-ping class="absolute h-full w-full rounded-full bg-[#121212]/50"></span>
+        <span class="relative h-2.5 w-2.5 rounded-full bg-[#121212] ring-2 ring-white"></span>
+      </span>
+    </div>
+    <div class="min-w-0 flex-1 text-left">
+      <p class="truncate text-[13.5px] leading-tight text-[#111111]">
+        <strong class="font-semibold">{countLabel} orang</strong> memesan
+      </p>
+      <p class="mt-0.5 truncate text-[12px] leading-tight text-[#555555]">dalam 24 jam terakhir</p>
+    </div>
+  </div>
+</div>
+)}
+<style>
+  [data-social-proof] {
+    transition:
+      transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.4s ease;
+  }
+
+  [data-social-proof-ping] {
+    animation: social-proof-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes social-proof-ping {
+    75%,
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-social-proof] {
+      transition: opacity 0.2s ease;
+    }
+
+    [data-social-proof-ping] {
+      animation: none;
+      opacity: 0;
+    }
+  }
+</style>
+
+<script>
+  // The rules live in a module both this component and its tests can load;
+  // this script is the DOM wiring around them. See social-proof-visibility.ts.
+  import { isToastBlocked } from '../../../lib/social-proof-visibility.ts';
+
+  const initSocialProof = () => {
+    const toast = document.querySelector<HTMLElement>('[data-social-proof]');
+    if (!toast) return;
+
+    // A selector may be absent by design (a landing page has no gallery) or
+    // simply wrong; `querySelector` throws on an invalid one, and an
+    // exception here would leave the toast permanently stuck at opacity-0.
+    const findBlocker = (selector: string | undefined) => {
+      if (!selector) return null;
+      try {
+        return document.querySelector(selector);
+      } catch {
+        return null;
+      }
+    };
+
+    const hero = findBlocker(toast.dataset.heroSelector);
+    const formSection = findBlocker(toast.dataset.formSelector);
+
+    // Both default to "assumed blocking" until the IntersectionObserver's own
+    // first callback confirms otherwise — that callback is always async, so a
+    // form already in view at load (a short landing page, or a tall viewport
+    // where the form sits high on the product page) would otherwise let the
+    // very first showToast() below fire on stale, wrong-direction data: it
+    // shows over the form, gets yanked back within milliseconds once the real
+    // callback lands, then reappears for the same buyer once truly unblocked —
+    // a flash-hide-reshow that reads as a duplicate notification.
+    let isHeroVisible = true;
+    let isFormVisible = true;
+    let isFormFocused = false;
+    let isToastShowing = false;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
+    // One real sentence, shown once per page view: repeating it on a timer
+    // would read as a stream of new orders that did not happen.
+    let shown = false;
+
+    const clearTimer = () => {
+      if (timerId) clearTimeout(timerId);
+      timerId = null;
+    };
+
+    const isBlocked = () =>
+      isToastBlocked({
+        heroVisible: isHeroVisible,
+        formVisible: isFormVisible,
+        formFocused: isFormFocused,
+        tabHidden: document.hidden,
+      });
+
+    const hideToast = () => {
+      toast.classList.add('opacity-0', '-translate-y-16', 'scale-95');
+      toast.classList.remove('opacity-100', 'translate-y-0', 'scale-100');
+      isToastShowing = false;
+      clearTimer();
+    };
+
+    const showToast = () => {
+      clearTimer();
+      if (shown) return;
+      if (isBlocked()) {
+        timerId = setTimeout(showToast, 3000);
+        return;
+      }
+
+      toast.classList.remove('opacity-0', '-translate-y-16', 'scale-95');
+      toast.classList.add('opacity-100', 'translate-y-0', 'scale-100');
+      isToastShowing = true;
+      timerId = setTimeout(() => {
+        hideToast();
+        shown = true;
+      }, 8000);
+    };
+    const handleVisibilityUpdate = () => {
+      if (isBlocked()) {
+        if (isToastShowing) hideToast();
+      } else if (!isToastShowing && !shown) {
+        showToast();
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.target === hero) isHeroVisible = entry.isIntersecting;
+          if (entry.target === formSection) isFormVisible = entry.isIntersecting;
+        });
+        handleVisibilityUpdate();
+      },
+      { root: null, threshold: 0.05 },
+    );
+
+    if (hero) observer.observe(hero);
+    else isHeroVisible = false;
+    if (formSection) observer.observe(formSection);
+    else isFormVisible = false;
+
+    document.addEventListener('visibilitychange', handleVisibilityUpdate);
+
+    if (formSection) {
+      formSection.querySelectorAll('input, textarea, select').forEach((field) => {
+        field.addEventListener('focus', () => {
+          isFormFocused = true;
+          handleVisibilityUpdate();
+        });
+        field.addEventListener('blur', () => {
+          setTimeout(() => {
+            const active = document.activeElement;
+            if (!active || !formSection.contains(active)) {
+              isFormFocused = false;
+              handleVisibilityUpdate();
+            }
+          }, 100);
+        });
+      });
+    }
+
+    showToast();
+  };
+
+  // Deferred 2s past load so it cannot touch LCP/INP.
+  if (document.readyState === 'complete') {
+    setTimeout(initSocialProof, 2000);
+  } else {
+    window.addEventListener('load', () => setTimeout(initSocialProof, 2000));
+  }
+</script>

@@ -1,0 +1,900 @@
+---
+import Icon from '../components/storefront/shared/Icon.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+// The re-brand tokens (--sf-accent*, ADR-019) live in this layer; without it a
+// store's own accent never reached the page where the buyer pays.
+import '../styles/form-hybrid.css';
+
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'no-store');
+if (Array.from(Astro.url.searchParams.keys()).some((key) => key !== 'preview')) {
+  return Astro.redirect(Astro.url.searchParams.get('preview') === '1' ? '/payment?preview=1' : '/payment', 303);
+}
+---
+
+<BaseLayout
+  title={`Pembayaran · ${Astro.locals.tenant.name}`}
+  description="Selesaikan pembayaran pesanan Anda."
+  hideHeader
+  hideFooter
+  noindex
+>
+  <script is:inline slot="head">
+    const preview = new URLSearchParams(window.location.search).get('preview') === '1';
+    const cleanUrl = `${window.location.pathname}${preview ? '?preview=1' : ''}${window.location.hash}`;
+    if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== cleanUrl) {
+      window.history.replaceState(null, '', cleanUrl);
+    }
+  </script>
+  <main data-hybrid-form-root class="min-h-screen bg-white px-4 py-6 font-sans text-[#111111] sm:py-10">
+    <div class="mx-auto w-full max-w-[480px] overflow-hidden rounded-none border border-[#E5E5E5] bg-white">
+      <!-- Header Reassurance -->
+      <header class="border-b border-[#E5E5E5] bg-white px-5 py-4 text-center">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#767676]">{Astro.locals.tenant.name}</p>
+        <h1 class="mt-1.5 text-xl font-semibold tracking-[-0.02em] text-[#111111]">Selesaikan Pembayaran</h1>
+        <p class="mt-1 text-xs leading-5 text-[#555555]">Pesanan akan diproses otomatis setelah pembayaran terkonfirmasi.</p>
+      </header>
+
+      <section class="px-5 py-5" aria-live="polite">
+        <!-- Order Header & Status Pill -->
+        <div class="flex items-center justify-between gap-3 rounded-none border border-[#E5E5E5] bg-[#F5F5F5] px-4 py-3">
+          <div>
+            <!-- #555555, not the #767676 used on white: on the #F5F5F5 panel
+                 that lighter grey measures 4.16:1, under the 4.5 AA floor. -->
+            <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#555555]">No. Pesanan</p>
+            <p id="order-number" class="mt-0.5 font-mono text-sm font-bold tracking-wider text-[#111111]">Memuat...</p>
+          </div>
+          <!-- The base classes stay in the markup and the script swaps only the
+               three colour classes, so the pill can never drift from what the
+               server rendered. Rewriting className wholesale is what let the
+               copy button and this pill diverge from their SSR shape. -->
+          <span id="payment-status" class="rounded-none border px-3 py-1 text-[10px] font-bold uppercase tracking-wider border-[#E5E5E5] bg-white text-[#555555]">
+            Menunggu
+          </span>
+        </div>
+
+        <!-- Expiry Countdown Bar -->
+        <div id="countdown-box" class="mt-4 hidden items-center justify-between rounded-none border px-4 py-3 border-[#E5E5E5] bg-[#F5F5F5] text-[#111111]">
+          <div class="flex items-center gap-2">
+            <Icon name="lucide:clock" class="size-4 shrink-0" aria-hidden="true" />
+            <span class="text-[10px] font-semibold uppercase tracking-[0.15em]">Batas Waktu Bayar</span>
+          </div>
+          <strong id="countdown-timer" class="font-mono text-sm font-bold tracking-widest">00:00:00</strong>
+        </div>
+
+        <!-- Payment Channel Branding & Amount -->
+        <div class="mt-5 rounded-none border border-[#E5E5E5] bg-white p-5 text-center">
+          <div id="channel-logo-container" class="mb-3 flex justify-center">
+            <div class="inline-flex h-14 w-28 items-center justify-center rounded-none border border-[#E5E5E5] bg-white p-1">
+              <img id="payment-logo" src="/images/payment/qris.svg" alt="QRIS" width="102" height="46" class="h-full w-full object-contain" loading="eager" decoding="async" />
+            </div>
+          </div>
+
+          <p id="payment-channel" class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#767676]">Pembayaran Online</p>
+
+          <!-- The copy control sits under the figure, never beside it. Beside
+               it, a long total or account number had to share one row with
+               the button and broke onto a second line mid-number. -->
+          <p id="payment-total" class="mt-3 text-[32px] font-bold leading-none tracking-[-0.03em] text-[#111111] tabular-nums">—</p>
+          <button
+            id="copy-total"
+            type="button"
+            data-copy
+            data-idle-label="Salin Nominal"
+            data-done-label="Nominal Tersalin"
+            class="mt-3 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-none border border-[#E5E5E5] bg-white px-4 text-[11px] font-semibold text-[#333333] transition-colors duration-150 hover:bg-[#F5F5F5] active:scale-[0.98] data-[copied=true]:border-[var(--sf-accent)] data-[copied=true]:bg-[var(--sf-accent)] data-[copied=true]:text-white"
+          >
+            <Icon name="lucide:copy" class="size-3.5 in-data-[copied=true]:hidden" aria-hidden="true" />
+            <Icon name="lucide:check" class="hidden size-3.5 in-data-[copied=true]:inline" aria-hidden="true" />
+            <span data-copy-label>Salin Nominal</span>
+          </button>
+
+          <p id="payment-instruction" class="mx-auto mt-2 max-w-[340px] text-xs leading-5 text-[#555555]">
+            Ikuti instruksi pembayaran di bawah ini.
+          </p>
+
+          <dl id="payment-breakdown" class="mt-4 grid gap-2 rounded-none border border-[#E5E5E5] bg-[#F5F5F5] px-4 py-3 text-xs" hidden>
+            <div class="flex items-center justify-between gap-4">
+              <dt id="payment-amount-label" class="text-[#555555]">Nominal Pesanan</dt>
+              <dd id="payment-amount" class="font-semibold text-[#111111]">—</dd>
+            </div>
+            <div id="payment-admin-fee-row" class="flex items-center justify-between gap-4">
+              <dt id="payment-admin-fee-label" class="text-[#555555]">Biaya Layanan</dt>
+              <dd id="payment-admin-fee" class="font-semibold text-[#111111]">—</dd>
+            </div>
+          </dl>
+        </div>
+
+        <!-- QRIS Display Section -->
+        <div id="qr-section" class="mt-5 text-center" hidden>
+          <div class="mx-auto grid size-[284px] max-w-full place-items-center rounded-none border border-[#E5E5E5] bg-white p-3">
+            <canvas id="qr-canvas" class="h-auto max-h-[260px] w-auto max-w-full" aria-label="QR code pembayaran"></canvas>
+            <img id="qr-image" class="h-auto max-h-[260px] w-auto max-w-full" alt="QR code pembayaran" hidden />
+          </div>
+
+          <div class="mt-3.5 flex flex-wrap items-center justify-center gap-2">
+            <button id="download-qr" type="button" class="inline-flex min-h-11 items-center gap-2 rounded-none bg-[var(--sf-accent)] px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-[var(--sf-accent-strong)]">
+              <Icon name="lucide:download" class="size-4" aria-hidden="true" />
+              <span id="download-qr-label">Simpan / Unduh Gambar QR</span>
+            </button>
+          </div>
+
+          <p class="mx-auto mt-2.5 max-w-[340px] text-[11px] leading-5 text-[#555555]">
+            Tekan & tahan gambar QRIS di atas untuk menyimpan ke Galeri HP, atau scan langsung dari m-Banking <strong>(BCA, Livin', BRImo, Octo)</strong> & e-Wallet <strong>(GoPay, OVO, ShopeePay, DANA, LinkAja)</strong>.
+          </p>
+        </div>
+
+        <!-- Virtual Account Empty Fallback Alert -->
+        <div id="va-missing-notice" class="mt-4 rounded-none border border-[#f2c4c4] bg-[#fdf1f1] p-4 text-xs leading-6 text-[#a12626]" hidden>
+          <strong id="va-missing-title" class="block font-semibold">Instruksi Pembayaran Belum Siap</strong>
+          <span id="va-missing-text">Nomor Virtual Account belum dapat ditampilkan secara otomatis. Pastikan API key AutoLaris aktif atau hubungi Admin Toko untuk konfirmasi pembayaran.</span>
+          <button id="retry-payment-btn" type="button" class="mt-3 block w-full rounded-none border border-[#a12626] bg-white px-3 py-2 text-xs font-semibold text-[#a12626]" hidden>
+            Buat Ulang Instruksi Pembayaran
+          </button>
+        </div>
+
+        <!-- Virtual Account / Payment Code Display Section -->
+        <!-- The number owns the full width of its card and the copy button sits
+             under it. Side by side, a 14-digit VA broke onto two lines at phone
+             width (`8808440911 / 0437`), which is exactly the moment a buyer is
+             reading it back against their banking app. -->
+        <div id="account-section" class="mt-5 rounded-none border border-[#E5E5E5] bg-[#F5F5F5] p-4" hidden>
+          <div class="flex items-center justify-between gap-3">
+            <p id="account-label" class="min-w-0 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#555555]">Nomor Virtual Account</p>
+            <span id="account-verification" class="shrink-0 rounded-none border border-[#E5E5E5] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#555555]">Otomatis</span>
+          </div>
+          <div id="account-box" class="mt-2 rounded-none border border-[#E5E5E5] bg-white px-4 py-4 text-center transition-colors duration-150 data-[copied=true]:border-[var(--sf-accent)]">
+            <strong id="account-value" class="block font-mono text-[clamp(17px,5.2vw,24px)] font-bold leading-tight tracking-[0.02em] text-[#111111] tabular-nums [overflow-wrap:anywhere]"></strong>
+            <p id="account-holder-row" class="mt-2 text-[13px] leading-5 text-[#555555]" hidden>
+              a.n. <strong id="account-holder" class="font-semibold text-[#111111]"></strong>
+            </p>
+          </div>
+          <button
+            id="copy-account"
+            type="button"
+            data-copy
+            data-idle-label="Salin Nomor VA"
+            data-done-label="Nomor VA Tersalin"
+            class="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-none border border-[var(--sf-accent)] bg-[var(--sf-accent)] px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition-colors duration-150 hover:bg-[var(--sf-accent-strong)] active:scale-[0.99] data-[copied=true]:bg-white data-[copied=true]:text-[#111111]"
+          >
+            <Icon name="lucide:copy" class="size-4 in-data-[copied=true]:hidden" aria-hidden="true" />
+            <Icon name="lucide:check" class="hidden size-4 in-data-[copied=true]:inline" aria-hidden="true" />
+            <span data-copy-label>Salin Nomor VA</span>
+          </button>
+          <p id="copy-account-hint" class="mt-2 text-center text-[11px] leading-5 text-[#555555]" role="status" aria-live="polite">
+            Tempel nomor ini di menu transfer aplikasi bank Anda.
+          </p>
+        </div>
+
+        <!-- Deep Link Provider App Button -->
+        <a
+          id="provider-link"
+          href="#"
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          class="mt-5 hidden min-h-12 w-full items-center justify-center gap-2 rounded-none bg-[var(--sf-accent)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-[var(--sf-accent-strong)]"
+        >
+          Buka Aplikasi Pembayaran
+          <Icon name="lucide:external-link" class="size-4" aria-hidden="true" />
+        </a>
+
+        <!-- Tailored Payment Instructions Accordion -->
+        <div id="instructions-container" class="mt-6 overflow-hidden rounded-none border border-[#E5E5E5] bg-white">
+          <!-- The channel name sits on its own line rather than inside a
+               parenthesis on the title row. Every Virtual Account label is
+               longer than the row, so the inline form wrapped mid-phrase and
+               left the closing bracket stranded on its own line. -->
+          <button
+            id="toggle-instructions"
+            type="button"
+            aria-expanded="false"
+            aria-controls="instructions-body"
+            class="flex w-full items-center justify-between gap-3 bg-[#F5F5F5] px-4 py-3.5 text-left transition-colors hover:bg-[#F3F3F3]"
+          >
+            <span class="flex min-w-0 items-center gap-2">
+              <Icon name="lucide:help-circle" class="size-4 shrink-0 text-[var(--sf-accent)]" aria-hidden="true" />
+              <span class="min-w-0">
+                <span class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-[#111111]">Cara Pembayaran</span>
+                <span id="instruction-channel-name" class="mt-0.5 block truncate text-[11px] font-normal text-[#555555]">Panduan</span>
+              </span>
+            </span>
+            <span id="instructions-chevron" class="inline-block shrink-0 transition-transform duration-200">
+              <Icon name="lucide:chevron-down" class="size-4 text-[#767676]" aria-hidden="true" />
+            </span>
+          </button>
+
+          <div id="instructions-body" class="hidden border-t border-[#E5E5E5] p-4 text-xs leading-6 text-[#555555]">
+            <!-- Dynamic guide list rendered by client script -->
+            <ol id="instructions-list" class="list-decimal space-y-2 pl-4">
+              <li>Pilih menu transfer pada aplikasi bank Anda.</li>
+              <li>Masukkan nomor Virtual Account di atas.</li>
+              <li>Pastikan nominal pembayaran sesuai.</li>
+              <li>Selesaikan pembayaran.</li>
+            </ol>
+          </div>
+        </div>
+
+        <p id="expiry" class="mt-4 text-center text-xs font-normal text-[#767676]" hidden></p>
+        <p id="payment-error" class="mt-4 rounded-none border border-[#f2c4c4] bg-[#fdf1f1] p-3.5 text-xs leading-6 text-[#a12626]" hidden></p>
+
+        <!-- Trust & Security Footer Badge -->
+        <div class="mt-5 flex items-start gap-3 rounded-none border border-[#E5E5E5] bg-[#F5F5F5] p-4">
+          <Icon name="lucide:shield-check" class="mt-0.5 size-5 shrink-0 text-[var(--sf-accent)]" aria-hidden="true" />
+          <div class="text-xs leading-5 text-[#555555]">
+            <strong id="payment-monitor-title" class="block font-semibold text-[#111111]">Menunggu Verifikasi Pembayaran</strong>
+            <span id="payment-monitor-copy">Tim toko memeriksa pembayaran di dashboard AutoLaris dan memperbarui status di CMS. Halaman ini menyegarkan status tiap menit, lalu otomatis berpindah ke halaman terima kasih setelah pembayaran dikonfirmasi.</span>
+          </div>
+        </div>
+
+        <!-- Tertiary: reopening this page on another device. It used to sit in
+             the amount card between the total and the instruction, competing
+             with the two things a buyer actually needs there. -->
+        <button
+          id="copy-payment-link"
+          type="button"
+          data-copy
+          data-idle-label="Salin tautan halaman ini"
+          data-done-label="Tautan tersalin"
+          title="Salin tautan halaman pembayaran ini untuk dibuka di perangkat lain"
+          class="mx-auto mt-4 flex min-h-10 items-center justify-center gap-1.5 px-3 text-[12px] font-semibold text-[#555555] underline-offset-4 transition-colors hover:text-[#111111] hover:underline data-[copied=true]:text-[#111111]"
+          hidden
+        >
+          <Icon name="lucide:link" class="size-3.5 in-data-[copied=true]:hidden" aria-hidden="true" />
+          <Icon name="lucide:check" class="hidden size-3.5 in-data-[copied=true]:inline" aria-hidden="true" />
+          <span data-copy-label>Salin tautan halaman ini</span>
+        </button>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    import QRCode from 'qrcode';
+    import { formatIdr } from '../lib/format-idr';
+    import { paymentBrandAsset } from '../lib/payment-brand';
+    import { copyText, groupAccountNumber, paymentChannelLabel } from '../lib/payment-display';
+
+    type PaymentDetails = {
+      channel_code?: string;
+      fee_bearer?: 'buyer' | 'seller';
+      status?: string;
+      amount?: number;
+      admin_fee?: number;
+      total_amount?: number;
+      virtual_account?: string | null;
+      qr_payload?: string | null;
+      payment_code?: string | null;
+      payment_url?: string | null;
+      expires_at?: string | null;
+      error?: string | null;
+      account_holder?: string | null;
+      bank_name?: string | null;
+      manual_transfer?: boolean;
+    };
+
+    type StatusResponse = {
+      success?: boolean;
+      is_paid?: boolean;
+      order_number?: string;
+      payment_method?: string;
+      payment_status?: string;
+      payment?: PaymentDetails | null;
+      error?: string;
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const isPreview = params.get('preview') === '1';
+    let stored: Record<string, unknown> = {};
+    try {
+      stored = JSON.parse(sessionStorage.getItem('thanks_state') || '{}') || {};
+    } catch {
+      stored = {};
+    }
+    // A locator in the fragment (`#o=<order>&t=<token>`) wins over whatever
+    // this tab remembers: it is how a buyer reopens their own instructions
+    // from another tab or device. It is copied into sessionStorage and then
+    // removed from the address bar so it is not on screen or in history.
+    try {
+      const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const linkedOrder = (fragment.get('o') || '').trim();
+      const linkedToken = (fragment.get('t') || '').trim();
+      if (linkedOrder && linkedToken) {
+        if (String(stored.order_pk || '') !== linkedOrder) stored = {};
+        stored = { ...stored, order_pk: linkedOrder, status_token: linkedToken };
+        sessionStorage.setItem('thanks_state', JSON.stringify(stored));
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+      }
+    } catch {
+      // Storage or history unavailable: the fragment still drives this load.
+    }
+
+    const text = (value: unknown) => String(value ?? '').trim();
+    const escapeHtml = (value: unknown) =>
+      text(value).replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[character] ?? character);
+    const numeric = (value: unknown) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const formatRp = (value: unknown) => formatIdr(numeric(value));
+
+    const orderPk = text(stored.order_pk);
+    const statusToken = text(stored.status_token);
+    let orderNumber = text(stored.order_id || orderPk);
+    let currentStatus = text(stored.payment_status || 'pending').toLowerCase();
+    let payment: PaymentDetails = {
+      channel_code: text(stored.payment_channel),
+      fee_bearer: text(stored.payment_fee_bearer) === 'seller' ? 'seller' : 'buyer',
+      amount: numeric(stored.payment_amount),
+      admin_fee: numeric(stored.payment_admin_fee),
+      total_amount: numeric(stored.total_payment),
+      virtual_account: text(stored.payment_virtual_account),
+      qr_payload: text(stored.payment_qr_payload),
+      payment_code: text(stored.payment_code),
+      payment_url: text(stored.payment_url),
+      expires_at: text(stored.payment_expires_at),
+      error: text(stored.payment_error),
+      account_holder: text(stored.payment_account_holder),
+      bank_name: text(stored.payment_bank_name),
+      manual_transfer: Boolean(stored.payment_manual_transfer),
+    };
+
+    const orderNumberEl = document.getElementById('order-number')!;
+    const statusEl = document.getElementById('payment-status')!;
+    const totalEl = document.getElementById('payment-total')!;
+    const copyTotalBtn = document.getElementById('copy-total') as HTMLButtonElement;
+    const copyLinkBtn = document.getElementById('copy-payment-link') as HTMLButtonElement | null;
+    const channelEl = document.getElementById('payment-channel')!;
+    const instructionEl = document.getElementById('payment-instruction')!;
+    const breakdownEl = document.getElementById('payment-breakdown')!;
+    const amountLabelEl = document.getElementById('payment-amount-label')!;
+    const adminFeeLabelEl = document.getElementById('payment-admin-fee-label')!;
+    const amountEl = document.getElementById('payment-amount')!;
+    const adminFeeEl = document.getElementById('payment-admin-fee')!;
+    const adminFeeRow = document.getElementById('payment-admin-fee-row')!;
+    const qrSection = document.getElementById('qr-section')!;
+    const qrCanvas = document.getElementById('qr-canvas') as HTMLCanvasElement;
+    const qrImage = document.getElementById('qr-image') as HTMLImageElement;
+    const downloadQrBtn = document.getElementById('download-qr') as HTMLButtonElement;
+    const accountSection = document.getElementById('account-section')!;
+    const accountLabel = document.getElementById('account-label')!;
+    const accountValue = document.getElementById('account-value')!;
+    const copyAccount = document.getElementById('copy-account') as HTMLButtonElement;
+    const accountBox = document.getElementById('account-box')!;
+    const accountHolderRow = document.getElementById('account-holder-row')!;
+    const accountHolder = document.getElementById('account-holder')!;
+    const copyAccountHint = document.getElementById('copy-account-hint')!;
+    const providerLink = document.getElementById('provider-link') as HTMLAnchorElement;
+    const paymentLogo = document.getElementById('payment-logo') as HTMLImageElement;
+    const accountVerification = document.getElementById('account-verification')!;
+    const paymentMonitorCopy = document.getElementById('payment-monitor-copy')!;
+    const paymentMonitorTitle = document.getElementById('payment-monitor-title')!;
+    const expiryEl = document.getElementById('expiry')!;
+    const countdownBox = document.getElementById('countdown-box')!;
+    const countdownTimer = document.getElementById('countdown-timer')!;
+    const errorEl = document.getElementById('payment-error')!;
+    
+    // Accordion elements
+    const toggleInstructionsBtn = document.getElementById('toggle-instructions') as HTMLButtonElement;
+    const instructionsBody = document.getElementById('instructions-body')!;
+    const instructionsChevron = document.getElementById('instructions-chevron')!;
+    const instructionChannelName = document.getElementById('instruction-channel-name')!;
+    const instructionsList = document.getElementById('instructions-list')!;
+
+    let renderedQr = '';
+    let countdownInterval: number | null = null;
+
+    /* Colour is swapped one class at a time, never by reassigning className.
+       Reassigning it dropped the layout and shape classes the server rendered
+       with — the copy button came back from "Tersalin" as a different button,
+       and the status pill and countdown box were round while the rest of the
+       page was square. Only the colours below ever change. */
+    const CALM = ['border-[#E5E5E5]', 'bg-[#F5F5F5]', 'text-[#111111]'];
+    const URGENT = ['border-[#f2c4c4]', 'bg-[#fdf1f1]', 'text-[#a12626]'];
+    const STATUS_TONES = {
+      waiting: ['border-[#E5E5E5]', 'bg-white', 'text-[#555555]'],
+      paid: ['border-[var(--sf-accent)]', 'bg-[#F3F3F3]', 'text-[#333333]'],
+      failed: ['border-[#f2c4c4]', 'bg-[#fdf1f1]', 'text-[#a12626]'],
+    } as const;
+    const swapTone = (
+      element: Element,
+      tones: readonly (readonly string[])[],
+      next: readonly string[],
+    ) => {
+      tones.forEach((tone) => tone.forEach((cls) => element.classList.remove(cls)));
+      next.forEach((cls) => element.classList.add(cls));
+    };
+    const setCountdownUrgent = (urgent: boolean) => {
+      swapTone(countdownBox, [CALM, URGENT], urgent ? URGENT : CALM);
+      countdownBox.classList.toggle('animate-pulse', urgent);
+    };
+
+
+    // Bank-Specific Payment Guides
+    const paymentGuides: Record<string, string[]> = {
+      QRIS: [
+        'Buka aplikasi m-Banking (BCA Mobile, Livin\', BRImo, Octo) atau e-Wallet (GoPay, OVO, ShopeePay, DANA).',
+        'Pilih menu <strong>Scan / QRIS</strong>.',
+        'Arahkan kamera ke QR Code di atas (atau unggah dari galeri jika di-download).',
+        'Periksa nama penerima & nominal total tagihan.',
+        'Masukkan PIN aplikasi Anda untuk menyelesaikan pembayaran.'
+      ],
+      VABCA: [
+        'Buka aplikasi <strong>BCA Mobile</strong> &gt; pilih <strong>m-Transfer</strong> &gt; <strong>BCA Virtual Account</strong>.',
+        'Masukkan nomor Virtual Account BCA di atas.',
+        'Periksa rincian tagihan &amp; nama penerima.',
+        'Masukkan PIN m-BCA Anda untuk menyelesaikan pembayaran.',
+        'Atau via ATM BCA: Transaksi Lainnya &gt; Transfer &gt; Ke Rek BCA Virtual Account.'
+      ],
+      VAMANDIRI: [
+        'Buka aplikasi <strong>Livin\' by Mandiri</strong> &gt; pilih menu <strong>Bayar</strong> &gt; ketik <strong>Virtual Account</strong>.',
+        'Masukkan nomor Virtual Account Mandiri di atas.',
+        'Konfirmasi nama penerima &amp; total pembayaran.',
+        'Masukkan PIN Livin\' Anda.',
+        'Atau via ATM Mandiri: Bayar/Beli &gt; Multipayment &gt; Masukkan Kode Perusahaan / VA.'
+      ],
+      VABRI: [
+        'Buka aplikasi <strong>BRImo</strong> &gt; pilih menu <strong>Pembayaran</strong> &gt; <strong>BRIVA</strong>.',
+        'Masukkan nomor BRIVA di atas.',
+        'Periksa rincian pembayaran &amp; nama penerima.',
+        'Masukkan PIN BRImo Anda untuk verifikasi.',
+        'Atau via ATM BRI: Transaksi Lain &gt; Pembayaran &gt; Lain-lain &gt; BRIVA.'
+      ],
+      VABNI: [
+        'Buka aplikasi <strong>BNI Mobile Banking</strong> &gt; pilih <strong>Transfer</strong> &gt; <strong>Virtual Account Billing</strong>.',
+        'Pilih Input Baru &amp; masukkan nomor Virtual Account BNI di atas.',
+        'Periksa konfirmasi tagihan &amp; masukkan Password Transaksi.',
+        'Atau via ATM BNI: Menu Lain &gt; Transfer &gt; Ke Rekening BNI &gt; Masukkan nomor VA.'
+      ],
+      VAPERMATA: [
+        'Buka aplikasi <strong>PermataMobile X</strong> &gt; pilih <strong>Transfer</strong> &gt; <strong>Virtual Account</strong>.',
+        'Masukkan nomor Virtual Account Permata di atas.',
+        'Konfirmasi rincian pembayaran &amp; masukkan PIN Anda.',
+        'Atau via ATM Permata/ALTO: Pembayaran &gt; Virtual Account.'
+      ],
+      VABSI: [
+        'Buka aplikasi <strong>BSI Mobile</strong> &gt; pilih <strong>Pembayaran</strong> &gt; <strong>Virtual Account</strong>.',
+        'Masukkan nomor Virtual Account BSI di atas.',
+        'Konfirmasi nama &amp; nominal tagihan, lalu masukkan PIN BSI Mobile.'
+      ],
+      VACIMB: [
+        'Buka aplikasi <strong>OCTO Mobile by CIMB Niaga</strong> &gt; pilih <strong>Transfer</strong> &gt; <strong>Virtual Account</strong>.',
+        'Masukkan nomor Virtual Account CIMB Niaga di atas.',
+        'Konfirmasi tagihan &amp; masukkan PIN OCTO Mobile.'
+      ],
+      VADANAMON: [
+        'Buka aplikasi <strong>D-Bank PRO</strong> &gt; pilih <strong>Pembayaran</strong> &gt; <strong>Virtual Account</strong>.',
+        'Masukkan nomor Virtual Account Danamon di atas.',
+        'Konfirmasi tagihan &amp; masukkan PIN D-Bank PRO.'
+      ]
+    };
+
+    const redirectToThanks = () => {
+      currentStatus = 'paid';
+      stored = {
+        ...stored,
+        order_id: orderNumber,
+        payment_status: currentStatus,
+        payment_channel: payment.channel_code,
+        payment_fee_bearer: payment.fee_bearer,
+        payment_amount: payment.amount,
+        payment_admin_fee: payment.admin_fee,
+        total_payment: payment.total_amount,
+        payment_virtual_account: payment.virtual_account,
+        payment_qr_payload: payment.qr_payload,
+        payment_code: payment.payment_code,
+        payment_url: payment.payment_url,
+        payment_expires_at: payment.expires_at,
+      };
+      try {
+        sessionStorage.setItem('thanks_state', JSON.stringify(stored));
+      } catch {
+        // The confirmed server status still wins when browser storage is unavailable.
+      }
+      window.location.replace('/thanks');
+    };
+
+    const startCountdown = (expiresAtStr: string) => {
+      if (countdownInterval) window.clearInterval(countdownInterval);
+      const targetTime = new Date(expiresAtStr).getTime();
+      if (Number.isNaN(targetTime)) {
+        countdownBox.classList.add('hidden');
+        countdownBox.classList.remove('flex');
+        return;
+      }
+
+      countdownBox.classList.remove('hidden');
+      countdownBox.classList.add('flex');
+
+      const updateClock = () => {
+        const now = Date.now();
+        const diff = Math.max(0, Math.floor((targetTime - now) / 1000));
+        
+        if (diff <= 0) {
+          countdownTimer.textContent = '00:00:00';
+          setCountdownUrgent(true);
+          countdownBox.classList.remove('animate-pulse');
+          if (countdownInterval) window.clearInterval(countdownInterval);
+          return;
+        }
+
+        const hours = Math.floor(diff / 3600);
+        const minutes = Math.floor((diff % 3600) / 60);
+        const seconds = diff % 60;
+        
+        countdownTimer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+        setCountdownUrgent(diff < 300); // Under 5 mins -> red alert pulse
+      };
+
+      updateClock();
+      countdownInterval = window.setInterval(updateClock, 1000);
+    };
+
+    const renderQr = async (payload: string) => {
+      if (!payload || payload === renderedQr) return;
+      renderedQr = payload;
+      qrSection.hidden = false;
+      downloadQrBtn.hidden = false;
+      const isImage = payload.startsWith('data:image/') || /^https?:\/\/[^?#]+\.(png|jpe?g|webp|svg)(?:[?#]|$)/i.test(payload);
+      if (isImage) {
+        qrCanvas.hidden = true;
+        qrImage.hidden = false;
+        qrImage.src = payload;
+        return;
+      }
+      qrImage.hidden = true;
+      qrCanvas.hidden = false;
+      await QRCode.toCanvas(qrCanvas, payload, {
+        width: 260,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#020617', light: '#ffffff' },
+      });
+    };
+
+    const render = () => {
+      orderNumberEl.textContent = orderNumber;
+      const amount = numeric(payment.amount);
+      const adminFee = numeric(payment.admin_fee);
+      // The provider's total is what the buyer is charged. When it equals the
+      // amount, the fee was not added to the bill whatever the store setting
+      // says (revenleather, 2026-11-02: "buyer" showed Rp6.011 on top of a QR
+      // that asked for the amount alone), so the page reads it as the seller's.
+      const sellerBearsFee =
+        payment.fee_bearer === 'seller' ||
+        (adminFee > 0 && numeric(payment.total_amount) === amount);
+      const computedTotal = numeric(payment.total_amount) || (sellerBearsFee ? amount : amount + adminFee);
+      payment.total_amount = computedTotal;
+      totalEl.textContent = formatRp(computedTotal);
+      if (copyTotalBtn) copyTotalBtn.dataset.value = String(computedTotal);
+      const channelCode = text(payment.channel_code).toUpperCase();
+      const manualTransfer = Boolean(payment.manual_transfer);
+      const channelName =
+        paymentChannelLabel(channelCode, { manualTransfer }) || text(payment.bank_name) || 'Pembayaran Online';
+      const logoAsset = paymentBrandAsset(channelCode);
+      if (logoAsset) {
+        paymentLogo.src = logoAsset;
+        paymentLogo.alt = channelName;
+      }
+      channelEl.textContent = channelName;
+      instructionEl.textContent = manualTransfer
+        ? `Transfer tepat ${formatRp(payment.total_amount)} ke rekening penerima di bawah. Simpan bukti transfer untuk konfirmasi admin.`
+        : channelCode === 'QRIS'
+          ? 'Scan QRIS memakai aplikasi bank atau e-wallet. Nominal pembayaran terisi otomatis.'
+          : channelCode.startsWith('VA')
+              ? 'Salin nomor Virtual Account, lalu bayar melalui aplikasi m-Banking atau ATM.'
+              : 'Ikuti instruksi pembayaran di bawah ini.';
+
+      breakdownEl.hidden = !(amount || adminFee);
+      amountLabelEl.textContent = sellerBearsFee ? 'Pesanan + ongkir' : 'Nominal Pesanan';
+      amountEl.textContent = formatRp(sellerBearsFee ? payment.total_amount : amount);
+      // A zero fee row only adds a line to read; a manual transfer has none.
+      // A fee the seller bears is between the store and AutoLaris (Paduka,
+      // 2026-11-02): the buyer sees only what they pay.
+      adminFeeRow.hidden = !adminFee || sellerBearsFee;
+      adminFeeLabelEl.textContent = sellerBearsFee ? 'Biaya Layanan (seller)' : 'Biaya Layanan';
+      adminFeeEl.textContent = sellerBearsFee && adminFee
+        ? `Ditanggung seller (${formatRp(adminFee)})`
+        : adminFee
+          ? formatRp(adminFee)
+          : 'Rp0';
+
+      const paid = ['paid', 'settled', 'success'].includes(currentStatus);
+      const failed = ['failed', 'expired'].includes(currentStatus) || Boolean(payment.error);
+      // A failed or expired instruction can be regenerated by the buyer; a
+      // live one is shown as is. The retry button lives inside the notice so
+      // it only ever appears beside the explanation of why it is needed.
+      if (retryPaymentBtn) retryPaymentBtn.hidden = !(failed && !paid && !manualTransfer && orderPk && statusToken);
+      statusEl.textContent = paid ? 'Berhasil' : failed ? (currentStatus === 'expired' ? 'Kedaluwarsa' : 'Gagal') : 'Menunggu';
+      swapTone(
+        statusEl,
+        [STATUS_TONES.waiting, STATUS_TONES.paid, STATUS_TONES.failed],
+        paid ? STATUS_TONES.paid : failed ? STATUS_TONES.failed : STATUS_TONES.waiting,
+      );
+
+      const qrPayload = text(payment.qr_payload);
+      const account = text(payment.virtual_account || payment.payment_code);
+      const vaNoticeEl = document.getElementById('va-missing-notice');
+      accountSection.hidden = !account;
+      if (vaNoticeEl) {
+        const isVaChannel = channelCode.startsWith('VA') || channelCode === 'QRIS';
+        const showMissingVa = isVaChannel && !manualTransfer && !paid && (failed || (!account && !qrPayload));
+        vaNoticeEl.hidden = !showMissingVa;
+        if (showMissingVa) {
+          // Named for what failed: a QRIS buyer was told their "Virtual
+          // Account" was not ready.
+          const vaTitle = document.getElementById('va-missing-title');
+          if (vaTitle) {
+            vaTitle.textContent = currentStatus === 'expired'
+              ? 'Instruksi Pembayaran Kedaluwarsa'
+              : channelCode === 'QRIS'
+                ? 'Kode QRIS Belum Siap'
+                : 'Nomor Virtual Account Belum Siap';
+          }
+          const vaText = document.getElementById('va-missing-text');
+          if (vaText) {
+            vaText.textContent = currentStatus === 'expired'
+              ? 'Batas waktu pembayaran sudah lewat dan instruksi ini tidak berlaku lagi. Buat ulang untuk mendapatkan instruksi pembayaran baru.'
+              : payment.error
+                ? payment.error
+                : `Nomor Virtual Account (${channelName}) belum dapat dibuat secara otomatis. Buat ulang instruksi pembayaran, atau hubungi Admin Toko.`;
+          }
+        }
+      }
+      if (account) {
+        const kind = manualTransfer ? 'Rekening' : payment.virtual_account ? 'VA' : 'Kode';
+        accountLabel.textContent = manualTransfer
+          ? `Nomor Rekening ${text(payment.bank_name) || channelCode}`
+          : payment.virtual_account
+              ? 'Nomor Virtual Account'
+              : 'Kode Pembayaran';
+        // A manual transfer is checked by a person; a VA or payment code is
+        // confirmed by the provider. The badge used to say "Verifikasi Admin"
+        // on both, which told a VA buyer to wait for someone who never comes.
+        accountVerification.textContent = manualTransfer ? 'Dicek Admin' : 'Otomatis';
+        // Read in groups of four; the copied value stays the raw number.
+        accountValue.textContent = groupAccountNumber(account);
+        accountValue.setAttribute('aria-label', account.split('').join(' '));
+        copyAccount.dataset.value = account;
+        copyAccount.dataset.idleLabel = `Salin Nomor ${kind}`;
+        copyAccount.dataset.doneLabel = `Nomor ${kind} Tersalin`;
+        if (copyAccount.dataset.copied !== 'true') {
+          copyAccount.querySelector('[data-copy-label]')!.textContent = copyAccount.dataset.idleLabel;
+        }
+        const holder = text(payment.account_holder);
+        accountHolderRow.hidden = !holder;
+        accountHolder.textContent = holder;
+        copyAccountHint.textContent = manualTransfer
+          ? `Transfer tepat ${formatRp(payment.total_amount)} lalu simpan bukti transfernya.`
+          : 'Tempel nomor ini di menu transfer aplikasi bank Anda.';
+      }
+      const guideKey = channelCode.startsWith('VA') ? channelCode : channelCode === 'QRIS' ? 'QRIS' : '';
+      const guideSteps = manualTransfer
+        ? [
+            'Buka aplikasi bank atau ATM yang Anda gunakan.',
+            `Transfer tepat <strong>${formatRp(payment.total_amount)}</strong> ke rekening <strong>${escapeHtml(payment.bank_name || channelCode)}</strong> di atas.`,
+            `Pastikan penerima tercantum sebagai <strong>${escapeHtml(payment.account_holder || 'nama penerima yang ditampilkan')}</strong>.`,
+            'Simpan bukti transfer. Admin akan memeriksa dan mengonfirmasi pembayaran.',
+          ]
+        : paymentGuides[guideKey] || paymentGuides.QRIS;
+      instructionChannelName.textContent = channelName;
+      instructionsList.innerHTML = guideSteps.map(step => `<li>${step}</li>`).join('');
+      paymentMonitorCopy.textContent = manualTransfer
+        ? 'Pembayaran transfer bank dikonfirmasi oleh admin setelah dana diterima.'
+        : 'Pembayaran dikonfirmasi otomatis oleh penyedia pembayaran, dan konfirmasinya bisa memerlukan beberapa saat. Halaman ini memeriksa status setiap menit dan otomatis beralih ke halaman terima kasih setelah pembayaran lunas.';
+      paymentMonitorTitle.textContent = manualTransfer
+        ? 'Konfirmasi Pembayaran'
+        : 'Menunggu Verifikasi Pembayaran';
+
+      const paymentUrl = text(payment.payment_url);
+      if (paymentUrl) {
+        providerLink.href = paymentUrl;
+        providerLink.classList.remove('hidden');
+        providerLink.classList.add('flex');
+      }
+
+      // A failed or expired instruction is not payable: no countdown to a
+      // deadline, no amount to copy — only the retry inside the notice. Showing
+      // a live-looking timer beside "Gagal" invited a buyer to pay a dead code.
+      const live = !failed || paid;
+      copyTotalBtn.hidden = !live;
+      const expiresAt = live ? text(payment.expires_at) : '';
+      if (!live) {
+        expiryEl.hidden = true;
+        if (countdownInterval) window.clearInterval(countdownInterval);
+        countdownBox.classList.add('hidden');
+        countdownBox.classList.remove('flex');
+      }
+      if (expiresAt) {
+        const expiry = new Date(expiresAt);
+        expiryEl.hidden = false;
+        expiryEl.textContent = `Batas Pembayaran: ${Number.isNaN(expiry.getTime()) ? expiresAt : new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(expiry) + ' WIB'}`;
+        startCountdown(expiresAt);
+      }
+
+      // The notice above already carries the provider's reason; repeating it
+      // in a second red box read as two separate failures.
+      if (payment.error && vaNoticeEl?.hidden !== false) {
+        errorEl.hidden = false;
+        errorEl.textContent = text(payment.error);
+      }
+
+      if (qrPayload) renderQr(qrPayload).catch(() => {
+        errorEl.hidden = false;
+        errorEl.textContent = 'QR pembayaran tidak dapat ditampilkan. Gunakan tombol aplikasi pembayaran atau hubungi admin.';
+      });
+    };
+
+    /* One behaviour for every copy button: the value lives in `data-value`,
+       the resting and done words in `data-idle-label` / `data-done-label`, and
+       the done state is `data-copied="true"`, which the markup styles (icon
+       swap, inverted colours). Only the dataset changes, so the button comes
+       back exactly as the server rendered it. `copyText` falls back to
+       `execCommand` where the Clipboard API is missing — some in-app browsers,
+       which is where ad traffic lands. */
+    const copyTimers = new WeakMap<HTMLElement, number>();
+    const bindCopy = (button: HTMLButtonElement, valueOf: () => string, onCopied?: (ok: boolean) => void) => {
+      button.addEventListener('click', async () => {
+        const value = valueOf();
+        if (!value) return;
+        const label = button.querySelector('[data-copy-label]');
+        const ok = await copyText(value);
+        if (ok) navigator.vibrate?.(15);
+        button.dataset.copied = ok ? 'true' : 'false';
+        if (label) label.textContent = ok ? button.dataset.doneLabel || 'Tersalin' : 'Gagal menyalin, salin manual';
+        onCopied?.(ok);
+        window.clearTimeout(copyTimers.get(button));
+        copyTimers.set(button, window.setTimeout(() => {
+          delete button.dataset.copied;
+          if (label) label.textContent = button.dataset.idleLabel || 'Salin';
+          onCopied?.(false);
+        }, 2400));
+      });
+    };
+
+    bindCopy(copyAccount, () => copyAccount.dataset.value || '', (ok) => {
+      // The number's own box confirms what was copied, not just the button.
+      if (ok) accountBox.dataset.copied = 'true';
+      else delete accountBox.dataset.copied;
+    });
+    bindCopy(copyTotalBtn, () => copyTotalBtn.dataset.value || '');
+
+    // The same page, reopenable elsewhere. Fragment only: never a query string.
+    if (copyLinkBtn && orderPk && statusToken && !isPreview) {
+      copyLinkBtn.hidden = false;
+      bindCopy(
+        copyLinkBtn,
+        () => `${window.location.origin}/payment#o=${encodeURIComponent(orderPk)}&t=${encodeURIComponent(statusToken)}`,
+      );
+    }
+
+    // Accordion Toggle
+    toggleInstructionsBtn.addEventListener('click', () => {
+      const willOpen = instructionsBody.classList.contains('hidden');
+      instructionsBody.classList.toggle('hidden', !willOpen);
+      instructionsChevron.classList.toggle('rotate-180', willOpen);
+      // Without this a screen reader announces a button that never changes,
+      // and the checkout form's own group heads already carry the state.
+      toggleInstructionsBtn.setAttribute('aria-expanded', String(willOpen));
+    });
+
+    // Download QR Canvas Image
+    downloadQrBtn?.addEventListener('click', async () => {
+      const downloadLabel = document.getElementById('download-qr-label');
+      if (downloadLabel) downloadLabel.textContent = 'Mengunduh...';
+      try {
+        const filename = `QRIS-${orderNumber || 'pembayaran'}.png`;
+        if (!qrCanvas.hidden) {
+          const dataUrl = qrCanvas.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = dataUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else if (qrImage.src) {
+          const resp = await fetch(qrImage.src);
+          const blob = await resp.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+        }
+        if (downloadLabel) downloadLabel.textContent = 'Tersimpan ✓';
+        window.setTimeout(() => {
+          if (downloadLabel) downloadLabel.textContent = 'Simpan / Unduh Gambar QR';
+        }, 2000);
+      } catch (err) {
+        if (downloadLabel) downloadLabel.textContent = 'Simpan / Unduh Gambar QR';
+      }
+    });
+
+    const retryPaymentBtn = document.getElementById('retry-payment-btn') as HTMLButtonElement | null;
+
+    const refreshStatus = async (retryPayment = false) => {
+      if (!orderPk || !statusToken) {
+        if (!isPreview) {
+          errorEl.hidden = false;
+          errorEl.textContent = 'Data pembayaran tidak lengkap. Kembali ke halaman checkout dan buat pesanan kembali.';
+        }
+        return false;
+      }
+      try {
+        const response = await fetch('/api/order-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_pk: orderPk,
+            status_token: statusToken,
+            ...(retryPayment ? { retry_payment: true } : {}),
+          }),
+          cache: 'no-store',
+        });
+        const data = await response.json() as StatusResponse;
+        if (!response.ok || data.success === false) throw new Error(data.error || 'Status pembayaran tidak tersedia.');
+        orderNumber = text(data.order_number || orderNumber);
+        // The server's method, not the tab's: an order an operator moved off
+        // COD, or one opened from a link on another device, would otherwise
+        // reach /thanks as COD (or the COD default) once paid.
+        if (data.payment_method) stored = { ...stored, payment_method: text(data.payment_method) };
+        if (data.is_paid) {
+          // Paid is paid, whatever the instruction row says about itself.
+          redirectToThanks();
+          return true;
+        }
+        const orderPaymentStatus = text(data.payment_status || currentStatus).toLowerCase();
+        const transactionStatus = text(data.payment?.status).toLowerCase();
+        // The instruction's own state wins whenever there is one: an order
+        // that an older release marked `failed` still gets its freshly
+        // regenerated `pending` VA rendered instead of a stale error.
+        currentStatus = transactionStatus || orderPaymentStatus;
+        // The server row is the whole truth after a refresh: a regenerated
+        // instruction must not keep the stale VA or error from the checkout
+        // response merged underneath it.
+        if (data.payment) payment = { ...payment, ...data.payment, error: text(data.payment.error) };
+        if (retryPayment && ['failed', 'expired'].includes(currentStatus)) {
+          throw new Error(payment.error || 'Instruksi pembayaran belum dapat dibuat ulang. Coba lagi beberapa saat atau hubungi Admin Toko.');
+        }
+        errorEl.hidden = true;
+        errorEl.textContent = '';
+        render();
+      } catch (error) {
+        errorEl.hidden = false;
+        errorEl.textContent = error instanceof Error ? error.message : 'Status pembayaran tidak tersedia.';
+      }
+      return false;
+    };
+
+    retryPaymentBtn?.addEventListener('click', async () => {
+      retryPaymentBtn.disabled = true;
+      retryPaymentBtn.textContent = 'Membuat instruksi baru...';
+      try {
+        await refreshStatus(true);
+      } finally {
+        retryPaymentBtn.disabled = false;
+        retryPaymentBtn.textContent = 'Buat Ulang Instruksi Pembayaran';
+      }
+    });
+
+    render();
+    refreshStatus().then((done) => {
+      if (done || isPreview) return;
+      const interval = window.setInterval(async () => {
+        if (document.visibilityState !== 'visible') return;
+        // A dead instruction has nothing to poll for; the retry button is the
+        // way forward, and it resumes polling by changing the status.
+        if (['failed', 'expired'].includes(currentStatus)) return;
+        if (await refreshStatus()) window.clearInterval(interval);
+      }, 60_000);
+    });
+  </script>
+</BaseLayout>

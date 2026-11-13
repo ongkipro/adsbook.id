@@ -1,0 +1,273 @@
+---
+import type { ComponentProps } from 'astro/types';
+import { SEO } from 'astro-seo';
+import { escapeHtmlText } from '../lib/html-escape';
+// Font faces are imported by the shared token layer consumed by storefront.css.
+// Importing them here put them in this layout's own stylesheet, which the admin,
+// the login screen and the embedded checkout never request — see the note there.
+import GoogleAdsBase from '../components/storefront/tracking/GoogleAdsBase.astro';
+import MetaPageViewTracker from '../components/storefront/tracking/MetaPageViewTracker.astro';
+import MetaPixelBase from '../components/storefront/tracking/MetaPixelBase.astro';
+import GtmBase from '../components/storefront/tracking/GtmBase.astro';
+import MetaDebugTracker from '../components/storefront/tracking/MetaDebugTracker.astro';
+import JsonLdSchema from '../components/storefront/seo/JsonLdSchema.astro';
+import SiteFooter from '../components/storefront/shared/SiteFooter.astro';
+import SiteHeader from '../components/storefront/shared/SiteHeader.astro';
+import { getStoreAdsConfig } from '../lib/store-ads';
+import { getStorefrontProduct } from '../lib/catalog';
+import { nativeLandingEntryForPath, nativeLandingProductJsonLd } from '../lib/native-landing-product';
+import '../styles/storefront.css';
+// The three Inter faces the pages draw above the fold. The stylesheet only
+// names them, so the browser found the files late (about 2 s on a slow phone),
+// and the swap to Inter reflowed the headline: CLS 0.18 on a landing page.
+// `?url` resolves to the same hashed file the stylesheet points at.
+import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
+import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?url';
+import inter700 from '@fontsource/inter/files/inter-latin-700-normal.woff2?url';
+
+type JsonLdProps = ComponentProps<typeof JsonLdSchema>;
+
+type PreloadImageItem = string | { srcset: string; imagesizes?: string; sizes?: string };
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  canonical?: string;
+  hideHeader?: boolean;
+  hideFooter?: boolean;
+  noindex?: boolean;
+  /** With `noindex`: still let crawlers follow this page's links (an HTML sitemap). */
+  follow?: boolean;
+  /** `og:type`; a product page says `product`. */
+  ogType?: string;
+  breadcrumbs?: JsonLdProps['breadcrumbs'];
+  product?: JsonLdProps['product'];
+  faqs?: JsonLdProps['faqs'];
+  itemList?: JsonLdProps['itemList'];
+  preloadImages?: PreloadImageItem | readonly PreloadImageItem[];
+  shell?: string;
+}
+
+const {
+  title: rawTitle = Astro.locals.tenant.defaultTitle,
+  description = Astro.locals.tenant.description,
+  image = Astro.locals.tenant.logo,
+  canonical: canonicalProp,
+  hideHeader = false,
+  hideFooter = false,
+  noindex: noindexProp = false,
+  follow = false,
+  ogType = 'website',
+  breadcrumbs,
+  product,
+  faqs,
+  itemList,
+  preloadImages,
+} = Astro.props;
+// A store-wide PUBLIC_SITE_NOINDEX must not leave the meta saying "index"
+// beside the middleware's noindex header.
+const noindex = noindexProp || Astro.locals.tenant.noindex;
+
+// Clean title: remove any "landing page" or "(landing page)" phrasing to focus strictly on product/brand name
+const title = (rawTitle || Astro.locals.tenant.defaultTitle)
+  .replace(/\s*\(?\s*landing\s*page\s*\)?/gi, '')
+  .replace(/\s+-\s+-\s+/g, ' - ')
+  .trim();
+
+// astro-seo renders its `title` prop through `<title set:html={...}>`
+// (node_modules/astro-seo/src/SEO.astro line 151), which skips Astro's
+// escaping — a merchant product title carrying `</title><script>…</script>`
+// closed the element and executed, reproduced live on 2026-08-23. The sink is
+// inside the library, so the value is escaped before it is handed over. The
+// openGraph and twitter titles below keep the raw `title`: those become
+// attribute values, which Astro escapes itself, and escaping twice would
+// double-encode every one of them.
+const titleForHead = escapeHtmlText(title);
+
+const publicSiteUrl = Astro.locals.tenant.siteUrl;
+const adsConfig = await getStoreAdsConfig(Astro.locals);
+const hasMetaPixel = Boolean(adsConfig.metaPixelId && /^\d{5,25}$/.test(String(adsConfig.metaPixelId).trim()));
+const hasGoogleTag = Boolean(
+  (adsConfig.googleTagManagerId && /^GTM-[A-Z0-9]{4,20}$/.test(String(adsConfig.googleTagManagerId).trim().toUpperCase())) ||
+  adsConfig.googleAdsConversionId
+);
+const canonical = canonicalProp ?? new URL(Astro.url.pathname, publicSiteUrl).toString();
+// A native landing page is a route file with no Product block of its own; the
+// register says which product it sells, so the layout supplies one (read from
+// the catalogue the page already loaded on `locals`). A page that passes its
+// own `product` keeps it.
+let productForSchema = product;
+if (!productForSchema) {
+  const nativeEntry = nativeLandingEntryForPath(Astro.url.pathname);
+  const nativeProduct = nativeEntry ? await getStorefrontProduct(Astro.locals, nativeEntry.productSlug) : undefined;
+  if (nativeProduct) productForSchema = nativeLandingProductJsonLd(nativeProduct, canonical);
+}
+// A store with no logo and a page with no image share the store's own icon,
+// never the page itself (an empty URL resolves to the page).
+const imageUrl = new URL(image || '/favicon-192.png', publicSiteUrl).toString();
+const preloadImageUrls =
+  typeof preloadImages === 'string' || (typeof preloadImages === 'object' && preloadImages !== null && !Array.isArray(preloadImages))
+    ? [preloadImages as PreloadImageItem]
+    : ((preloadImages as readonly PreloadImageItem[] | undefined) ?? []);
+---
+
+<!doctype html>
+<html lang={Astro.locals.tenant.locale}>
+  <head>
+    <meta charset="UTF-8" />
+    <slot name="head" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    {hasGoogleTag && (
+      <>
+        <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+        <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
+      </>
+    )}
+    {hasMetaPixel && (
+      <>
+        <link rel="dns-prefetch" href="https://connect.facebook.net" />
+        <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
+      </>
+    )}
+    {[inter400, inter600, inter700].map((href) => (
+      <link rel="preload" as="font" type="font/woff2" href={href} crossorigin />
+    ))}
+    {
+      preloadImageUrls.map((item) =>
+        typeof item === 'string' ? (
+          <link rel="preload" as="image" href={item} fetchpriority="high" />
+        ) : (
+          <link rel="preload" as="image" imagesrcset={item.srcset} imagesizes={item.imagesizes || item.sizes} fetchpriority="high" />
+        )
+      )
+    }
+    {/*
+      `astro-seo` always emits exactly one robots meta, built from its
+      `noindex`/`nofollow` props. `extend.meta` used to add a second one, so
+      every page shipped the directive twice — and on `/thanks` and `/payment`
+      the two disagreed: astro-seo's `noindex, follow` beside a hand-written
+      `noindex, nofollow`. A crawler resolves a conflict by taking the most
+      restrictive, so the outcome was right by luck while the page stated two
+      different things. `nofollow={noindex}` carries the intended semantics
+      through the one tag that is actually owned here.
+
+      A JSX comment, not an HTML one: an HTML comment here would ship in the
+      <head> of every page on the site.
+    */}
+    <SEO
+      title={titleForHead}
+      description={description}
+      canonical={canonical}
+      noindex={noindex}
+      nofollow={noindex && !follow}
+      openGraph={{
+        basic: {
+          title,
+          type: ogType,
+          image: imageUrl,
+          url: canonical,
+        },
+        optional: {
+          description,
+          locale: Astro.locals.tenant.openGraphLocale,
+          siteName: Astro.locals.tenant.name,
+        },
+        image: {
+          url: imageUrl,
+          alt: title,
+        },
+      }}
+      twitter={{
+        card: 'summary_large_image',
+        title,
+        description,
+        image: imageUrl,
+        imageAlt: title,
+      }}
+      extend={{
+        meta: [
+          { name: 'theme-color', content: Astro.locals.tenant.themeColor },
+          { name: 'author', content: Astro.locals.tenant.name },
+          { name: 'publisher', content: Astro.locals.tenant.name },
+        ],
+        link: [
+          { rel: 'icon', href: '/favicon.png', type: 'image/png' },
+          { rel: 'apple-touch-icon', href: '/favicon-192.png' },
+        ],
+      }}
+    />
+    <JsonLdSchema
+      siteUrl={publicSiteUrl}
+      organization={{
+        name: Astro.locals.tenant.name,
+        url: publicSiteUrl,
+        logo: Astro.locals.tenant.logo,
+        description: Astro.locals.tenant.description,
+      }}
+      website={{
+        name: Astro.locals.tenant.name,
+        url: publicSiteUrl,
+        description: Astro.locals.tenant.description,
+        inLanguage: Astro.locals.tenant.locale,
+      }}
+      product={productForSchema}
+      breadcrumbs={breadcrumbs}
+      faqs={faqs}
+      itemList={itemList}
+    />
+    <style is:global>
+      :where(html) {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      /* Media defaults go in Tailwind's base layer, not unlayered: an unlayered
+         rule beats every layered one whatever its specificity, so `height: auto`
+         here once overrode `h-full` on every public image and pushed the QRIS
+         logo out of its box. `img, video { max-width; height: auto }` is
+         preflight's own and is not repeated. Layer order is fixed by first
+         mention, so Tailwind's own order is declared here too, whichever
+         stylesheet the bundle emits first. */
+      @layer theme, base, components, utilities;
+      @layer base {
+        :where(iframe) {
+          max-width: 100%;
+        }
+
+        :where(img[width][height], video[width][height], iframe[width][height]) {
+          aspect-ratio: attr(width type(<number>)) / attr(height type(<number>));
+        }
+      }
+    </style>
+    <GtmBase gtmId={adsConfig.googleTagManagerId} />
+    <GoogleAdsBase
+      googleAdsId={adsConfig.googleAdsConversionId}
+      googleAdsLabel={adsConfig.googleAdsConversionLabel}
+    />
+    <MetaPixelBase pixelId={adsConfig.metaPixelId} />
+    {hasMetaPixel && <MetaPageViewTracker />}
+    <MetaDebugTracker />
+  </head>
+  <body>
+    <GtmBase gtmId={adsConfig.googleTagManagerId} noscript />
+    <!-- Ink, not emerald. This is the first focusable element on six of the seven
+         checkout routes, so tabbing into a page the design system requires to carry
+         no green painted a solid emerald block across it. Square, like everything
+         else on these routes. -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-[#111111] focus:text-white focus:px-4 focus:py-2 focus:font-bold">Lewati ke konten utama</a>
+    {/* The storefront is a phone-width column on every screen (compact
+        template, DESIGN-SYSTEM §3). On a wide screen the grey canvas says
+        the column is deliberate rather than a page that failed to stretch. */}
+    <div class="flex min-h-screen w-full justify-center bg-[#F3F3F3]">
+      <div class="min-h-screen w-full max-w-[480px] bg-white sm:shadow-[0_0_0_1px_#EDEDED]">
+        {!hideHeader && <SiteHeader />}
+        <div id="main-content" tabindex="-1" class="outline-none">
+          <slot />
+        </div>
+        {!hideFooter && <SiteFooter />}
+      </div>
+    </div>
+
+  </body>
+</html>

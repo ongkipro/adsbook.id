@@ -1,0 +1,32 @@
+---
+import SiteBrand from './SiteBrand.astro';
+
+// One bar (DESIGN-SYSTEM §3): the wordmark (or uploaded logo), centred, and
+// under it the store's "Official Store" line (Paduka, 2026-11-01; it was an
+// announcement bar above the header). The catalogue, the landing pages and the
+// policies are reached from the footer. It scrolls away with the page; a
+// hairline that fades at both ends closes it.
+---
+
+<!-- Not sticky: the column is short-form commerce and the PDP's own sticky buy
+     bar is the action that follows the reader. The rule under the bar fades
+     out toward both edges instead of cutting the column. -->
+<header class="relative bg-white">
+  <div class="flex flex-col items-center justify-center px-4 pb-2.5 pt-2">
+    <SiteBrand href="/" />
+    {/* The store's own site is its official store (owner decision
+        2026-10-31). A solid blue badge-check, drawn inline: the icon subset is
+        for line icons. */}
+    <p class="-mt-1.5 flex items-center gap-1 text-[11px] font-semibold leading-4 text-[#555555]">
+      <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+        <path fill="#1D6FEB" d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/>
+        <path fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m8.5 12.2 2.4 2.4 4.6-4.9"/>
+      </svg>
+      Official Store
+    </p>
+  </div>
+  <div
+    aria-hidden="true"
+    class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,#E5E5E5_20%,#E5E5E5_80%,transparent)]"
+  ></div>
+</header>

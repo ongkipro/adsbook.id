@@ -1,0 +1,18 @@
+---
+import { ProductForm } from '../../../components/admin/ProductForm';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+export const prerender = false;
+---
+
+<AdminLayout title="Tambah produk" activeMenu="products">
+  <div class="space-y-5">
+    <AdminPageHeader
+      title="Tambah produk"
+      description="Simpan identitas produk, storefront, SKU, harga, berat, dan stok dalam satu operasi."
+      backHref="/admin/products"
+      backLabel="Katalog produk"
+    />
+    <ProductForm storeName={Astro.locals.tenant.name} client:load />
+  </div>
+</AdminLayout>

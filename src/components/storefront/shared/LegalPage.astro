@@ -1,0 +1,60 @@
+---
+import { legalSegments } from '../../../lib/legal-links';
+import PageIntro from './PageIntro.astro';
+
+interface LegalSection {
+  title: string;
+  paragraphs: string[];
+}
+
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
+interface Props {
+  badge: string;
+  title: string;
+  description: string;
+  sections: LegalSection[];
+  breadcrumbs?: BreadcrumbItem[];
+}
+
+const { badge, title, description, sections, breadcrumbs = [] } = Astro.props;
+---
+
+<!-- One reading column, as a Shopify theme sets its policy pages: headings
+     and text on white, no box around each section. Contacts and page names
+     inside a paragraph are links (src/lib/legal-links.ts). -->
+<main id="konten-utama" class="min-h-screen bg-white text-[#111111]">
+  <PageIntro badge={badge} title={title} description={description} breadcrumbs={breadcrumbs} />
+
+  <div class="px-4 pb-12 pt-2">
+    {
+      sections.map((section) => (
+        <section class="pt-7">
+          <h2 class="text-base font-bold tracking-[-0.01em] text-[#111111]">{section.title}</h2>
+          <div class="mt-2 space-y-3 text-[15px] leading-7 text-[#444444]">
+            {section.paragraphs.map((paragraph) => (
+              <p>
+                {legalSegments(paragraph).map((segment) =>
+                  segment.href ? (
+                    <a
+                      href={segment.href}
+                      class="font-semibold text-[#111111] underline decoration-[#C7C7C7] underline-offset-4 hover:decoration-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]"
+                      {...(segment.href.startsWith('https://') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                    >
+                      {segment.text}
+                    </a>
+                  ) : (
+                    segment.text
+                  ),
+                )}
+              </p>
+            ))}
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</main>

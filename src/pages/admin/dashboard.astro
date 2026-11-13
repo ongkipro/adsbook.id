@@ -1,0 +1,59 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { AnalyticsDashboard } from '../../components/admin/AnalyticsDashboard';
+import { canAccessAdminRoute } from '../../lib/auth';
+import { getRuntimeEnv } from '../../lib/env';
+import { buildSetupChecklist, readSetupFacts } from '../../lib/setup-checklist';
+
+export const prerender = false;
+
+const adminRole = Astro.locals.admin?.role ?? 'customer_service';
+const mayManageOrders = canAccessAdminRoute(adminRole, '/admin/orders');
+const mayManagePayments = canAccessAdminRoute(adminRole, '/admin/payments');
+const mayReadInsights = canAccessAdminRoute(adminRole, '/api/admin/insights');
+// First steps after /install. Owner/admin only — they are the roles that can
+// complete them. The checklist itself lives on /admin/status (A39); the
+// dashboard keeps one line while a required step is left.
+const maySetUp = adminRole === 'owner' || adminRole === 'admin';
+const setupFacts = maySetUp
+  ? await readSetupFacts(getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined, Astro.locals)
+  : null;
+const setupSteps = setupFacts ? buildSetupChecklist(setupFacts) : [];
+const setupRequiredLeft = setupSteps.filter((step) => step.required && !step.done).length;
+// Named, so the line says what is missing rather than only how much.
+const setupMissing = setupSteps.filter((step) => step.required && !step.done).map((step) => step.label).join(', ');
+const primaryActions = mayManageOrders
+  ? [
+      { href: '/admin/orders', label: 'Kelola order', primary: false },
+      { href: '/admin/shipping', label: 'Buka pengiriman', primary: true },
+    ]
+  : [
+      { href: '/admin/products', label: 'Kelola produk', primary: false },
+      { href: '/admin/ads', label: 'Buka Ads', primary: true },
+    ];
+---
+
+<AdminLayout title="Dashboard" activeMenu="dashboard">
+  <div class="space-y-4 md:space-y-5">
+    <header class="flex flex-col gap-3 border-b border-slate-200/80 pb-4 sm:flex-row sm:items-end sm:justify-between sm:pb-5">
+      <div>
+        <h2 class="text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">Ringkasan bisnis</h2>
+      </div>
+      <div class="grid grid-cols-2 gap-2 sm:flex">
+        {primaryActions.map((action) => (
+          <a href={action.href} class={action.primary ? "btn-primary" : "btn-secondary"}>{action.label}</a>
+        ))}
+      </div>
+    </header>
+    {setupRequiredLeft > 0 && (
+      <a
+        href="/admin/status"
+        class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+      >
+        <span class="min-w-0"><span class="font-medium">Siapkan toko:</span> {setupRequiredLeft} langkah wajib lagi sebelum toko bisa menerima pesanan — {setupMissing}.</span>
+        <span class="shrink-0 font-medium" aria-hidden="true">Lihat status →</span>
+      </a>
+    )}
+    <AnalyticsDashboard client:only="react" showPaymentsLink={mayManagePayments} showAttention={mayManageOrders} showInsights={mayReadInsights} />
+  </div>
+</AdminLayout>

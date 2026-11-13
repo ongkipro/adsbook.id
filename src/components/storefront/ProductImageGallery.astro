@@ -1,0 +1,49 @@
+---
+/**
+ * The product photo, full width, and nothing else.
+ *
+ * This was a swipe carousel: a scroll-snap track, a vertical thumbnail column,
+ * previous/next arrows, a counter, and an IntersectionObserver to keep them in
+ * step. It was serving nothing — every product in every install carries exactly
+ * one image, so the thumbnails and arrows never rendered and the machinery only
+ * ever cost bytes.
+ *
+ * It also cost the page its scroll. A horizontal scroll container claims the
+ * gesture before `touch-action` is consulted, and an `<img>` is draggable by
+ * default, so a finger held on the photo — most of the target on a phone — could
+ * not scroll the page at all. Three fixes went into that carousel before this
+ * one; deleting it removes the class of bug rather than the instance.
+ *
+ * What replaces it is a plain image per photo. No scroll container, so there is
+ * nothing to trap a drag, and no script at all. Extra photos, if a store ever
+ * adds them, simply stack and load lazily; the first stays eager because it is
+ * the page's LCP element.
+ */
+interface Props {
+  images: string[];
+  productName: string;
+}
+
+const { images, productName } = Astro.props;
+const gallery = images.filter((image) => image.trim());
+---
+
+{gallery.length > 0 && (
+  <div class="w-full" data-gallery>
+    {gallery.map((imgUrl, idx) => (
+      <div class="relative w-full bg-[#F3F3F3]">
+        <img
+          src={imgUrl}
+          alt={idx === 0 ? `Foto ${productName}` : `${productName} foto ${idx + 1}`}
+          width={1000}
+          height={1000}
+          class="block aspect-square w-full object-cover"
+          loading={idx === 0 ? 'eager' : 'lazy'}
+          decoding={idx === 0 ? 'sync' : 'async'}
+          fetchpriority={idx === 0 ? 'high' : undefined}
+          draggable={false}
+        />
+      </div>
+    ))}
+  </div>
+)}

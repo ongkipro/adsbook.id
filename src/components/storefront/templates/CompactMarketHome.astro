@@ -1,0 +1,75 @@
+---
+import HeroSection from '../home/HeroSection.astro';
+import ProductsSection from '../home/ProductsSection.astro';
+import type { TenantHomeContent } from '../../../lib/tenant-content';
+
+interface ProductCard {
+  slug: string;
+  name: string;
+  category: string;
+  description: string;
+  href: string;
+  image: string;
+  price: number;
+  comparePrice?: number;
+  ratingValue?: number;
+  reviewCount?: number;
+  soldCount?: number;
+  variants: Array<{ label: string; price: number }>;
+}
+
+interface Props {
+  content: TenantHomeContent;
+  products: ProductCard[];
+  /** Resolved by the page, not here: index.astro preloads the first slide's
+   *  image as the LCP element, so the page and the hero must read the same
+   *  list. The daily-rotation fallback lives with that preload now. */
+  heroSlides: Array<{ image: string; alt: string; badge: string; text: string }>;
+  sections: {
+    hero: boolean;
+    catalog: true;
+    // `proofs` is still accepted so a template saved before this change keeps
+    // parsing; the third slot lists landing pages now.
+    proofs?: boolean;
+    landingPages?: boolean;
+  };
+}
+
+const { content, products, heroSlides, sections } = Astro.props;
+---
+
+<main id="konten-utama" class="overflow-x-hidden bg-white font-sans text-[#111111] antialiased">
+  <div id="home" class="flex w-full flex-col">
+    {sections.hero && <HeroSection slides={heroSlides} highlights={content.heroHighlights} content={content.hero} />}
+    {sections.catalog && <ProductsSection products={products} heading={content.catalog} />}
+    {/* Landing pages are not listed on the home page (Paduka, 2026-11-01):
+        they live on /landing-page, reached from the header and footer
+        "Halaman" link. `sections.landingPages` still parses for saved
+        templates and no longer renders anything. */}
+  </div>
+</main>
+
+<script>
+  // Native scroll-snap carries the swipe; this only keeps the dots in step and
+  // lets a dot jump to its slide. The hero never advances by itself: an
+  // autoplaying hero made every slide a fresh LCP candidate (two runs of one
+  // build measured 1.8 s and 6.3 s) and kept Speed Index from settling.
+  const heroTrack = document.getElementById('hero-track');
+  const heroDots = document.getElementById('hero-dots');
+  if (heroTrack && heroDots) {
+    const dots = [...heroDots.children];
+    const mark = (index: number) =>
+      dots.forEach((dot, itemIndex) => {
+        if (itemIndex === index) dot.setAttribute('aria-current', 'true');
+        else dot.removeAttribute('aria-current');
+      });
+    dots.forEach((dot, index) =>
+      dot.addEventListener('click', () => heroTrack.scrollTo({ left: index * heroTrack.clientWidth, behavior: 'smooth' })),
+    );
+    heroTrack.addEventListener(
+      'scroll',
+      () => mark(Math.round(heroTrack.scrollLeft / Math.max(1, heroTrack.clientWidth))),
+      { passive: true },
+    );
+  }
+</script>

@@ -1,0 +1,171 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { buttonVariants } from '../../components/ui/button';
+import { ChevronRight, CodeXml, CreditCard, MessageCircle, MessageSquareText, Puzzle, ShoppingBag, Truck, UserCog, Warehouse } from 'lucide-react';
+export const prerender = false;
+
+// shadcn components rendered to static HTML: nothing on this page is
+// hydrated; the script below only wires the two check buttons.
+const mayManageAccess = Astro.locals.admin?.role === 'owner';
+const outline = buttonVariants({ variant: 'outline' });
+const links = [
+  { href: '/admin/settings/store', icon: ShoppingBag, title: 'Toko & customer service', detail: 'Identitas toko, alamat storefront, dan pengalihan ke WhatsApp.' },
+  { href: '/admin/settings/whatsapp', icon: MessageCircle, title: 'Nomor WhatsApp CS', detail: 'Nomor yang menerima pembeli COD, dibagi rata per order.' },
+  { href: '/admin/settings/warehouse', icon: Warehouse, title: 'Gudang & pickup', detail: 'Origin pengiriman, alamat pickup, dan PIC.' },
+  { href: '/admin/settings/crm', icon: MessageSquareText, title: 'Template CRM', detail: 'Pesan welcome dan follow-up WhatsApp.' },
+  { href: '/admin/settings/developer', icon: CodeXml, title: 'Headless API & domain', detail: 'API key dan domain yang boleh memanggil API.' },
+  { href: '/admin/settings/plugins', icon: Puzzle, title: 'Plugin', detail: 'Fitur opsional seperti Kelola CRM, aktif per toko.' },
+  ...(mayManageAccess ? [{ href: '/admin/settings/access', icon: UserCog, title: 'Akses pengguna', detail: 'Akun operator dan perannya.' }] : []),
+];
+---
+
+<AdminLayout title="Pengaturan" activeMenu="settings">
+  <div class="space-y-6">
+    <AdminPageHeader
+      title="Pengaturan sistem"
+      description="Status integrasi dan semua halaman pengaturan toko."
+    />
+
+    <div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle as="h3" className="font-semibold">Integrasi</CardTitle>
+        <CardDescription>Kunci API tersimpan di database toko dan tidak pernah ditampilkan utuh.</CardDescription>
+      </CardHeader>
+      <CardContent className="px-0">
+        <p id="settingsLoading" class="px-4 py-3 text-sm text-muted-foreground" role="status" aria-busy="true">Memuat status integrasi…</p>
+        <p id="settingsError" class="hidden px-4 py-3 text-sm text-destructive" role="alert"></p>
+        <div id="credentialCards" class="hidden divide-y">
+          <div class="flex flex-wrap items-start gap-3 px-4 py-4 sm:flex-nowrap sm:items-center">
+            <span class="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true"><Truck className="size-4" /></span>
+            <div class="min-w-0 flex-1 basis-[calc(100%-3rem)] space-y-0.5 sm:basis-auto">
+              <p class="flex items-center gap-2 font-medium text-foreground">Mengantar <span id="mengantarBadge" class="rounded-md border px-1.5 py-0.5 text-xs font-medium">Memuat</span></p>
+              <p class="text-sm text-muted-foreground">Ongkir, COD, resi, pickup, dan tracking.</p>
+              <p class="font-mono text-xs text-muted-foreground">Key <span id="mengantarKey">••••</span> · <span id="mengantarUrl"></span></p>
+              <p id="mengantarStatus" class="text-xs empty:hidden" role="status" aria-live="polite"></p>
+            </div>
+            <button id="testMengantar" type="button" class:list={[outline, "w-full sm:w-auto"]}>Tes koneksi</button>
+          </div>
+          <div class="flex flex-wrap items-start gap-3 px-4 py-4 sm:flex-nowrap sm:items-center">
+            <span class="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true"><CreditCard className="size-4" /></span>
+            <div class="min-w-0 flex-1 basis-[calc(100%-3rem)] space-y-0.5 sm:basis-auto">
+              <p class="flex items-center gap-2 font-medium text-foreground">AutoLaris <span id="autolarisBadge" class="rounded-md border px-1.5 py-0.5 text-xs font-medium">Memuat</span></p>
+              <p class="text-sm text-muted-foreground">QRIS dan Virtual Account, dicek otomatis setiap jam.</p>
+              <p class="font-mono text-xs text-muted-foreground">Key <span id="autolarisKey">••••</span></p>
+              <p id="autolarisStatus" class="text-xs empty:hidden" role="status" aria-live="polite"></p>
+            </div>
+            <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+              <button id="testAutolaris" type="button" class={outline}>Periksa konfigurasi</button>
+              <a href="/admin/balance" class={outline}>Rekonsiliasi</a>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle as="h3" className="font-semibold">Pengaturan toko</CardTitle>
+        <CardDescription>Identitas, gudang, pesan, API, dan akses operator.</CardDescription>
+      </CardHeader>
+      <CardContent className="px-0">
+        <nav aria-label="Halaman pengaturan">
+          <ul class="divide-y">
+            {links.map(({ href, icon: Icon, title, detail }) => (
+              <li>
+                <a href={href} class="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/60">
+                  <span class="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true"><Icon className="size-4" /></span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block font-medium text-foreground">{title}</span>
+                    <span class="block text-sm text-muted-foreground">{detail}</span>
+                  </span>
+                  <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </CardContent>
+    </Card>
+    </div>
+  </div>
+  <script>
+    const text = (id: string, value: string) => {
+      const node = document.getElementById(id);
+      if (node) node.textContent = value;
+    };
+    const setStatus = (id: string, message: string, state: 'idle' | 'success' | 'error') => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.setAttribute('role', state === 'error' ? 'alert' : 'status');
+      node.textContent = message;
+      node.className = `text-xs empty:hidden ${state === 'success' ? 'text-emerald-700' : state === 'error' ? 'text-rose-700' : 'text-muted-foreground'}`;
+    };
+    const badge = (id: string, ready: boolean, label?: string) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.textContent = label ?? (ready ? 'Aktif' : 'Belum dikonfigurasi');
+      node.className = `rounded-md border px-1.5 py-0.5 text-xs font-medium ${ready ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`;
+    };
+    const loading = document.getElementById('settingsLoading');
+    fetch('/api/admin/settings', { headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Gagal memuat pengaturan.');
+        return payload.data.credentials;
+      })
+      .then((data) => {
+        badge('mengantarBadge', Boolean(data.mengantar.configured));
+        const autolarisConfigured = Boolean(data.autolaris.api_key_configured);
+        badge('autolarisBadge', autolarisConfigured, autolarisConfigured ? 'Tersimpan' : 'Belum diatur');
+        text('mengantarKey', data.mengantar.api_key_masked || 'belum diatur');
+        text('mengantarUrl', data.mengantar.base_url || '');
+        text('autolarisKey', data.autolaris.api_key_masked || 'belum diatur');
+        loading?.setAttribute('aria-busy', 'false');
+        loading?.classList.add('hidden');
+        document.getElementById('credentialCards')?.classList.remove('hidden');
+      })
+      .catch((error) => {
+        loading?.setAttribute('aria-busy', 'false');
+        loading?.classList.add('hidden');
+        const box = document.getElementById('settingsError');
+        if (box) {
+          box.textContent = error instanceof Error ? error.message : 'Gagal memuat pengaturan.';
+          box.classList.remove('hidden');
+        }
+      });
+    const run = async (action: string, buttonId: string, statusId: string) => {
+      const button = document.getElementById(buttonId) as HTMLButtonElement | null;
+      if (!button || button.disabled) return;
+      const label = button.textContent || 'Periksa konfigurasi';
+      button.disabled = true;
+      button.textContent = 'Memeriksa…';
+      button.setAttribute('aria-busy', 'true');
+      setStatus(statusId, 'Memeriksa konfigurasi…', 'idle');
+      try {
+        const response = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) throw new Error(payload.message || payload.error || 'Pemeriksaan gagal.');
+        setStatus(
+          statusId,
+          payload.message || 'Konfigurasi tersedia.',
+          payload.verification_supported === false ? 'idle' : payload.verified ? 'success' : 'error',
+        );
+      } catch (error) {
+        setStatus(statusId, error instanceof Error ? error.message : 'Pemeriksaan gagal.', 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = label;
+        button.setAttribute('aria-busy', 'false');
+      }
+    };
+    document.getElementById('testMengantar')?.addEventListener('click', () => run('test-mengantar', 'testMengantar', 'mengantarStatus'));
+    document.getElementById('testAutolaris')?.addEventListener('click', () => run('test-autolaris', 'testAutolaris', 'autolarisStatus'));
+  </script>
+</AdminLayout>

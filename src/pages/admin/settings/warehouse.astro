@@ -1,0 +1,19 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import Warehouses from '../../../components/admin/Warehouses';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Gudang & pickup" activeMenu="settings">
+  <div class="space-y-6">
+    <AdminPageHeader
+      title="Gudang & pickup"
+      description="Gudang asal pengiriman, PIC, dan alamat pickup Mengantar. Setiap ongkir dihitung dari gudang yang paling dekat ke pembeli."
+      backHref="/admin/settings"
+      backLabel="Pengaturan"
+    />
+    <Warehouses client:load />
+  </div>
+</AdminLayout>
