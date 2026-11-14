@@ -39,7 +39,7 @@ Product documentation lives in a separate repository, **adsbook.id-docs**, clone
 | `docs/spec/02-PRD.md` | **adsbook.id product requirements** (`PR-*`, `NFR-*`, open questions). The canonical PRD from 2026-11-14 |
 | `docs/spec/03-…17-*.md`, `docs/spec/CONTEXT-RECORD.md` | Spec pack (development-spec-suite): one namespace each — `TD-*` design, `ARCH-*` architecture, `DATA-*` data, `TEN-*` isolation, `IAM-*` identity, `DOM-*` domains, `API-*` APIs, `UI-*` white-label, `BILL-*` billing, `SEC-*` security, `PRIV-*` privacy, `DEL-*`/`MIG-*` delivery, `OBS-*` observability, `UX-*` screens; context `CTX-*`/`JUR-*`/`XFER-*`. Index `docs/spec/README.md`; check `check-traceability.py docs/spec --tasks docs/product/TASKS.md` |
 | `docs/product/PRD.md` | Inherited single-tenant base-product requirements (`REQ-*`, chapters A0–A47) that every tenant store runs. Chapters A48/A49 are frozen (moved to `docs/spec/02-PRD.md`) |
-| `docs/product/TASKS.md` | The one execution queue (`T-*`, each with one primary `PR-*`), under 50 KB. Finished contracts are frozen in `docs/archive/TASKS-<date>.md` |
+| `docs/product/TASKS.md` + `docs/product/tasks/P*.md` | The one execution queue (`T-*`, each with one primary `PR-*`): phase 1 contracts and the index in `TASKS.md`, phases 2–4 in the phase files; each file under 50 KB. Finished contracts are frozen in `docs/archive/TASKS-<date>.md`. Check: `scripts/check-spec.sh` in the docs repository |
 | `docs/product/TASKS-LEGACY-INDEX.md` | Untriaged open rows inherited from the AdsBookCMS ledger |
 | `docs/history/BUILD-LOG.md` | Chronological history. Append-only |
 | `docs/design/DESIGN-SYSTEM.md` | Visual contract |
