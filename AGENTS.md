@@ -1,6 +1,6 @@
 # AGENTS.md — Working Agreement for AdsBookCMS
 
-> Verified against disk: 2026-11-13 @ `1403298` (§2 ownership table re-pointed to the adsbook.id-docs repository, ADR-038; §4 baseline 1207 re-run). Previously: 2026-11-10 @ `745de51` (1.10.0; §4 baseline 1207 re-run on that tree). Previously: 2026-11-06 @ `700bc21` + fix/image-guard-parser working tree (1.9.2; §4 baseline 1193 re-run on that tree; the lib-module count, the auth test count and the §6 guard names re-checked; other claims not re-audited)
+> Verified against disk: 2026-11-14 @ `2b244be` (§2 ownership table: spec pack `docs/spec/` added, `docs/product/PRD.md` re-scoped to the inherited base). Previously: 2026-11-13 @ `1403298` (§2 ownership table re-pointed to the adsbook.id-docs repository, ADR-038; §4 baseline 1207 re-run). Previously: 2026-11-10 @ `745de51` (1.10.0; §4 baseline 1207 re-run on that tree). Previously: 2026-11-06 @ `700bc21` + fix/image-guard-parser working tree (1.9.2; §4 baseline 1193 re-run on that tree; the lib-module count, the auth test count and the §6 guard names re-checked; other claims not re-audited)
 
 This file is the contract for any AI coding agent or contributor working in this repository. Read it before the first edit.
 
@@ -21,7 +21,7 @@ This file is the contract for any AI coding agent or contributor working in this
 
 Exactly one document owns each subject. Do not restate another document's truth; link to it.
 
-Product documentation lives in a separate repository, **adsbook.id-docs**, cloned beside this one (`../adsbook.id-docs/`, i.e. `~/Projects/adsbook.id-docs/`; ADR-038). Paths below starting with `docs/` are relative to that repository's root; `README.md`, `AGENTS.md` and `doc/` are in this repository. Never create `PRD.md`, `TASKS.md`, `STATUS.md`, `DECISIONS.md`, `PLAN.md` or another product document here: extend its owner in `../adsbook.id-docs/docs/` (index: `../adsbook.id-docs/README.md`). `src/**/README.md` files outside `src/pages/` are local boundary notes, subordinate to the document they name. This project is new: never commit, push or add a remote toward `ongkipro/adsbookcms`, and never touch a store of the old fleet. **Direction:** adsbook.id is becoming a multi-tenant SaaS (PRD A49, ADR-039 Option D accepted, design `docs/architecture/MULTI-TENANT-DESIGN.md`: one Worker, one SQLite Durable Object per tenant in APAC, Cloudflare for SaaS; see the `cloudflare` skill reference `references/cloudflare-for-saas.md`). Until the platform tasks land, the code is the single-tenant base and the invariants below describe it; any change that adds tenant routing, a tenant database handle or shared-resource keys follows ADR-039 and needs its cross-tenant test.
+Product documentation lives in a separate repository, **adsbook.id-docs**, cloned beside this one (`../adsbook.id-docs/`, i.e. `~/Projects/adsbook.id-docs/`; ADR-038). Paths below starting with `docs/` are relative to that repository's root; `README.md`, `AGENTS.md` and `doc/` are in this repository. Never create `PRD.md`, `TASKS.md`, `STATUS.md`, `DECISIONS.md`, `PLAN.md` or another product document here: extend its owner in `../adsbook.id-docs/docs/` (index: `../adsbook.id-docs/README.md`). `src/**/README.md` files outside `src/pages/` are local boundary notes, subordinate to the document they name. This project is new: never commit, push or add a remote toward `ongkipro/adsbookcms`, and never touch a store of the old fleet. **Direction:** adsbook.id is becoming a multi-tenant SaaS (canonical requirements `docs/spec/02-PRD.md`, ADR-039 Option D accepted, design `docs/architecture/MULTI-TENANT-DESIGN.md`: one Worker, one SQLite Durable Object per tenant in APAC, Cloudflare for SaaS; see the `cloudflare` skill reference `references/cloudflare-for-saas.md`). Until the platform tasks land, the code is the single-tenant base and the invariants below describe it; any change that adds tenant routing, a tenant database handle or shared-resource keys follows ADR-039 and needs its cross-tenant test.
 
 | Document | Owns |
 | --- | --- |
@@ -30,14 +30,16 @@ Product documentation lives in a separate repository, **adsbook.id-docs**, clone
 | `docs/architecture/ARCHITECTURE.md` | System structure, data layer, config resolution, gap register §10 |
 | `docs/architecture/MULTI-TENANT-DESIGN.md` | How adsbook.id becomes multi-tenant (ADR-039): request path, domains, control plane, `TenantStore` Durable Object adapter, migrations, shared resources, sessions, webhooks, housekeeping, custom hostnames, operations |
 | `docs/architecture/DECISIONS.md` | The one decision index (ADR-001…), status per decision; full text in `adr/`. Append-only |
-| `docs/operations/RELEASE.md` | Single-tenant deploy, migrations, versioning, rollback, approval boundary (scope note: the old fleet; the platform runbook comes with TASK-028) |
+| `docs/operations/RELEASE.md` | Single-tenant deploy, migrations, versioning, rollback, approval boundary (scope note: the old fleet; the platform runbook comes with T-30; the platform delivery contract is `docs/spec/15-DEVOPS-CICD-MIGRATIONS.md`) |
 | `docs/architecture/OBSERVABILITY.md` | Logging, failure visibility, what to enable |
 | `docs/operations/INSTALLATION.md` | Standing up a new install |
 | `docs/operations/STATUS.md` | Current state: Now / Next / Blockers, under 12 KB. History up to 2026-11-10 is frozen in `docs/archive/STATUS-2026-11-10.md` |
 | `docs/operations/FLEET.md` | The install fleet: which stores run AdsBookCMS, their version, repository, visibility, infrastructure and per-install merge rules |
 | `docs/product/UNIMPLEMENTED_SPECS.md` | Remaining work and external blockers |
-| `docs/product/PRD.md` | Product requirements |
-| `docs/product/TASKS.md` | Active plan (release 1.10.1, multi-tenant platform), under 50 KB. Finished contracts are frozen in `docs/archive/TASKS-<date>.md` |
+| `docs/spec/02-PRD.md` | **adsbook.id product requirements** (`PR-*`, `NFR-*`, open questions). The canonical PRD from 2026-11-14 |
+| `docs/spec/03-…17-*.md`, `docs/spec/CONTEXT-RECORD.md` | Spec pack (development-spec-suite): one namespace each — `TD-*` design, `ARCH-*` architecture, `DATA-*` data, `TEN-*` isolation, `IAM-*` identity, `DOM-*` domains, `API-*` APIs, `UI-*` white-label, `BILL-*` billing, `SEC-*` security, `PRIV-*` privacy, `DEL-*`/`MIG-*` delivery, `OBS-*` observability, `UX-*` screens; context `CTX-*`/`JUR-*`/`XFER-*`. Index `docs/spec/README.md`; check `check-traceability.py docs/spec --tasks docs/product/TASKS.md` |
+| `docs/product/PRD.md` | Inherited single-tenant base-product requirements (`REQ-*`, chapters A0–A47) that every tenant store runs. Chapters A48/A49 are frozen (moved to `docs/spec/02-PRD.md`) |
+| `docs/product/TASKS.md` | The one execution queue (`T-*`, each with one primary `PR-*`), under 50 KB. Finished contracts are frozen in `docs/archive/TASKS-<date>.md` |
 | `docs/product/TASKS-LEGACY-INDEX.md` | Untriaged open rows inherited from the AdsBookCMS ledger |
 | `docs/history/BUILD-LOG.md` | Chronological history. Append-only |
 | `docs/design/DESIGN-SYSTEM.md` | Visual contract |
@@ -52,7 +54,7 @@ Product documentation lives in a separate repository, **adsbook.id-docs**, clone
 | `doc/ROUTE-MAP.md` / `doc/route-map.xml` | **Generated, never edited.** The route and module dictionary: URL → file → verbs → auth → roles → libs → tables → tests, and each `src/lib` module's exports, tables, test and callers. `npm run route-map` writes it; `src/lib/route-map.test.ts` fails when it and the filesystem disagree. The first thing to open for an audit, and the thing `docs/architecture/ARCHITECTURE.md` §3 defers to for counts |
 | `docs/operations/UPDATE-PATH-OWNERSHIP.md` | Which paths an install update copies and which it never touches (ADR-020). `docs/operations/RELEASE.md` §7 owns the procedure that uses it |
 | `docs/architecture/adr/ADR-NNN-*.md` | One file per decision, full text. Indexed and status-owned by `docs/architecture/DECISIONS.md` |
-| `docs/product/prd/*.md` | PRD chapters (one per epic). Part of the one PRD; indexed from `docs/product/PRD.md` |
+| `docs/product/prd/*.md` | Base-product PRD chapters (one per epic), indexed from `docs/product/PRD.md`; A48/A49 frozen |
 | `docs/archive/BUILD-LOG-*.md` | Frozen BUILD-LOG volumes, indexed at the top of `docs/history/BUILD-LOG.md` |
 | `docs/design/design-tokens.md` | Neutral colour/type/spacing values. Subordinate to `docs/design/DESIGN-SYSTEM.md`, which wins on conflict |
 | `docs/design/NATIVE_LANDING_PAGE_SPEC.md` | Implementation standard for a native Astro landing page. Subordinate to `docs/design/LANDING-PAGES.md` |
