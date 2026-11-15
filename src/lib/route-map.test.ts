@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -119,7 +119,8 @@ function unmappedRoutableFiles(dir: string): string[] {
     readdirSync(current, { withFileTypes: true }).flatMap((entry) => {
       if (entry.name.startsWith("_")) return [];
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) return walk(join(current, entry.name), relative);
+      // `statSync` follows a symlink: a linked folder is walked like a real one.
+      if (statSync(join(current, entry.name)).isDirectory()) return walk(join(current, entry.name), relative);
       return routable.test(entry.name) ? [relative] : [];
     });
   return walk(dir, "").sort();
@@ -137,10 +138,18 @@ test("a routable file the map cannot list is refused, unless `_` keeps it out of
       writeFileSync(join(dir, "landing", `_README.${extension}`), "");
       writeFileSync(join(dir, "_drafts", `note.${extension}`), "");
     }
-    assert.deepEqual(
-      unmappedRoutableFiles(dir),
-      UNMAPPED_ROUTABLE.map((extension) => `landing/README.${extension}`).sort(),
-    );
+    // A folder linked in from elsewhere is still a folder of pages.
+    const linked = mkdtempSync(join(tmpdir(), "route-guard-linked-"));
+    writeFileSync(join(linked, "internal.md"), "");
+    symlinkSync(linked, join(dir, "notes"));
+    try {
+      assert.deepEqual(
+        unmappedRoutableFiles(dir),
+        [...UNMAPPED_ROUTABLE.map((extension) => `landing/README.${extension}`), "notes/internal.md"].sort(),
+      );
+    } finally {
+      rmSync(linked, { recursive: true, force: true });
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
