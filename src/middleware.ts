@@ -8,7 +8,7 @@ import {
   readClickIdCookie,
   serializeClickIds,
 } from './lib/click-ids';
-import { canAccessAdminRoute, getDefaultAdminRoute } from './lib/auth';
+import { BROWSER_UNSUPPORTED_MESSAGE, canAccessAdminRoute, getDefaultAdminRoute, unsafeRequestVerdict } from './lib/auth';
 import { resolveAdminSession } from './lib/admin-session';
 import { resolveAuthSecret } from './lib/auth-secret';
 import { getRuntimeEnv } from './lib/env';
@@ -55,9 +55,17 @@ function applySecurityHeaders(
   response.headers.set('Strict-Transport-Security', 'max-age=31536000');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  if (isPrivate) response.headers.set('Cache-Control', 'no-store');
+  if (isPrivate) {
+    response.headers.set('Cache-Control', 'no-store');
+    // SEC-3: admin pages carry their own policy, never a seller tag host. No
+    // script-src yet (Astro's hydration scripts are inline); what it does fix
+    // is framing, <base> hijacking, plugins and where a form may post.
+    if (!frameAncestors) response.headers.set('Content-Security-Policy', ADMIN_CSP);
+  }
   return response;
 }
+
+export const ADMIN_CSP = "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
 
 async function loadStoredEmbedAllowedOrigins(
   database: D1Database | undefined,
@@ -339,11 +347,16 @@ export function createMiddleware(
     url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/');
   const isPrivate = isAdminPage || isAdminApi;
 
+  // IAM-5 strict CSRF: a sibling seller host is same-site, so the only safe
+  // unsafe request is one whose Origin is this origin and whose browser says
+  // `Sec-Fetch-Site: same-origin`.
   if (isAdminApi && UNSAFE_METHODS.has(context.request.method)) {
-    const origin = context.request.headers.get('origin');
-    const fetchSite = context.request.headers.get('sec-fetch-site');
-    if ((origin && origin !== url.origin) || fetchSite === 'cross-site') {
-      return applySecurityHeaders(new Response(JSON.stringify({ success: false, error: 'Forbidden request origin' }), {
+    const verdict = unsafeRequestVerdict(context.request, url);
+    if (verdict !== 'allowed') {
+      const body = verdict === 'browser_unsupported'
+        ? { success: false, error: BROWSER_UNSUPPORTED_MESSAGE, code: 'browser_unsupported' }
+        : { success: false, error: 'Forbidden request origin', code: 'forbidden_origin' };
+      return applySecurityHeaders(new Response(JSON.stringify(body), {
         status: 403,
         headers: JSON_HEADERS,
       }), true);

@@ -8,7 +8,10 @@ import {
   getDefaultAdminRoute,
   getSessionCookie,
   isAdminRole,
-  shouldSecureSessionCookie,
+  SESSION_COOKIE_NAME,
+  SESSION_COOKIE_OPTIONS,
+  lacksFetchMetadata,
+  unsafeRequestVerdict,
   signJwt,
   verifyJwt,
 } from './auth.ts';
@@ -17,9 +20,31 @@ import type { AdminRole, AdminSession } from './auth.ts';
 const AUTH_SECRET = 'unit-test-auth-secret-0123456789abcdef';
 const OTHER_SECRET = 'unit-test-auth-secret-fedcba9876543210';
 
-test('session cookie security follows the request transport, not build mode', () => {
-  assert.equal(shouldSecureSessionCookie(new URL('https://store.example/hello')), true);
-  assert.equal(shouldSecureSessionCookie(new URL('http://100.127.67.86:8790/hello')), false);
+test('IAM-2: the session cookie is __Host-: every set and delete is Secure, Path=/, host-only', () => {
+  assert.equal(SESSION_COOKIE_NAME, '__Host-adsbook_session');
+  assert.equal(SESSION_COOKIE_OPTIONS.secure, true, 'a __Host- cookie without Secure is refused, and so is its delete');
+  assert.equal(SESSION_COOKIE_OPTIONS.path, '/');
+  assert.equal(SESSION_COOKIE_OPTIONS.httpOnly, true);
+  assert.equal(SESSION_COOKIE_OPTIONS.sameSite, 'lax');
+  assert.equal('domain' in SESSION_COOKIE_OPTIONS, false, 'a Domain attribute voids the __Host- prefix');
+});
+
+test('IAM-5: an unsafe request needs its own Origin and Sec-Fetch-Site: same-origin', () => {
+  const url = new URL('https://toko-a.belanja.cc/api/admin/orders');
+  const verdict = (headers: Record<string, string>) =>
+    unsafeRequestVerdict(new Request(url, { method: 'POST', headers }), url);
+  assert.equal(verdict({ origin: 'https://toko-a.belanja.cc', 'sec-fetch-site': 'same-origin' }), 'allowed');
+  // Another seller's host is same-site: SameSite=Lax would send the cookie.
+  assert.equal(verdict({ origin: 'https://toko-b.belanja.cc', 'sec-fetch-site': 'same-site' }), 'forbidden');
+  assert.equal(verdict({ origin: 'https://toko-a.belanja.cc', 'sec-fetch-site': 'same-site' }), 'forbidden');
+  assert.equal(verdict({ origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }), 'forbidden');
+  assert.equal(verdict({ 'sec-fetch-site': 'same-origin' }), 'forbidden', 'a missing Origin is refused');
+  assert.equal(verdict({ origin: 'null', 'sec-fetch-site': 'same-origin' }), 'forbidden');
+  assert.equal(verdict({ origin: 'http://toko-a.belanja.cc', 'sec-fetch-site': 'same-origin' }), 'forbidden');
+  // Safari before 16.4: the right Origin, no Fetch Metadata.
+  assert.equal(verdict({ origin: 'https://toko-a.belanja.cc' }), 'browser_unsupported');
+  assert.equal(lacksFetchMetadata(new Headers()), true);
+  assert.equal(lacksFetchMetadata(new Headers({ 'sec-fetch-site': 'none' })), false);
 });
 
 // The admin gate that consumes these tokens lives in `src/middleware.ts`, which
@@ -285,14 +310,17 @@ test('the session cookie is read only under its exact name', async () => {
   const read = (cookie?: string) =>
     getSessionCookie(new Request('https://admin.test/admin', cookie ? { headers: { cookie } } : undefined));
 
-  assert.equal(read(`adsbook_session=${token}`), token);
-  assert.equal(read(`theme=dark; adsbook_session=${token}; other=1`), token);
-  assert.equal(read(`adsbook_session=${encodeURIComponent(token)}`), token);
+  assert.equal(read(`__Host-adsbook_session=${token}`), token);
+  assert.equal(read(`theme=dark; __Host-adsbook_session=${token}; other=1`), token);
+  assert.equal(read(`__Host-adsbook_session=${encodeURIComponent(token)}`), token);
   assert.equal(read(), null);
   assert.equal(read('theme=dark'), null);
   // A cookie whose name merely ends with the session name must not be accepted.
-  assert.equal(read('xadsbook_session=forged'), null);
-  assert.equal(read('evil_adsbook_session=forged'), null);
+  assert.equal(read('x__Host-adsbook_session=forged'), null);
+  // Names a parent-domain cookie can carry (ISO-11): never read as the session.
+  assert.equal(read('adsbook_session=forged'), null);
+  assert.equal(read('__host-adsbook_session=forged'), null);
+  assert.equal(read(`__host-adsbook_session=forged; __Host-adsbook_session=${token}`), token);
 });
 
 test('a session is closed once the credential behind it rotates', async () => {
@@ -586,7 +614,7 @@ async function runAdminRequest(options: {
   credential: CredentialRow;
 }) {
   const headers = new Headers();
-  if (options.token) headers.set('cookie', `adsbook_session=${encodeURIComponent(options.token)}`);
+  if (options.token) headers.set('cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(options.token)}`);
   const request = new Request(`https://admin.test${options.pathname}`, { headers });
   const context = {
     request,

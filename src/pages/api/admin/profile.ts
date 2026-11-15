@@ -5,7 +5,7 @@ import {
 } from '../../../lib/admin-credentials';
 import { revokeAdminSessions } from '../../../lib/admin-session';
 import { jsonError, jsonOk } from '../../../lib/api';
-import { SESSION_COOKIE_NAME } from '../../../lib/auth';
+import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../../../lib/auth';
 import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
@@ -73,7 +73,7 @@ export const PUT: APIRoute = async ({ request, locals, cookies }) => {
     if (!result.ok) return jsonError(result.error, 400);
 
     await revokeAdminSessions(database, actorUsername);
-    cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+    cookies.delete(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
     return jsonOk({
       message: 'Profil admin diperbarui. Silakan login kembali.',
       data: { username: result.username, reauthenticate: true },

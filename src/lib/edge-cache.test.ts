@@ -64,8 +64,8 @@ test("ad tracking parameters share one entry; real parameters, provinces and byp
   assert.equal(key("https://store.example/", { cf: { regionCode: "JB" } }), "https://store.example/");
   assert.equal(key("https://store.example/produk", { cf: { regionCode: "JB" } }), "https://store.example/produk");
   // An admin session, an Authorization header, a preview and a non-GET never use the cache.
-  assert.equal(key(base, { headers: { cookie: "adsbook_session=abc" } }), null);
-  assert.equal(key(base, { headers: { cookie: "_fbp=x; adsbook_session=abc" } }), null);
+  assert.equal(key(base, { headers: { cookie: "__Host-adsbook_session=abc" } }), null);
+  assert.equal(key(base, { headers: { cookie: "_fbp=x; __Host-adsbook_session=abc" } }), null);
   assert.equal(key(base, { headers: { authorization: "Bearer x" } }), null);
   assert.equal(key(`${base}?preview=1`), null);
   // The rewrite of a product page onto a native landing page's path.
@@ -243,7 +243,7 @@ test("middleware: a hit skips D1 and the render, keeps security headers and writ
   assert.equal(await paFirst.response.text(), "<p>full:Papua</p>");
 
   // An admin session never reads the cache.
-  const admin = await run("https://store.example/aussie-formulabaru", async () => new Response("<p>preview</p>", { status: 200, headers: { "content-type": "text/html" } }), { cookie: "adsbook_session=abc" });
+  const admin = await run("https://store.example/aussie-formulabaru", async () => new Response("<p>preview</p>", { status: 200, headers: { "content-type": "text/html" } }), { cookie: "__Host-adsbook_session=abc" });
   assert.equal(await admin.response.text(), "<p>preview</p>");
   assert.notEqual(admin.response.headers.get("x-edge-cache"), "HIT");
 });

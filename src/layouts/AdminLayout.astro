@@ -2,6 +2,7 @@
 import '../styles/admin.css';
 import { AdminShell } from '../components/admin/AdminShell.tsx';
 import { ADMIN_ACCENT } from '../components/admin/admin-navigation';
+import { BROWSER_UNSUPPORTED_MESSAGE, lacksFetchMetadata } from '../lib/auth';
 
 interface Props {
   title: string;
@@ -13,6 +14,9 @@ const currentPath = (Astro.url.pathname + Astro.url.search).replace(/\/$/, '') |
 const adminRole = Astro.locals.admin?.role ?? 'customer_service';
 const mustChangePassword = Astro.locals.admin?.mustChangePassword ?? false;
 const sidebarDefaultOpen = Astro.cookies.get('sidebar_state')?.value !== 'false';
+// IAM-5: a browser that sends no Fetch Metadata cannot save anything here; say
+// so before the operator fills a form, not after.
+const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
 
 ---
 
@@ -55,6 +59,11 @@ const sidebarDefaultOpen = Astro.cookies.get('sidebar_state')?.value !== 'false'
       mustChangePassword={mustChangePassword}
       sidebarDefaultOpen={sidebarDefaultOpen}
     >
+      {browserUnsupported && (
+        <div id="browserUnsupportedNotice" role="alert" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          {BROWSER_UNSUPPORTED_MESSAGE}
+        </div>
+      )}
       <slot />
     </AdminShell>
     <!-- Vanilla JS for the admin drawer, global search, and logout enhancement. -->

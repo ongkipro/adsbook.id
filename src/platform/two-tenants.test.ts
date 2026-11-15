@@ -408,6 +408,72 @@ test("T-45/ISO-9: with every platform env value set, a tenant without settings i
   assert.deepEqual(calls, [], "a tenant without settings made an outbound provider call");
 });
 
+test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never stands in for a session on tenant B", async () => {
+  const platformDb = await platform([["x-a", "active", "fix-a.belanja.cc"], ["x-b", "active", "fix-b.belanja.cc"]]);
+  const stores = namespace({ migrated: true });
+  const tokens: Record<string, string> = {};
+  for (const id of ["x-a", "x-b"]) {
+    stores.get(id).storage.db.exec(`
+      INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16');
+      UPDATE admin_credentials SET username = 'owner', password_hash = 'x', must_change_password = 0,
+        updated_at = '2026-11-16T00:00:00.000Z', role = 'owner' WHERE id = 1;
+      INSERT INTO orders (id, order_number, store_id, customer_name, customer_phone, address, province, city, district,
+        total_amount, created_at)
+      VALUES (1, 'INV-${id.toUpperCase()}', 1, 'Siti Rahayu', '6281234567890', 'Jl. Melati 10', 'Jawa Barat', 'Bogor', 'Kec', 60000, '2026-11-16T00:00:00.000Z');
+    `);
+    const database = createTenantDb(stores.get(id).stub);
+    const { token, session } = await signJwt({ username: "owner", role: "owner" }, await resolveAuthSecret(database, id));
+    await storeAdminSession(database, session, { mustChangePassword: false, updatedAt: "2026-11-16T00:00:00.000Z" });
+    tokens[id] = token;
+  }
+  const onRequest = createMiddleware();
+  const send = async (host: string, init: { method?: string; cookie?: string; headers?: Record<string, string> }) => {
+    const href = `https://${host}/api/admin/orders`;
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const headers = new Headers(init.headers);
+    if (init.cookie) headers.set("cookie", init.cookie);
+    const request = new Request(href, { method: init.method ?? "GET", headers });
+    const context = { request, url: new URL(href), locals, routePattern: "/api/admin/orders", redirect: () => new Response(null, { status: 302 }) };
+    const previous = { log: console.log, error: console.error };
+    console.log = () => undefined;
+    console.error = () => undefined;
+    try {
+      const response = (await onRequest(context as never, (async () => adminOrdersRoute.GET(context as never)) as never)) as Response;
+      return { status: response.status, text: await response.text(), csp: response.headers.get("content-security-policy") };
+    } finally {
+      Object.assign(console, previous);
+    }
+  };
+
+  // What a script on A can plant for `.belanja.cc`: any name but a `__Host-` one.
+  const planted = `adsbook_session=${tokens["x-a"]}; __host-adsbook_session=${tokens["x-a"]}`;
+  assert.equal((await send("fix-b.belanja.cc", { cookie: planted })).status, 401, "a planted parent-domain cookie opened B");
+  const intact = await send("fix-b.belanja.cc", { cookie: `${planted}; ${SESSION_COOKIE_NAME}=${tokens["x-b"]}` });
+  assert.equal(intact.status, 200, "B's own session survives the planted cookies");
+  assert.match(intact.text, /INV-X-B/);
+  assert.doesNotMatch(intact.text, /INV-X-A/);
+  // SEC-3: the admin answer carries the admin policy and no seller tag host.
+  assert.equal(intact.csp, "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
+  assert.doesNotMatch(intact.csp ?? "", /googletagmanager|facebook|tiktok|doubleclick/);
+
+  // IAM-5 on an unsafe admin route, with B's valid session in every case.
+  const bCookie = `${SESSION_COOKIE_NAME}=${tokens["x-b"]}`;
+  const post = (headers: Record<string, string>) => send("fix-b.belanja.cc", { method: "POST", cookie: bCookie, headers });
+  const sameSiteCrossHost = await post({ origin: "https://fix-a.belanja.cc", "sec-fetch-site": "same-site" });
+  assert.equal(sameSiteCrossHost.status, 403, "a same-site cross-host POST was accepted");
+  assert.equal(JSON.parse(sameSiteCrossHost.text).code, "forbidden_origin");
+  assert.equal((await post({ "sec-fetch-site": "same-origin" })).status, 403, "a POST without Origin was accepted");
+  const oldBrowser = await post({ origin: "https://fix-b.belanja.cc" });
+  assert.equal(oldBrowser.status, 403);
+  assert.deepEqual(JSON.parse(oldBrowser.text), {
+    success: false,
+    error: "Browser ini terlalu lama untuk menyimpan perubahan dengan aman. Perbarui browser Anda, lalu coba lagi.",
+    code: "browser_unsupported",
+  });
+  const sameOrigin = await post({ origin: "https://fix-b.belanja.cc", "sec-fetch-site": "same-origin" });
+  assert.notEqual(sameOrigin.status, 403, "a same-origin POST from a current browser was refused");
+});
+
 test("T-21: there is no installer page or route to answer /install", () => {
   const pages = new URL("../pages/", import.meta.url);
   for (const path of ["install.astro", "install/index.astro", "install.ts", "api/install.ts", "api/install/index.ts"]) {

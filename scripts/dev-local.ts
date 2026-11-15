@@ -81,6 +81,10 @@ const worker = spawn(
     "--persist-to", stateDir,
     "--env-file", envFile,
     // Exposes /cdn-cgi/handler/scheduled?cron=7+*+*+*+* to run the hourly job by hand.
+    // The local platform host. Tenants answer on `<slug>.localhost`, which
+    // Chrome treats as a secure context, so the `__Host-` session cookie is set,
+    // sent and deleted there (T-22, proven in a real browser 2026-11-16).
+    "--var", "PLATFORM_HOSTS:app.localhost",
     "--test-scheduled",
     "--show-interactive-dev-session=false",
   ],
@@ -90,7 +94,8 @@ const worker = spawn(
 console.log(`
   AdsBookCMS local store
   ─────────────────────────────────────────────
-  Worker     http://${host || "localhost"}:${port}
+  Platform   http://app.localhost:${port}
+  Tenants    http://<slug>.localhost:${port}   (a tenant exists once PLATFORM_DB names it)
   Providers  ${providerBase}   (Mengantar + AutoLaris stand-ins)
   Cron       http://${host || "localhost"}:${port}/cdn-cgi/handler/scheduled?cron=7+*+*+*+*
   Settle     curl -X POST '${providerBase}/__dev/autolaris/pay?transaction_id=<id>'

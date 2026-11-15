@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { SESSION_COOKIE_NAME, getSessionCookie, verifyJwt } from '../../../lib/auth';
+import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS, getSessionCookie, verifyJwt } from '../../../lib/auth';
 import { deleteAdminSession } from '../../../lib/admin-session';
 import { resolveAuthSecret } from '../../../lib/auth-secret';
 import { tenantDatabase } from '../../../lib/tenant-database.ts';
@@ -19,6 +19,6 @@ export const POST: APIRoute = async ({ request, locals, cookies, redirect }) => 
       console.error('admin-logout', error);
     }
   }
-  cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+  cookies.delete(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
   return redirect('/hello', 303);
 };
