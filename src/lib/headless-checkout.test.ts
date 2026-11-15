@@ -130,3 +130,143 @@ test('resolveTrustedHeadlessShipping refuses a primary price when the city chose
   assert.equal(primary.shippingCost, 18000);
   assert.equal(primary.warehouseId, 1);
 });
+
+// ── PR-5: the AutoLaris switch, driven through both checkout routes on the real migration chain ──
+
+import { readdirSync, readFileSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+import { DatabaseSync } from 'node:sqlite';
+import { hashApiKeySecret } from './developer-api-keys.ts';
+import { splitMigrationStatements } from './schema-version.ts';
+
+// The routes import their libs without an extension, as Vite resolves them.
+const extensionResolver = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      if (!specifier.startsWith('.') || /\.[a-z0-9]+$/i.test(specifier)) throw error;
+      return nextResolve(`${specifier}.ts`, context);
+    }
+  },
+});
+const headlessCheckoutRoute = await import('../pages/api/v1/checkout.ts');
+const storefrontCheckoutRoute = await import('../pages/api/submit-order.ts');
+extensionResolver.deregister();
+
+const API_KEY = 'adsbook_live_autolaris_switch_test_key';
+
+async function switchStore() {
+  const sqlite = new DatabaseSync(':memory:');
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  const directory = new URL('../db/migrations/', import.meta.url);
+  for (const name of readdirSync(directory).filter((file) => file.endsWith('.sql')).sort()) {
+    for (const sql of splitMigrationStatements(readFileSync(new URL(name, directory), 'utf8'))) sqlite.exec(sql);
+  }
+  sqlite.exec(`
+    INSERT INTO stores (id, name, slug, created_at, autolaris_api_key, autolaris_base_url, is_autolaris_enabled)
+      VALUES (1, 'Toko Uji', 'toko-uji', '2026-11-01T00:00:00.000Z', 'qa-key', 'https://autolaris.example.test', 0);
+    INSERT INTO warehouses (id, store_id, name, origin_area_id, pickup_address_id, address, city, province, contact_name, contact_phone)
+      VALUES (1, 1, 'Gudang', 'area-1', 'pickup-1', 'Jl. Gudang 1', 'Surabaya', 'Jawa Timur', 'PIC', '081300000000');
+    INSERT INTO products (id, store_id, title, slug, created_at) VALUES (11111, 1, 'Pupuk', 'pupuk', '2026-11-01T00:00:00.000Z');
+    INSERT INTO product_variants (id, product_id, sku, title, price) VALUES (101, 11111, 'P-1', '1 kg', 50000);
+  `);
+  sqlite
+    .prepare(`INSERT INTO developer_api_keys (name, key_hash, key_preview, created_by, created_at)
+      VALUES ('Storefront', ?, 'adsbook_live_…', 'owner', '2026-11-01T00:00:00.000Z')`)
+    .run(await hashApiKeySecret(API_KEY));
+  type Value = null | number | string;
+  const statement = (sql: string, values: Value[] = []) => ({
+    bind: (...next: Value[]) => statement(sql, next.map((value) => value ?? null)),
+    first: async () => sqlite.prepare(sql).get(...values) ?? null,
+    all: async () => ({ results: sqlite.prepare(sql).all(...values) }),
+    run: async () => {
+      if (/^\s*SELECT\b/i.test(sql)) return { results: sqlite.prepare(sql).all(...values), meta: { changes: 0 } };
+      return { results: [], meta: { changes: Number(sqlite.prepare(sql).run(...values).changes) } };
+    },
+  });
+  const database = {
+    prepare: (sql: string) => statement(sql),
+    async batch(statements: Array<ReturnType<typeof statement>>) {
+      sqlite.exec('BEGIN');
+      try {
+        const results = [];
+        for (const item of statements) results.push(await item.run());
+        sqlite.exec('COMMIT');
+        return results;
+      } catch (error) {
+        sqlite.exec('ROLLBACK');
+        throw error;
+      }
+    },
+  } as unknown as D1Database;
+  const locals = {
+    // The order rail is fully configured: only the switch stands in the way.
+    runtimeEnv: { OMS_DB: database, AUTOLARIS_ORDER_ORIGIN_ID: 'origin-1', AUTOLARIS_ORDER_DESTINATION_ID: 'dest-1' },
+    tenant: { siteUrl: 'https://store.example.test' },
+  } as unknown as App.Locals;
+  const count = (table: string) =>
+    Number((sqlite.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get() as { total: number }).total);
+  return { sqlite, locals, count };
+}
+
+const qrisOrder = (submitToken: string) => ({
+  customer_name: 'Siti Rahayu',
+  customer_phone: '081234567890',
+  address: 'Jalan Melati Nomor 10, Bogor',
+  district: 'Bogor Tengah',
+  province: 'Jawa Barat',
+  city: 'Bogor',
+  postal_code: '16111',
+  payment_method: 'qris',
+  payment_channel: 'QRIS',
+  variant_id: '101',
+  quantity: 1,
+  submit_token: submitToken,
+});
+
+const post = (route: { POST: unknown }, path: string, body: unknown, locals: App.Locals) =>
+  (route.POST as (context: unknown) => Promise<Response>)({
+    request: new Request(`https://store.example.test${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-app-key': API_KEY },
+      body: JSON.stringify(body),
+    }),
+    locals,
+  });
+
+test('with AutoLaris switched off, /api/v1/checkout refuses QRIS exactly as /api/submit-order does', async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const providerCalls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    providerCalls.push(String(input instanceof Request ? input.url : input));
+    throw new Error('no provider call is expected while the switch is off');
+  }) as typeof fetch;
+  const { sqlite, locals, count } = await switchStore();
+
+  const storefront = await post(storefrontCheckoutRoute, '/api/submit-order', qrisOrder('sb_switch_off_storefront_1'), locals);
+  const storefrontBody = (await storefront.json()) as { error: string; code: string };
+  const headless = await post(headlessCheckoutRoute, '/api/v1/checkout', qrisOrder('sb_switch_off_headless_01'), locals);
+  const headlessBody = (await headless.json()) as { error: { message: string; code: string } };
+
+  assert.equal(storefrontBody.code, 'PAYMENT_METHOD_UNAVAILABLE');
+  assert.deepEqual(
+    { status: headless.status, code: headlessBody.error.code, message: headlessBody.error.message },
+    { status: storefront.status, code: storefrontBody.code, message: storefrontBody.error },
+  );
+  assert.equal(count('orders'), 0, 'a refused checkout must not leave an order row');
+  assert.equal(count('payment_transactions'), 0);
+  assert.deepEqual(providerCalls, [], 'no provider call may be made while the switch is off');
+
+  // The refusal is the switch and nothing else: turned on, the same request
+  // gets past the payment gate and stops at the next one, the shipping quote.
+  sqlite.exec('UPDATE stores SET is_autolaris_enabled = 1');
+  const enabled = await post(headlessCheckoutRoute, '/api/v1/checkout', qrisOrder('sb_switch_on_headless_001'), locals);
+  const enabledBody = (await enabled.json()) as { error: { code: string } };
+  assert.notEqual(enabledBody.error.code, 'PAYMENT_METHOD_UNAVAILABLE');
+  assert.equal(enabledBody.error.code, 'SHIPPING_QUOTE_REQUIRED');
+  assert.equal(count('orders'), 0);
+});

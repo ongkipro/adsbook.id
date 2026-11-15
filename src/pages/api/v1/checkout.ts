@@ -73,11 +73,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     // QRIS/VA need a provider to issue the instruction. Without this an API
     // order was stored with no payment row and no way for the buyer to pay.
+    // The store's own switch counts as much as the key: `/api/submit-order`
+    // refuses on it, and a configured key alone let the API keep issuing
+    // payment instructions for a store that had turned AutoLaris off (PR-5).
     const providerPayment = data.payment_method === 'qris' || data.payment_method === 'bank_transfer';
-    if (providerPayment && !(await getProviderConfig(database, locals)).autolaris.apiKey) {
-      return validation.finalize(headlessError('Pembayaran online belum tersedia. Silakan pilih COD.', 503, {
-        code: 'PAYMENT_METHOD_UNAVAILABLE',
-      }, validation.corsHeaders));
+    if (providerPayment) {
+      const [provider, store] = await Promise.all([
+        getProviderConfig(database, locals).then((config) => config.autolaris),
+        database
+          .prepare('SELECT is_autolaris_enabled FROM stores ORDER BY id LIMIT 1')
+          .first<{ is_autolaris_enabled: number | null }>(),
+      ]);
+      if (!provider.apiKey || store?.is_autolaris_enabled === 0) {
+        return validation.finalize(headlessError('Pembayaran online belum tersedia. Silakan pilih COD.', 503, {
+          code: 'PAYMENT_METHOD_UNAVAILABLE',
+        }, validation.corsHeaders));
+      }
     }
 
     const shipping = await resolveTrustedHeadlessShipping(body, data, (input) =>
