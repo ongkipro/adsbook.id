@@ -13,9 +13,9 @@
   // ASSET_BUCKET, AI, ASSETS — because the application resolves them by name.
   "$schema": "./node_modules/wrangler/config-schema.json",
 
-  // Unique within the Cloudflare account. The button lets the operator rename
-  // it; the default is a real, deployable name rather than a placeholder.
-  "name": "adsbookcms",
+  // ARCH-2. Never an AdsBookCMS install's Worker name: a deploy under that
+  // name would replace a live store of the old fleet (ADR-038).
+  "name": "adsbook-platform",
   "main": "./src/worker.ts",
 
 
@@ -78,10 +78,13 @@
     "bindings": [{ "name": "TENANT_STORE", "class_name": "TenantStore" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantStore"] }],
+  // A bucket of its own, never an AdsBookCMS install's (ADR-038): every key is
+  // `t/<tenantId>/…` (TEN-3, src/platform/keys.ts), so it starts empty and no
+  // unprefixed object ever exists in it.
   "r2_buckets": [
     {
       "binding": "ASSET_BUCKET",
-      "bucket_name": "adsbookcms-assets"
+      "bucket_name": "adsbook-media"
     }
   ],
   "ai": {
