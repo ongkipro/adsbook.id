@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
@@ -10,6 +12,7 @@ import {
   knownTables,
   libImportsOf,
   methodsOf,
+  PAGES_DIR,
   tablesOf,
   toRoutePath,
   toXml,
@@ -97,4 +100,56 @@ test("the dictionary columns are derived, and only from what exists", () => {
   const tables = knownTables();
   assert.ok(tables.has("orders") && tables.has("landing_sections"));
   assert.equal(tables.has("landing_sections_next"), false);
+});
+
+/**
+ * PR-1. Astro compiles these into a page, and `listPageFiles` reads only
+ * `.astro` and `.ts`, so such a file is a live URL the map never lists: an
+ * internal note at `src/pages/landing/README.md` answered 200 on
+ * `/landing/README` on every store. The guard refuses the file instead of
+ * teaching the map to list it. `.html` is not in PR-1's list but Astro routes
+ * it the same way.
+ */
+const UNMAPPED_ROUTABLE = ["md", "markdown", "mdown", "mkdn", "mkd", "mdwn", "mdx", "js", "html"];
+
+/** Files Astro would route but the map would not list. `_` excludes a file or a folder, as in Astro. */
+function unmappedRoutableFiles(dir: string): string[] {
+  const routable = new RegExp(`\\.(${UNMAPPED_ROUTABLE.join("|")})$`);
+  const walk = (current: string, prefix: string): string[] =>
+    readdirSync(current, { withFileTypes: true }).flatMap((entry) => {
+      if (entry.name.startsWith("_")) return [];
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) return walk(join(current, entry.name), relative);
+      return routable.test(entry.name) ? [relative] : [];
+    });
+  return walk(dir, "").sort();
+}
+
+test("a routable file the map cannot list is refused, unless `_` keeps it out of the router", () => {
+  const dir = mkdtempSync(join(tmpdir(), "route-guard-"));
+  try {
+    mkdirSync(join(dir, "landing"));
+    mkdirSync(join(dir, "_drafts"));
+    writeFileSync(join(dir, "index.astro"), "");
+    writeFileSync(join(dir, "robots.txt.ts"), "");
+    for (const extension of UNMAPPED_ROUTABLE) {
+      writeFileSync(join(dir, "landing", `README.${extension}`), "");
+      writeFileSync(join(dir, "landing", `_README.${extension}`), "");
+      writeFileSync(join(dir, "_drafts", `note.${extension}`), "");
+    }
+    assert.deepEqual(
+      unmappedRoutableFiles(dir),
+      UNMAPPED_ROUTABLE.map((extension) => `landing/README.${extension}`).sort(),
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("no file under src/pages compiles into a page the route map does not list", () => {
+  assert.deepEqual(
+    unmappedRoutableFiles(PAGES_DIR),
+    [],
+    "Astro serves these as pages and doc/route-map.xml cannot list them: move the file out of src/pages or prefix it with `_`",
+  );
 });
