@@ -66,7 +66,6 @@ async function gate(db: SqliteD1 | null, href: string, options: { headers?: Reco
         passed.push(forwarded);
         return new Response("validation", { status: 200 });
       },
-      log: () => undefined,
     },
   );
   return { result, passed };
@@ -108,8 +107,12 @@ test("a host is owned once, a tenant has one primary, and hosts are stored norma
   assert.throws(() => addHost(db, "Toko-B.belanja.cc", "t-b"), /CHECK constraint failed/);
   assert.throws(() => addHost(db, "toko-b.belanja.cc.", "t-b"), /CHECK constraint failed/);
   assert.throws(() => addTenant(db, "t-c", "toko-c", "deleted"), /CHECK constraint failed/);
-  db.sqlite.exec("INSERT INTO tenant_events (tenant_id, kind, actor, at) VALUES ('t-a', 'signup', 'owner', '2026-11-16')");
+  const fresh = new Date().toISOString();
+  db.sqlite.exec(`INSERT INTO tenant_events (tenant_id, kind, actor, at) VALUES ('t-a', 'signup', 'owner', '${fresh}'), ('t-a', 'old', 'owner', '2024-01-01T00:00:00.000Z')`);
   assert.throws(() => db.sqlite.exec("UPDATE tenant_events SET kind = 'x'"), /append-only/);
+  assert.throws(() => db.sqlite.exec("DELETE FROM tenant_events WHERE kind = 'signup'"), /append-only/);
+  db.sqlite.exec("DELETE FROM tenant_events WHERE kind = 'old'"); // the 1-year retention job (PRIV-4)
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM tenant_events").get()?.n, 1);
 });
 
 test("HOST-1: certificate validation passes through for unknown, pending and platform hosts, with no tenant work", async () => {
@@ -190,7 +193,7 @@ test("ISO-1: forwarded-host headers never select a tenant", async () => {
   assert.equal(tenantOf(result), "t-a");
 });
 
-test("ISO-2 / HOST-3: a host moved from A to B is quarantined, then serves B and never A again", async () => {
+test("ISO-2 / HOST-3: a host moved from A to B is quarantined at once, then serves B and never A again", async () => {
   const db = await controlPlane();
   const cache = new HostCache();
   addTenant(db, "t-a", "toko-a");
@@ -203,14 +206,56 @@ test("ISO-2 / HOST-3: a host moved from A to B is quarantined, then serves B and
   db.sqlite
     .prepare("UPDATE tenant_hosts SET tenant_id = 't-b', status = 'active', revoked_at = NULL, quarantine_until = ? WHERE host = 'shop.merchant.com'")
     .run(new Date(moved + HOST_QUARANTINE_MS).toISOString());
-  // After the cache TTL, during the quarantine: neither tenant.
-  const during = await gate(db, "https://shop.merchant.com/", { cache, now: moved + HOST_CACHE_TTL_MS + 1 });
-  assert.equal(statusOf(during.result), 404);
-  // After the quarantine: B, and A never again.
-  for (const offset of [HOST_QUARANTINE_MS + 1, HOST_QUARANTINE_MS + HOST_CACHE_TTL_MS + 2, HOST_QUARANTINE_MS * 3]) {
-    assert.equal(tenantOf((await gate(db, "https://shop.merchant.com/", { cache, now: moved + offset })).result), "t-b", `offset ${offset}`);
+  // Immediately and throughout the quarantine, in the same warm isolate: neither tenant.
+  for (const offset of [1, HOST_CACHE_TTL_MS + 1, HOST_QUARANTINE_MS - 1]) {
+    const during = await gate(db, "https://shop.merchant.com/", { cache, now: moved + offset });
+    assert.equal(statusOf(during.result), 404, `offset ${offset}`);
   }
-  assert.ok(HOST_QUARANTINE_MS > HOST_CACHE_TTL_MS, "a quarantine shorter than the cache TTL could route to the old tenant");
+  // After the quarantine: never A; B once a miss cached during the quarantine
+  // has expired (at most one cache TTL later).
+  for (const offset of [HOST_QUARANTINE_MS + 1, HOST_QUARANTINE_MS + HOST_CACHE_TTL_MS + 2, HOST_QUARANTINE_MS * 3]) {
+    const after = tenantOf((await gate(db, "https://shop.merchant.com/", { cache, now: moved + offset })).result);
+    assert.notEqual(after, "t-a", `offset ${offset}`);
+    if (offset >= HOST_QUARANTINE_MS + HOST_CACHE_TTL_MS) assert.equal(after, "t-b", `offset ${offset}`);
+  }
+  assert.ok(HOST_QUARANTINE_MS > HOST_CACHE_TTL_MS);
+});
+
+test("a suspension or revocation takes effect on the very next request in a warm isolate", async () => {
+  const db = await controlPlane();
+  const cache = new HostCache();
+  addTenant(db, "t-a", "toko-a");
+  addHost(db, "toko-a.belanja.cc", "t-a");
+  assert.equal(tenantOf((await gate(db, "https://toko-a.belanja.cc/", { cache })).result), "t-a");
+  db.sqlite.exec("UPDATE tenants SET status = 'suspended' WHERE id = 't-a'");
+  assert.equal(statusOf((await gate(db, "https://toko-a.belanja.cc/", { cache, now: T0 + 1 })).result), 403);
+  db.sqlite.exec("UPDATE tenants SET status = 'active' WHERE id = 't-a'");
+  assert.equal(tenantOf((await gate(db, "https://toko-a.belanja.cc/", { cache, now: T0 + 2 })).result), "t-a");
+  db.sqlite.exec("UPDATE tenant_hosts SET status = 'revoked' WHERE host = 'toko-a.belanja.cc'");
+  assert.equal(statusOf((await gate(db, "https://toko-a.belanja.cc/", { cache, now: T0 + 3 })).result), 404);
+});
+
+test("the default pass-through answers 404 on local and IP hosts instead of fetching itself", async () => {
+  const previous = globalThis.fetch;
+  const fetched: string[] = [];
+  globalThis.fetch = (async (input: Request) => (fetched.push(input.url), new Response("upstream"))) as typeof fetch;
+  try {
+    for (const href of [
+      "http://127.0.0.1:8787/.well-known/acme-challenge/x",
+      "http://[::1]:8787/.well-known/acme-challenge/x",
+      "http://localhost:8787/.well-known/pki-validation/x",
+      "http://toko.localhost:8787/.well-known/acme-challenge/x",
+    ]) {
+      const result = await gateRequest(new Request(href), new URL(href), {}, {});
+      assert.equal(result.kind === "validation" && result.response.status, 404, href);
+    }
+    assert.deepEqual(fetched, []);
+    const live = await gateRequest(new Request("https://shop.merchant.com/.well-known/acme-challenge/t"), new URL("https://shop.merchant.com/.well-known/acme-challenge/t"), {}, {});
+    assert.equal(live.kind === "validation" && (await live.response.text()), "upstream");
+    assert.deepEqual(fetched, ["https://shop.merchant.com/.well-known/acme-challenge/t"]);
+  } finally {
+    globalThis.fetch = previous;
+  }
 });
 
 test("platform routes are refused on tenant hosts, and tenant routes on platform hosts", async () => {
@@ -252,7 +297,10 @@ test("a control-plane failure is a 503 for the tenant host, never a default tena
   db.failWhen = /FROM tenant_hosts/;
   const { result } = await gate(db, "https://toko-a.belanja.cc/");
   assert.equal(statusOf(result), 503);
-  assert.equal(statusOf((await gate(null, "https://toko-a.belanja.cc/")).result), 503);
+  assert.equal(result.kind === "refused" && result.reason, "platform_db_failed");
+  const unbound = (await gate(null, "https://toko-a.belanja.cc/")).result;
+  assert.equal(statusOf(unbound), 503);
+  assert.equal(unbound.kind === "refused" && unbound.reason, "platform_db_unbound");
 });
 
 test("UX-5: state pages carry the right status, noindex, no store data, and one body for every unknown host", async () => {

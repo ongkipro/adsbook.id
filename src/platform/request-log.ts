@@ -15,6 +15,8 @@ export type RequestLogLine = {
   status: number;
   duration_ms: number;
   request_id: string;
+  /** A fixed code when the gate refused or the handler threw; never free text from a request. */
+  reason?: string;
 };
 
 /** Anything that is not a route pattern is reduced to a fixed label. */

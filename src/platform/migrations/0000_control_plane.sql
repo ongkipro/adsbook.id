@@ -85,6 +85,13 @@ BEGIN
   SELECT RAISE(ABORT, 'tenant_events is append-only');
 END;
 --> statement-breakpoint
+-- Deletion is the 1-year retention job only (PRIV-4): a younger row cannot go.
+CREATE TRIGGER tenant_events_append_only_delete BEFORE DELETE ON tenant_events
+WHEN OLD.at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-365 days')
+BEGIN
+  SELECT RAISE(ABORT, 'tenant_events is append-only');
+END;
+--> statement-breakpoint
 
 CREATE TABLE migration_bookmarks (
   tenant_id TEXT NOT NULL,

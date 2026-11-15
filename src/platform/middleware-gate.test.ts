@@ -49,10 +49,10 @@ platformDb.sqlite.exec(`
 `);
 
 const onRequest = createMiddleware(async () => undefined, (request, url, env) =>
-  gateRequest(request, url, env, { ensureSchema: async () => undefined, log: () => undefined }),
+  gateRequest(request, url, env, { ensureSchema: async () => undefined }),
 );
 
-async function run(href: string, routePattern = "/produk/[slug]") {
+async function run(href: string, routePattern = "/produk/[slug]", nextImpl?: () => Promise<Response>, env: Record<string, unknown> = {}) {
   const touched: string[] = [];
   const omsDb = new Proxy({}, { get: (_target, property) => (touched.push(`OMS_DB.${String(property)}`), () => { throw new Error("tenant database touched"); }) });
   const cacheReads: string[] = [];
@@ -62,9 +62,9 @@ async function run(href: string, routePattern = "/produk/[slug]") {
   const previousLog = console.log;
   console.log = (line: unknown) => void logs.push(String(line));
   let nextCalls = 0;
-  const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, OMS_DB: omsDb } };
+  const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, OMS_DB: omsDb, ...env } };
   try {
-    const response = (await onRequest(
+    const response = (await Promise.resolve(onRequest(
       {
         request: new Request(href),
         url: new URL(href),
@@ -74,10 +74,10 @@ async function run(href: string, routePattern = "/produk/[slug]") {
       } as never,
       (async () => {
         nextCalls += 1;
-        return new Response("route", { status: 200 });
+        return nextImpl ? nextImpl() : new Response("route", { status: 200 });
       }) as never,
-    )) as Response;
-    return { response, touched, cacheReads, nextCalls, locals, logs: logs.map((line) => JSON.parse(line) as Record<string, unknown>) };
+    )).catch((error: unknown) => error)) as Response | Error;
+    return { response: response as Response, error: response instanceof Error ? response : null, touched, cacheReads, nextCalls, locals, logs: logs.map((line) => JSON.parse(line) as Record<string, unknown>) };
   } finally {
     console.log = previousLog;
     (globalThis as { caches?: unknown }).caches = previousCaches;
@@ -127,4 +127,18 @@ test("a platform route on a platform host runs with platform context and no tena
   assert.deepEqual(result.cacheReads, []);
   assert.equal(result.logs[0].host_kind, "platform");
   assert.equal(result.logs[0].tenant_id, null);
+});
+
+test("exactly one log line on every path: a gate refusal with its reason, and a route that throws", async () => {
+  const down = await run("https://toko-a.belanja.cc/produk/x", "/produk/[slug]", undefined, { PLATFORM_DB: undefined });
+  assert.equal(down.response.status, 503);
+  assert.equal(down.logs.length, 1);
+  assert.equal(down.logs[0].reason, "platform_db_unbound");
+
+  const thrown = await run("https://adsbook.id/platform/x", "/platform/x", async () => {
+    throw new Error("route failed");
+  });
+  assert.equal(thrown.error?.message, "route failed");
+  assert.equal(thrown.logs.length, 1);
+  assert.deepEqual({ status: thrown.logs[0].status, reason: thrown.logs[0].reason, host_kind: thrown.logs[0].host_kind }, { status: 500, reason: "unhandled_exception", host_kind: "platform" });
 });

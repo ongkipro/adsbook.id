@@ -13,7 +13,13 @@ export type GateResult =
   | { kind: "validation"; response: Response }
   | { kind: "platform"; host: string }
   | { kind: "tenant"; tenant: TenantContext }
-  | { kind: "refused"; hostKind: "tenant" | "platform" | "unknown"; response: Response };
+  | {
+      kind: "refused";
+      hostKind: "tenant" | "platform" | "unknown";
+      response: Response;
+      /** Why, for the request log line (OBS-1): never a host, path or secret. */
+      reason?: string;
+    };
 
 export type GateEnv = {
   PLATFORM_DB?: unknown;
@@ -27,7 +33,6 @@ export type GateDeps = {
   /** Forwards a certificate-validation request untouched. */
   passThrough?: (request: Request) => Promise<Response>;
   ensureSchema?: (db: D1Database) => Promise<void>;
-  log?: (label: string, detail: Record<string, unknown>) => void;
 };
 
 const LOCAL_HOST = /(^|\.)localhost$/;
@@ -38,8 +43,10 @@ const LOCAL_HOST = /(^|\.)localhost$/;
  * there is no CA and a fetch would loop back into this Worker, so it answers 404.
  */
 async function defaultPassThrough(request: Request): Promise<Response> {
-  const host = normalizeHost(new URL(request.url).host) ?? "";
-  if (LOCAL_HOST.test(host)) return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
+  // An IP literal or an unparseable Host is not a hostname a CA validates, and
+  // on a local listener a fetch would come straight back here (T-17 review).
+  const host = normalizeHost(new URL(request.url).host);
+  if (!host || LOCAL_HOST.test(host)) return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
   return fetch(request);
 }
 
@@ -49,7 +56,6 @@ export async function gateRequest(
   env: GateEnv | null | undefined,
   deps: GateDeps = {},
 ): Promise<GateResult> {
-  const log = deps.log ?? ((label, detail) => console.error(label, detail));
   if (isValidationPath(url.pathname)) {
     return { kind: "validation", response: await (deps.passThrough ?? defaultPassThrough)(request) };
   }
@@ -73,8 +79,7 @@ export async function gateRequest(
 
   const db = env?.PLATFORM_DB as D1Database | undefined;
   if (!db || typeof db.prepare !== "function") {
-    log("gate-no-platform-db", { host_kind: "tenant" });
-    return { kind: "refused", hostKind: "tenant", response: statePage("unavailable", url.pathname) };
+    return { kind: "refused", hostKind: "tenant", response: statePage("unavailable", url.pathname), reason: "platform_db_unbound" };
   }
   try {
     await (deps.ensureSchema ?? ensureControlPlane)(db);
@@ -89,9 +94,9 @@ export async function gateRequest(
       default:
         return { kind: "refused", hostKind: "unknown", response: statePage("not-found", url.pathname) };
     }
-  } catch (error) {
-    // A control-plane read failure is a 503 for this tenant host (TD-2), never a default tenant.
-    log("gate-platform-db-failed", { message: error instanceof Error ? error.message.slice(0, 200) : "unknown" });
-    return { kind: "refused", hostKind: "tenant", response: statePage("unavailable", url.pathname) };
+  } catch {
+    // A control-plane read failure is a 503 for this tenant host (TD-2), never
+    // a default tenant. The reason goes on the request's one log line.
+    return { kind: "refused", hostKind: "tenant", response: statePage("unavailable", url.pathname), reason: "platform_db_failed" };
   }
 }

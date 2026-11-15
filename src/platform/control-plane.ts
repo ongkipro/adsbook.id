@@ -91,10 +91,12 @@ export function decideHost(row: HostRow | null, host: string, now: Date): HostRe
 }
 
 /**
- * The in-isolate cache of `MULTI-TENANT-DESIGN.md` §3: memory only, never KV.
- * Active hosts and misses are held for `ttlMs`; the moved-host quarantine
- * (DOM-3) is longer than this TTL, so a stale entry can never outlive it.
- * Bounded so a random-Host flood cannot grow it without limit.
+ * The in-isolate cache of `MULTI-TENANT-DESIGN.md` §3: memory only, never KV,
+ * and **misses only**. An active host is read from `PLATFORM_DB` on every
+ * request, so a suspension, revocation or move takes effect on the next
+ * request in every isolate (T-17 review P1); a cached miss only delays a newly
+ * activated host by `ttlMs`, which is harmless. Bounded so a random-Host flood
+ * cannot grow it without limit.
  */
 export class HostCache {
   readonly #entries = new Map<string, { at: number; value: HostResolution }>();
@@ -117,9 +119,7 @@ export class HostCache {
   }
 
   set(host: string, value: HostResolution, now: number): void {
-    // Only an active tenant or a miss is cached; suspended and recovery are
-    // read fresh so a resume takes effect on the next request.
-    if (value.kind !== "tenant" && value.kind !== "not-found") return;
+    if (value.kind !== "not-found") return;
     if (this.#entries.size >= this.maxEntries) {
       const oldest = this.#entries.keys().next().value;
       if (oldest !== undefined) this.#entries.delete(oldest);
@@ -132,9 +132,13 @@ export class HostCache {
   }
 }
 
-/** In-isolate TTL (SPIKE-1 item 7). */
+/** In-isolate TTL of a cached miss (SPIKE-1 item 7). */
 export const HOST_CACHE_TTL_MS = 5_000;
-/** DOM-3 quarantine for a moved host: 12× the cache TTL. */
+/**
+ * DOM-3 quarantine for a moved host. With no positive cache the quarantine no
+ * longer covers a stale isolate entry; it keeps a moved host unroutable while
+ * any D1 read replica may still return the old row.
+ */
 export const HOST_QUARANTINE_MS = 60_000;
 
 /** One per isolate: module scope is the intended lifetime of this cache. */

@@ -158,36 +158,48 @@ export function createMiddleware(
    */
   return defineMiddleware(async (context, next) => {
     const started = Date.now();
-    const result = await gate(context.request, context.url, getRuntimeEnv(context.locals) as GateEnv);
-    let response: Response;
-    let hostKind: HostKind;
+    let status = 500;
+    let hostKind: HostKind = 'unknown';
     let tenantId: string | null = null;
-    if (result.kind === 'validation') {
-      hostKind = 'validation';
-      response = result.response;
-    } else if (result.kind === 'refused') {
-      hostKind = result.hostKind;
-      response = result.response;
-    } else if (result.kind === 'platform') {
-      hostKind = 'platform';
-      context.locals.platform = { host: result.host };
-      response = applySecurityHeaders(await next(), true);
-    } else {
-      hostKind = 'tenant';
-      tenantId = result.tenant.tenantId;
-      context.locals.tenantContext = result.tenant;
-      response = await handleTenantRequest(context, next);
+    let reason: string | undefined;
+    try {
+      const result = await gate(context.request, context.url, getRuntimeEnv(context.locals) as GateEnv);
+      let response: Response;
+      if (result.kind === 'validation') {
+        hostKind = 'validation';
+        response = result.response;
+      } else if (result.kind === 'refused') {
+        hostKind = result.hostKind;
+        reason = result.reason;
+        response = result.response;
+      } else if (result.kind === 'platform') {
+        hostKind = 'platform';
+        context.locals.platform = { host: result.host };
+        response = applySecurityHeaders(await next(), true);
+      } else {
+        hostKind = 'tenant';
+        tenantId = result.tenant.tenantId;
+        context.locals.tenantContext = result.tenant;
+        response = await handleTenantRequest(context, next);
+      }
+      status = response.status;
+      return response;
+    } catch (error) {
+      reason = 'unhandled_exception';
+      throw error;
+    } finally {
+      // Exactly one line per request, on every path (OBS-1).
+      writeRequestLog(buildRequestLog({
+        tenant_id: tenantId,
+        host_kind: hostKind,
+        route: routeLabel(context.routePattern, hostKind === 'tenant' || hostKind === 'platform' ? 'unmatched' : 'gate'),
+        method: context.request.method,
+        status,
+        duration_ms: Date.now() - started,
+        request_id: requestId(context.request),
+        ...(reason ? { reason } : {}),
+      }));
     }
-    writeRequestLog(buildRequestLog({
-      tenant_id: tenantId,
-      host_kind: hostKind,
-      route: routeLabel(context.routePattern, hostKind === 'tenant' || hostKind === 'platform' ? 'unmatched' : 'gate'),
-      method: context.request.method,
-      status: response.status,
-      duration_ms: Date.now() - started,
-      request_id: requestId(context.request),
-    }));
-    return response;
   });
 
   async function handleTenantRequest(context: APIContext, next: MiddlewareNext): Promise<Response> {
