@@ -10,7 +10,8 @@ import {
 } from "../../../lib/embed-security.ts";
 import { parseHeadlessAllowedOrigins } from "../../../lib/headless-api.ts";
 import { isAcceptedSiteProtocol, LOCALE_PATTERN, SUPPORT_EMAIL_PATTERN, THEME_COLOR_PATTERN } from "../../../lib/tenant.ts";
-import { maskSecretValue } from "../../../lib/env.ts";
+import { getRuntimeEnv, maskSecretValue } from "../../../lib/env.ts";
+import { issueWebhookToken, webhookTokenIssuedAt, webhookUrl } from "../../../platform/webhook-secrets.ts";
 import {
   addStorefrontTemplate,
   listStorefrontTemplates,
@@ -48,6 +49,7 @@ type SettingsPayload = {
     | "save-warehouse"
     | "save-crm"
     | "save-integrations"
+    | "issue-webhook-token"
     | "save-payment-fee-policy"
     | "save-payment-toggles"
     | "save-autolaris-channels"
@@ -253,6 +255,14 @@ async function getSettingsRow(database: D1Database) {
   }
 }
 
+/** The tenant's webhook token is kept hashed in PLATFORM_DB; only when it was issued is shown. */
+async function autolarisWebhookIssuedAt(locals: App.Locals): Promise<string | null> {
+  const platformDb = getRuntimeEnv(locals)?.PLATFORM_DB as D1Database | undefined;
+  const tenantId = locals.tenantContext?.tenantId;
+  if (!platformDb || !tenantId) return null;
+  return webhookTokenIssuedAt(platformDb, tenantId, "autolaris").catch(() => null);
+}
+
 async function credentialStatus(database: D1Database, locals: App.Locals) {
   const config = await getProviderConfig(database, locals);
 
@@ -271,6 +281,7 @@ async function credentialStatus(database: D1Database, locals: App.Locals) {
       order_origin_id: config.autolaris.originId,
       order_destination_id: config.autolaris.destinationId,
       shipper_email: config.autolaris.shipperEmail,
+      webhook_issued_at: await autolarisWebhookIssuedAt(locals),
       source: config.autolaris.source,
     },
   };
@@ -363,8 +374,24 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
   try {
     const db = database as D1Database;
-    if (body.action === "save-integrations" && locals.admin?.role !== "owner") {
+    if ((body.action === "save-integrations" || body.action === "issue-webhook-token") && locals.admin?.role !== "owner") {
       return jsonError("Hanya owner yang dapat mengubah endpoint dan kredensial provider.", 403);
+    }
+    if (body.action === "issue-webhook-token") {
+      // SEC-5: a new token replaces the old one at once; the URL is shown this
+      // one time only (the store keeps a hash), so the owner pastes it into
+      // AutoLaris now.
+      const platformDb = getRuntimeEnv(locals)?.PLATFORM_DB as D1Database | undefined;
+      const tenantId = locals.tenantContext?.tenantId;
+      if (!platformDb || !tenantId) return jsonError("Webhook belum tersedia.", 503);
+      // Checked before rotating, so a tenant without a subdomain keeps its old token.
+      const base = await webhookUrl(platformDb, tenantId, "autolaris", "");
+      if (!base) return jsonError("Subdomain toko belum aktif.", 409);
+      const url = base + (await issueWebhookToken(platformDb, tenantId, "autolaris"));
+      return jsonOk({
+        message: "URL webhook AutoLaris baru dibuat. Salin sekarang; URL ini tidak ditampilkan lagi.",
+        data: { webhook_url: url, credentials: await credentialStatus(db, locals) },
+      });
     }
     const providerConfig = await getProviderConfig(db, locals);
     if (body.action === "test-mengantar") {

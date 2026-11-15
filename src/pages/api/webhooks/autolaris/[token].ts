@@ -1,7 +1,9 @@
 import type { APIRoute } from "astro";
-import { jsonError, jsonOk } from "../../../lib/api.ts";
-import { checkRateLimit, getClientIp } from "../../../lib/rate-limit.ts";
-import { tenantDatabase } from "../../../lib/tenant-database.ts";
+import { jsonError, jsonOk } from "../../../../lib/api.ts";
+import { getRuntimeEnv } from "../../../../lib/env.ts";
+import { checkRateLimit, getClientIp } from "../../../../lib/rate-limit.ts";
+import { tenantDatabase } from "../../../../lib/tenant-database.ts";
+import { verifyWebhook } from "../../../../platform/webhook-secrets.ts";
 
 export const prerender = false;
 
@@ -39,11 +41,24 @@ function readIdentifiers(body: string) {
 
 /**
  * AutoLaris has no accepted callback contract, so this endpoint records and
- * acknowledges — it never moves payment state (A-164). Manual reconciliation
- * remains the only path to `paid`. Every delivery lands in
+ * acknowledges — it never moves payment state (A-164, ADR-022). Manual
+ * reconciliation remains the only path to `paid`. Every delivery lands in
  * `autolaris_callbacks` so the real shape can be classified from evidence.
+ *
+ * SEC-5 (T-23): answered only on the tenant's own `<slug>.belanja.cc` with
+ * that tenant's token in the path, checked before the rate limiter or any
+ * write. The token is the only authentication AutoLaris can carry.
  */
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request, locals, params }) => {
+  const verdict = await verifyWebhook(
+    getRuntimeEnv(locals)?.PLATFORM_DB as D1Database | undefined,
+    locals.tenantContext,
+    "autolaris",
+    typeof params.token === "string" ? params.token : undefined,
+  );
+  if (verdict === "not_found") return jsonError("Not found", 404);
+  if (verdict === "unauthorized") return jsonError("Unauthorized", 401);
+
   const database = tenantDatabase(locals);
   if (!database?.prepare) {
     return jsonError("Penyimpanan callback belum tersedia.", 503);

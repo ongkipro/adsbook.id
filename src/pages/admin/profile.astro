@@ -116,6 +116,13 @@ const pageTitle = mustChangePassword
           <label class="mt-4 block text-xs font-semibold text-slate-700" for="autolarisShipperEmail">Email pengirim <span class="font-normal text-slate-500">(opsional)</span></label>
           <input id="autolarisShipperEmail" name="autolaris_shipper_email" type="email" autocomplete="off" aria-describedby="autolarisShipperHint" class="admin-input-flat mt-2 sm:text-sm" />
           <p id="autolarisShipperHint" class="mt-1 text-xs text-slate-500">Kosongkan untuk memakai email pembeli.</p>
+          <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p class="text-xs font-semibold text-slate-700">URL webhook AutoLaris</p>
+            <p id="autolarisWebhookState" class="mt-1 text-xs text-slate-500">Belum dibuat.</p>
+            <output id="autolarisWebhookUrl" class="mt-2 hidden break-all rounded-lg bg-white px-2 py-1.5 font-mono text-xs text-slate-900"></output>
+            <button id="issueWebhook" type="button" class="btn-secondary mt-2">Buat URL webhook baru</button>
+            <p class="mt-1 text-xs text-slate-500">URL hanya tampil sekali dan khusus subdomain toko ini. Membuat yang baru mematikan URL lama.</p>
+          </div>
         </fieldset>
       </div>
 
@@ -132,7 +139,12 @@ const pageTitle = mustChangePassword
     type Credential = { configured: boolean; api_key_masked: string; base_url: string; source: 'dashboard' | 'none' };
     type Credentials = {
       mengantar: Credential;
-      autolaris: Credential & { order_origin_id: string; order_destination_id: string; shipper_email: string };
+      autolaris: Credential & {
+        order_origin_id: string;
+        order_destination_id: string;
+        shipper_email: string;
+        webhook_issued_at: string | null;
+      };
     };
     const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
     const integrationsLoading = byId('integrationsLoading');
@@ -214,6 +226,13 @@ const pageTitle = mustChangePassword
       setValue('autolarisOrigin', credentials.autolaris.order_origin_id);
       setValue('autolarisDestination', credentials.autolaris.order_destination_id);
       setValue('autolarisShipperEmail', credentials.autolaris.shipper_email);
+      const webhookState = byId('autolarisWebhookState');
+      if (webhookState) {
+        const issued = credentials.autolaris.webhook_issued_at;
+        webhookState.textContent = issued
+          ? `Aktif sejak ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(issued))} WIB.`
+          : 'Belum dibuat.';
+      }
       if (mengantarKey) { mengantarKey.value = ''; mengantarKey.placeholder = credentials.mengantar.api_key_masked || 'Masukkan API key Mengantar'; }
       if (autolarisKey) { autolarisKey.value = ''; autolarisKey.placeholder = credentials.autolaris.api_key_masked || 'Masukkan API key AutoLaris'; }
       setSecretVisibility(mengantarKey, mengantarToggle, 'API key Mengantar', false);
@@ -303,6 +322,30 @@ const pageTitle = mustChangePassword
       } catch (error) {
         profileStatus(error instanceof Error ? error.message : 'Profil admin gagal disimpan.', 'error');
         setProfilePending(false);
+      }
+    });
+
+    byId<HTMLButtonElement>('issueWebhook')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      if (button.disabled) return;
+      button.disabled = true;
+      showStatus('Membuat URL webhook…', 'idle');
+      try {
+        const response = await fetch('/api/admin/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'issue-webhook-token' }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'URL webhook gagal dibuat.');
+        render(payload.data.credentials);
+        const output = byId('autolarisWebhookUrl');
+        if (output) { output.textContent = payload.data.webhook_url; output.classList.remove('hidden'); }
+        showStatus(payload.message || 'URL webhook dibuat.', 'success');
+      } catch (error) {
+        showStatus(error instanceof Error ? error.message : 'URL webhook gagal dibuat.', 'error');
+      } finally {
+        button.disabled = false;
       }
     });
 

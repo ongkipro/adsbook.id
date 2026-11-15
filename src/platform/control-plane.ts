@@ -37,6 +37,8 @@ export type TenantContext = {
   status: TenantStatus;
   cacheVersion: number;
   host: string;
+  /** `subdomain` is the tenant's immutable `<slug>.belanja.cc`; webhooks answer only there (SEC-5). */
+  hostKind: "subdomain" | "custom";
   primaryHost: string | null;
 };
 
@@ -48,6 +50,7 @@ export type HostResolution =
 
 type HostRow = {
   host_status: string;
+  host_kind?: string;
   quarantine_until: string | null;
   tenant_id: string;
   slug: string;
@@ -56,7 +59,7 @@ type HostRow = {
   primary_host: string | null;
 };
 
-const HOST_SQL = `SELECT h.status AS host_status, h.quarantine_until,
+const HOST_SQL = `SELECT h.status AS host_status, h.kind AS host_kind, h.quarantine_until,
     t.id AS tenant_id, t.slug, t.status, t.cache_version,
     (SELECT p.host FROM tenant_hosts p
       WHERE p.tenant_id = t.id AND p.is_primary = 1 AND p.status = 'active') AS primary_host
@@ -77,6 +80,7 @@ export function decideHost(row: HostRow | null, host: string, now: Date): HostRe
           status: row.status,
           cacheVersion: Number(row.cache_version),
           host,
+          hostKind: row.host_kind === "subdomain" ? "subdomain" : "custom",
           primaryHost: row.primary_host,
         },
       };

@@ -72,6 +72,8 @@ const opsOpenApiRoute = await import("../pages/api/ops/v1/openapi.json.ts");
 const { getProviderConfig, autoLarisOrderRailGap } = await import("../lib/provider-config.ts");
 const { getStoreAdsConfig } = await import("../lib/store-ads.ts");
 const { loadGoogleAdsOfflineConfig } = await import("../lib/google-ads-offline.ts");
+const autolarisWebhookRoute = await import("../pages/api/webhooks/autolaris/[token].ts");
+const { issueWebhookToken } = await import("./webhook-secrets.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -485,6 +487,54 @@ test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never
   } finally {
     console.log = previousLog;
   }
+});
+
+test("T-23/API-7: a webhook writes only on its tenant's subdomain with that tenant's token", async () => {
+  const platformDb = await platform([["w-a", "active", "hook-a.belanja.cc"], ["w-b", "active", "hook-b.belanja.cc"]]);
+  platformDb.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES ('shop-a.example', 'w-a', 'custom', 'active', 0, '2026-11-16')").run();
+  const stores = namespace({ migrated: true });
+  for (const id of ["w-a", "w-b"]) {
+    stores.get(id).storage.db.exec(`INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16')`);
+  }
+  const tokenA = await issueWebhookToken(platformDb, "w-a", "autolaris");
+  const tokenB = await issueWebhookToken(platformDb, "w-b", "autolaris");
+  const onRequest = createMiddleware();
+  const call = async (host: string, token: string) => {
+    const href = `https://${host}/api/webhooks/autolaris/${token}`;
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const request = new Request(href, {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
+      body: JSON.stringify({ data: { reff_id: "10041", trx_id: "TRX-1", status: "PAID" } }),
+    });
+    const context = { request, url: new URL(href), params: { token }, locals, routePattern: "/api/webhooks/autolaris/[token]", redirect: () => new Response(null, { status: 302 }) };
+    const previous = { log: console.log, error: console.error };
+    console.log = () => undefined;
+    console.error = () => undefined;
+    try {
+      return ((await onRequest(context as never, (async () => autolarisWebhookRoute.POST(context as never)) as never)) as Response).status;
+    } finally {
+      Object.assign(console, previous);
+    }
+  };
+  const evidence = (id: string) =>
+    (stores.get(id).storage.db.prepare("SELECT COUNT(*) AS n FROM autolaris_callbacks").get() as { n: number }).n;
+  const writes = () => [evidence("w-a"), evidence("w-b")];
+
+  assert.equal(await call("hook-a.belanja.cc", "0".repeat(64)), 401, "a wrong token");
+  assert.equal(await call("hook-a.belanja.cc", "not-a-token"), 401, "a malformed token");
+  assert.equal(await call("hook-a.belanja.cc", tokenB), 401, "tenant B's token on tenant A's host");
+  assert.equal(await call("shop-a.example", tokenA), 404, "A's own token on A's custom domain");
+  assert.deepEqual(writes(), [0, 0], "a refused webhook wrote evidence");
+
+  assert.equal(await call("hook-a.belanja.cc", tokenA), 200);
+  assert.deepEqual(writes(), [1, 0], "the accepted call recorded for its own tenant only");
+
+  // A rotated token stops the old one at once.
+  const rotated = await issueWebhookToken(platformDb, "w-a", "autolaris");
+  assert.equal(await call("hook-a.belanja.cc", tokenA), 401);
+  assert.equal(await call("hook-a.belanja.cc", rotated), 200);
+  assert.deepEqual(writes(), [2, 0]);
 });
 
 test("T-21: there is no installer page or route to answer /install", () => {

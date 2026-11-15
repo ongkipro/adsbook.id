@@ -149,7 +149,7 @@ let schemaCalls = 0;
 // The request gate (T-17) is tested in src/platform/; these tests start past it, on an active tenant.
 const tenantGate = async () => ({
   kind: 'tenant' as const,
-  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.belanja.cc', primaryHost: 'test.belanja.cc' },
+  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.belanja.cc', hostKind: 'subdomain' as const, primaryHost: 'test.belanja.cc' },
 });
 const onRequest = createMiddleware(async (env) => { schemaCalls += 1; return (env as { OMS_DB: D1Database }).OMS_DB; }, tenantGate);
 

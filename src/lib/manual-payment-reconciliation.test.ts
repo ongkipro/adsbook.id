@@ -11,7 +11,7 @@ import {
   GET,
   POST,
 } from "../pages/api/admin/payment-reconciliation.ts";
-import { POST as LEGACY_WEBHOOK } from "../pages/api/webhooks/autolaris.ts";
+import { POST as LEGACY_WEBHOOK } from "../pages/api/webhooks/autolaris/[token].ts";
 
 // By suffix, never by number (RELEASE.md): an install with its own migrations
 // renumbers the product's above them, and a fixed number would miss the file.
@@ -512,13 +512,25 @@ test("an AutoLaris callback is recorded verbatim and moves no payment state", as
   console.error = () => {};
   let response: Response;
   try {
+    // T-23: the tenant's own token on its platform subdomain (webhook-secrets.test.ts covers refusals).
+    const token = "a".repeat(64);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    const secretHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const platformDb = {
+      prepare: () => ({ bind: () => ({ first: async () => ({ secret_hash: secretHash }) }) }),
+    };
     response = await LEGACY_WEBHOOK({
-      request: new Request("https://cms.test/api/webhooks/autolaris", {
+      request: new Request(`https://toko.belanja.cc/api/webhooks/autolaris/${token}`, {
         method: "POST",
         headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
         body: JSON.stringify({ rc: "00", data: { trx_id: "TRX-77", reff_id: "10041", status: "PAID" } }),
       }),
-      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
+      params: { token },
+      locals: {
+        tenantDb: database,
+        runtimeEnv: { PLATFORM_DB: platformDb },
+        tenantContext: { tenantId: "t-1", hostKind: "subdomain" },
+      },
     } as never);
   } finally {
     console.error = original;
