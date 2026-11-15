@@ -194,18 +194,62 @@ test("a restore is recorded in PLATFORM_DB first; the restarted store is not mig
       throw new Error("aborted"); // what ctx.abort() looks like to the caller
     },
   };
-  const { undo } = await restoreTenant(db, stub, "t-a", "bm-before", "owner@example.test", new Date("2026-11-16T06:00:00.000Z"));
+  const { undo, state } = await restoreTenant(db, stub, "t-a", "bm-before", "owner@example.test", new Date("2026-11-16T06:00:00.000Z"));
   assert.equal(undo, "bm-undo");
+  assert.equal(state.applied, N, "a fresh read after the restart");
   assert.deepEqual(calls, ["prepareRestore bm-before", "restart"]);
   const tenant = db.sqlite.prepare("SELECT status, cache_version FROM tenants WHERE id = 't-a'").get() as { status: string; cache_version: number };
   assert.deepEqual({ ...tenant }, { status: "recovery", cache_version: 2 });
-  const event = db.sqlite.prepare("SELECT kind, actor, detail_json FROM tenant_events WHERE tenant_id = 't-a'").get() as { kind: string; actor: string; detail_json: string };
-  assert.deepEqual({ kind: event.kind, actor: event.actor, detail: JSON.parse(event.detail_json) }, { kind: "restore", actor: "owner@example.test", detail: { bookmark: "bm-before", undo: "bm-undo" } });
+  const events = db.sqlite.prepare("SELECT kind, actor, detail_json FROM tenant_events WHERE tenant_id = 't-a' ORDER BY id").all() as Array<{ kind: string; actor: string; detail_json: string }>;
+  assert.deepEqual(
+    events.map((event) => ({ kind: event.kind, actor: event.actor, detail: JSON.parse(event.detail_json) })),
+    [
+      { kind: "restore_requested", actor: "owner@example.test", detail: { bookmark: "bm-before" } },
+      { kind: "restore_armed", actor: "owner@example.test", detail: { bookmark: "bm-before", undo: "bm-undo" } },
+    ],
+  );
   // While PLATFORM_DB says recovery the gate answers 503 before any store call;
   // the platform cron opens active tenants only. Neither path migrates it.
   const active = db.sqlite.prepare("SELECT id FROM tenants WHERE status = 'active'").all();
   assert.deepEqual(active, []);
   assert.equal(readLedger(store.storage).length, N);
+});
+
+test("a restore arms nothing when the control-plane fence cannot be written, and reports a store that does not come back", async () => {
+  const db = await platform("t-a");
+  const store = objectFor(storeAt(N));
+  const armed: string[] = [];
+  const stub = {
+    ...store.stub,
+    prepareRestore: async (_protocol: number, bookmark: string) => (armed.push(bookmark), { undo: "bm-undo" }),
+    restart: async () => undefined,
+  };
+  db.failWhen = /UPDATE tenants SET status = 'recovery'/;
+  await assert.rejects(restoreTenant(db, stub, "t-a", "bm-before", "owner@example.test"));
+  assert.deepEqual(armed, [], "armed before the tenant was fenced");
+  db.failWhen = null;
+  const silent = { ...stub, schemaState: async () => { throw new Error("object gone"); } };
+  await assert.rejects(
+    restoreTenant(db, silent, "t-a", "bm-before", "owner@example.test"),
+    (error: unknown) => error instanceof TenantUnavailableError && error.reason === "protocol",
+  );
+});
+
+test("a state another release changed between calls is checked again before it is accepted", async () => {
+  const db = await platform("t-a");
+  const store = objectFor(storeAt(N));
+  // The first read says "behind"; by the prepare, a newer release has applied a contraction.
+  const stub: TenantStoreStub = {
+    ...store.stub,
+    prepareMigration: async (protocol) => {
+      const prepared = await store.stub.prepareMigration(protocol);
+      return { ...prepared, state: { ...prepared.state, applied: CHAIN.length + 1, readerFloor: CHAIN.length + 1 } };
+    },
+  };
+  await assert.rejects(
+    ensureTenantSchema(db, stub, ref("t-a"), CHAIN.length, { ready: new Map() }),
+    (error: unknown) => error instanceof TenantUnavailableError && error.reason === "history",
+  );
 });
 
 test("an isolate checks a tenant again when its generation moves (restore, re-activation)", async () => {

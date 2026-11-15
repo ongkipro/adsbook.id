@@ -207,22 +207,21 @@ async function markRecovery(platformDb: D1Database, tenantId: string, at: Date, 
   ]);
 }
 
-async function migrateTenant(
+/**
+ * Every store state this release accepts passes here — the first read and the
+ * state returned by each later call, since another release may have moved the
+ * store in between (T-18 review). Refuses a store in recovery (repairing the
+ * authoritative copy first), an unknown history, and a contraction this
+ * release cannot read.
+ */
+async function acceptState(
   platformDb: D1Database,
-  stub: TenantStoreStub,
   tenantId: string,
+  state: SchemaState,
   target: number,
   now: () => Date,
 ): Promise<SchemaState> {
-  let state: SchemaState;
-  try {
-    state = await stub.schemaState(TENANT_STORE_PROTOCOL);
-  } catch (error) {
-    // Most often an object still on the previous release's protocol (§4.1 item 8).
-    throw new TenantUnavailableError("protocol", (error as Error).message);
-  }
   if (state.recovery) {
-    // The store says recovery; make the authoritative copy agree before refusing.
     await markRecovery(platformDb, tenantId, now(), { reconciled: true, applied: state.applied });
     throw new TenantUnavailableError("recovery", "migration paused");
   }
@@ -230,9 +229,28 @@ async function migrateTenant(
   if (state.readerFloor > target) {
     throw new TenantUnavailableError("history", `store contracted at ${state.readerFloor}, this release reads ${target}`);
   }
+  return state;
+}
+
+async function migrateTenant(
+  platformDb: D1Database,
+  stub: TenantStoreStub,
+  tenantId: string,
+  target: number,
+  now: () => Date,
+): Promise<SchemaState> {
+  let first: SchemaState;
+  try {
+    first = await stub.schemaState(TENANT_STORE_PROTOCOL);
+  } catch (error) {
+    // Most often an object still on the previous release's protocol (§4.1 item 8).
+    throw new TenantUnavailableError("protocol", (error as Error).message);
+  }
+  const state = await acceptState(platformDb, tenantId, first, target, now);
   if (state.applied >= target) return state;
 
   const prepared = await stub.prepareMigration(TENANT_STORE_PROTOCOL);
+  await acceptState(platformDb, tenantId, prepared.state, target, now);
   // Another request migrated the store between the two calls: nothing to do,
   // and this bookmark is not a pre-migration one, so it is not stored.
   if (prepared.state.applied >= target) return prepared.state;
@@ -263,6 +281,7 @@ async function migrateTenant(
     await markRecovery(platformDb, tenantId, now(), { from: prepared.state.applied, target, bookmarkId, error: message });
     throw new TenantUnavailableError(/TENANT_IN_RECOVERY/.test(message) ? "recovery" : "migration", message);
   }
+  await acceptState(platformDb, tenantId, migrated, target, now);
   if (migrated.applied < target) {
     throw new TenantUnavailableError("protocol", `store reached ${migrated.applied}, release needs ${target}`);
   }
@@ -274,10 +293,20 @@ async function migrateTenant(
 }
 
 /**
- * Operator recovery (§4.5): record the restore in `PLATFORM_DB` first — the
- * tenant in `recovery`, a new `cache_version`, and both bookmarks in the audit
- * row — then restart the store into the restored state. Automatic migration
- * stays off while the tenant is in `recovery`.
+ * Operator recovery (§4.5), in an order where every failure leaves the tenant
+ * fenced:
+ *
+ * 1. `PLATFORM_DB` first: the tenant in `recovery` with a new `cache_version`
+ *    (every isolate re-checks; the gate answers 503) and a `restore_requested`
+ *    audit row. Nothing has been armed yet if this fails.
+ * 2. Arm the restore in the store; it returns the undo bookmark.
+ * 3. Record the undo bookmark (`restore_armed`). If this write fails the
+ *    restore stays armed and the tenant stays fenced; the bookmark is in the
+ *    error log line, and `getBookmarkForTime` can recover it.
+ * 4. Restart the store, then confirm with a fresh state read that a new
+ *    object answers. A store that does not answer is reported, not hidden.
+ *
+ * Automatic migration stays off while the tenant is in `recovery`.
  */
 export async function restoreTenant(
   platformDb: D1Database,
@@ -286,18 +315,31 @@ export async function restoreTenant(
   bookmark: string,
   actor: string,
   now = new Date(),
-): Promise<{ undo: string }> {
+): Promise<{ undo: string; state: SchemaState }> {
   if (!stub.prepareRestore || !stub.restart) throw new TenantUnavailableError("protocol", "store cannot restore");
-  const { undo } = await stub.prepareRestore(TENANT_STORE_PROTOCOL, bookmark);
+  const event = (kind: string, detail: Record<string, unknown>) =>
+    platformDb
+      .prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES (?, ?, ?, ?, ?)")
+      .bind(tenantId, kind, actor, now.toISOString(), JSON.stringify(detail));
   await platformDb.batch([
     platformDb.prepare("UPDATE tenants SET status = 'recovery', cache_version = cache_version + 1 WHERE id = ?").bind(tenantId),
-    platformDb
-      .prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES (?, 'restore', ?, ?, ?)")
-      .bind(tenantId, actor, now.toISOString(), JSON.stringify({ bookmark, undo })),
+    event("restore_requested", { bookmark }),
   ]);
-  // The restart aborts the object, so the call itself rejects; that is the restart.
+  const { undo } = await stub.prepareRestore(TENANT_STORE_PROTOCOL, bookmark);
+  try {
+    await event("restore_armed", { bookmark, undo }).run();
+  } catch (error) {
+    console.error("tenant-restore-undo-unrecorded", { tenant_id: tenantId, bookmark, undo, message: (error as Error).message });
+    throw error;
+  }
+  // `ctx.abort()` ends the call with an error; whether the object came back is
+  // what a fresh call says.
   await stub.restart(TENANT_STORE_PROTOCOL).catch(() => undefined);
-  return { undo };
+  try {
+    return { undo, state: await stub.schemaState(TENANT_STORE_PROTOCOL) };
+  } catch (error) {
+    throw new TenantUnavailableError("protocol", `store did not answer after restart: ${(error as Error).message}`);
+  }
 }
 
 /** What `openTenantDb` reads from the runtime environment. Only `src/platform/` reads it. */
