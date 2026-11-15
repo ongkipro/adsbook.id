@@ -215,12 +215,14 @@ class FakeD1Database {
     }
     const ids = args.map(Number).filter((id) => Number.isInteger(id) && id > 0);
     // The single-order write is bound to the state it was validated against:
-    // `... WHERE id = ? AND payment_status = ? AND shipping_status = ?`.
-    const stateGuarded = sql.includes("AND payment_status = ? AND shipping_status = ?");
-    const guardedTargetId = Number(args.at(stateGuarded ? -3 : -1));
+    // `... WHERE id = ? AND payment_method = ? AND payment_status = ? AND shipping_status = ?`.
+    const stateGuarded = sql.includes("AND payment_method = ? AND payment_status = ? AND shipping_status = ?");
+    const guardedTargetId = Number(args.at(stateGuarded ? -4 : -1));
     const stateMoved = (current: TestOrder) =>
       stateGuarded &&
-      (current.payment_status !== args.at(-2) || current.shipping_status !== args.at(-1));
+      (current.payment_method !== args.at(-3) ||
+        current.payment_status !== args.at(-2) ||
+        current.shipping_status !== args.at(-1));
 
     if (sql.includes("UPDATE product_variants")) {
       const releaseStateRequired = sql.includes("o.shipping_status IN");
@@ -310,9 +312,14 @@ class FakeD1Database {
       // The bulk write: each order only while it is still in its validated state.
       const status = sql.match(/SET shipping_status = '([^']+)'/)?.[1] || "";
       const updated = [];
-      for (const [id, paymentStatus, shippingStatus] of JSON.parse(String(args[0])) as [number, string, string][]) {
+      for (const [id, paymentMethod, paymentStatus, shippingStatus] of JSON.parse(String(args[0])) as [number, string, string, string][]) {
         const current = this.state.orders.get(id);
-        if (!current || current.payment_status !== paymentStatus || current.shipping_status !== shippingStatus) continue;
+        if (
+          !current ||
+          current.payment_method !== paymentMethod ||
+          current.payment_status !== paymentStatus ||
+          current.shipping_status !== shippingStatus
+        ) continue;
         current.shipping_status = status;
         updated.push({ id });
       }
@@ -1259,6 +1266,28 @@ test("a refused status write never sets the void marker", async () => {
   assert.equal(database.state.orders.get(122)?.stock_restored_at, null);
 });
 
+test("a payment marked paid by hand is refused when the payment method changed after validation", async () => {
+  // Validated as COD, where an operator may mark `paid`; by the write the
+  // order is QRIS, where only the AutoLaris reconciliation may. The two
+  // statuses never moved, so only the method in the guard can refuse it.
+  const database = databaseWithOrders(order(124));
+  database.beforeNextBatch = () => {
+    database.state.orders.get(124)!.payment_method = "qris";
+  };
+  const response = await detailRoute.PATCH({
+    params: { id: "124" },
+    request: new Request("https://example.test/api/admin/orders/124", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ payment_status: "paid" }),
+    }),
+    locals: locals(database),
+  } as never);
+
+  assert.equal(response.status, 409);
+  assert.equal(database.state.orders.get(124)?.payment_status, "unpaid");
+});
+
 test("a single uncontended status change still applies", async () => {
   const database = databaseWithOrders(shippedOrder(123));
   const response = await patchStatus(database, 123, "delivered");
@@ -1288,8 +1317,8 @@ test("the guarded write and the bulk write hold on a real SQLite engine", async 
       validated,
       { shippingStatus: status },
       d1
-        .prepare("UPDATE orders SET shipping_status = ? WHERE id = ? AND payment_status = ? AND shipping_status = ?")
-        .bind(status, 131, validated.payment_status, validated.shipping_status),
+        .prepare("UPDATE orders SET shipping_status = ? WHERE id = ? AND payment_method = ? AND payment_status = ? AND shipping_status = ?")
+        .bind(status, 131, validated.payment_method, validated.payment_status, validated.shipping_status),
     );
   assert.equal((await write("returned")).updated, true);
   assert.deepEqual(await write("delivered"), { updated: false, stockRestored: false });
@@ -1329,6 +1358,17 @@ test("the guarded write and the bulk write hold on a real SQLite engine", async 
   assert.equal(row(134).shipping_status, "cancelled");
   assert.ok(row(134).stock_restored_at);
   assert.deepEqual(row(135), { shipping_status: "processing", stock_restored_at: null });
+
+  // The payment method is part of the validated state.
+  assert.deepEqual(
+    await updateAdminOrderShippingStatuses(
+      interleaved("UPDATE orders SET payment_method = 'qris' WHERE id = 132"),
+      [132],
+      "returned",
+    ),
+    { updatedIds: [], conflictIds: [132] },
+  );
+  assert.equal(row(132).shipping_status, "delivered");
 });
 
 test("the bulk status route applies the rest and names the conflicts", async () => {

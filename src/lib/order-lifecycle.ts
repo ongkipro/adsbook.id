@@ -255,7 +255,8 @@ function buildOrderReleaseStatements(
  * in one batch.
  *
  * `orderMutation` must be bound to the state `current` was read in
- * (`AND payment_status = ? AND shipping_status = ?`): the transition is
+ * (`AND payment_method = ? AND payment_status = ? AND shipping_status = ?`,
+ * or the part of it the transition reads): the transition is
  * validated against that state, and a write that lands on any other state is
  * a different transition nobody validated. `updated: false` is that conflict
  * (PR-7) — answer 409, never retry blindly.
@@ -326,13 +327,14 @@ export async function updateAdminOrderShippingStatuses(
   // Each order is written only while it is still in the state its transition
   // was validated against (PR-7). One that moved in between is skipped and
   // reported, and the rest of the selection still applies. The validated
-  // states travel as one JSON parameter: three bindings per order would pass
-  // D1's 100-parameter limit at 34 orders.
+  // states travel as one JSON parameter: four bindings per order would pass
+  // D1's 100-parameter limit at 26 orders.
   const statements = [
     database
       .prepare(
-        `WITH validated(order_id, payment_status, shipping_status) AS (
-          SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]')
+        `WITH validated(order_id, payment_method, payment_status, shipping_status) AS (
+          SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'),
+            json_extract(value, '$[2]'), json_extract(value, '$[3]')
           FROM json_each(?)
         )
         UPDATE orders
@@ -341,14 +343,20 @@ export async function updateAdminOrderShippingStatuses(
           SELECT v.order_id
           FROM validated v
           INNER JOIN orders o ON o.id = v.order_id
-          WHERE o.payment_status = v.payment_status
+          WHERE o.payment_method = v.payment_method
+            AND o.payment_status = v.payment_status
             AND o.shipping_status = v.shipping_status
         )
         RETURNING id`,
       )
       .bind(
         JSON.stringify(
-          orders.map((order) => [order.id, order.payment_status, order.shipping_status]),
+          orders.map((order) => [
+            order.id,
+            order.payment_method,
+            order.payment_status,
+            order.shipping_status,
+          ]),
         ),
       ),
   ];

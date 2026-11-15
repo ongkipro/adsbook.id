@@ -805,9 +805,10 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
       // A status change is validated against the order as read. Written only
       // while the order is still in that state, so a second operator's change
       // (or a provider sync) landing in between is a 409, not a silent
-      // overwrite that reactivates a returned order (PR-7).
+      // overwrite that reactivates a returned order (PR-7). The payment method
+      // is part of that state: it decides whether `paid` may be set by hand.
       const lifecycleGuard = hasLifecycleChange ? `
-        AND payment_status = ? AND shipping_status = ?` : '';
+        AND payment_method = ? AND payment_status = ? AND shipping_status = ?` : '';
       const mutation = db.prepare(`
         UPDATE orders
         SET ${assignments.join(', ')}
@@ -817,7 +818,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         ...values,
         current.id,
         ...(hasShippingSelection ? [current.payment_method, current.total_amount] : []),
-        ...(hasLifecycleChange ? [current.payment_status, current.shipping_status] : []),
+        ...(hasLifecycleChange ? [current.payment_method, current.payment_status, current.shipping_status] : []),
       );
       const updated = hasLifecycleChange
         ? (
@@ -836,11 +837,12 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         // Which guard refused: the order is gone, its status moved, or (the
         // destination guards) Mengantar or a payment switch got there first.
         const latest = await db
-          .prepare('SELECT payment_status, shipping_status FROM orders WHERE id = ?')
+          .prepare('SELECT payment_method, payment_status, shipping_status FROM orders WHERE id = ?')
           .bind(current.id)
-          .first<{ payment_status: string; shipping_status: string }>();
+          .first<{ payment_method: string; payment_status: string; shipping_status: string }>();
         if (!latest) return jsonError('Order tidak ditemukan.', 404);
         const statusMoved =
+          latest.payment_method !== current.payment_method ||
           latest.payment_status !== current.payment_status ||
           latest.shipping_status !== current.shipping_status;
         if (destinationEditGuard && !(hasLifecycleChange && statusMoved)) {
