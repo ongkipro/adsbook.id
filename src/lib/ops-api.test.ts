@@ -57,6 +57,11 @@ function store() {
           return { results: sqlite.prepare(sql).all(...(values as never[])) };
         },
         async run() {
+          // D1 hands a RETURNING statement's rows back, in a batch too.
+          if (/\bRETURNING\b/i.test(sql)) {
+            const results = sqlite.prepare(sql).all(...(values as never[]));
+            return { success: true, results, meta: { changes: results.length } };
+          }
           const info = sqlite.prepare(sql).run(...(values as never[]));
           return { success: true, meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) } };
         },
@@ -386,7 +391,7 @@ test("REQ-254: updated_at advances through the lifecycle, the bulk status change
   assert.ok(stamp() > "2025", "payment-switch");
 
   reset();
-  assert.equal(await updateAdminOrderShippingStatuses(database, [id], "cancelled"), 1);
+  assert.deepEqual(await updateAdminOrderShippingStatuses(database, [id], "cancelled"), { updatedIds: [id], conflictIds: [] });
   assert.ok(stamp() > "2025", "bulk status");
 });
 

@@ -250,6 +250,16 @@ function buildOrderReleaseStatements(
   ];
 }
 
+/**
+ * Runs an admin status write and, when it voids the order, the release marker
+ * in one batch.
+ *
+ * `orderMutation` must be bound to the state `current` was read in
+ * (`AND payment_status = ? AND shipping_status = ?`): the transition is
+ * validated against that state, and a write that lands on any other state is
+ * a different transition nobody validated. `updated: false` is that conflict
+ * (PR-7) — answer 409, never retry blindly.
+ */
 export async function applyOrderLifecycleMutation(
   database: D1Database,
   current: OrderLifecycleState,
@@ -271,11 +281,17 @@ export async function applyOrderLifecycleMutation(
   };
 }
 
+export type BulkShippingStatusResult = {
+  updatedIds: number[];
+  /** Orders whose status changed after they were validated; left untouched. */
+  conflictIds: number[];
+};
+
 export async function updateAdminOrderShippingStatuses(
   database: D1Database,
   rawOrderIds: readonly number[],
   shippingStatus: AdminShippingStatus,
-): Promise<number> {
+): Promise<BulkShippingStatusResult> {
   const orderIds = Array.from(new Set(rawOrderIds)).filter(
     (orderId) => Number.isInteger(orderId) && orderId > 0,
   );
@@ -307,28 +323,51 @@ export async function updateAdminOrderShippingStatuses(
   const transitions = orders.map((order) =>
     resolveAdminOrderTransition(order, { shippingStatus }),
   );
-  const cte = selectedOrdersCte(orderIds);
+  // Each order is written only while it is still in the state its transition
+  // was validated against (PR-7). One that moved in between is skipped and
+  // reported, and the rest of the selection still applies. The validated
+  // states travel as one JSON parameter: three bindings per order would pass
+  // D1's 100-parameter limit at 34 orders.
   const statements = [
     database
       .prepare(
-        `${cte}
+        `WITH validated(order_id, payment_status, shipping_status) AS (
+          SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]')
+          FROM json_each(?)
+        )
         UPDATE orders
         SET shipping_status = '${shippingStatus}'
-        WHERE id IN (SELECT order_id FROM selected)`,
+        WHERE id IN (
+          SELECT v.order_id
+          FROM validated v
+          INNER JOIN orders o ON o.id = v.order_id
+          WHERE o.payment_status = v.payment_status
+            AND o.shipping_status = v.shipping_status
+        )
+        RETURNING id`,
       )
-      .bind(...orderIds),
+      .bind(
+        JSON.stringify(
+          orders.map((order) => [order.id, order.payment_status, order.shipping_status]),
+        ),
+      ),
   ];
   if (transitions.some((transition) => transition.releasesStock)) {
     statements.push(
       ...buildOrderReleaseStatements(database, orderIds),
     );
   }
-  await database.batch(statements);
-  // Every selected row was loaded and validated above, and the batch is all or
-  // nothing, so that is the count. D1's `meta.changes` is not: it also counts
-  // the 0075 `updated_at` trigger's own UPDATE, and reported 4 for 2 orders
-  // (audit 2026-10-31 M1).
-  return orders.length;
+  const results = await database.batch(statements);
+  // The ids the UPDATE returned, not `meta.changes`: that also counts the 0075
+  // `updated_at` trigger's own UPDATE, and reported 4 for 2 orders (audit
+  // 2026-10-31 M1).
+  const updated = new Set(
+    ((results[0]?.results || []) as { id: number }[]).map((row) => Number(row.id)),
+  );
+  return {
+    updatedIds: orderIds.filter((orderId) => updated.has(orderId)),
+    conflictIds: orderIds.filter((orderId) => !updated.has(orderId)),
+  };
 }
 
 /**

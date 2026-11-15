@@ -316,7 +316,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `order-export` | 12 | `order_items` `orders` `pickup_schedules` `product_variants` `products` `warehouses` | ✓ | `/api/admin/orders/export` |
 | `order-follow-up` | 7 | `order_follow_ups` `orders` | ✓ | `/api/admin/orders` `/api/admin/orders/[id]/follow-up` |
 | `order-instruction-hint` | 2 | — | ✓ | — |
-| `order-lifecycle` | 13 | `order_items` `orders` `payment_reconciliation_audits` `payment_transactions` | ✓ | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/shipping` |
+| `order-lifecycle` | 14 | `order_items` `orders` `payment_reconciliation_audits` `payment_transactions` | ✓ | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/shipping` |
 | `order-list-filter` | 10 | `payment_transactions` | **none** | `/api/admin/abandoned-orders` `/api/admin/orders` `/api/admin/shipping` |
 | `order-metrics` | 6 | — | **none** | `/api/admin/analytics` `/api/admin/orders/[id]/follow-up` |
 | `order-persistence` | 14 | `order_items` `order_number_counters` `orders` `payment_transactions` `product_variants` `products` `seller_bank_accounts` `stores` | ✓ | `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/retention` |

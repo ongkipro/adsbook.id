@@ -455,16 +455,27 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     try {
-      const updatedCount = await updateAdminOrderShippingStatuses(
+      const { updatedIds, conflictIds } = await updateAdminOrderShippingStatuses(
         database as D1Database,
         update.orderIds,
         update.status,
       );
+      // Partial by design (PR-7): an order whose status moved after it was
+      // validated is skipped and named, the rest of the selection applies.
+      const conflictNote = conflictIds.length
+        ? `${conflictIds.length} order tidak diubah karena statusnya berubah saat diproses. Muat ulang lalu coba lagi.`
+        : '';
+      if (updatedIds.length === 0) {
+        return jsonError(conflictNote, 409, {
+          data: { updated_count: 0, conflict_order_ids: conflictIds.map(String), status: update.status },
+        });
+      }
       return jsonOk({
-        message: `${updatedCount} order berhasil diubah ke ${shippingStatusLabel(update.status)}.`,
+        message: `${updatedIds.length} order berhasil diubah ke ${shippingStatusLabel(update.status)}.${conflictNote ? ` ${conflictNote}` : ''}`,
         data: {
-          updated_count: updatedCount,
+          updated_count: updatedIds.length,
           order_ids: update.orderIds.map(String),
+          conflict_order_ids: conflictIds.map(String),
           status: update.status,
         },
       });

@@ -799,19 +799,26 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         AND provider_dispatch_claimed_at IS NULL
         AND shipping_status = 'pending'${quoteGuard}`
           : '';
+      const hasLifecycleChange =
+        action !== 'dispatch-order' &&
+        (nextPaymentStatus !== undefined || nextShippingStatus !== undefined);
+      // A status change is validated against the order as read. Written only
+      // while the order is still in that state, so a second operator's change
+      // (or a provider sync) landing in between is a 409, not a silent
+      // overwrite that reactivates a returned order (PR-7).
+      const lifecycleGuard = hasLifecycleChange ? `
+        AND payment_status = ? AND shipping_status = ?` : '';
       const mutation = db.prepare(`
         UPDATE orders
         SET ${assignments.join(', ')}
         WHERE id = ?
-        ${destinationEditGuard}
+        ${destinationEditGuard}${lifecycleGuard}
       `).bind(
         ...values,
         current.id,
         ...(hasShippingSelection ? [current.payment_method, current.total_amount] : []),
+        ...(hasLifecycleChange ? [current.payment_status, current.shipping_status] : []),
       );
-      const hasLifecycleChange =
-        action !== 'dispatch-order' &&
-        (nextPaymentStatus !== undefined || nextShippingStatus !== undefined);
       const updated = hasLifecycleChange
         ? (
             await applyOrderLifecycleMutation(
@@ -826,14 +833,25 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
           ).updated
         : Boolean((await mutation.run()).meta?.changes);
       if (!updated) {
-        return destinationEditGuard
-          ? jsonError(
-              hasShippingSelection
-                ? 'Order berubah saat ongkir dihitung ulang (diproses ke Mengantar atau pembayarannya diganti). Muat ulang halaman.'
-                : 'Data tujuan tidak dapat diubah karena order sedang atau sudah diproses ke Mengantar.',
-              409,
-            )
-          : jsonError('Order tidak ditemukan.', 404);
+        // Which guard refused: the order is gone, its status moved, or (the
+        // destination guards) Mengantar or a payment switch got there first.
+        const latest = await db
+          .prepare('SELECT payment_status, shipping_status FROM orders WHERE id = ?')
+          .bind(current.id)
+          .first<{ payment_status: string; shipping_status: string }>();
+        if (!latest) return jsonError('Order tidak ditemukan.', 404);
+        const statusMoved =
+          latest.payment_status !== current.payment_status ||
+          latest.shipping_status !== current.shipping_status;
+        if (destinationEditGuard && !(hasLifecycleChange && statusMoved)) {
+          return jsonError(
+            hasShippingSelection
+              ? 'Order berubah saat ongkir dihitung ulang (diproses ke Mengantar atau pembayarannya diganti). Muat ulang halaman.'
+              : 'Data tujuan tidak dapat diubah karena order sedang atau sudah diproses ke Mengantar.',
+            409,
+          );
+        }
+        return jsonError('Status order berubah saat diproses. Muat ulang lalu coba lagi.', 409);
       }
       if (customerPhoneChanged && nextCustomerPhone) {
         scheduleReceiverPerformanceRefresh(
