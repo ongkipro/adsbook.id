@@ -350,7 +350,7 @@ export function createMiddleware(
   // IAM-5 strict CSRF: a sibling seller host is same-site, so the only safe
   // unsafe request is one whose Origin is this origin and whose browser says
   // `Sec-Fetch-Site: same-origin`.
-  if (isAdminApi && UNSAFE_METHODS.has(context.request.method)) {
+  if (isPrivate && UNSAFE_METHODS.has(context.request.method)) {
     const verdict = unsafeRequestVerdict(context.request, url);
     if (verdict !== 'allowed') {
       const body = verdict === 'browser_unsupported'

@@ -40,9 +40,12 @@ const database = tenantDatabase(Astro.locals);
 // third-party page can silently log an admin into an attacker's session.
 const loginOrigin = Astro.request.headers.get('origin');
 const loginFetchSite = Astro.request.headers.get('sec-fetch-site');
+// `same-site` too: another seller's host shares the parent domain, and a login
+// posted from there would fix the victim into the attacker's session (T-22).
 const crossSiteLogin =
   (loginOrigin !== null && loginOrigin !== Astro.url.origin) ||
-  loginFetchSite === 'cross-site';
+  loginFetchSite === 'cross-site' ||
+  loginFetchSite === 'same-site';
 
 if (Astro.request.method === 'POST' && crossSiteLogin) {
   Astro.response.status = 403;

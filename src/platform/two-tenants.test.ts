@@ -472,6 +472,19 @@ test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never
   });
   const sameOrigin = await post({ origin: "https://fix-b.belanja.cc", "sec-fetch-site": "same-origin" });
   assert.notEqual(sameOrigin.status, 403, "a same-origin POST from a current browser was refused");
+
+  // IAM-5 covers admin pages too, not only /api/admin (T-22 review).
+  const pageHref = "https://fix-b.belanja.cc/admin/profile";
+  const pageRequest = new Request(pageHref, { method: "POST", headers: { cookie: bCookie, "sec-fetch-site": "same-site", origin: "https://fix-a.belanja.cc" } });
+  const pageContext = { request: pageRequest, url: new URL(pageHref), locals: { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } }, routePattern: "/admin/profile", redirect: () => new Response(null, { status: 302 }) };
+  const previousLog = console.log;
+  console.log = () => undefined;
+  try {
+    const pageResponse = (await onRequest(pageContext as never, (async () => new Response("handled")) as never)) as Response;
+    assert.equal(pageResponse.status, 403, "a cross-host POST to an admin page reached its handler");
+  } finally {
+    console.log = previousLog;
+  }
 });
 
 test("T-21: there is no installer page or route to answer /install", () => {
