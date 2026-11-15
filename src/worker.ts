@@ -158,7 +158,7 @@ export async function runTenantMaintenance(
     sweepMissedCodPurchases(database, scheduledLocals, new Date(scheduledTime)),
   );
   const drainedCapiEvents = await housekeeping("scheduled-capi-drain-failed", async () => {
-    const ads = await getStoreAdsConfig({ runtimeEnv: env } as unknown as App.Locals);
+    const ads = await getStoreAdsConfig(scheduledLocals);
     return ads.metaPixelId && ads.metaCapiToken
       ? drainCapiOutboxBacklog(database, ads.metaPixelId, ads.metaCapiToken, new Date(scheduledTime))
       : 0;

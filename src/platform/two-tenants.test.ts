@@ -61,6 +61,7 @@ const { createMiddleware } = await import("../middleware.ts");
 const { runPlatformCron } = await import("../worker.ts");
 const { tenantDatabase } = await import("../lib/tenant-database.ts");
 const { getRuntimeEnv } = await import("../lib/env.ts");
+const orderStatusRoute = await import("../pages/api/order-status.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -168,6 +169,7 @@ test("the platform cron runs each active tenant on its own store; a suspended on
     ["c-d", "active", "cron-d.belanja.cc"],
   ]);
   const stores = namespace({ failing: ["c-d"] });
+  const sharedReads: string[] = [];
   const errors: string[] = [];
   const original = { error: console.error, info: console.info, warn: console.warn };
   console.error = (label: unknown, detail?: unknown) => void errors.push(`${String(label)} ${JSON.stringify(detail ?? null)}`);
@@ -176,7 +178,8 @@ test("the platform cron runs each active tenant on its own store; a suspended on
   let result: Awaited<ReturnType<typeof runPlatformCron>>;
   try {
     result = await runPlatformCron(
-      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } as never,
+      // The shared OMS_DB binding must never be read: a tenant's maintenance uses its own store only.
+      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, OMS_DB: { prepare: (sql: string) => { sharedReads.push(sql); throw new Error("shared OMS_DB read"); } } } as never,
       Date.parse("2026-11-16T05:07:00.000Z"),
       { waitUntil() {}, passThroughOnException() {} } as never,
     );
@@ -192,8 +195,43 @@ test("the platform cron runs each active tenant on its own store; a suspended on
     assert.equal(heartbeat?.scheduler_ran_at, "2026-11-16T05:07:00.000Z", `${id} heartbeat`);
   }
   assert.ok(errors.some((line) => line.startsWith("scheduled-tenant-failed") && line.includes("c-d")));
+  assert.deepEqual(sharedReads, [], "a maintenance step read the shared OMS_DB binding");
   assert.equal(
     (platformDb.sqlite.prepare("SELECT schema_version FROM tenants WHERE id = 'c-a'").get() as { schema_version: number }).schema_version,
     CHAIN.length,
   );
+});
+
+test("ISO-5: an order's status token answers on its own tenant's host only", async () => {
+  const platformDb = await platform([["s-a", "active", "shop-a.belanja.cc"], ["s-b", "active", "shop-b.belanja.cc"]]);
+  const stores = namespace({ migrated: true });
+  for (const [id, number, token] of [["s-a", "INV-10001", "tok-a"], ["s-b", "INV-10001", "tok-b"]]) {
+    stores.get(id).storage.db.exec(`
+      INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16');
+      INSERT INTO orders (id, order_number, store_id, customer_name, customer_phone, address, province, city, district,
+        total_amount, created_at, public_status_token)
+      VALUES (1, '${number}', 1, 'Siti Rahayu', '6281234567890', 'Jl. Melati 10', 'Jawa Barat', 'Bogor', 'Kec', 60000, '2026-11-16T00:00:00.000Z', '${token}');
+    `);
+  }
+  const onRequest = createMiddleware();
+  const ask = async (host: string, token: string) => {
+    const href = `https://${host}/api/order-status`;
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const request = new Request(href, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ order_id: "INV-10001", status_token: token }) });
+    const context = { request, url: new URL(href), locals, routePattern: "/api/order-status", redirect: () => new Response(null, { status: 302 }) };
+    const previousLog = console.log;
+    console.log = () => undefined;
+    try {
+      const response = (await onRequest(context as never, (async () => orderStatusRoute.POST(context as never)) as never)) as Response;
+      return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    } finally {
+      console.log = previousLog;
+    }
+  };
+  const own = await ask("shop-a.belanja.cc", "tok-a");
+  assert.equal(own.status, 200);
+  const crossed = await ask("shop-b.belanja.cc", "tok-a");
+  assert.equal(crossed.status, 404, "tenant A's token must not open an order on tenant B's host");
+  assert.equal(JSON.stringify(crossed.body).includes("tok-a"), false);
+  assert.equal((await ask("shop-b.belanja.cc", "tok-b")).status, 200);
 });
