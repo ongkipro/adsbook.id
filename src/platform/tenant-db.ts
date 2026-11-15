@@ -33,7 +33,10 @@ export class TenantDbUnsupportedError extends Error {
 function toSqlValue(value: unknown): SqlValue {
   if (value === null || typeof value === "string" || typeof value === "number") return value;
   if (typeof value === "boolean") return value ? 1 : 0;
-  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "bigint") {
+    if (!Number.isSafeInteger(Number(value))) throw new TypeError(`D1_TYPE_ERROR: bigint ${value} is outside the safe integer range`);
+    return Number(value);
+  }
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
     return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
@@ -69,7 +72,7 @@ class TenantPreparedStatement implements D1PreparedStatement {
     const row: Row | undefined = results[0];
     if (!row) return null;
     if (colName === undefined) return row as T;
-    if (!(colName in row)) throw new Error(`D1_COLUMN_NOTFOUND: Column not found (${colName})`);
+    if (!Object.hasOwn(row, colName)) throw new Error(`D1_COLUMN_NOTFOUND: Column not found (${colName})`);
     return row[colName] as T;
   }
 
@@ -128,6 +131,8 @@ export interface TenantStoreStub extends TenantStoreRpc {
   schemaState(protocol: number): Promise<SchemaState>;
   prepareMigration(protocol: number): Promise<{ bookmark: string; state: SchemaState }>;
   applyMigrations(protocol: number, target: number, bookmarkId: string): Promise<SchemaState>;
+  prepareRestore?(protocol: number, bookmark: string): Promise<{ undo: string }>;
+  restart?(protocol: number): Promise<void>;
 }
 
 /** The tenant cannot be served right now; the caller answers 503 for this tenant only. */
@@ -141,44 +146,65 @@ export class TenantUnavailableError extends Error {
   }
 }
 
-/** Per isolate: a tenant checked at a target is not checked again by this isolate. */
+/** Which tenant, and which generation of it: `tenants.cache_version`. */
+export type TenantRef = { tenantId: string; cacheVersion: number };
+
+/**
+ * Per isolate: a tenant checked at a target is not checked again by this
+ * isolate — until its `cache_version` moves. Every operator action that can
+ * move a store's schema backwards (a restore, re-activation after recovery)
+ * bumps it, so every isolate checks again.
+ */
 const readyTenants = new Map<string, Promise<SchemaState>>();
 
 export type EnsureSchemaOptions = {
   now?: () => Date;
-  /** Bounded in tests; the module-level map in production. */
+  /** A fresh map in tests; the module-level map in production. */
   ready?: Map<string, Promise<SchemaState>>;
 };
 
 /**
- * Brings one tenant's store to `target` files, at most once per isolate:
+ * Brings one tenant's store to `target` files, at most once per isolate and
+ * tenant generation:
  *
- * 1. Ask the store its state. Ahead of `target` with a known history is served:
- *    releases only add (expand-and-contract with drain), so a rollback keeps
- *    every tenant up. An unknown history is a 503 for that tenant only.
+ * 1. Ask the store its state. A store whose own recovery guard is up is put in
+ *    `recovery` in `PLATFORM_DB` too (idempotent, so a lost write is repaired
+ *    on the next request) and refused. An unknown history, or a store whose
+ *    contraction floor is above this release, is refused for that tenant only.
+ *    Ahead of `target` otherwise is served: releases only add (MIG-2).
  * 2. Behind: take the store's PITR bookmark and **store it in `PLATFORM_DB`
- *    first**. If that write fails, nothing migrates and the request is a 503.
- * 3. Apply. A failing file leaves the store in `recovery`; `PLATFORM_DB` is set
- *    to `recovery` too (it is the authoritative copy: a restore rolls the
- *    object's own storage back) and an audit row is written.
+ *    first** (the latest attempt's bookmark replaces an older one). If that
+ *    write fails, nothing migrates and the request is a 503.
+ * 3. Apply, and accept only a result that reached `target`. A failing file
+ *    leaves the store in `recovery`; `PLATFORM_DB` is set to `recovery` too,
+ *    with an audit row.
  */
 export async function ensureTenantSchema(
   platformDb: D1Database,
   stub: TenantStoreStub,
-  tenantId: string,
+  tenant: TenantRef,
   target: number,
   options: EnsureSchemaOptions = {},
 ): Promise<SchemaState> {
   const ready = options.ready ?? readyTenants;
-  const key = `${tenantId}\u0000${target}`;
+  const key = `${tenant.tenantId}\u0000${tenant.cacheVersion}\u0000${target}`;
   const existing = ready.get(key);
   if (existing) return existing;
-  const attempt = migrateTenant(platformDb, stub, tenantId, target, options.now ?? (() => new Date())).catch((error) => {
+  const attempt = migrateTenant(platformDb, stub, tenant.tenantId, target, options.now ?? (() => new Date())).catch((error) => {
     ready.delete(key);
     throw error;
   });
   ready.set(key, attempt);
   return attempt;
+}
+
+async function markRecovery(platformDb: D1Database, tenantId: string, at: Date, detail: Record<string, unknown>) {
+  await platformDb.batch([
+    platformDb.prepare("UPDATE tenants SET status = 'recovery', cache_version = cache_version + 1 WHERE id = ? AND status = 'active'").bind(tenantId),
+    platformDb
+      .prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES (?, 'migration_failed', 'platform', ?, ?)")
+      .bind(tenantId, at.toISOString(), JSON.stringify(detail)),
+  ]);
 }
 
 async function migrateTenant(
@@ -195,18 +221,30 @@ async function migrateTenant(
     // Most often an object still on the previous release's protocol (§4.1 item 8).
     throw new TenantUnavailableError("protocol", (error as Error).message);
   }
+  if (state.recovery) {
+    // The store says recovery; make the authoritative copy agree before refusing.
+    await markRecovery(platformDb, tenantId, now(), { reconciled: true, applied: state.applied });
+    throw new TenantUnavailableError("recovery", "migration paused");
+  }
   if (state.historyUnknown) throw new TenantUnavailableError("history", `${state.applied} files applied`);
+  if (state.readerFloor > target) {
+    throw new TenantUnavailableError("history", `store contracted at ${state.readerFloor}, this release reads ${target}`);
+  }
   if (state.applied >= target) return state;
-  if (state.recovery) throw new TenantUnavailableError("recovery", "migration paused");
 
   const prepared = await stub.prepareMigration(TENANT_STORE_PROTOCOL);
+  // Another request migrated the store between the two calls: nothing to do,
+  // and this bookmark is not a pre-migration one, so it is not stored.
+  if (prepared.state.applied >= target) return prepared.state;
   const bookmarkId = `${tenantId}:${prepared.state.applied}`;
   try {
-    // A concurrent request may have stored this version's bookmark first; both continue.
+    // A prepare that saw `applied < target` always precedes any migration from
+    // that version (the store is single-threaded), so the latest attempt's
+    // bookmark is the one a restore needs.
     await platformDb
       .prepare(
         `INSERT INTO migration_bookmarks (tenant_id, schema_version, bookmark, at) VALUES (?, ?, ?, ?)
-         ON CONFLICT (tenant_id, schema_version) DO NOTHING`,
+         ON CONFLICT (tenant_id, schema_version) DO UPDATE SET bookmark = excluded.bookmark, at = excluded.at`,
       )
       .bind(tenantId, prepared.state.applied, prepared.bookmark, now().toISOString())
       .run();
@@ -219,20 +257,47 @@ async function migrateTenant(
     migrated = await stub.applyMigrations(TENANT_STORE_PROTOCOL, target, bookmarkId);
   } catch (error) {
     const message = (error as Error).message.slice(0, 500);
-    if (/TENANT_IN_RECOVERY/.test(message)) throw new TenantUnavailableError("recovery", message);
-    await platformDb.batch([
-      platformDb.prepare("UPDATE tenants SET status = 'recovery' WHERE id = ? AND status = 'active'").bind(tenantId),
-      platformDb
-        .prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES (?, 'migration_failed', 'platform', ?, ?)")
-        .bind(tenantId, now().toISOString(), JSON.stringify({ from: prepared.state.applied, target, bookmarkId, error: message })),
-    ]);
-    throw new TenantUnavailableError("migration", message);
+    if (/TENANT_TARGET_UNAVAILABLE|TENANT_STORE_PROTOCOL_MISMATCH/.test(message)) {
+      throw new TenantUnavailableError("protocol", message);
+    }
+    await markRecovery(platformDb, tenantId, now(), { from: prepared.state.applied, target, bookmarkId, error: message });
+    throw new TenantUnavailableError(/TENANT_IN_RECOVERY/.test(message) ? "recovery" : "migration", message);
+  }
+  if (migrated.applied < target) {
+    throw new TenantUnavailableError("protocol", `store reached ${migrated.applied}, release needs ${target}`);
   }
   await platformDb
     .prepare("UPDATE tenants SET schema_version = ? WHERE id = ? AND schema_version < ?")
     .bind(migrated.applied, tenantId, migrated.applied)
     .run();
   return migrated;
+}
+
+/**
+ * Operator recovery (§4.5): record the restore in `PLATFORM_DB` first — the
+ * tenant in `recovery`, a new `cache_version`, and both bookmarks in the audit
+ * row — then restart the store into the restored state. Automatic migration
+ * stays off while the tenant is in `recovery`.
+ */
+export async function restoreTenant(
+  platformDb: D1Database,
+  stub: TenantStoreStub,
+  tenantId: string,
+  bookmark: string,
+  actor: string,
+  now = new Date(),
+): Promise<{ undo: string }> {
+  if (!stub.prepareRestore || !stub.restart) throw new TenantUnavailableError("protocol", "store cannot restore");
+  const { undo } = await stub.prepareRestore(TENANT_STORE_PROTOCOL, bookmark);
+  await platformDb.batch([
+    platformDb.prepare("UPDATE tenants SET status = 'recovery', cache_version = cache_version + 1 WHERE id = ?").bind(tenantId),
+    platformDb
+      .prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES (?, 'restore', ?, ?, ?)")
+      .bind(tenantId, actor, now.toISOString(), JSON.stringify({ bookmark, undo })),
+  ]);
+  // The restart aborts the object, so the call itself rejects; that is the restart.
+  await stub.restart(TENANT_STORE_PROTOCOL).catch(() => undefined);
+  return { undo };
 }
 
 /** What `openTenantDb` reads from the runtime environment. Only `src/platform/` reads it. */
@@ -246,13 +311,13 @@ type StoreNamespace = {
 };
 
 /**
- * The one way to a tenant's data (TEN-2): the gate's tenant id, a store
- * reached by that id with the APAC hint (DATA-1), its schema brought to
- * `target`, and the D1-shaped capability over it.
+ * The one way to a tenant's data (TEN-2): the gate's tenant, a store reached
+ * by its id with the APAC hint (DATA-1), its schema brought to `target`, and
+ * the D1-shaped capability over it.
  */
 export async function openTenantDb(
   env: TenantDbEnv | null | undefined,
-  tenantId: string,
+  tenant: TenantRef,
   target: number,
   options: EnsureSchemaOptions = {},
 ): Promise<D1Database> {
@@ -262,7 +327,7 @@ export async function openTenantDb(
     throw new TenantUnavailableError("protocol", "PLATFORM_DB or TENANT_STORE is not bound");
   }
   // The stub's RPC methods return the structured clone of the store's results.
-  const stub = namespace.getByName(tenantId, { locationHint: "apac-se" }) as TenantStoreStub;
-  await ensureTenantSchema(platformDb, stub, tenantId, target, options);
+  const stub = namespace.getByName(tenant.tenantId, { locationHint: "apac-se" }) as TenantStoreStub;
+  await ensureTenantSchema(platformDb, stub, tenant, target, options);
   return createTenantDb(stub);
 }

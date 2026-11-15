@@ -73,14 +73,19 @@ export class TenantStore extends DurableObject {
   }
 
   /**
-   * Operator recovery (§4.5): restore to a bookmark on the next start. The
-   * restarted object keeps the restored schema and stays in recovery; the
-   * call itself ends with the object aborting.
+   * Operator recovery (§4.5), step one: arm a restore to `bookmark` for the
+   * next start and hand back the undo bookmark. Nothing about the restore is
+   * kept in this object's own storage — the restore rolls that back too; the
+   * Worker records both bookmarks in `PLATFORM_DB` before calling `restart`.
    */
-  async restore(protocol: number, bookmark: string): Promise<void> {
+  async prepareRestore(protocol: number, bookmark: string): Promise<{ undo: string }> {
     this.#store.checkProtocol(protocol);
-    const undo = await this.ctx.storage.onNextSessionRestoreBookmark(bookmark);
-    this.#store.rememberRestoreUndo(undo);
+    return { undo: await this.ctx.storage.onNextSessionRestoreBookmark(bookmark) };
+  }
+
+  /** Step two: restart the object, which applies the armed restore. The call itself fails. */
+  async restart(protocol: number): Promise<void> {
+    this.#store.checkProtocol(protocol);
     this.ctx.abort();
   }
 }

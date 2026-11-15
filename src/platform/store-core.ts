@@ -118,14 +118,23 @@ export function readLedger(storage: StorageLike): string[] {
 }
 
 /**
+ * A contraction (a drop or rename, `-- adsbook:contract` in the file) breaks
+ * every release that still reads the old shape. It may ship only after those
+ * releases drained (MIG-2), and once applied no older reader may serve.
+ */
+export const CONTRACTION_MARKER = /^\s*--\s*adsbook:contract\b/m;
+
+/**
  * Applies one migration file in its own transaction: the ledger row and every
  * statement commit together or not at all. `split` is the repository's
- * `splitMigrationStatements`, which keeps trigger bodies whole.
+ * `splitMigrationStatements`, which keeps trigger bodies whole. `onApplied`
+ * runs inside the same transaction.
  */
 export function applyMigrationFile(
   storage: StorageLike,
   migration: MigrationFile,
   split: (sql: string) => string[],
+  onApplied?: () => void,
 ): void {
   const statements = split(migration.sql);
   storage.transactionSync(() => {
@@ -138,6 +147,7 @@ export function applyMigrationFile(
     );
     storage.sql.exec(`INSERT INTO ${MIGRATIONS_TABLE} (name) VALUES (?)`, migration.name);
     for (const statement of statements) storage.sql.exec(statement).toArray();
+    onApplied?.();
   });
 }
 
@@ -171,6 +181,11 @@ export type SchemaState = {
   historyUnknown: boolean;
   /** The object's own copy of the recovery guard; PLATFORM_DB is authoritative. */
   recovery: boolean;
+  /**
+   * The oldest release (in chain files) that may still serve this store: the
+   * position after its latest applied contraction, 0 when none was applied.
+   */
+  readerFloor: number;
   protocol: number;
 };
 
@@ -216,6 +231,7 @@ export class TenantStoreEngine {
       bundled: this.#chain.length,
       historyUnknown,
       recovery: this.#kv.get("recovery") === true,
+      readerFloor: Number(this.#kv.get("reader_floor") ?? 0),
       protocol: TENANT_STORE_PROTOCOL,
     };
   }
@@ -228,12 +244,19 @@ export class TenantStoreEngine {
   applyMigrations(target: number, bookmarkId: string): SchemaState {
     if (!bookmarkId) throw new Error("TENANT_MIGRATION_NO_BOOKMARK");
     if (this.#kv.get("recovery") === true) throw new Error("TENANT_IN_RECOVERY");
+    // An object still on an older bundle cannot reach this target; refusing is
+    // the only honest answer (never report a lower version as done).
+    if (target > this.#chain.length) {
+      throw new Error(`TENANT_TARGET_UNAVAILABLE: target ${target}, object bundles ${this.#chain.length}`);
+    }
     assertKnownPrefix(this.#applied, this.#chain);
-    const goal = Math.min(target, this.#chain.length);
-    while (this.#applied.length < goal) {
+    while (this.#applied.length < target) {
       const file = this.#chain[this.#applied.length];
+      const position = this.#applied.length + 1;
       try {
-        applyMigrationFile(this.#storage, file, this.#split);
+        applyMigrationFile(this.#storage, file, this.#split, () => {
+          if (CONTRACTION_MARKER.test(file.sql)) this.#kv.put("reader_floor", position);
+        });
       } catch (error) {
         this.#kv.put("recovery", true);
         throw new Error(`TENANT_MIGRATION_FAILED: ${file.name}: ${(error as Error).message}`);
@@ -249,8 +272,4 @@ export class TenantStoreEngine {
     else this.#kv.delete("recovery");
   }
 
-  rememberRestoreUndo(bookmark: string): void {
-    this.#kv.put("restore_undo", bookmark);
-    this.#kv.put("recovery", true);
-  }
 }

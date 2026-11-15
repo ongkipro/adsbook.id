@@ -22,6 +22,7 @@ import {
   createTenantDb,
   ensureTenantSchema,
   openTenantDb,
+  restoreTenant,
   TenantUnavailableError,
   type TenantStoreStub,
 } from "./tenant-db.ts";
@@ -40,6 +41,8 @@ const PLATFORM_CHAIN: MigrationFile[] = readdirSync(platformDir)
   .map((name) => ({ name, sql: readFileSync(new URL(name, platformDir), "utf8") }));
 
 const N = CHAIN.length - 1; // release N bundles 0000…0078; release N+1 adds 0079
+
+const ref = (tenantId: string, cacheVersion = 1) => ({ tenantId, cacheVersion });
 
 function memoryKv(): StoreKv & { values: Map<string, unknown> } {
   const values = new Map<string, unknown>();
@@ -90,7 +93,7 @@ test("two tenants migrate N → N+1 concurrently, each file applied once per ten
   // Three isolates per tenant (separate per-isolate maps) racing the same upgrade.
   const results = await Promise.all(
     [a, b].flatMap(({ stub }, index) =>
-      [1, 2, 3].map(() => ensureTenantSchema(db, stub, index === 0 ? "t-a" : "t-b", CHAIN.length, { ready: new Map() })),
+      [1, 2, 3].map(() => ensureTenantSchema(db, stub, ref(index === 0 ? "t-a" : "t-b"), CHAIN.length, { ready: new Map() })),
     ),
   );
   assert.ok(results.every((state) => state.applied === CHAIN.length));
@@ -112,7 +115,7 @@ test("one isolate asks a ready tenant once, however many requests arrive", async
   const db = await platform("t-a");
   const a = objectFor(storeAt(CHAIN.length));
   const ready = new Map<string, Promise<SchemaState>>();
-  await Promise.all(Array.from({ length: 10 }, () => ensureTenantSchema(db, a.stub, "t-a", CHAIN.length, { ready })));
+  await Promise.all(Array.from({ length: 10 }, () => ensureTenantSchema(db, a.stub, ref("t-a"), CHAIN.length, { ready })));
   assert.deepEqual(a.calls, ["schemaState"]);
 });
 
@@ -121,7 +124,7 @@ test("a failed bookmark write starts no migration; a delayed one starts it only 
   failing.failWhen = /migration_bookmarks/;
   const a = objectFor(storeAt(N));
   await assert.rejects(
-    ensureTenantSchema(failing, a.stub, "t-a", CHAIN.length, { ready: new Map() }),
+    ensureTenantSchema(failing, a.stub, ref("t-a"), CHAIN.length, { ready: new Map() }),
     (error: unknown) => error instanceof TenantUnavailableError && error.reason === "bookmark",
   );
   assert.equal(readLedger(a.storage).length, N, "migrated without a stored bookmark");
@@ -148,7 +151,7 @@ test("a failed bookmark write starts no migration; a delayed one starts it only 
       },
     });
   }) as typeof delayed.prepare;
-  await ensureTenantSchema(delayed, b.stub, "t-b", CHAIN.length, { ready: new Map() });
+  await ensureTenantSchema(delayed, b.stub, ref("t-b"), CHAIN.length, { ready: new Map() });
   assert.deepEqual(order, [`bookmark written (store at ${N})`]);
   assert.equal(readLedger(b.storage).length, CHAIN.length);
 });
@@ -159,10 +162,10 @@ test("a failing migration puts that tenant in recovery and leaves the other serv
   const a = objectFor(storeAt(CHAIN.length), memoryKv(), [...CHAIN, bad]);
   const b = objectFor(storeAt(CHAIN.length), memoryKv(), [...CHAIN, { name: bad.name, sql: "CREATE TABLE fine (id INTEGER);" }]);
   await assert.rejects(
-    ensureTenantSchema(db, a.stub, "t-a", CHAIN.length + 1, { ready: new Map() }),
+    ensureTenantSchema(db, a.stub, ref("t-a"), CHAIN.length + 1, { ready: new Map() }),
     (error: unknown) => error instanceof TenantUnavailableError && error.reason === "migration",
   );
-  await ensureTenantSchema(db, b.stub, "t-b", CHAIN.length + 1, { ready: new Map() });
+  await ensureTenantSchema(db, b.stub, ref("t-b"), CHAIN.length + 1, { ready: new Map() });
   assert.equal(statusOf(db, "t-a").status, "recovery");
   assert.equal(statusOf(db, "t-b").status, "active");
   const event = db.sqlite.prepare("SELECT kind, actor, detail_json FROM tenant_events WHERE tenant_id = 't-a'").get() as { kind: string; actor: string; detail_json: string };
@@ -174,28 +177,96 @@ test("a failing migration puts that tenant in recovery and leaves the other serv
   assert.equal(await createTenantDb(b.stub).prepare("SELECT COUNT(*) AS n FROM fine").first("n"), 0);
   // No automatic retry while in recovery.
   await assert.rejects(
-    ensureTenantSchema(db, a.stub, "t-a", CHAIN.length + 1, { ready: new Map() }),
+    ensureTenantSchema(db, a.stub, ref("t-a"), CHAIN.length + 1, { ready: new Map() }),
     (error: unknown) => error instanceof TenantUnavailableError && error.reason === "recovery",
   );
 });
 
-test("a restored store restarts on its old schema, in recovery, and is not migrated again", async () => {
+test("a restore is recorded in PLATFORM_DB first; the restarted store is not migrated again", async () => {
   const db = await platform("t-a");
-  db.sqlite.exec("UPDATE tenants SET status = 'recovery' WHERE id = 't-a'");
-  // What a PITR restore to the pre-migration bookmark leaves: release N's schema,
-  // and the object's own copy of the guard (`rememberRestoreUndo`).
-  const restored = memoryKv();
-  const before = objectFor(storeAt(N), restored);
-  before.engine.rememberRestoreUndo("bm-undo");
-  // Restart: a new object over the same storage, constructor reads the ledger only.
-  const restarted = objectFor(before.storage, restored);
-  assert.equal(restarted.engine.schemaState().applied, N);
+  const store = objectFor(storeAt(N));
+  const calls: string[] = [];
+  const stub = {
+    ...store.stub,
+    prepareRestore: async (_protocol: number, bookmark: string) => (calls.push(`prepareRestore ${bookmark}`), { undo: "bm-undo" }),
+    restart: async () => {
+      calls.push("restart");
+      throw new Error("aborted"); // what ctx.abort() looks like to the caller
+    },
+  };
+  const { undo } = await restoreTenant(db, stub, "t-a", "bm-before", "owner@example.test", new Date("2026-11-16T06:00:00.000Z"));
+  assert.equal(undo, "bm-undo");
+  assert.deepEqual(calls, ["prepareRestore bm-before", "restart"]);
+  const tenant = db.sqlite.prepare("SELECT status, cache_version FROM tenants WHERE id = 't-a'").get() as { status: string; cache_version: number };
+  assert.deepEqual({ ...tenant }, { status: "recovery", cache_version: 2 });
+  const event = db.sqlite.prepare("SELECT kind, actor, detail_json FROM tenant_events WHERE tenant_id = 't-a'").get() as { kind: string; actor: string; detail_json: string };
+  assert.deepEqual({ kind: event.kind, actor: event.actor, detail: JSON.parse(event.detail_json) }, { kind: "restore", actor: "owner@example.test", detail: { bookmark: "bm-before", undo: "bm-undo" } });
+  // While PLATFORM_DB says recovery the gate answers 503 before any store call;
+  // the platform cron opens active tenants only. Neither path migrates it.
+  const active = db.sqlite.prepare("SELECT id FROM tenants WHERE status = 'active'").all();
+  assert.deepEqual(active, []);
+  assert.equal(readLedger(store.storage).length, N);
+});
+
+test("an isolate checks a tenant again when its generation moves (restore, re-activation)", async () => {
+  const db = await platform("t-a");
+  const store = objectFor(storeAt(CHAIN.length));
+  const ready = new Map<string, Promise<SchemaState>>();
+  await ensureTenantSchema(db, store.stub, ref("t-a", 1), CHAIN.length, { ready });
+  await ensureTenantSchema(db, store.stub, ref("t-a", 1), CHAIN.length, { ready });
+  assert.deepEqual(store.calls, ["schemaState"]);
+  await ensureTenantSchema(db, store.stub, ref("t-a", 2), CHAIN.length, { ready });
+  assert.deepEqual(store.calls, ["schemaState", "schemaState"]);
+});
+
+test("a store whose own recovery guard is up puts the tenant in recovery in PLATFORM_DB too", async () => {
+  const db = await platform("t-a");
+  const kv = memoryKv();
+  kv.put("recovery", true); // the migration failed, but the D1 write after it was lost
+  const store = objectFor(storeAt(CHAIN.length), kv);
   await assert.rejects(
-    ensureTenantSchema(db, restarted.stub, "t-a", CHAIN.length, { ready: new Map() }),
+    ensureTenantSchema(db, store.stub, ref("t-a"), CHAIN.length, { ready: new Map() }),
     (error: unknown) => error instanceof TenantUnavailableError && error.reason === "recovery",
   );
-  assert.equal(readLedger(restarted.storage).length, N);
-  assert.equal(restarted.calls.includes("applyMigrations"), false);
+  assert.equal(statusOf(db, "t-a").status, "recovery");
+  const event = db.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE tenant_id = 't-a'").get() as { detail_json: string };
+  assert.equal(JSON.parse(event.detail_json).reconciled, true);
+});
+
+test("a retried upgrade stores the latest attempt's bookmark, not an older one", async () => {
+  const db = await platform("t-a");
+  db.sqlite.exec(`INSERT INTO migration_bookmarks (tenant_id, schema_version, bookmark, at) VALUES ('t-a', ${N}, 'bm-days-old', '2026-11-01T00:00:00.000Z')`);
+  const store = objectFor(storeAt(N));
+  await ensureTenantSchema(db, store.stub, ref("t-a"), CHAIN.length, { ready: new Map() });
+  const row = db.sqlite.prepare("SELECT bookmark FROM migration_bookmarks WHERE tenant_id = 't-a'").get() as { bookmark: string };
+  assert.equal(row.bookmark, `bm-${N}`);
+});
+
+test("an object on an older bundle never reports a lower version as done", async () => {
+  const db = await platform("t-a");
+  const store = objectFor(storeAt(N), memoryKv(), CHAIN.slice(0, N));
+  await assert.rejects(
+    ensureTenantSchema(db, store.stub, ref("t-a"), CHAIN.length, { ready: new Map() }),
+    (error: unknown) => error instanceof TenantUnavailableError && error.reason === "protocol",
+  );
+  assert.equal(statusOf(db, "t-a").status, "active", "an old object is not a failed migration");
+  assert.equal(readLedger(store.storage).length, N);
+});
+
+test("after a contraction, an older release is refused for that tenant; an expansion-only store is served", async () => {
+  const db = await platform("t-a");
+  const contraction: MigrationFile = {
+    name: `${String(CHAIN.length).padStart(4, "0")}_drop_old_column.sql`,
+    sql: "-- adsbook:contract\nCREATE TABLE contracted (id INTEGER);",
+  };
+  const store = objectFor(storeAt(CHAIN.length), memoryKv(), [...CHAIN, contraction]);
+  await ensureTenantSchema(db, store.stub, ref("t-a"), CHAIN.length + 1, { ready: new Map() });
+  assert.equal(store.engine.schemaState().readerFloor, CHAIN.length + 1);
+  // Rolled back to the release before the contraction: refused, not served on a shape it cannot read.
+  await assert.rejects(
+    ensureTenantSchema(db, store.stub, ref("t-a", 2), CHAIN.length, { ready: new Map() }),
+    (error: unknown) => error instanceof TenantUnavailableError && error.reason === "history",
+  );
 });
 
 test("a rollback to release N keeps tenants already on N+1 serving", async () => {
@@ -203,7 +274,7 @@ test("a rollback to release N keeps tenants already on N+1 serving", async () =>
   const a = objectFor(storeAt(CHAIN.length), memoryKv(), CHAIN.slice(0, N));
   const b = objectFor(storeAt(N), memoryKv(), CHAIN.slice(0, N));
   for (const [id, store] of [["t-a", a], ["t-b", b]] as const) {
-    const state = await ensureTenantSchema(db, store.stub, id, N, { ready: new Map() });
+    const state = await ensureTenantSchema(db, store.stub, ref(id), N, { ready: new Map() });
     assert.ok(state.applied >= N);
     assert.equal(store.calls.includes("applyMigrations"), false, `${id} migrated on rollback`);
     assert.equal(await createTenantDb(store.stub).prepare("SELECT COUNT(*) AS n FROM orders").first("n"), 0);
@@ -211,7 +282,7 @@ test("a rollback to release N keeps tenants already on N+1 serving", async () =>
   // An unknown history is refused for that tenant only.
   const odd = objectFor(storeAt(3), memoryKv(), [CHAIN[0], CHAIN[1], { name: "0002_other.sql", sql: "SELECT 1;" }]);
   await assert.rejects(
-    ensureTenantSchema(db, odd.stub, "t-b", 3, { ready: new Map() }),
+    ensureTenantSchema(db, odd.stub, ref("t-b"), 3, { ready: new Map() }),
     (error: unknown) => error instanceof TenantUnavailableError && error.reason === "history",
   );
 });
@@ -225,7 +296,7 @@ test("a store on another protocol version is a 503 for its tenant, not a crash",
     },
   };
   await assert.rejects(
-    ensureTenantSchema(db, stub, "t-a", CHAIN.length, { ready: new Map() }),
+    ensureTenantSchema(db, stub, ref("t-a"), CHAIN.length, { ready: new Map() }),
     (error: unknown) => error instanceof TenantUnavailableError && error.reason === "protocol",
   );
 });
@@ -236,13 +307,13 @@ test("openTenantDb reaches the tenant's store by its id with the APAC hint, and 
   const asked: unknown[] = [];
   const tenantDb = await openTenantDb(
     { PLATFORM_DB: db, TENANT_STORE: { getByName: (name: string, options: unknown) => (asked.push([name, options]), store.stub) } },
-    "t-a",
+    ref("t-a"),
     CHAIN.length,
     { ready: new Map() },
   );
   assert.deepEqual(asked, [["t-a", { locationHint: "apac-se" }]]);
   assert.equal(await tenantDb.prepare("SELECT COUNT(*) AS n FROM stores").first("n"), 0);
-  await assert.rejects(openTenantDb({ PLATFORM_DB: db }, "t-a", CHAIN.length), TenantUnavailableError);
+  await assert.rejects(openTenantDb({ PLATFORM_DB: db }, ref("t-a"), CHAIN.length), TenantUnavailableError);
 });
 
 // ── The adapter against the real code (SPIKE-1 items 2 and 5, kept as tests) ──
@@ -277,6 +348,9 @@ test("meta.changes counts trigger writes; a batch is all or nothing; D1 binding 
   assert.deepEqual(await db.prepare("SELECT ? AS t, ? AS f").bind(true, false).first(), { t: 1, f: 0 });
   assert.throws(() => db.prepare("SELECT ?").bind(undefined), /D1_TYPE_ERROR/);
   await assert.rejects(db.prepare("SELECT 7 AS n").first("missing"), /D1_COLUMN_NOTFOUND/);
+  await assert.rejects(db.prepare("SELECT 7 AS n").first("toString"), /D1_COLUMN_NOTFOUND/);
+  assert.deepEqual(await db.prepare("SELECT ? AS id").bind(42n).first(), { id: 42 });
+  assert.throws(() => db.prepare("SELECT ?").bind(9007199254740993n), /D1_TYPE_ERROR/);
   assert.deepEqual(await db.prepare("SELECT 1 AS a, 'x' AS b").raw({ columnNames: true }), [["a", "b"], [1, "x"]]);
   await assert.rejects(db.exec("SELECT 1"), /TENANT_DB_UNSUPPORTED/);
   const other = createTenantDb(objectFor(createNodeStorage()).stub);
