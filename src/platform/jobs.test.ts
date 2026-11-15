@@ -146,3 +146,47 @@ test("PRIV-4: a tenant whose purge_after has passed starts purging, with an audi
   // Idempotent: a second run starts nothing new.
   assert.equal((await runPlatformJobs(db, now)).purgesStarted, 0);
 });
+
+test("a purge deadline cleared or moved after selection is honoured (T-24 review)", async () => {
+  const now = new Date("2026-11-16T05:00:00.000Z");
+  const { db, tenant } = await controlPlane();
+  tenant("due", "suspended", new Date(now.getTime() - DAY).toISOString());
+  // Simulate an owner restoring between selection and the batch: the batch's own predicate decides.
+  const original = db.batch.bind(db);
+  db.batch = (async (statements: D1PreparedStatement[]) => {
+    db.sqlite.prepare("UPDATE tenants SET purge_after = NULL WHERE id = 'due'").run();
+    return original(statements);
+  }) as typeof db.batch;
+  const result = await runPlatformJobs(db, now);
+  assert.equal(result.purgesStarted, 0);
+  assert.equal((db.sqlite.prepare("SELECT status FROM tenants WHERE id = 'due'").get() as { status: string }).status, "suspended");
+  assert.equal(count(db, "SELECT COUNT(*) AS n FROM tenant_events WHERE kind = 'purge_started'"), 0);
+});
+
+test("hostname deletes Cloudflare keeps refusing rotate to the back, so the rest still drain", async () => {
+  const now = new Date("2026-11-16T05:00:00.000Z");
+  const { db, tenant } = await controlPlane();
+  tenant("t-1", "active", null);
+  const insert = db.sqlite.prepare(
+    "INSERT INTO tenant_hosts (host, tenant_id, kind, status, cf_custom_hostname_id, is_primary, created_at, revoked_at) VALUES (?, 't-1', 'custom', 'revoked', ?, 0, '2026-01-01', ?)",
+  );
+  for (let index = 0; index < 60; index += 1) {
+    insert.run(`h${index}.example`, `cf-${index}`, new Date(Date.parse("2026-11-01T00:00:00Z") + index * 1000).toISOString());
+  }
+  const deleted: string[] = [];
+  const original = console.error;
+  console.error = () => undefined;
+  try {
+    // The first 50 always fail; the last 10 succeed once they get a slot.
+    const deleter = async (id: string) => {
+      if (Number(id.slice(3)) < 50) throw new Error("Cloudflare 500");
+      deleted.push(id);
+    };
+    await runPlatformJobs(db, now, deleter);
+    assert.equal(deleted.length, 0, "the first run spent its slots on the failing rows");
+    await runPlatformJobs(db, new Date(now.getTime() + 3_600_000), deleter);
+    assert.equal(deleted.length, 10, "the second run reached the rows behind them");
+  } finally {
+    console.error = original;
+  }
+});

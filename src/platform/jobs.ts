@@ -112,12 +112,15 @@ export async function runPlatformJobs(
           .prepare(
             `INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json)
              SELECT id, 'purge_started', 'platform-job', ?, json_object('purge_after', purge_after) FROM tenants
-             WHERE id = ? AND status NOT IN ('purging', 'purged')`,
+             WHERE id = ? AND purge_after IS NOT NULL AND purge_after < ? AND status NOT IN ('purging', 'purged')`,
           )
-          .bind(now.toISOString(), id),
+          .bind(now.toISOString(), id, now.toISOString()),
         platformDb
-          .prepare("UPDATE tenants SET status = 'purging' WHERE id = ? AND status NOT IN ('purging', 'purged')")
-          .bind(id),
+          .prepare(
+            `UPDATE tenants SET status = 'purging'
+             WHERE id = ? AND purge_after IS NOT NULL AND purge_after < ? AND status NOT IN ('purging', 'purged')`,
+          )
+          .bind(id, now.toISOString()),
       ]);
       started += changes(update);
     }
@@ -154,7 +157,8 @@ async function reapStaleHostnames(
     await platformDb
       .prepare(
         `SELECT host, cf_custom_hostname_id FROM tenant_hosts
-         WHERE kind = 'custom' AND status = 'revoked' AND cf_custom_hostname_id IS NOT NULL LIMIT ?`,
+         WHERE kind = 'custom' AND status = 'revoked' AND cf_custom_hostname_id IS NOT NULL
+         ORDER BY revoked_at LIMIT ?`,
       )
       .bind(HOSTNAME_BATCH)
       .all<{ host: string; cf_custom_hostname_id: string }>()
@@ -168,6 +172,13 @@ async function reapStaleHostnames(
         .run();
     } catch (error) {
       console.error("platform-job-hostname-reap-failed", { host: row.host, error: String(error) });
+      // To the back of the queue: rows Cloudflare keeps refusing never hold
+      // every slot of the next run (`revoked_at` then reads "last attempt").
+      await platformDb
+        .prepare("UPDATE tenant_hosts SET revoked_at = ? WHERE host = ? AND status = 'revoked'")
+        .bind(now.toISOString(), row.host)
+        .run()
+        .catch(() => undefined);
     }
   }
   return claimed;
