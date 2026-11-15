@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { tenantKv, type ScopedKv } from "../../platform/keys.ts";
 import { jsonError, jsonOk } from "../../lib/api";
 import {
   STORE_CONFIG_CACHE_KEY,
@@ -28,7 +29,7 @@ const PUBLIC_CACHE_CONTROL =
 
 async function loadCachedStoreCodDisabledProvinceCodes(
   database: D1Database | undefined,
-  sessions: KVNamespace | undefined,
+  sessions: ScopedKv | undefined,
 ): Promise<string[]> {
   if (sessions) {
     try {
@@ -96,7 +97,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
   const runtimeEnv = getRuntimeEnv(locals);
   const database = tenantDatabase(locals);
-  const sessions = runtimeEnv?.SESSION as KVNamespace | undefined;
+  const tenantId = locals.tenantContext?.tenantId;
+  const sessions = tenantId ? tenantKv(runtimeEnv, tenantId) : undefined;
   const disabledCodes = await loadCachedStoreCodDisabledProvinceCodes(
     database,
     sessions,

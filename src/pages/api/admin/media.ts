@@ -1,13 +1,15 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
 import { getRuntimeEnv } from "../../../lib/env";
+import { tenantR2 } from "../../../platform/keys.ts";
 import { buildStorefrontMediaKey } from "../../../lib/storefront-media";
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const bucket = getRuntimeEnv(locals)?.ASSET_BUCKET;
-  if (!bucket || typeof bucket !== "object") {
+  const tenantId = locals.tenantContext?.tenantId;
+  const bucket = tenantId ? tenantR2(getRuntimeEnv(locals), tenantId) : undefined;
+  if (!bucket) {
     return jsonError("Penyimpanan media tenant belum tersedia.", 503);
   }
   try {
@@ -15,7 +17,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const file = form.get("file");
     if (!(file instanceof File)) return jsonError("File gambar wajib dipilih.", 400);
     const key = buildStorefrontMediaKey(file);
-    await (bucket as R2Bucket).put(key, await file.arrayBuffer(), {
+    await bucket.put(key, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type },
       customMetadata: {
         uploadedBy: locals.admin?.username || "unknown",

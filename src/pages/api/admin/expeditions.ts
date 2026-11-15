@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { jsonError, jsonOk } from '../../../lib/api.ts';
 import { getRuntimeEnv } from '../../../lib/env.ts';
 import { invalidateStoreConfigCache } from '../../../lib/store-config-cache.ts';
+import { tenantKv } from '../../../platform/keys.ts';
 import {
   parseProvinceCodeList,
   validateProvinceCodeList,
@@ -145,8 +146,9 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
       }
       // The public form-config endpoint caches this policy in KV. Drop it now
       // so the change is live immediately instead of after the cache TTL.
+      const tenantId = locals.tenantContext?.tenantId;
       await invalidateStoreConfigCache(
-        getRuntimeEnv(locals)?.SESSION as KVNamespace | undefined,
+        tenantId ? tenantKv(getRuntimeEnv(locals), tenantId) : undefined,
       );
       return jsonOk({
         message: 'Kebijakan wilayah COD berhasil disimpan.',

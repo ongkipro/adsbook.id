@@ -33,6 +33,7 @@
  * edge lifetime is internal. An admin edit shows within `EDGE_CACHE_SECONDS`.
  * Prices are never read from here: checkout validates them again server-side.
  */
+import { tenantCacheKey, type TenantScope } from "../platform/keys.ts";
 import { SESSION_COOKIE_NAME } from "./auth.ts";
 import { CLICK_ID_KEYS } from "./click-ids.ts";
 import { resolveProvinceCode } from "./geo.ts";
@@ -66,8 +67,13 @@ export function edgeCachePath(pathname: string): string | null {
   return match && !NOT_SHARED.has(match[1].toLowerCase()) ? path : null;
 }
 
-/** The cache key for this request, or null when it must not touch the cache. */
-export function edgeCacheRequest(request: Request, url: URL): Request | null {
+/**
+ * The cache key for this request, or null when it must not touch the cache.
+ * The key carries the tenant and its cache version (TEN-3, `tenantCacheKey`):
+ * a request with no resolved tenant never touches the cache.
+ */
+export function edgeCacheRequest(request: Request, url: URL, tenant: TenantScope | undefined): Request | null {
+  if (!tenant) return null;
   if (request.method !== "GET") return null;
   if (request.headers.get("authorization")) return null;
   if ((request.headers.get("cookie") ?? "").includes(`${SESSION_COOKIE_NAME}=`)) return null;
@@ -82,7 +88,7 @@ export function edgeCacheRequest(request: Request, url: URL): Request | null {
   if (url.search.length > 200) return null;
   const path = edgeCachePath(url.pathname);
   if (!path) return null;
-  const key = new URL(path, url.origin);
+  const key = new URL(tenantCacheKey(tenant, url.host, path));
   const kept = [...url.searchParams]
     .filter(([name]) => !TRACKING_PARAMS.has(name.toLowerCase()))
     .sort(([a], [b]) => a.localeCompare(b));
@@ -165,9 +171,10 @@ export const STAND_IN_HEADER = "X-Asset-Stand-In";
 const UPLOAD_CACHE_GENERATION = "2";
 
 /** The cache key for an upload; the query string never selects different bytes. */
-export function uploadCacheRequest(request: Request, url: URL): Request | null {
+export function uploadCacheRequest(request: Request, url: URL, tenant: TenantScope | undefined): Request | null {
+  if (!tenant) return null;
   if (request.method !== "GET" || !url.pathname.startsWith("/assets/uploads/")) return null;
-  const key = new URL(url.pathname, url.origin);
+  const key = new URL(tenantCacheKey(tenant, url.host, url.pathname));
   key.searchParams.set("__g", UPLOAD_CACHE_GENERATION);
   return new Request(key);
 }

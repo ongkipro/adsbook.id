@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
-import { getRuntimeEnv } from '../../lib/env';
-import { STAND_IN_HEADER } from '../../lib/edge-cache';
+import { getRuntimeEnv } from '../../lib/env.ts';
+import { tenantR2 } from '../../platform/keys.ts';
+import { STAND_IN_HEADER } from '../../lib/edge-cache.ts';
 
 export const prerender = false;
 
@@ -15,7 +16,9 @@ export const GET: APIRoute = async ({ params, locals }) => {
   const key = String(params.key || '');
   if (!SAFE_KEY.test(key)) return new Response('Not found', { status: 404 });
 
-  const bucket = getRuntimeEnv(locals)?.ASSET_BUCKET as R2Bucket | undefined;
+  // The tenant's own objects only (TEN-3): the URL key is tenant-relative.
+  const tenantId = locals.tenantContext?.tenantId;
+  const bucket = tenantId ? tenantR2(getRuntimeEnv(locals), tenantId) : undefined;
   if (!bucket) return new Response('Asset storage unavailable', { status: 503 });
 
   let object = await bucket.get(key);

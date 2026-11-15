@@ -62,6 +62,12 @@ test("T-45: no code outside src/platform reads a tenant value from the environme
   );
 });
 
+test("T-20: no code outside src/platform names the shared ASSET_BUCKET or SESSION binding", () => {
+  // TEN-3: an unprefixed key is a key another tenant can read or overwrite.
+  // keys.ts is the one place that adds the tenant (and lives in src/platform/).
+  assert.deepEqual(offenders(/\b(?:ASSET_BUCKET|SESSION)\b/), [], "use tenantR2 / tenantKv from src/platform/keys.ts");
+});
+
 test("the scan itself covers the code it guards", () => {
   assert.ok(SCANNED.includes("src/middleware.ts"));
   assert.ok(SCANNED.some((path) => path.startsWith("src/pages/api/v1/")));

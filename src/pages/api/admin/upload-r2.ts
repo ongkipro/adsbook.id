@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
 import { getRuntimeEnv } from "../../../lib/env";
+import { tenantR2 } from "../../../platform/keys.ts";
 import { checkRateLimit, getClientIp } from "../../../lib/rate-limit";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
@@ -43,8 +44,9 @@ const BASE_KEY =
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
-    const env = getRuntimeEnv(locals);
-    const bucket = env?.ASSET_BUCKET as R2Bucket | undefined;
+    // The tenant's own prefix (TEN-3); the returned URL stays tenant-relative.
+    const tenantId = locals.tenantContext?.tenantId;
+    const bucket = tenantId ? tenantR2(getRuntimeEnv(locals), tenantId) : undefined;
     if (!bucket) {
       return jsonError("Asset storage belum tersedia.", 503);
     }

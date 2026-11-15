@@ -2,6 +2,7 @@ import type { ExecutionContext, ExportedHandler } from "@cloudflare/workers-type
 import { handle } from "@astrojs/cloudflare/handler";
 // One SQLite Durable Object per tenant (ADR-039, TD-3); src/platform/tenant-db.ts opens it.
 export { TenantStore } from "./platform/tenant-store.ts";
+import { tenantKv } from "./platform/keys.ts";
 import { purgeExpiredAbandonedOrders } from "./lib/order-persistence.ts";
 import {
   alertsFromOperationalHealth,
@@ -193,7 +194,8 @@ export async function runTenantMaintenance(
   const alerts = await evaluateOperationalAlerts(
     alertsFromOperationalHealth(health),
     {
-      store: env.SESSION,
+      // The tenant's own alert state (TEN-3): one tenant's firing never mutes another's.
+      store: tenantKv(env, tenantId),
       // The platform's alert channel (a Worker secret), not a tenant value.
       webhookUrl: String(env.OPS_ALERT_WEBHOOK_URL ?? "").trim(),
       // No request here, so the tenant names itself from its own store.

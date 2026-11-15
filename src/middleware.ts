@@ -27,6 +27,7 @@ import { statePage } from './platform/state-pages';
 import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
 import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
+import { scopeFromLocals } from './platform/keys.ts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -224,7 +225,7 @@ export function createMiddleware(
   };
   // An uploaded image another visitor fetched is answered before the schema
   // check, the store lookup and the R2 read: it is the same bytes for everyone.
-  const uploadKey = uploadCacheRequest(context.request, url);
+  const uploadKey = uploadCacheRequest(context.request, url, scopeFromLocals(context.locals));
   if (uploadKey) {
     const hit = await readUploadCache(uploadKey);
     if (hit) return applySecurityHeaders(hit, false);
@@ -242,7 +243,7 @@ export function createMiddleware(
   // the last two minutes skips the schema check, the store lookup, the page's
   // D1 reads and the render. It sits after the gate, so no cache is read for a
   // host that has not resolved to an active tenant.
-  const edgeKey = edgeCacheRequest(context.request, url);
+  const edgeKey = edgeCacheRequest(context.request, url, scopeFromLocals(context.locals));
   if (edgeKey) {
     const hit = await readEdgeCache(edgeKey);
     if (hit) {
