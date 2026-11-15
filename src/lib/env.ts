@@ -7,6 +7,10 @@ try {
   // Fallback for non-Cloudflare environments (e.g. Node unit test runner)
 }
 
+/**
+ * The Worker's bindings. Tenant values never come from here (T-21, T-45):
+ * identity and provider credentials are rows in the tenant's own store.
+ */
 type EnvSource = CloudflareRuntimeEnv | Record<string, unknown> | null | undefined;
 
 function normalizeEnvValue(value: unknown) {
@@ -26,39 +30,6 @@ export function getRuntimeEnv(
     return localEnv;
   }
   return cloudflareEnv as unknown as Record<string, unknown>;
-}
-
-export function getEnvValue(key: string, env?: EnvSource) {
-  const runtimeValue = normalizeEnvValue(
-    (env as Record<string, unknown> | null | undefined)?.[key],
-  );
-  if (runtimeValue !== '') {
-    return runtimeValue;
-  }
-
-  try {
-    const buildValue = normalizeEnvValue(
-      (import.meta.env as Record<string, unknown> | undefined)?.[key]
-    );
-    if (buildValue !== '') {
-      return buildValue;
-    }
-  } catch {
-    // fallback
-  }
-
-  try {
-    const processValue = normalizeEnvValue(
-      typeof process !== 'undefined' ? process.env?.[key] : undefined
-    );
-    if (processValue !== '') {
-      return processValue;
-    }
-  } catch {
-    // fallback
-  }
-
-  return '';
 }
 
 /** Nothing of a secret this short may be shown. */

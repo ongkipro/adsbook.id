@@ -69,9 +69,9 @@ export function createOneWarehouseStore() {
     CREATE TABLE stores (
       id INTEGER PRIMARY KEY, name TEXT,
       mengantar_api_key TEXT, mengantar_base_url TEXT,
-      autolaris_api_key TEXT, autolaris_base_url TEXT
+      autolaris_api_key TEXT, autolaris_base_url TEXT, autolaris_order_origin_id TEXT, autolaris_order_destination_id TEXT, autolaris_shipper_email TEXT
     );
-    INSERT INTO stores VALUES (1, 'Toko', 'qa-key', 'https://mengantar.example.test', NULL, NULL);
+    INSERT INTO stores VALUES (1, 'Toko', 'qa-key', 'https://mengantar.example.test', NULL, NULL, NULL, NULL, NULL);
     CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT, is_active INTEGER);
     INSERT INTO products VALUES (1, 'Sepatu', 1);
     CREATE TABLE product_variants (id INTEGER PRIMARY KEY, product_id INTEGER, title TEXT, price INTEGER, weight_grams INTEGER);
@@ -701,18 +701,20 @@ test("headless checkout on a one-warehouse store with a city makes one rate call
   assert.equal(charged.warehouseId, before.warehouse?.id);
 });
 
-test("headless checkout on a store with no warehouse rows (env origin) makes one rate call", async (context) => {
+test("a store with no warehouse rows makes no rate call, even with an env origin set (T-45)", async (context) => {
   const requests = stubMengantar(context);
   const { sqlite, database } = createOneWarehouseStore();
   sqlite.exec("DELETE FROM warehouses");
   const envLocals = { runtimeEnv: { MENGANTAR_ORIGIN_AREA_ID: "area-bandung" } } as unknown as App.Locals;
-  const charged = await resolveTrustedHeadlessShipping(
-    { destination_id: "area-sby-0", courier_code: "SiCepat", courier_service_id: 1, city: "Kota Surabaya" },
-    headlessOrder,
-    (input) => resolveEligibleShippingRates(database, envLocals, input),
+  await assert.rejects(
+    resolveTrustedHeadlessShipping(
+      { destination_id: "area-sby-0", courier_code: "SiCepat", courier_service_id: 1, city: "Kota Surabaya" },
+      headlessOrder,
+      (input) => resolveEligibleShippingRates(database, envLocals, input),
+    ),
+    (error: Error & { code?: string }) => error.code === "SHIPPING_UNAVAILABLE",
   );
-  assert.equal(estimateOrigins(requests).length, 1);
-  assert.ok(charged.shippingCost > 0);
+  assert.equal(estimateOrigins(requests).length, 0, "an origin the tenant never saved was quoted");
 });
 
 test("headless checkout fails closed when the city warehouse's quote fails", async (context) => {

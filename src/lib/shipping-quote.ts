@@ -2,7 +2,6 @@ import {
   isCourierRateEnabled,
   type CourierAvailabilityRule,
 } from "./courier-rules.ts";
-import { getEnvValue, getRuntimeEnv } from "./env.ts";
 import { MengantarClient, type CourierRateResult } from "./mengantar-client.ts";
 import { getProviderConfig } from "./provider-config.ts";
 import { normalizeProvinceCode } from "./province.ts";
@@ -221,8 +220,6 @@ export async function resolveEligibleShippingRates(
 
   let originId =
     input.originId?.trim() || warehouse?.origin_area_id?.trim() || "";
-  const env = getRuntimeEnv(locals);
-  if (!originId) originId = getEnvValue("MENGANTAR_ORIGIN_AREA_ID", env) || "";
   const config = (await getProviderConfig(database, locals)).mengantar;
   if (!originId || !config.apiKey) {
     throw new ShippingQuoteError(
@@ -303,7 +300,7 @@ export async function resolveEligibleShippingRates(
       )
       .first<QuotedWarehouse>();
     const primaryOrigin =
-      primary?.origin_area_id?.trim() || getEnvValue("MENGANTAR_ORIGIN_AREA_ID", env) || "";
+      primary?.origin_area_id?.trim() || "";
     if (primary && primary.id !== warehouse.id && primaryOrigin) {
       console.warn("shipping-quote-primary-fallback", {
         warehouse_id: warehouse.id,

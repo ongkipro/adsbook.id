@@ -16,7 +16,7 @@ export const prerender = false;
 
 type Payload = {
   action?: "save" | "test" | "backfill";
-  /** null clears the stored pair and falls back to the env pair. */
+  /** null clears the stored pair, which turns the push off. */
   webhook_url?: string | null;
   /** Empty keeps the stored secret. */
   webhook_secret?: string;
@@ -24,7 +24,7 @@ type Payload = {
 
 /** The secret never leaves the server; the URL token is masked. */
 async function status(context: PluginContext) {
-  const config = getKelolaConfig(context.settings, context.env);
+  const config = getKelolaConfig(context.settings);
   return {
     configured: Boolean(config),
     source: config?.source ?? "none",
@@ -52,7 +52,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if (!body) return jsonError("Payload tidak valid.", 400);
 
   if (body.action === "test") {
-    const config = getKelolaConfig(context.settings, context.env);
+    const config = getKelolaConfig(context.settings);
     if (!config) return jsonError("Kelola CRM belum dihubungkan.", 400);
     const result = await testKelolaConnection(config);
     return result.ok
@@ -60,7 +60,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       : jsonError(result.message, 502, { verified: false });
   }
   if (body.action === "backfill") {
-    const config = getKelolaConfig(context.settings, context.env);
+    const config = getKelolaConfig(context.settings);
     if (!config) return jsonError("Kelola CRM belum dihubungkan.", 400);
     const synced = await drainKelolaOrders(context.database, config, null);
     const kelola = await status(context);

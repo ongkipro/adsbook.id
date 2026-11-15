@@ -36,6 +36,32 @@ test("no code outside src/platform reaches the TenantStore namespace", () => {
   assert.deepEqual(offenders(/\bTENANT_STORE\b/), [], "only src/platform/tenant-db.ts opens a tenant store");
 });
 
+/** Every provider value a single-tenant install read from Worker env. */
+const FORMER_PROVIDER_ENV = new RegExp(
+  `\\b(?:${[
+    "MENGANTAR_API_KEY", "MENGANTAR_BASE_URL", "MENGANTAR_ORIGIN_AREA_ID", "MENGANTAR_PICKUP_ADDRESS_ID",
+    "AUTOLARIS_API_KEY", "AUTOLARIS_BASE_URL", "AUTOLARIS_ORDER_ORIGIN_ID", "AUTOLARIS_ORDER_DESTINATION_ID",
+    "AUTOLARIS_SHIPPER_EMAIL", "KELOLA_ORDER_WEBHOOK_URL", "KELOLA_ORDER_WEBHOOK_SECRET",
+    "META_PIXEL_ID", "META_CAPI_ACCESS_TOKEN", "META_CAPI_TOKEN", "NEXT_PUBLIC_FB_PIXEL_ID", "PUBLIC_FB_PIXEL_ID",
+    "FB_PIXEL_ID", "NEXT_PUBLIC_GTM_ID", "PUBLIC_GTM_ID", "GTM_ID", "GOOGLE_ADS_CONVERSION_ID",
+    "GOOGLE_ADS_CONVERSION_LABEL", "GOOGLE_ADS_CUSTOMER_ID", "GOOGLE_ADS_OFFLINE_CONVERSION_ACTION_ID",
+    "GOOGLE_ADS_LOGIN_CUSTOMER_ID", "GOOGLE_ADS_DEVELOPER_TOKEN", "GOOGLE_ADS_CLIENT_ID",
+    "GOOGLE_ADS_CLIENT_SECRET", "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_OFFLINE_START_AT",
+  ].join("|")})\\b`,
+);
+
+test("T-45: no code outside src/platform reads a tenant value from the environment", () => {
+  // getEnvValue fell back to import.meta.env and process.env, and every
+  // provider credential once resolved through it: one Worker value for every
+  // tenant. A tenant value is a row in that tenant's store.
+  assert.deepEqual(offenders(/\bgetEnvValue\b|\bimport\.meta\.env\b/), [], "read the tenant's store instead");
+  assert.deepEqual(
+    offenders(FORMER_PROVIDER_ENV).filter((line) => !/^\S+:\d+: (?:\/\/|\*|\/\*)/.test(line)),
+    [],
+    "a provider env name outside a comment",
+  );
+});
+
 test("the scan itself covers the code it guards", () => {
   assert.ok(SCANNED.includes("src/middleware.ts"));
   assert.ok(SCANNED.some((path) => path.startsWith("src/pages/api/v1/")));

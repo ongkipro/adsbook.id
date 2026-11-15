@@ -28,6 +28,7 @@ import {
 import { MengantarClient } from "../../../lib/mengantar-client.ts";
 import {
   getProviderConfig,
+  parseAutoLarisOrderIdentity,
   resolveCredentialUpdate,
 } from "../../../lib/provider-config.ts";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
@@ -79,6 +80,9 @@ type SettingsPayload = {
     mengantar_base_url?: string;
     autolaris_api_key?: string | null;
     autolaris_base_url?: string;
+    autolaris_order_origin_id?: string;
+    autolaris_order_destination_id?: string;
+    autolaris_shipper_email?: string;
   };
   warehouse?: {
     name?: string;
@@ -264,6 +268,9 @@ async function credentialStatus(database: D1Database, locals: App.Locals) {
       api_key_configured: Boolean(config.autolaris.apiKey),
       api_key_masked: maskSecretValue(config.autolaris.apiKey),
       base_url: config.autolaris.baseUrl,
+      order_origin_id: config.autolaris.originId,
+      order_destination_id: config.autolaris.destinationId,
+      shipper_email: config.autolaris.shipperEmail,
       source: config.autolaris.source,
     },
   };
@@ -639,6 +646,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           400,
         );
       }
+      const orderIdentity = parseAutoLarisOrderIdentity({
+        originId: body.integrations?.autolaris_order_origin_id,
+        destinationId: body.integrations?.autolaris_order_destination_id,
+        shipperEmail: body.integrations?.autolaris_shipper_email,
+      });
+      if (!orderIdentity.ok) return jsonError(orderIdentity.error, 400);
 
       await db
         .prepare(
@@ -649,7 +662,10 @@ export const PUT: APIRoute = async ({ request, locals }) => {
             mengantar_base_url = ?,
             autolaris_api_key = CASE WHEN ? = 1 THEN NULL
               ELSE COALESCE(NULLIF(?, ''), autolaris_api_key) END,
-            autolaris_base_url = ?
+            autolaris_base_url = ?,
+            autolaris_order_origin_id = ?,
+            autolaris_order_destination_id = ?,
+            autolaris_shipper_email = ?
         WHERE id = ?
       `,
         )
@@ -660,6 +676,9 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           autolarisKey.clear ? 1 : 0,
           autolarisApiKey,
           autolarisBaseUrl,
+          orderIdentity.originId,
+          orderIdentity.destinationId,
+          orderIdentity.shipperEmail,
           current.store_id,
         )
         .run();

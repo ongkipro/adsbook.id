@@ -69,17 +69,8 @@ const providerBase = `http://127.0.0.1:${providerPort}`;
 mkdirSync(`${root}.wrangler`, { recursive: true });
 writeFileSync(envFile, "");
 
-// Passed as plain vars, not through the env file, so the stand-ins are visible
-// on the command line Wrangler logs.
-const providerVars = {
-  MENGANTAR_API_KEY: "dev",
-  MENGANTAR_BASE_URL: providerBase,
-  AUTOLARIS_API_KEY: "dev",
-  AUTOLARIS_BASE_URL: providerBase,
-  // AutoLaris' own area ids; any positive integers satisfy the stand-in.
-  AUTOLARIS_ORDER_ORIGIN_ID: "1",
-  AUTOLARIS_ORDER_DESTINATION_ID: "2",
-};
+// The provider stand-ins are a tenant's saved settings, not Worker env (T-45):
+// a seeded tenant stores this base URL and a dummy key in its own store.
 
 const worker = spawn(
   "npx",
@@ -89,7 +80,6 @@ const worker = spawn(
     ...(host ? ["--ip", host] : []),
     "--persist-to", stateDir,
     "--env-file", envFile,
-    ...Object.entries(providerVars).flatMap(([key, value]) => ["--var", `${key}:${value}`]),
     // Exposes /cdn-cgi/handler/scheduled?cron=7+*+*+*+* to run the hourly job by hand.
     "--test-scheduled",
     "--show-interactive-dev-session=false",

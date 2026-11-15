@@ -10,43 +10,10 @@ type R2Bucket = import("@cloudflare/workers-types/index.ts").R2Bucket;
 type Ai = import("@cloudflare/workers-types/index.ts").Ai;
 
 interface SharedEnvVars {
-  // No store identity, AUTH_SECRET or INSTALL_TOKEN here (T-21): each is a row
-  // in the tenant's own store. Provider keys below leave with T-45.
-  MENGANTAR_API_KEY?: string;
-  /** Optional per-install HTTPS endpoint for redacted operational alerts. */
+  // No store identity, AUTH_SECRET, INSTALL_TOKEN (T-21) or provider credential
+  // (T-45) here: each is a row in the tenant's own store.
+  /** The platform's HTTPS endpoint for redacted operational alerts (a Worker secret). */
   OPS_ALERT_WEBHOOK_URL?: string;
-  /** Kelola plugin fallback webhook pair; used only while the plugin is active (ADR-028). */
-  KELOLA_ORDER_WEBHOOK_URL?: string;
-  KELOLA_ORDER_WEBHOOK_SECRET?: string;
-  MENGANTAR_ORIGIN_AREA_ID?: string;
-  MENGANTAR_PICKUP_ADDRESS_ID?: string;
-  AUTOLARIS_API_KEY?: string;
-  /** Numeric AutoLaris area ids used only by the `/submit` dashboard-order mirror. */
-  AUTOLARIS_ORDER_ORIGIN_ID?: string;
-  AUTOLARIS_ORDER_DESTINATION_ID?: string;
-  /** Optional provider-required shipper email; buyer email is the fallback. */
-  AUTOLARIS_SHIPPER_EMAIL?: string;
-  AUTOLARIS_BASE_URL?: string;
-  META_PIXEL_ID?: string;
-  META_CAPI_ACCESS_TOKEN?: string;
-  META_CAPI_TOKEN?: string;
-  NEXT_PUBLIC_FB_PIXEL_ID?: string;
-  PUBLIC_FB_PIXEL_ID?: string;
-  FB_PIXEL_ID?: string;
-  GOOGLE_ADS_CONVERSION_ID?: string;
-  GOOGLE_ADS_CONVERSION_LABEL?: string;
-  NEXT_PUBLIC_GTM_ID?: string;
-  PUBLIC_GTM_ID?: string;
-  GTM_ID?: string;
-  GOOGLE_ADS_CUSTOMER_ID?: string;
-  GOOGLE_ADS_OFFLINE_CONVERSION_ACTION_ID?: string;
-  GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
-  GOOGLE_ADS_DEVELOPER_TOKEN?: string;
-  GOOGLE_ADS_CLIENT_ID?: string;
-  GOOGLE_ADS_CLIENT_SECRET?: string;
-  GOOGLE_ADS_REFRESH_TOKEN?: string;
-  /** ISO timestamp; prevents accidental historical conversion backfill. */
-  GOOGLE_ADS_OFFLINE_START_AT?: string;
 }
 
 interface CloudflareRuntimeEnv extends SharedEnvVars {

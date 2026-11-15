@@ -4,13 +4,16 @@ import {
   getStoreAdsConfig,
   hasValidGoogleAdsConversion,
 } from "./store-ads.ts";
+import { sendMetaCapiEvent } from "./meta-capi.ts";
 
 /**
  * Audit 2026-08-23 §2.6: this module resolves the pixel id, CAPI token and
  * Google identifiers every tracking path depends on, and a silent
- * misresolution disables tracking store-wide without failing loudly. These
- * tests pin the resolution order and the failure behaviour rather than the
- * shape of the row.
+ * misresolution disables tracking store-wide without failing loudly.
+ *
+ * T-45: the tenant's own row is the only source. A Worker env value would put
+ * every tenant's buyers into one ad account, so each test sets every former
+ * env name (in `runtimeEnv` and `process.env`) and asserts none is used.
  */
 
 type StoreRow = Record<string, string | null> | null;
@@ -28,30 +31,24 @@ function storeDatabase(row: StoreRow, options: { throws?: boolean } = {}) {
   } as unknown as D1Database;
 }
 
-/**
- * `getEnvValue` falls back to `process.env`, and `wrangler.jsonc` declares
- * these very names as dev secrets loaded from the shell — so a developer who
- * exported one to run `wrangler dev` would otherwise fail this suite. Every
- * test states its whole environment through `runtimeEnv`; nothing may leak in.
- */
-const ADS_ENV_KEYS = [
-  "NEXT_PUBLIC_FB_PIXEL_ID",
-  "PUBLIC_FB_PIXEL_ID",
-  "FB_PIXEL_ID",
-  "META_PIXEL_ID",
-  "META_CAPI_ACCESS_TOKEN",
-  "META_CAPI_TOKEN",
-  "PUBLIC_GTM_ID",
-  "GTM_ID",
-  "GOOGLE_ADS_CONVERSION_ID",
-  "GOOGLE_ADS_CONVERSION_LABEL",
-] as const;
+const PLATFORM_ENV = {
+  NEXT_PUBLIC_FB_PIXEL_ID: "999999999999991",
+  PUBLIC_FB_PIXEL_ID: "999999999999992",
+  FB_PIXEL_ID: "999999999999993",
+  META_PIXEL_ID: "999999999999994",
+  META_CAPI_ACCESS_TOKEN: "env-capi-token",
+  META_CAPI_TOKEN: "env-capi-token-2",
+  PUBLIC_GTM_ID: "GTM-ENVONLY",
+  GTM_ID: "GTM-ENVONLY2",
+  GOOGLE_ADS_CONVERSION_ID: "AW-999999999",
+  GOOGLE_ADS_CONVERSION_LABEL: "env-label",
+};
 
-function withoutAdsSecrets(context: { after: (fn: () => void) => void }) {
+function withPlatformEnv(context: { after: (fn: () => void) => void }) {
   const saved = new Map<string, string | undefined>();
-  for (const key of ADS_ENV_KEYS) {
+  for (const [key, value] of Object.entries(PLATFORM_ENV)) {
     saved.set(key, process.env[key]);
-    delete process.env[key];
+    process.env[key] = value;
   }
   context.after(() => {
     for (const [key, value] of saved) {
@@ -69,18 +66,22 @@ const CONFIGURED_ROW = {
   google_ads_conversion_label: "db-label",
 };
 
-test("the store's own configuration wins over a leftover Worker secret", async (context) => {
-  withoutAdsSecrets(context);
+const UNCONFIGURED = {
+  metaPixelId: "",
+  metaCapiToken: "",
+  googleTagManagerId: "",
+  googleAdsConversionId: "",
+  googleAdsConversionLabel: "",
+  metaPixelSource: "none",
+  metaCapiSource: "none",
+  googleTagManagerSource: "none",
+  googleAdsConversionSource: "none",
+};
+
+test("a configured tenant resolves exactly its own row", async (context) => {
+  withPlatformEnv(context);
   const config = await getStoreAdsConfig({
-    tenantDb: storeDatabase(CONFIGURED_ROW), runtimeEnv: {
-      // A stale deploy-time secret from another store must never override what
-      // this store set in its dashboard.
-      META_PIXEL_ID: "999999999999999",
-      META_CAPI_ACCESS_TOKEN: "env-capi-token",
-      GTM_ID: "GTM-ENVONLY",
-      GOOGLE_ADS_CONVERSION_ID: "AW-999999999",
-      GOOGLE_ADS_CONVERSION_LABEL: "env-label",
-    },
+    tenantDb: storeDatabase(CONFIGURED_ROW), runtimeEnv: PLATFORM_ENV,
   } as never);
 
   assert.deepEqual(config, {
@@ -96,120 +97,83 @@ test("the store's own configuration wins over a leftover Worker secret", async (
   });
 });
 
-test("a store row that leaves a field blank falls through to the environment", async (context) => {
-  withoutAdsSecrets(context);
-  const config = await getStoreAdsConfig({
-    tenantDb: storeDatabase({
-        ...CONFIGURED_ROW,
-        meta_capi_token: "",
-        google_tag_manager_id: null,
-      }), runtimeEnv: {
-      META_CAPI_ACCESS_TOKEN: "env-capi-token",
-      GTM_ID: "GTM-ENVONLY",
-    },
-  } as never);
-
-  assert.equal(config.metaPixelId, "111111111111111");
-  assert.equal(config.metaCapiToken, "env-capi-token");
-  assert.equal(config.googleTagManagerId, "GTM-ENVONLY");
-  assert.equal(config.metaCapiSource, "environment");
-  assert.equal(config.googleTagManagerSource, "environment");
+test("a tenant without settings is unconfigured even with every platform env value set (T-45)", async (context) => {
+  withPlatformEnv(context);
+  for (const row of [null, {}, { meta_pixel_id: "", meta_capi_token: null }] as StoreRow[]) {
+    const config = await getStoreAdsConfig({ tenantDb: storeDatabase(row), runtimeEnv: PLATFORM_ENV } as never);
+    assert.deepEqual(config, UNCONFIGURED, JSON.stringify(row));
+  }
 });
 
-test("Google Ads direct conversion requires a valid complete destination", async (context) => {
-  withoutAdsSecrets(context);
+test("a blank field stays blank: no field is filled from the environment", async (context) => {
+  withPlatformEnv(context);
+  const config = await getStoreAdsConfig({
+    tenantDb: storeDatabase({ ...CONFIGURED_ROW, meta_capi_token: "", google_tag_manager_id: null }),
+    runtimeEnv: PLATFORM_ENV,
+  } as never);
+  assert.equal(config.metaPixelId, "111111111111111");
+  assert.equal(config.metaCapiToken, "");
+  assert.equal(config.metaCapiSource, "none");
+  assert.equal(config.googleTagManagerId, "");
+});
+
+test("a failed store read is an unconfigured tenant, not an env fallback", async (context) => {
+  withPlatformEnv(context);
+  const config = await getStoreAdsConfig({
+    tenantDb: storeDatabase(null, { throws: true }), runtimeEnv: PLATFORM_ENV,
+  } as never);
+  assert.deepEqual(config, UNCONFIGURED);
+});
+
+test("Google Ads direct conversion requires a valid complete destination from the row", async (context) => {
+  withPlatformEnv(context);
   assert.equal(hasValidGoogleAdsConversion("AW-111111111", "valid_label-1"), true);
   assert.equal(hasValidGoogleAdsConversion("AW-111111111", ""), false);
   assert.equal(hasValidGoogleAdsConversion("G-111111111", "valid_label-1"), false);
   assert.equal(hasValidGoogleAdsConversion("AW-111111111", "not valid"), false);
 
-  const config = await getStoreAdsConfig({
-    tenantDb: storeDatabase(null), runtimeEnv: {
-      GOOGLE_ADS_CONVERSION_ID: "AW-111111111",
-      GOOGLE_ADS_CONVERSION_LABEL: "not valid",
-    },
+  const halfSet = await getStoreAdsConfig({
+    tenantDb: storeDatabase({ ...CONFIGURED_ROW, google_ads_conversion_label: null }), runtimeEnv: PLATFORM_ENV,
   } as never);
-  assert.equal(config.googleAdsConversionId, "");
-  assert.equal(config.googleAdsConversionLabel, "");
+  assert.equal(halfSet.googleAdsConversionId, "");
+  assert.equal(halfSet.googleAdsConversionLabel, "");
+  assert.equal(halfSet.googleAdsConversionSource, "none");
 });
 
-test("every documented pixel alias resolves, so one spelling does not silently disable tracking", async (context) => {
-  withoutAdsSecrets(context);
-  const aliases = [
-    "NEXT_PUBLIC_FB_PIXEL_ID",
-    "PUBLIC_FB_PIXEL_ID",
-    "FB_PIXEL_ID",
-    "META_PIXEL_ID",
-  ];
-
-  for (const alias of aliases) {
-    const config = await getStoreAdsConfig({
-      tenantDb: storeDatabase(null), runtimeEnv: { [alias]: "222222222222222" },
-    } as never);
-    assert.equal(config.metaPixelId, "222222222222222", `alias ${alias}`);
-  }
-});
-
-test("the first pixel alias wins when several are set", async (context) => {
-  withoutAdsSecrets(context);
+/**
+ * A-226, decided in T-45: a tenant with a pixel id and no CAPI token keeps its
+ * browser pixel (the seller's ads still see PageView/Purchase from the browser
+ * leg), and the server leg sends nothing — `meta-not-configured`, which the
+ * Purchase path already records and the health panel reports as Meta CAPI not
+ * configured. It never borrows a platform token.
+ */
+test("A-226: pixel without a CAPI token keeps the browser pixel and sends no server event", async (context) => {
+  withPlatformEnv(context);
   const config = await getStoreAdsConfig({
-    tenantDb: storeDatabase(null), runtimeEnv: {
-      NEXT_PUBLIC_FB_PIXEL_ID: "111",
-      PUBLIC_FB_PIXEL_ID: "222",
-      FB_PIXEL_ID: "333",
-      META_PIXEL_ID: "444",
-    },
+    tenantDb: storeDatabase({ meta_pixel_id: "111111111111111", meta_capi_token: null }),
+    runtimeEnv: PLATFORM_ENV,
   } as never);
-  assert.equal(config.metaPixelId, "111");
-});
-
-test("a failed store read degrades to the environment instead of throwing", async (context) => {
-  withoutAdsSecrets(context);
-  // The read is wrapped in a bare catch, so a schema problem must not take the
-  // tracking path down with it — but it must also not invent a value.
-  const config = await getStoreAdsConfig({
-    tenantDb: storeDatabase(null, { throws: true }), runtimeEnv: {
-      META_PIXEL_ID: "333333333333333",
-      META_CAPI_ACCESS_TOKEN: "env-capi-token",
-    },
-  } as never);
-
-  assert.equal(config.metaPixelId, "333333333333333");
-  assert.equal(config.metaCapiToken, "env-capi-token");
-});
-
-test("an unconfigured store resolves to empty values with explicit sources", async (context) => {
-  withoutAdsSecrets(context);
-  // Callers gate on truthiness and interpolate these into tag payloads; a
-  // literal "undefined" pixel id would be worse than none.
-  const config = await getStoreAdsConfig({
-    tenantDb: storeDatabase(null), runtimeEnv: {},
-  } as never);
-
-  assert.equal(config.metaPixelId, "");
+  assert.equal(config.metaPixelId, "111111111111111", "the browser pixel still loads");
   assert.equal(config.metaCapiToken, "");
-  assert.equal(config.googleTagManagerId, "");
-  assert.equal(config.googleAdsConversionId, "");
-  assert.equal(config.googleAdsConversionLabel, "");
-  assert.equal(config.metaPixelSource, "none");
-  assert.equal(config.metaCapiSource, "none");
-  assert.equal(config.googleTagManagerSource, "none");
-  assert.equal(config.googleAdsConversionSource, "none");
-});
 
-test("Google Ads destination never mixes a database ID with an environment label", async (context) => {
-  withoutAdsSecrets(context);
-  const config = await getStoreAdsConfig({
-    tenantDb: storeDatabase({
-        ...CONFIGURED_ROW,
-        google_ads_conversion_id: "AW-111111111",
-        google_ads_conversion_label: null,
-      }), runtimeEnv: {
-      GOOGLE_ADS_CONVERSION_ID: "AW-999999999",
-      GOOGLE_ADS_CONVERSION_LABEL: "env-label",
-    },
-  } as never);
-  assert.equal(config.googleAdsConversionId, "AW-999999999");
-  assert.equal(config.googleAdsConversionLabel, "env-label");
-  assert.equal(config.googleAdsConversionSource, "environment");
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    calls.push(String(input));
+    return new Response("{}");
+  }) as typeof fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const result = await sendMetaCapiEvent(
+    "Purchase",
+    "INV-10001",
+    "https://toko-a.belanja.cc/thanks",
+    { clientIp: "203.0.113.1", userAgent: "test" },
+    { orderNumber: "INV-10001", value: 100000, currency: "IDR" },
+    config.metaPixelId,
+    config.metaCapiToken,
+  );
+  assert.deepEqual(result, { success: false, reason: "meta-not-configured" });
+  assert.deepEqual(calls, [], "no request to Meta without the tenant's own token");
 });

@@ -13,7 +13,6 @@ import {
   type PaymentFeeBearer,
 } from "./payment-fee-policy.ts";
 import { getProviderConfig } from "./provider-config.ts";
-import { getEnvValue, getRuntimeEnv } from "./env.ts";
 import { buildPaymentNotification, recordNotification } from "./notifications.ts";
 
 export type AutoLarisPaymentRecord = {
@@ -816,7 +815,6 @@ export async function createAutoLarisPaymentForOrder(
   }
 
   try {
-    const env = getRuntimeEnv(locals);
     const customerEmail = buyerEmail(
       order.customer_email,
       order.customer_phone,
@@ -829,8 +827,8 @@ export async function createAutoLarisPaymentForOrder(
       reffId: referenceId,
       channelCode: input.channelCode,
       courirId: 1,
-      origin: getEnvValue("AUTOLARIS_ORDER_ORIGIN_ID", env),
-      destination: getEnvValue("AUTOLARIS_ORDER_DESTINATION_ID", env),
+      origin: config.originId,
+      destination: config.destinationId,
       weight: Math.max(
         1,
         items.reduce(
@@ -846,7 +844,7 @@ export async function createAutoLarisPaymentForOrder(
         order.warehouse_contact_name || order.warehouse_name || order.store_name,
       shipperPhone: order.warehouse_contact_phone || order.customer_phone,
       shipperEmail:
-        getEnvValue("AUTOLARIS_SHIPPER_EMAIL", env) || customerEmail,
+        config.shipperEmail || customerEmail,
       shipperAddress: [
         order.warehouse_address,
         order.warehouse_city,

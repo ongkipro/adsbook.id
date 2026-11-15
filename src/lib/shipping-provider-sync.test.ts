@@ -76,7 +76,7 @@ class ShippingSyncDatabase {
         mengantar_api_key TEXT,
         mengantar_base_url TEXT,
         autolaris_api_key TEXT,
-        autolaris_base_url TEXT
+        autolaris_base_url TEXT, autolaris_order_origin_id TEXT, autolaris_order_destination_id TEXT, autolaris_shipper_email TEXT
       );
       CREATE TABLE product_variants (id INTEGER PRIMARY KEY, stock INTEGER);
       CREATE TABLE orders (

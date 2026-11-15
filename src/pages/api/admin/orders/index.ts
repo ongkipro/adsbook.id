@@ -2,7 +2,6 @@ import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../../lib/api.ts';
 import { CRM_BANK_ACCOUNTS_SQL, CRM_STORE_SQL, crmStoreContext, formatBankAccount } from '../../../../lib/crm-template.ts';
 import { buyerLinkOrigin, buyerOrderLinks } from '../../../../lib/payment-switch.ts';
-import { getRuntimeEnv } from '../../../../lib/env.ts';
 import { shippingStatusLabel } from '../../../../lib/shipping-status.ts';
 import { readOrderFollowUpsFor, type OrderFollowUp } from '../../../../lib/order-follow-up.ts';
 import { dispatchOrderToMengantar } from '../../../../lib/mengantar-dispatch.ts';
@@ -324,9 +323,6 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
         Number(row.count) || 0,
       ]),
     );
-    const fallbackPickupAddressId = String(
-      getRuntimeEnv(locals)?.MENGANTAR_PICKUP_ADDRESS_ID || '',
-    ).trim();
 
     const rows = (rowResult.results ?? []) as OrderRow[];
     const prefetch = request?.headers.get(ORDER_LIST_PREFETCH_HEADER) === '1';
@@ -356,7 +352,7 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
           providerDispatchClaimedAt: row.provider_dispatch_claimed_at,
           destinationAreaId: row.destination_area_id,
           courierCode: row.courier_code,
-          pickupAddressId: row.pickup_address_id || fallbackPickupAddressId,
+          pickupAddressId: row.pickup_address_id || '',
         });
         return {
           id: row.id,

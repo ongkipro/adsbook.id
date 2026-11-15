@@ -124,11 +124,13 @@ export async function sendMetaCapiEvent(
   const fbp = cleanRawSignal(userData.fbp);
   const fbc = cleanRawSignal(userData.fbc);
   const orderNumber = cleanRawSignal(customData.orderNumber);
-  const targetPixelId = pixelId || import.meta.env.META_PIXEL_ID;
-  const targetToken = accessToken || import.meta.env.META_CAPI_ACCESS_TOKEN;
+  // The tenant's own pair only (T-45): a build-time env pixel would put every
+  // tenant's buyers into one ad account.
+  const targetPixelId = pixelId?.trim() || '';
+  const targetToken = accessToken?.trim() || '';
 
   if (!targetPixelId || !targetToken) {
-    return { success: false, reason: 'META_PIXEL_ID or META_CAPI_ACCESS_TOKEN not set' };
+    return { success: false, reason: 'meta-not-configured' };
   }
 
   const [ph, em, fn, ln, ct, st, zp, country, external_id] = await Promise.all([

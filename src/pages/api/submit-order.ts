@@ -12,7 +12,6 @@ import {
   isCodBlockedForProvince,
   loadStoreCodDisabledProvinceCodes,
 } from "../../lib/form-mode";
-import { getEnvValue, getRuntimeEnv } from "../../lib/env";
 import { buyerEmail } from "../../lib/autolaris-payment";
 import {
   checkRateLimit,
@@ -158,11 +157,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           .prepare("SELECT address FROM warehouses ORDER BY id LIMIT 1")
           .first<{ address: string | null }>(),
       ]);
-      const env = getRuntimeEnv(locals);
       const gap = autoLarisOrderRailGap({
         apiKey: provider.apiKey,
-        originId: getEnvValue("AUTOLARIS_ORDER_ORIGIN_ID", env),
-        destinationId: getEnvValue("AUTOLARIS_ORDER_DESTINATION_ID", env),
+        originId: provider.originId,
+        destinationId: provider.destinationId,
         warehouseAddress: warehouse?.address,
       });
       if (gap || store?.is_autolaris_enabled === 0) {

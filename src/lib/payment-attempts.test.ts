@@ -20,8 +20,9 @@ function store() {
   }
   const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   sqlite.exec(`
-    INSERT INTO stores (id, name, slug, created_at, autolaris_api_key, autolaris_base_url)
-      VALUES (1, 'Toko', 'toko', '2026-01-01', 'qa-key', 'https://autolaris.example.test');
+    INSERT INTO stores (id, name, slug, created_at, autolaris_api_key, autolaris_base_url,
+        autolaris_order_origin_id, autolaris_order_destination_id)
+      VALUES (1, 'Toko', 'toko', '2026-01-01', 'qa-key', 'https://autolaris.example.test', '3517100', '3518010');
     INSERT INTO admin_credentials (id, username, password_hash, role, updated_at)
       VALUES (10, 'owner.one', 'x', 'owner', '2026-01-01');
     INSERT INTO warehouses (id, store_id, name, origin_area_id, pickup_address_id, address, city, province, contact_name, contact_phone)
@@ -75,7 +76,6 @@ function store() {
 
 const locals = {
   tenant: { ...defaultTenantConfig, siteUrl: "https://store.example.test" },
-  runtimeEnv: { AUTOLARIS_ORDER_ORIGIN_ID: "3517100", AUTOLARIS_ORDER_DESTINATION_ID: "3518010" },
   cfContext: { waitUntil() {} } as App.Locals["cfContext"],
 } as App.Locals;
 

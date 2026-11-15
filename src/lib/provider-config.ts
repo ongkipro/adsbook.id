@@ -1,5 +1,3 @@
-import { getEnvValue, getRuntimeEnv } from "./env.ts";
-
 export const DEFAULT_MENGANTAR_BASE_URL = "https://api-public.mengantar.com";
 export const DEFAULT_AUTOLARIS_BASE_URL = "https://api-h2h.autolaris.com";
 
@@ -8,18 +6,31 @@ type ProviderConfigRow = {
   mengantar_base_url: string | null;
   autolaris_api_key: string | null;
   autolaris_base_url: string | null;
+  autolaris_order_origin_id: string | null;
+  autolaris_order_destination_id: string | null;
+  autolaris_shipper_email: string | null;
 };
 
+/**
+ * A tenant's provider credentials: what that tenant saved, nothing else
+ * (T-45, TEN-4). There is no Worker env fallback — one env key would be every
+ * tenant's account. `none` means not configured, and nothing is sent.
+ */
 export type ProviderConfig = {
   mengantar: {
     apiKey: string;
     baseUrl: string;
-    source: "dashboard" | "server" | "none";
+    source: "dashboard" | "none";
   };
   autolaris: {
     apiKey: string;
     baseUrl: string;
-    source: "dashboard" | "server" | "none";
+    /** The account's `courir_id: 1` area pair for Create Order (`/submit`). */
+    originId: string;
+    destinationId: string;
+    /** Optional; the buyer's email is the fallback. */
+    shipperEmail: string;
+    source: "dashboard" | "none";
   };
 };
 
@@ -29,11 +40,8 @@ const clean = (value: string | null | undefined) => value?.trim() || "";
  * How a submitted provider credential should change the stored value.
  *
  * An empty submission keeps whatever is stored, so an operator can save the
- * base URL without retyping a secret. That made a stored credential permanent:
- * `/admin/profile` could overwrite it but never remove it, and because the
- * database value wins over the deployed Worker secret, one wrong key kept a
- * live store from quoting shipping with no way out of the admin. An explicit
- * `null` now means clear, which is what falls the install back to its secret.
+ * base URL without retyping a secret. An explicit `null` means clear, which
+ * leaves the provider not configured.
  */
 export function resolveCredentialUpdate(raw: unknown): {
   clear: boolean;
@@ -43,50 +51,39 @@ export function resolveCredentialUpdate(raw: unknown): {
   return { clear: false, value: typeof raw === "string" ? raw.trim() : "" };
 }
 
+// lazy: `_locals` is unused since T-45 and kept so the fifteen callers outside
+// this task's paths stay untouched; drop it with the next sweep of those files.
 export async function getProviderConfig(
   database: D1Database,
-  locals?: App.Locals,
+  _locals?: App.Locals,
 ): Promise<ProviderConfig> {
   const row = await database
     .prepare(
       `
-    SELECT mengantar_api_key, mengantar_base_url, autolaris_api_key, autolaris_base_url
+    SELECT mengantar_api_key, mengantar_base_url, autolaris_api_key, autolaris_base_url,
+      autolaris_order_origin_id, autolaris_order_destination_id, autolaris_shipper_email
     FROM stores
     ORDER BY id
     LIMIT 1
   `,
     )
     .first<ProviderConfigRow>();
-  const env = getRuntimeEnv(locals);
-  const mengantarDbKey = clean(row?.mengantar_api_key);
-  const autolarisDbKey = clean(row?.autolaris_api_key);
-  const mengantarEnvKey = getEnvValue("MENGANTAR_API_KEY", env);
-  const autolarisEnvKey = getEnvValue("AUTOLARIS_API_KEY", env);
+  const mengantarKey = clean(row?.mengantar_api_key);
+  const autolarisKey = clean(row?.autolaris_api_key);
 
   return {
     mengantar: {
-      apiKey: mengantarDbKey || mengantarEnvKey,
-      baseUrl:
-        clean(row?.mengantar_base_url) ||
-        getEnvValue("MENGANTAR_BASE_URL", env) ||
-        DEFAULT_MENGANTAR_BASE_URL,
-      source: mengantarDbKey
-        ? "dashboard"
-        : mengantarEnvKey
-          ? "server"
-          : "none",
+      apiKey: mengantarKey,
+      baseUrl: clean(row?.mengantar_base_url) || DEFAULT_MENGANTAR_BASE_URL,
+      source: mengantarKey ? "dashboard" : "none",
     },
     autolaris: {
-      apiKey: autolarisDbKey || autolarisEnvKey,
-      baseUrl:
-        clean(row?.autolaris_base_url) ||
-        getEnvValue("AUTOLARIS_BASE_URL", env) ||
-        DEFAULT_AUTOLARIS_BASE_URL,
-      source: autolarisDbKey
-        ? "dashboard"
-        : autolarisEnvKey
-          ? "server"
-          : "none",
+      apiKey: autolarisKey,
+      baseUrl: clean(row?.autolaris_base_url) || DEFAULT_AUTOLARIS_BASE_URL,
+      originId: clean(row?.autolaris_order_origin_id),
+      destinationId: clean(row?.autolaris_order_destination_id),
+      shipperEmail: clean(row?.autolaris_shipper_email),
+      source: autolarisKey ? "dashboard" : "none",
     },
   };
 }
@@ -114,4 +111,39 @@ export function autoLarisOrderRailGap(input: {
   }
   if (!input.warehouseAddress?.trim()) return "Alamat gudang belum diatur.";
   return null;
+}
+
+/**
+ * The AutoLaris order identity an owner submits from /admin/profile: the
+ * `courir_id: 1` area pair (positive integers, both or neither) and an
+ * optional shipper email. Empty clears a field, which closes the QRIS/VA rail
+ * (`autoLarisOrderRailGap`) rather than sending a half-filled order.
+ */
+export function parseAutoLarisOrderIdentity(input: {
+  originId?: unknown;
+  destinationId?: unknown;
+  shipperEmail?: unknown;
+}):
+  | { ok: true; originId: string | null; destinationId: string | null; shipperEmail: string | null }
+  | { ok: false; error: string } {
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  const originId = text(input.originId);
+  const destinationId = text(input.destinationId);
+  const shipperEmail = text(input.shipperEmail).toLowerCase();
+  const areaId = (value: string) => /^\d{1,20}$/.test(value) && Number(value) > 0;
+  if (Boolean(originId) !== Boolean(destinationId)) {
+    return { ok: false, error: "Isi area origin dan destination AutoLaris bersamaan, atau kosongkan keduanya." };
+  }
+  if (originId && (!areaId(originId) || !areaId(destinationId))) {
+    return { ok: false, error: "Area origin/destination AutoLaris harus berupa ID angka positif." };
+  }
+  if (shipperEmail && (shipperEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(shipperEmail))) {
+    return { ok: false, error: "Email pengirim AutoLaris tidak valid." };
+  }
+  return {
+    ok: true,
+    originId: originId || null,
+    destinationId: destinationId || null,
+    shipperEmail: shipperEmail || null,
+  };
 }

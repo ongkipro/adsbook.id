@@ -98,7 +98,7 @@ class ReconciliationDatabase {
       CREATE TABLE stores (
         id INTEGER PRIMARY KEY,
         mengantar_api_key TEXT, mengantar_base_url TEXT,
-        autolaris_api_key TEXT, autolaris_base_url TEXT
+        autolaris_api_key TEXT, autolaris_base_url TEXT, autolaris_order_origin_id TEXT, autolaris_order_destination_id TEXT, autolaris_shipper_email TEXT
       );
       CREATE TABLE admin_credentials (
         id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, role TEXT NOT NULL
@@ -117,7 +117,7 @@ class ReconciliationDatabase {
         total_amount INTEGER NOT NULL, expires_at TEXT, paid_at TEXT,
         failed_reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
       );
-      INSERT INTO stores VALUES (1, NULL, NULL, 'qa-key', 'https://autolaris.example.test');
+      INSERT INTO stores VALUES (1, NULL, NULL, 'qa-key', 'https://autolaris.example.test', NULL, NULL, NULL);
       INSERT INTO admin_credentials VALUES (10, 'owner.one', 'owner');
       INSERT INTO admin_credentials VALUES (11, 'admin.one', 'admin');
       INSERT INTO admin_credentials VALUES (12, 'cs.one', 'customer_service');

@@ -17,7 +17,11 @@ import {
   AUTOLARIS_EXPIRED_RECHECK_HOURS,
 } from "./autolaris-payment.ts";
 
-function createAutoLarisOrderDatabase(autoLarisApiKey: string | null, paymentFeeBearer: "buyer" | "seller" = "seller") {
+function createAutoLarisOrderDatabase(
+  autoLarisApiKey: string | null,
+  paymentFeeBearer: "buyer" | "seller" = "seller",
+  areaIds: { origin: string | null; destination: string | null } = { origin: "3517100", destination: "3518010" },
+) {
   const state = {
     transaction: null as null | Record<string, unknown>,
   };
@@ -71,6 +75,9 @@ function createAutoLarisOrderDatabase(autoLarisApiKey: string | null, paymentFee
               mengantar_base_url: null,
               autolaris_api_key: autoLarisApiKey,
               autolaris_base_url: "https://autolaris.example.test",
+              autolaris_order_origin_id: areaIds.origin,
+              autolaris_order_destination_id: areaIds.destination,
+              autolaris_shipper_email: null,
             };
           }
           throw new Error(`Unexpected first query: ${sql}`);
@@ -158,10 +165,6 @@ function createAutoLarisOrderDatabase(autoLarisApiKey: string | null, paymentFee
 
 const QA_LOCALS = {
   tenant: { ...defaultTenantConfig, siteUrl: "https://store.example.test" },
-  runtimeEnv: {
-    AUTOLARIS_ORDER_ORIGIN_ID: "3517100",
-    AUTOLARIS_ORDER_DESTINATION_ID: "3518010",
-  },
   cfContext: { waitUntil() {} } as App.Locals["cfContext"],
 } as App.Locals;
 
@@ -313,15 +316,16 @@ test("Create Order fails before fetch when AutoLaris mirror area ids are missing
   context.after(() => {
     globalThis.fetch = originalFetch;
   });
-  const { database } = createAutoLarisOrderDatabase("qa-key");
+  const { database } = createAutoLarisOrderDatabase("qa-key", "seller", { origin: null, destination: null });
   let providerCalls = 0;
   globalThis.fetch = async () => {
     providerCalls += 1;
     return new Response(null, { status: 500 });
   };
+  // Env area ids are never read (T-45): only the tenant's saved pair counts.
   const locals = {
     ...QA_LOCALS,
-    runtimeEnv: {},
+    runtimeEnv: { AUTOLARIS_ORDER_ORIGIN_ID: "3517100", AUTOLARIS_ORDER_DESTINATION_ID: "3518010" },
   } as App.Locals;
 
   const payment = await createAutoLarisPaymentForOrder(database, locals, {

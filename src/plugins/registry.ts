@@ -11,10 +11,10 @@
  * compiled in, and a plugin follows the same conventions as the rest of the
  * product: D1, the shared admin shell, Indonesian UI copy, tests beside the code.
  */
-import { getRuntimeEnv, type getEnvValue } from "../lib/env.ts";
+import { getRuntimeEnv } from "../lib/env.ts";
 import { kelolaPlugin } from "./kelola/index.ts";
 
-type Env = Parameters<typeof getEnvValue>[1];
+type Env = ReturnType<typeof getRuntimeEnv>;
 
 export type PluginContext = {
   database: D1Database;

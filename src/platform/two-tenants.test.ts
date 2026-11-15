@@ -69,6 +69,9 @@ const { createTenantDb } = await import("./tenant-db.ts");
 const { hashApiKeySecret } = await import("../lib/developer-api-keys.ts");
 const headlessOpenApiRoute = await import("../pages/api/v1/openapi.json.ts");
 const opsOpenApiRoute = await import("../pages/api/ops/v1/openapi.json.ts");
+const { getProviderConfig, autoLarisOrderRailGap } = await import("../lib/provider-config.ts");
+const { getStoreAdsConfig } = await import("../lib/store-ads.ts");
+const { loadGoogleAdsOfflineConfig } = await import("../lib/google-ads-offline.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -329,6 +332,80 @@ test("T-21: a tenant's admin token never verifies on another tenant, even with i
   assert.equal(await open("jwt-a.belanja.cc"), 200);
   // AUTH_SECRET in the env is tenant A's key: an env secret must not be honoured on any tenant.
   assert.equal(await open("jwt-b.belanja.cc"), 401, "tenant A's token opened tenant B's admin");
+});
+
+/** Every provider value a single-tenant install took from Worker env, set at once. */
+const EVERY_PLATFORM_PROVIDER_ENV = {
+  MENGANTAR_API_KEY: "env-mengantar", MENGANTAR_BASE_URL: "https://env.mengantar.test",
+  MENGANTAR_ORIGIN_AREA_ID: "1", MENGANTAR_PICKUP_ADDRESS_ID: "2",
+  AUTOLARIS_API_KEY: "env-autolaris", AUTOLARIS_BASE_URL: "https://env.autolaris.test",
+  AUTOLARIS_ORDER_ORIGIN_ID: "1", AUTOLARIS_ORDER_DESTINATION_ID: "2", AUTOLARIS_SHIPPER_EMAIL: "ops@env.test",
+  KELOLA_ORDER_WEBHOOK_URL: "https://env.kelola.test/api/public/toko/order/twh_env", KELOLA_ORDER_WEBHOOK_SECRET: "env",
+  META_PIXEL_ID: "999999999999999", META_CAPI_ACCESS_TOKEN: "env-capi", FB_PIXEL_ID: "999999999999998",
+  GTM_ID: "GTM-ENVONLY", GOOGLE_ADS_CONVERSION_ID: "AW-999999999", GOOGLE_ADS_CONVERSION_LABEL: "env-label",
+  GOOGLE_ADS_CUSTOMER_ID: "1234567890", GOOGLE_ADS_OFFLINE_CONVERSION_ACTION_ID: "987", GOOGLE_ADS_DEVELOPER_TOKEN: "dev",
+  GOOGLE_ADS_CLIENT_ID: "cid", GOOGLE_ADS_CLIENT_SECRET: "cs", GOOGLE_ADS_REFRESH_TOKEN: "rt",
+  GOOGLE_ADS_OFFLINE_START_AT: "2026-01-01T00:00:00.000Z",
+};
+
+test("T-45/ISO-9: with every platform env value set, a tenant without settings is unconfigured and its cron calls no provider", async (context) => {
+  const saved = new Map(Object.keys(EVERY_PLATFORM_PROVIDER_ENV).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, EVERY_PLATFORM_PROVIDER_ENV);
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    calls.push(String(input instanceof Request ? input.url : input));
+    return new Response("{}", { status: 500 });
+  }) as typeof fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  const platformDb = await platform([["p-a", "active", "plain-a.belanja.cc"]]);
+  const stores = namespace({ migrated: true });
+  // A paid order with a Google click and a delivered COD order: work any configured provider would pick up.
+  stores.get("p-a").storage.db.exec(`
+    INSERT INTO stores (id, name, slug, created_at) VALUES (1, 'Toko Polos', 'toko-polos', '2026-11-16');
+    INSERT INTO orders (id, order_number, store_id, customer_name, customer_phone, address, province, city, district,
+      total_amount, created_at, payment_method, payment_status, shipping_status, ad_click_ids)
+    VALUES (1, 'INV-P0001', 1, 'Siti Rahayu', '6281234567890', 'Jl. Melati 10', 'Jawa Barat', 'Bogor', 'Kec', 60000,
+      '2026-11-16T00:00:00.000Z', 'cod', 'unpaid', 'delivered', '{"gclid":"Cj0KCQ_valid-click"}');
+  `);
+  const database = createTenantDb(stores.get("p-a").stub);
+  const locals = { tenantDb: database, runtimeEnv: { ...EVERY_PLATFORM_PROVIDER_ENV } } as never;
+
+  const providers = await getProviderConfig(database, locals);
+  assert.deepEqual(
+    [providers.mengantar.apiKey, providers.mengantar.source, providers.autolaris.apiKey, providers.autolaris.source],
+    ["", "none", "", "none"],
+  );
+  assert.equal(providers.mengantar.baseUrl.includes("env."), false);
+  assert.equal(providers.autolaris.originId + providers.autolaris.destinationId + providers.autolaris.shipperEmail, "");
+  assert.equal(
+    autoLarisOrderRailGap({ ...providers.autolaris, warehouseAddress: "Jl. Gudang 1" }),
+    "AutoLaris belum dikonfigurasi.",
+  );
+  const ads = await getStoreAdsConfig(locals);
+  assert.deepEqual([ads.metaPixelId, ads.metaCapiToken, ads.googleTagManagerId, ads.googleAdsConversionId], ["", "", "", ""]);
+  assert.equal(await loadGoogleAdsOfflineConfig(database), null);
+
+  const original = { error: console.error, info: console.info, warn: console.warn, log: console.log };
+  console.error = console.info = console.warn = console.log = () => undefined;
+  try {
+    const result = await runPlatformCron(
+      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...EVERY_PLATFORM_PROVIDER_ENV } as never,
+      Date.parse("2026-11-16T05:07:00.000Z"),
+      { waitUntil() {}, passThroughOnException() {} } as never,
+    );
+    assert.deepEqual(result, { tenants: 1, failed: [] });
+  } finally {
+    Object.assign(console, original);
+  }
+  assert.deepEqual(calls, [], "a tenant without settings made an outbound provider call");
 });
 
 test("T-21: there is no installer page or route to answer /install", () => {

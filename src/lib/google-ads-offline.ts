@@ -61,27 +61,59 @@ export type GoogleRetryDecision = {
   delayMs: number;
 };
 
-function digits(value: string | undefined): string {
+function digits(value: string | null | undefined): string {
   return String(value || "").replace(/\D/g, "");
 }
 
+/** The tenant's saved offline-upload settings: a `stores` row (migration 0080). */
+export type GoogleAdsOfflineRow = {
+  google_ads_customer_id?: string | null;
+  google_ads_offline_conversion_action_id?: string | null;
+  google_ads_login_customer_id?: string | null;
+  google_ads_offline_start_at?: string | null;
+  google_ads_developer_token?: string | null;
+  google_ads_client_id?: string | null;
+  google_ads_client_secret?: string | null;
+  google_ads_refresh_token?: string | null;
+};
+
+const OFFLINE_COLUMNS = [
+  "google_ads_customer_id",
+  "google_ads_offline_conversion_action_id",
+  "google_ads_login_customer_id",
+  "google_ads_offline_start_at",
+  "google_ads_developer_token",
+  "google_ads_client_id",
+  "google_ads_client_secret",
+  "google_ads_refresh_token",
+] as const;
+
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+
+/**
+ * The upload config, all or nothing, from what the tenant saved (T-45). There
+ * is no Worker env fallback: one platform credential would upload every
+ * tenant's conversions into one Google Ads account.
+ */
 export function readGoogleAdsOfflineConfig(
-  env: SharedEnvVars,
+  row: GoogleAdsOfflineRow | null | undefined,
 ): GoogleAdsOfflineConfig | null {
-  const customerId = digits(env.GOOGLE_ADS_CUSTOMER_ID);
-  const conversionActionId = digits(env.GOOGLE_ADS_OFFLINE_CONVERSION_ACTION_ID);
-  const loginCustomerId = digits(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID) || undefined;
-  const startAt = String(env.GOOGLE_ADS_OFFLINE_START_AT || "").trim();
+  if (!row) return null;
+  const text = (value: string | null | undefined) => String(value || "").trim();
+  const customerId = digits(row.google_ads_customer_id);
+  const conversionActionId = digits(row.google_ads_offline_conversion_action_id);
+  const loginCustomerId = digits(row.google_ads_login_customer_id) || undefined;
+  const startAt = text(row.google_ads_offline_start_at);
   const required = {
-    developerToken: String(env.GOOGLE_ADS_DEVELOPER_TOKEN || "").trim(),
-    clientId: String(env.GOOGLE_ADS_CLIENT_ID || "").trim(),
-    clientSecret: String(env.GOOGLE_ADS_CLIENT_SECRET || "").trim(),
-    refreshToken: String(env.GOOGLE_ADS_REFRESH_TOKEN || "").trim(),
+    developerToken: text(row.google_ads_developer_token),
+    clientId: text(row.google_ads_client_id),
+    clientSecret: text(row.google_ads_client_secret),
+    refreshToken: text(row.google_ads_refresh_token),
   };
   if (
     !/^\d{5,20}$/.test(customerId) ||
     !/^\d{1,20}$/.test(conversionActionId) ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(startAt) ||
+    !ISO_INSTANT.test(startAt) ||
     Object.values(required).some((value) => !value)
   ) {
     return null;
@@ -93,6 +125,66 @@ export function readGoogleAdsOfflineConfig(
     startAt,
     ...required,
   };
+}
+
+export async function loadGoogleAdsOfflineRow(database: D1Database): Promise<GoogleAdsOfflineRow | null> {
+  return database
+    .prepare(`SELECT ${OFFLINE_COLUMNS.join(", ")} FROM stores ORDER BY id LIMIT 1`)
+    .first<GoogleAdsOfflineRow>();
+}
+
+export async function loadGoogleAdsOfflineConfig(database: D1Database): Promise<GoogleAdsOfflineConfig | null> {
+  return readGoogleAdsOfflineConfig(await loadGoogleAdsOfflineRow(database));
+}
+
+/**
+ * The columns an owner's save writes, or an error. Ids are submitted as text
+ * (dashes allowed); a secret left empty keeps the stored one; `clear` removes
+ * the whole set. `start_at` is stamped the first time the upload becomes
+ * complete and kept after, so a later edit never backfills older orders.
+ */
+export function planGoogleAdsOfflineSave(
+  input: {
+    clear?: unknown;
+    customerId?: unknown;
+    conversionActionId?: unknown;
+    loginCustomerId?: unknown;
+    developerToken?: unknown;
+    clientId?: unknown;
+    clientSecret?: unknown;
+    refreshToken?: unknown;
+  },
+  current: GoogleAdsOfflineRow | null,
+  now: Date,
+): { ok: true; row: Required<{ [K in keyof GoogleAdsOfflineRow]: string | null }>; configured: boolean } | { ok: false; error: string } {
+  if (input.clear === true) {
+    const row = Object.fromEntries(OFFLINE_COLUMNS.map((column) => [column, null])) as Required<{
+      [K in keyof GoogleAdsOfflineRow]: string | null;
+    }>;
+    return { ok: true, row, configured: false };
+  }
+  const text = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
+  const keep = (submitted: string, stored: string | null | undefined) => submitted || String(stored || "").trim();
+  const customerId = digits(text(input.customerId, 32));
+  const conversionActionId = digits(text(input.conversionActionId, 32));
+  const loginCustomerId = digits(text(input.loginCustomerId, 32));
+  if (customerId && !/^\d{5,20}$/.test(customerId)) return { ok: false, error: "Customer ID Google Ads tidak valid." };
+  if (conversionActionId && !/^\d{1,20}$/.test(conversionActionId)) return { ok: false, error: "Conversion action ID harus berupa angka." };
+  if (loginCustomerId && !/^\d{5,20}$/.test(loginCustomerId)) return { ok: false, error: "Login customer ID tidak valid." };
+  const row = {
+    google_ads_customer_id: customerId || null,
+    google_ads_offline_conversion_action_id: conversionActionId || null,
+    google_ads_login_customer_id: loginCustomerId || null,
+    google_ads_offline_start_at: current?.google_ads_offline_start_at?.trim() || null,
+    google_ads_developer_token: keep(text(input.developerToken, 200), current?.google_ads_developer_token) || null,
+    google_ads_client_id: keep(text(input.clientId, 300), current?.google_ads_client_id) || null,
+    google_ads_client_secret: keep(text(input.clientSecret, 300), current?.google_ads_client_secret) || null,
+    google_ads_refresh_token: keep(text(input.refreshToken, 1000), current?.google_ads_refresh_token) || null,
+  };
+  if (!row.google_ads_offline_start_at) row.google_ads_offline_start_at = now.toISOString();
+  const configured = readGoogleAdsOfflineConfig(row) !== null;
+  if (!configured) row.google_ads_offline_start_at = current?.google_ads_offline_start_at?.trim() || null;
+  return { ok: true, row, configured };
 }
 
 function readClickIds(raw: string | null): {

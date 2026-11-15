@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../../lib/api.ts';
-import { getRuntimeEnv } from '../../../../lib/env.ts';
 import { readOrderAttention } from '../../../../lib/order-attention.ts';
 import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
@@ -11,13 +10,12 @@ export const prerender = false;
  * `/api/admin/orders`, so only the roles that work the order list read it.
  */
 export const GET: APIRoute = async ({ locals }) => {
-  const env = getRuntimeEnv(locals);
   const database = tenantDatabase(locals);
   if (!database) return jsonError('Database order belum tersedia.', 503);
   try {
-    const data = await readOrderAttention(database, {
-      fallbackPickupAddressId: String(env?.MENGANTAR_PICKUP_ADDRESS_ID || ''),
-    });
+    // No env pickup fallback (T-45): a warehouse without its own pickup
+    // address is reported as such, not filled from a Worker-wide value.
+    const data = await readOrderAttention(database);
     return jsonOk({ data }, 200, { 'cache-control': 'no-store' });
   } catch (error) {
     console.error('admin-orders-attention', error);

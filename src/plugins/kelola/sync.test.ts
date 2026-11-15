@@ -15,7 +15,6 @@ import {
   maskKelolaWebhookUrl,
   normalizeKelolaWebhookUrl,
   pushOrderToKelola,
-  readKelolaConfig,
   signKelolaBody,
   testKelolaConnection,
 } from "./sync.ts";
@@ -32,20 +31,12 @@ test("signature matches Kelola's verifier (its Mengantar test vector)", async ()
   );
 });
 
-test("config needs both URL and secret", () => {
-  assert.equal(readKelolaConfig({ KELOLA_ORDER_WEBHOOK_URL: config.url }), null);
+test("the push runs on the tenant's saved pair only; env never supplies one (T-45)", () => {
+  assert.equal(getKelolaConfig({}), null);
+  assert.equal(getKelolaConfig({ webhook_url: config.url }), null, "a URL without its secret is off");
+  assert.equal(getKelolaConfig({ webhook_secret: "s" }), null);
   assert.deepEqual(
-    readKelolaConfig({ KELOLA_ORDER_WEBHOOK_URL: config.url, KELOLA_ORDER_WEBHOOK_SECRET: "s" }),
-    { url: config.url, secret: "s", source: "server" },
-  );
-});
-
-test("the dashboard pair wins over the env pair; env stays the fallback", async () => {
-  const env = { KELOLA_ORDER_WEBHOOK_URL: "https://env.test/api/public/toko/order/twh_env", KELOLA_ORDER_WEBHOOK_SECRET: "envsecret" };
-  assert.deepEqual(getKelolaConfig({}, env), { url: env.KELOLA_ORDER_WEBHOOK_URL, secret: "envsecret", source: "server" });
-  assert.equal(getKelolaConfig({}, {}), null);
-  assert.deepEqual(
-    getKelolaConfig({ webhook_url: config.url, webhook_secret: "dbsecret" }, env),
+    getKelolaConfig({ webhook_url: config.url, webhook_secret: "dbsecret" }),
     { url: config.url, secret: "dbsecret", source: "dashboard" },
   );
 });

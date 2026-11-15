@@ -3,7 +3,6 @@ import { handle } from "@astrojs/cloudflare/handler";
 // One SQLite Durable Object per tenant (ADR-039, TD-3); src/platform/tenant-db.ts opens it.
 export { TenantStore } from "./platform/tenant-store.ts";
 import { purgeExpiredAbandonedOrders } from "./lib/order-persistence.ts";
-import { getEnvValue } from "./lib/env.ts";
 import {
   alertsFromOperationalHealth,
   evaluateOperationalAlerts,
@@ -30,7 +29,7 @@ import { runPluginCron } from "./plugins/registry.ts";
 import {
   drainGoogleAdsConversionOutbox,
   purgeExpiredGoogleAdsConversions,
-  readGoogleAdsOfflineConfig,
+  loadGoogleAdsOfflineConfig,
   reconcileGoogleAdsConversions,
 } from "./lib/google-ads-offline.ts";
 type AstroRequest = Parameters<typeof handle>[0];
@@ -162,7 +161,11 @@ export async function runTenantMaintenance(
       ? drainCapiOutboxBacklog(database, ads.metaPixelId, ads.metaCapiToken, new Date(scheduledTime))
       : 0;
   });
-  const googleAdsOffline = readGoogleAdsOfflineConfig(env);
+  // The tenant's own upload settings (T-45); an unreadable row uploads nothing.
+  const googleAdsOffline = await loadGoogleAdsOfflineConfig(database).catch((error) => {
+    console.error("scheduled-google-ads-config-failed", { tenant_id: tenantId, error: String(error) });
+    return null;
+  });
   const queuedGoogleAdsConversions = googleAdsOffline
     ? await housekeeping("scheduled-google-ads-reconcile-failed", () =>
         reconcileGoogleAdsConversions(database, googleAdsOffline, new Date(scheduledTime)),
@@ -191,9 +194,8 @@ export async function runTenantMaintenance(
     alertsFromOperationalHealth(health),
     {
       store: env.SESSION,
-      webhookUrl: getEnvValue("OPS_ALERT_WEBHOOK_URL", {
-        OPS_ALERT_WEBHOOK_URL: env.OPS_ALERT_WEBHOOK_URL,
-      }),
+      // The platform's alert channel (a Worker secret), not a tenant value.
+      webhookUrl: String(env.OPS_ALERT_WEBHOOK_URL ?? "").trim(),
       // No request here, so the tenant names itself from its own store.
       source: scheduledLocals.tenant.siteUrl,
     },

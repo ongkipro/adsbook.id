@@ -45,7 +45,7 @@ import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 /** The Kelola config when the plugin is active, else `undefined` (plugin off). */
 async function activeKelolaConfig(db: D1Database, locals: App.Locals) {
   const context = await pluginContext(db, getRuntimeEnv(locals), 'kelola');
-  return context ? getKelolaConfig(context.settings, context.env) : undefined;
+  return context ? getKelolaConfig(context.settings) : undefined;
 }
 
 export const prerender = false;
@@ -297,9 +297,7 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
       providerDispatchClaimedAt: order.provider_dispatch_claimed_at,
       destinationAreaId: order.destination_area_id,
       courierCode: order.courier_code,
-      pickupAddressId:
-        order.pickup_address_id ||
-        String(getRuntimeEnv(locals)?.MENGANTAR_PICKUP_ADDRESS_ID || '').trim(),
+      pickupAddressId: order.pickup_address_id || '',
     });
 
     if (
@@ -503,9 +501,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         providerDispatchClaimedAt: updated.provider_dispatch_claimed_at,
         destinationAreaId: updated.destination_area_id,
         courierCode: updated.courier_code,
-        pickupAddressId:
-          updated.pickup_address_id ||
-          String(getRuntimeEnv(locals)?.MENGANTAR_PICKUP_ADDRESS_ID || '').trim(),
+        pickupAddressId: updated.pickup_address_id || '',
       });
       return jsonOk({
         message: `Risiko RTS penerima ${phone} berhasil diperbarui dari Mengantar (${performance.riskLevel}).`,
