@@ -38,6 +38,7 @@ import {
 } from "../../lib/autolaris-payment";
 import { autoLarisOrderRailGap, getProviderConfig } from "../../lib/provider-config";
 import { normalizePhone } from "../../lib/validation";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -54,7 +55,7 @@ const json = (
 export const POST: APIRoute = async ({ request, locals }) => {
   const clientIp = getClientIp(request.headers);
   const rateLimit = await checkRateLimit(
-    getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined,
+    tenantDatabase(locals),
     `submit-order:${clientIp}`,
     10,
     60_000,
@@ -112,7 +113,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   const data = parsed.data;
   const customerPhone = normalizePhone(data.customer_phone);
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) {
     return json(
       {

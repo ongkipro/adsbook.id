@@ -1,7 +1,7 @@
 ---
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 import FormHybridContent from './FormHybridContent.astro';
 import FormMiddleContent from './FormMiddleContent.astro';
-import { getRuntimeEnv } from '../../../lib/env';
 import {
   loadStoreCodDisabledProvinceCodes,
   resolveFormModeContext,
@@ -25,7 +25,7 @@ const {
   selectedVariantId,
   bannerImage,
 } = Astro.props;
-const database = getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined;
+const database = tenantDatabase(Astro.locals);
 const codDisabledProvinceCodes = await loadStoreCodDisabledProvinceCodes(database);
 const formContext = await resolveFormModeContext(
   Astro.request,

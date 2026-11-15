@@ -2,7 +2,6 @@ import type { APIRoute } from 'astro';
 import { drainCapiOutbox, deliverCapiEvent, enqueueCapiEvent } from '../../lib/capi-outbox';
 import { getStoreAdsConfig } from '../../lib/store-ads';
 import { validateMetaEventPayload } from '../../lib/meta-event-contract';
-import { getRuntimeEnv } from '../../lib/env';
 import { toE164Digits } from '../../lib/meta-capi';
 import { checkRateLimit, getClientIp, rateLimitHeaders } from '../../lib/rate-limit';
 import { readMetaBrowserIds } from '../../lib/click-ids';
@@ -14,6 +13,7 @@ import {
   resolveMetaPurchaseContentIds,
   type MetaPurchaseOrder,
 } from '../../lib/meta-purchase-order';
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -87,7 +87,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     //
     // 60/minute per IP, the same ceiling `/api/shipping-rates` uses. A real
     // session fires a handful of events per page; this bites only a machine.
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     const clientIp = getClientIp(request.headers);
     const rateLimit = await checkRateLimit(database, `public-meta-event:${clientIp}`, 60, 60_000);
     if (!rateLimit.allowed) {

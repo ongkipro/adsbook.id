@@ -19,6 +19,7 @@ import {
 import { getRuntimeEnv } from "../../lib/env";
 import { getStorefrontProduct } from "../../lib/catalog";
 import { catalogProductIdOrNull } from "../../lib/catalog-feed";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -94,7 +95,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
   }
 
   const runtimeEnv = getRuntimeEnv(locals);
-  const database = runtimeEnv?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   const sessions = runtimeEnv?.SESSION as KVNamespace | undefined;
   const disabledCodes = await loadCachedStoreCodDisabledProvinceCodes(
     database,

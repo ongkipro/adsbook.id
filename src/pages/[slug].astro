@@ -1,4 +1,5 @@
 ---
+import { tenantDatabase } from '../lib/tenant-database.ts';
 import GeoIpResolvedForm from '../components/storefront/forms/GeoIpResolvedForm.astro';
 import MetaLandingTracker from '../components/storefront/tracking/MetaLandingTracker.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
@@ -39,7 +40,7 @@ if (previewRequested) {
     isPreview = true;
   } else {
     const env = getRuntimeEnv(Astro.locals);
-    const database = env?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(Astro.locals);
     const session = await resolveAdminSession(
       database,
       Astro.request,
@@ -58,7 +59,7 @@ if (!product) {
   return Astro.rewrite('/404');
 }
 // The store's real orders (A-300); under the threshold the toast renders nothing.
-const socialProofOrders = await recentOrderCount(getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined);
+const socialProofOrders = await recentOrderCount(tenantDatabase(Astro.locals));
 
 // When this page has taken over the product's page, the product URL is its
 // only address, so a direct visit to the landing slug is sent there.

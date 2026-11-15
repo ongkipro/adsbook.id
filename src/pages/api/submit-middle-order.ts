@@ -6,7 +6,6 @@ import {
 import { hasClickId, readClickIdCookie, serializeClickIds } from "../../lib/click-ids";
 import { normalizePhoneNumber } from "../../lib/order-schema";
 import { isValidWa62 } from "../../lib/validation";
-import { getRuntimeEnv } from "../../lib/env";
 import { loadStoreCodDisabledProvinceCodes } from "../../lib/form-mode";
 import { resolveGeoLocation } from "../../lib/geo";
 import { isProvinceExcluded } from "../../lib/province";
@@ -24,6 +23,7 @@ import {
   OrderInputError,
   persistOrder,
 } from "../../lib/order-persistence";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -40,7 +40,7 @@ const json = (
 export const POST: APIRoute = async ({ request, locals }) => {
   const clientIp = getClientIp(request.headers);
   const rateLimit = await checkRateLimit(
-    getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined,
+    tenantDatabase(locals),
     `submit-middle-order:${clientIp}`,
     10,
     60_000,
@@ -150,7 +150,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       422,
     );
 
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare)
     return json(
       {

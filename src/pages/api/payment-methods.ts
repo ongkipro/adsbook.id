@@ -15,12 +15,13 @@ import {
   paymentFeeDescription,
 } from "../../lib/payment-fee-policy";
 import { paymentBrandAsset } from "../../lib/payment-brand";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ locals }) => {
   try {
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     let isCodEnabled = true;
     let isAutoLarisMasterEnabled = true;
     let autoLarisConfigured = false;

@@ -1,18 +1,17 @@
 import type { APIRoute } from "astro";
-import { getRuntimeEnv } from "../../lib/env";
 import {
   resolveEligibleShippingRates,
   ShippingQuoteError,
 } from "../../lib/shipping-quote";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../../lib/rate-limit";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ request, url, locals }) => {
   try {
-    const env = getRuntimeEnv(locals);
     const rateLimit = await checkRateLimit(
-      env?.OMS_DB as D1Database | undefined,
+      tenantDatabase(locals),
       `public-shipping-rate:${getClientIp(request.headers)}`,
       60,
       60_000,
@@ -23,7 +22,7 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
         { status: 429, headers: { "Content-Type": "application/json", ...rateLimitHeaders(rateLimit.remaining, rateLimit.resetAt) } },
       );
     }
-    const database = env?.OMS_DB;
+    const database = tenantDatabase(locals);
     if (!database || typeof database !== "object") {
       return new Response(
         JSON.stringify({

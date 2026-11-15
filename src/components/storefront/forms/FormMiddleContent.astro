@@ -1,8 +1,8 @@
 ---
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 import { formatIdr } from '../../../lib/format-idr';
 import { getStorefrontProduct } from '../../../lib/catalog';
 import { cheapestVariant, resolveFormVariant } from '../../../lib/form-config';
-import { getRuntimeEnv } from '../../../lib/env';
 import { loadStoreCodDisabledProvinceCodes } from '../../../lib/form-mode';
 import { jsonForScript } from '../../../lib/json-script';
 import Icon from '../shared/Icon.astro';
@@ -30,7 +30,7 @@ if (!product) throw new Error(`Product ${productSlug} not found`);
 const defaultVariant = resolveFormVariant(product, selectedVariantId) || cheapestVariant(product.variants)!;
 const defaultComparePrice = defaultVariant.comparePrice ?? defaultVariant.price;
 const defaultHasDiscount = defaultComparePrice > defaultVariant.price;
-const database = getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined;
+const database = tenantDatabase(Astro.locals);
 const codDisabledProvinceCodes =
   codDisabledProvinceCodesProp ??
   await loadStoreCodDisabledProvinceCodes(database);

@@ -1,10 +1,10 @@
 ---
+import { tenantDatabase } from '../lib/tenant-database.ts';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import FormHybridContent from '../components/storefront/forms/FormHybridContent.astro';
 import FormMiddleContent from '../components/storefront/forms/FormMiddleContent.astro';
 import MetaLandingTracker from '../components/storefront/tracking/MetaLandingTracker.astro';
 import { getStorefrontProduct } from '../lib/catalog';
-import { getRuntimeEnv } from '../lib/env';
 import { resolveFormVariant } from '../lib/form-config';
 import {
   loadStoreCodDisabledProvinceCodes,
@@ -22,7 +22,7 @@ const product = await getStorefrontProduct(Astro.locals, productKey);
 if (!product) return Astro.redirect('/produk');
 const selectedVariant = resolveFormVariant(product, variantKey);
 if (!selectedVariant) return Astro.redirect(`/produk/${product.slug}`);
-const database = getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined;
+const database = tenantDatabase(Astro.locals);
 const codDisabledProvinceCodes =
   await loadStoreCodDisabledProvinceCodes(database);
 const formContext = await resolveFormModeContext(
