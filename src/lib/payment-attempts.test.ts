@@ -7,7 +7,7 @@ import test from "node:test";
 import { createAutoLarisPaymentForOrder, reconcileAutoLarisPaymentStatuses } from "./autolaris-payment.ts";
 import { confirmManualAutoLarisPayment } from "./manual-payment-reconciliation.ts";
 import { splitMigrationStatements } from "./schema-version.ts";
-import { envTenantConfig } from "./tenant.ts";
+import { defaultTenantConfig } from "./tenant.ts";
 
 type Value = null | number | string;
 
@@ -74,7 +74,7 @@ function store() {
 }
 
 const locals = {
-  tenant: { ...envTenantConfig, siteUrl: "https://store.example.test" },
+  tenant: { ...defaultTenantConfig, siteUrl: "https://store.example.test" },
   runtimeEnv: { AUTOLARIS_ORDER_ORIGIN_ID: "3517100", AUTOLARIS_ORDER_DESTINATION_ID: "3518010" },
   cfContext: { waitUntil() {} } as App.Locals["cfContext"],
 } as App.Locals;

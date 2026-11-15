@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { getRuntimeEnv } from './env.ts';
 import {
   DEFAULT_API_KEY_DAILY_QUOTA,
   DEFAULT_API_KEY_RATE_LIMIT,
@@ -536,15 +535,9 @@ export function resolveAllowedOrigins(
 
   addPatterns(extraAllowed);
 
-  try {
-    const env = getRuntimeEnv(locals);
-    if (env) {
-      addPatterns(env.PUBLIC_HEADLESS_ALLOWED_ORIGINS);
-      addPatterns(env.PUBLIC_SITE_URL);
-    }
-  } catch {
-    // Fallback if env is unavailable
-  }
+  // The tenant's own origin, from its store (T-21). A Worker-wide env value
+  // would be one allowlist for every tenant.
+  addPatterns(locals?.tenant?.siteUrl);
 
   // Default local development origins
   patterns.push('localhost', '127.0.0.1');

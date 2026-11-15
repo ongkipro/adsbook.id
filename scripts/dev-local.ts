@@ -17,8 +17,9 @@
  *                device on the tailnet. Providers stay on 127.0.0.1.
  *
  * Nothing here is read by a deploy: the env file lives under `.wrangler/`
- * (ignored), and `.dev.vars.example` — what the Deploy button reads — keeps
- * asking for `INSTALL_TOKEN` alone.
+ * (ignored) and is empty on purpose, so a developer's own `.env` or
+ * `.dev.vars` never reaches the local Worker. There is no installer or
+ * INSTALL_TOKEN (T-21); a tenant exists once PLATFORM_DB names it.
  */
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -33,7 +34,6 @@ const host = process.argv.slice(2).find((arg) => arg.startsWith("--ip="))?.split
 const providerPort = port + 1;
 const stateDir = `${root}.wrangler/dev-local-state`;
 const envFile = `${root}.wrangler/dev-local.env`;
-const INSTALL_TOKEN = "dev-local-install-token";
 
 // A second run while the first is still up used to die inside wrangler with
 // "Address already in use" — after --reset had already wiped the state the
@@ -67,11 +67,10 @@ const providers = await startDevProviders(providerPort);
 const providerBase = `http://127.0.0.1:${providerPort}`;
 
 mkdirSync(`${root}.wrangler`, { recursive: true });
-writeFileSync(envFile, `INSTALL_TOKEN=${INSTALL_TOKEN}\n`);
+writeFileSync(envFile, "");
 
-// Passed as plain vars, not through the env file: with `secrets.required` in
-// wrangler.jsonc, Wrangler loads only the declared secret names from an env
-// file and silently drops the rest — which left the stand-ins unused.
+// Passed as plain vars, not through the env file, so the stand-ins are visible
+// on the command line Wrangler logs.
 const providerVars = {
   MENGANTAR_API_KEY: "dev",
   MENGANTAR_BASE_URL: providerBase,
@@ -101,8 +100,7 @@ const worker = spawn(
 console.log(`
   AdsBookCMS local store
   ─────────────────────────────────────────────
-  Store      http://${host || "localhost"}:${port}   (redirects to /install until installed)
-  Token      ${INSTALL_TOKEN}
+  Worker     http://${host || "localhost"}:${port}
   Providers  ${providerBase}   (Mengantar + AutoLaris stand-ins)
   Cron       http://${host || "localhost"}:${port}/cdn-cgi/handler/scheduled?cron=7+*+*+*+*
   Settle     curl -X POST '${providerBase}/__dev/autolaris/pay?transaction_id=<id>'

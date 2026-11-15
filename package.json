@@ -71,17 +71,14 @@
   },
   "cloudflare": {
     "bindings": {
-      "OMS_DB": {
-        "description": "The store database: products, orders, settings. Its schema is applied automatically on the first request."
-      },
       "SESSION": {
         "description": "Caches only (location lookups, alert state). Safe to empty."
       },
       "ASSET_BUCKET": {
         "description": "Product photos and landing-page media uploaded from `/admin`."
       },
-      "INSTALL_TOKEN": {
-        "description": "Type a long random value (**16+ characters**) of your own. The `/install` wizard asks for it so nobody else can claim the store first."
+      "PLATFORM_DB": {
+        "description": "The control plane: tenants, hosts, plans, audit. Its schema is applied automatically on the first request."
       }
     }
   }

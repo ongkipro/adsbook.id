@@ -1,4 +1,3 @@
-import { getEnvValue } from "./env.ts";
 import {
   isStorefrontTemplateId,
   type StorefrontTemplateId,
@@ -12,7 +11,7 @@ export interface PublicTenantConfig {
   logo: string;
   /** Optional header mark beside the wordmark; empty keeps the letter monogram. */
   brandMark: string;
-  /** PUBLIC_SITE_NOINDEX: the whole store stays out of search (see siteNoindex). */
+  /** The whole store stays out of search. Per tenant; never from the environment (T-21). */
   noindex: boolean;
   tagline: string;
   /** Brand reported for a product that has none of its own (feeds, JSON-LD); falls back to the store name. */
@@ -50,11 +49,11 @@ export const DEFAULT_TENANT_LOGO = "";
 export const LEGACY_PLACEHOLDER_LOGO = "/images/adsbook-mark.webp";
 
 /**
- * Product defaults for an install that has not been configured yet. A real
- * install supplies these from its `stores` row, or failing that from
- * PUBLIC_SITE_* — these values exist so an unconfigured install describes
- * itself honestly instead of inheriting the identity of whichever store the
- * bundle was built from.
+ * Product defaults for a tenant whose `stores` row leaves a field empty. A
+ * tenant's identity comes only from its own store (T-21, TEN-4): the Worker's
+ * environment is shared by every tenant, so it never supplies one. These
+ * values exist so an unconfigured store describes itself honestly instead of
+ * inheriting another store's identity.
  *
  * `siteUrl` intentionally defaults to a placeholder origin: a wrong-but-obvious
  * canonical URL is easier to notice than one silently pointing at another store.
@@ -63,7 +62,7 @@ const defaults = {
   slug: "adsbook",
   name: "AdsBookCMS Store",
   siteUrl: "https://example.com",
-  // Deliberately empty, for the reason PUBLIC_SITE_TAGLINE is: a placeholder
+  // Deliberately empty, for the reason the tagline is: a placeholder
   // sentence here does not stay in the config file. It becomes the meta
   // description Google prints under the store's result and, on the home page,
   // the second half of the <title> — so an unconfigured install advertised
@@ -86,28 +85,9 @@ function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/**
- * Resolution order for every field: the database, then the environment, then
- * the product default. A NULL column means "not configured here" rather than
- * "blank", which is what lets an install that predates migration 0036 keep
- * rendering from its environment unchanged.
- */
-/**
- * Opt-in for a store whose domain must not compete in search, e.g. an ads and
- * COD funnel on a subdomain beside the brand's main shop selling the same
- * products. Only `true` or `1` turns it on; a typo leaves the store indexed.
- */
-export function siteNoindex(env?: Parameters<typeof getEnvValue>[1]): boolean {
-  return /^(1|true)$/i.test(getEnvValue("PUBLIC_SITE_NOINDEX", env));
-}
-
-/** A root-relative or https image path; anything else is dropped, not rendered. */
-function imagePath(value: string): string {
-  return /^(\/(?!\/)|https:\/\/)/.test(value) ? value : "";
-}
-
-function pick(dbValue: unknown, envKey: string, fallback: string): string {
-  return text(dbValue) || getEnvValue(envKey) || fallback;
+/** The store's own value, else the product default. Never the environment. */
+function pick(dbValue: unknown, fallback: string): string {
+  return text(dbValue) || fallback;
 }
 
 /**
@@ -178,41 +158,40 @@ function storefrontTemplate(value: string): StorefrontTemplateId {
  */
 export function resolveTenantConfig(
   row: StoreIdentityRow | null | undefined,
+  /** The tenant's primary host from the gate: the site address when the row has none. */
+  primaryHost?: string | null,
 ): Readonly<PublicTenantConfig> {
-  const name = pick(row?.name, "PUBLIC_SITE_NAME", defaults.name);
-  const tagline = pick(row?.tagline, "PUBLIC_SITE_TAGLINE", defaults.tagline);
+  const name = pick(row?.name, defaults.name);
+  const tagline = pick(row?.tagline, defaults.tagline);
   const resolvedLocale = locale(
-    pick(row?.locale, "PUBLIC_SITE_LOCALE", defaults.locale),
+    pick(row?.locale, defaults.locale),
   );
 
   return Object.freeze({
     slug: text(row?.slug) || defaults.slug,
     name,
-    siteUrl: siteOrigin(pick(row?.site_url, "PUBLIC_SITE_URL", defaults.siteUrl)),
+    siteUrl: siteOrigin(pick(row?.site_url, primaryHost ? `https://${primaryHost}` : defaults.siteUrl)),
     description:
-      pick(row?.description, "PUBLIC_SITE_DESCRIPTION", defaults.description) ||
+      pick(row?.description, defaults.description) ||
       `Belanja online di ${name}.`,
     logo: ((value) => (value === LEGACY_PLACEHOLDER_LOGO ? DEFAULT_TENANT_LOGO : value))(
-      pick(row?.logo, "PUBLIC_SITE_LOGO", defaults.logo),
+      pick(row?.logo, defaults.logo),
     ),
-    brandMark: imagePath(getEnvValue("PUBLIC_SITE_BRAND_MARK")),
-    noindex: siteNoindex(),
+    brandMark: "",
+    noindex: false,
     tagline,
-    defaultBrand: text(getEnvValue("PUBLIC_DEFAULT_BRAND")) || name,
+    defaultBrand: name,
     themeColor: themeColor(
-      pick(row?.theme_color, "PUBLIC_SITE_THEME_COLOR", defaults.themeColor),
+      pick(row?.theme_color, defaults.themeColor),
     ),
     locale: resolvedLocale,
     openGraphLocale: resolvedLocale.replace("-", "_"),
     defaultTitle: tagline ? `${name} - ${tagline}` : name,
     storefrontTemplate: storefrontTemplate(
-      pick(
-        row?.storefront_template,
-        "PUBLIC_STOREFRONT_TEMPLATE",
-        defaults.storefrontTemplate,
+      pick(row?.storefront_template, defaults.storefrontTemplate,
       ),
     ),
-    adminName: pick(row?.admin_name, "PUBLIC_ADMIN_NAME", defaults.adminName),
+    adminName: pick(row?.admin_name, defaults.adminName),
   });
 }
 
@@ -274,11 +253,8 @@ export async function loadStoreIdentity(
   return read.state === "installed" ? read.row : null;
 }
 
-/**
- * Identity resolved from the environment alone, with no database. Used before
- * middleware has run and by build-time tooling such as the catalog feeds.
- */
-export const envTenantConfig: Readonly<PublicTenantConfig> =
+/** The product defaults alone: a store with no identity row yet, and test fixtures. */
+export const defaultTenantConfig: Readonly<PublicTenantConfig> =
   resolveTenantConfig(null);
 
 /** `Title - Store`, unless the title already names the store (legal pages do). */

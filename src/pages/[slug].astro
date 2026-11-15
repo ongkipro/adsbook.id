@@ -9,7 +9,6 @@ import { productPageRedirect } from '../lib/native-landing-pages';
 import { getStoreSupportWhatsapp } from '../lib/public-store';
 import { resolveAdminSession } from '../lib/admin-session';
 import { resolveAuthSecret } from '../lib/auth-secret';
-import { getRuntimeEnv } from '../lib/env';
 import '../styles/form-hybrid.css';
 import '../styles/landing-pages/landing.css';
 import { defaultCatalogContentId } from '../lib/catalog-feed';
@@ -39,12 +38,11 @@ if (previewRequested) {
   if (Astro.locals.admin) {
     isPreview = true;
   } else {
-    const env = getRuntimeEnv(Astro.locals);
     const database = tenantDatabase(Astro.locals);
     const session = await resolveAdminSession(
       database,
       Astro.request,
-      await resolveAuthSecret(env, database),
+      await resolveAuthSecret(database, Astro.locals.tenantContext?.tenantId),
     );
     isPreview = session !== null && !session.mustChangePassword;
   }

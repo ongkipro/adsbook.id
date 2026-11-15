@@ -11,9 +11,9 @@ import {
 import { canAccessAdminRoute, getDefaultAdminRoute } from './lib/auth';
 import { resolveAdminSession } from './lib/admin-session';
 import { resolveAuthSecret } from './lib/auth-secret';
-import { getEnvValue, getRuntimeEnv } from './lib/env';
+import { getRuntimeEnv } from './lib/env';
 import { isRegisteredNativeSlug, productPageRedirect } from './lib/native-landing-pages';
-import { readStoreIdentity, resolveTenantConfig, siteNoindex } from './lib/tenant';
+import { readStoreIdentity, resolveTenantConfig } from './lib/tenant';
 import {
   buildEmbedFrameAncestors,
   resolveEmbedAllowedOrigins,
@@ -113,32 +113,6 @@ async function readNativeProductPageSlug(
     console.error('native-landing-claim-read-failed', error);
     return null;
   }
-}
-
-function isInstallerRoute(pathname: string): boolean {
-  return (
-    pathname === '/install' ||
-    pathname === '/install/' ||
-    pathname === '/api/install'
-  );
-}
-
-/**
- * The installer's own routes plus the assets its page needs to render. Used
- * only while the store is *not* installed, to let the wizard through.
- *
- * Deliberately not reused for the installed case: an installed store that
- * redirected `/images/…` would answer a missing image with a 302 to the login
- * screen instead of a 404 — which is what it did.
- */
-function isInstallerPath(pathname: string): boolean {
-  return (
-    isInstallerRoute(pathname) ||
-    pathname.startsWith('/_astro/') ||
-    pathname.startsWith('/images/') ||
-    pathname === '/favicon.ico' ||
-    pathname === '/favicon.png'
-  );
 }
 
 /** Opens the request's tenant store; the default is the platform capability. */
@@ -273,7 +247,7 @@ export function createMiddleware(
     const hit = await readEdgeCache(edgeKey);
     if (hit) {
       const cached = applySecurityHeaders(hit, false);
-      if (url.hostname.endsWith('.workers.dev') || siteNoindex(runtime)) cached.headers.set('X-Robots-Tag', 'noindex, nofollow');
+      if (url.hostname.endsWith('.workers.dev')) cached.headers.set('X-Robots-Tag', 'noindex, nofollow');
       persistClickIds(cached);
       return cached;
     }
@@ -304,23 +278,17 @@ export function createMiddleware(
       : ({ state: 'unknown' } as const);
   context.locals.tenant = resolveTenantConfig(
     identity.state === 'installed' ? identity.row : null,
+    tenantContext.primaryHost ?? tenantContext.host,
   );
 
-  // A migrated database with no store row has never been set up: no migration
-  // inserts one. Send the operator to the wizard rather than to twenty call
-  // sites that each silently read null. Only `uninstalled` redirects —
-  // `unknown` means the query failed, and a transient database fault must never
-  // route a live store to its own installer.
-  if (
-    (identity.state === 'uninstalled' || identity.state === 'unmigrated') &&
-    !isInstallerPath(url.pathname)
-  ) {
-    return applySecurityHeaders(context.redirect('/install'), true);
-  }
-  // Once installed the wizard is gone for good; it is unauthenticated, so it
-  // must not linger as a re-runnable surface.
-  if (identity.state === 'installed' && isInstallerRoute(url.pathname)) {
-    return applySecurityHeaders(context.redirect('/hello'), true);
+  // Provisioning writes the one `stores` row before a tenant becomes active
+  // (MULTI-TENANT-DESIGN.md §3.1), so an active tenant without it is a broken
+  // store: a neutral 503 for that tenant, never an installer (`/install` and
+  // INSTALL_TOKEN are gone, T-21). `unknown` is a failed read, and the page
+  // still renders from the product defaults rather than failing the store.
+  if (identity.state === 'uninstalled' || identity.state === 'unmigrated') {
+    console.error('tenant-store-row-missing', { tenant_id: tenantContext.tenantId, state: identity.state });
+    return statePage('unavailable', url.pathname);
   }
 
   // A native landing page that has taken over a product page must answer on
@@ -356,7 +324,7 @@ export function createMiddleware(
     ? buildEmbedFrameAncestors(
         resolveEmbedAllowedOrigins(
           await loadStoredEmbedAllowedOrigins(identityDb),
-          getEnvValue('PUBLIC_EMBED_ALLOWED_ORIGINS', runtime),
+          '',
         ).origins,
       )
     : undefined;
@@ -386,7 +354,7 @@ export function createMiddleware(
     const session = await resolveAdminSession(
       identityDb,
       context.request,
-      await resolveAuthSecret(runtime, identityDb, tenantContext.tenantId),
+      await resolveAuthSecret(identityDb, tenantContext.tenantId),
     );
     if (!session) {
       if (isAdminApi) {
@@ -462,12 +430,10 @@ export function createMiddleware(
     embedFrameAncestors,
   );
 
-  // The Worker's own *.workers.dev address stays on so a one-click install has
-  // somewhere to open /install (ADR-026). It must never compete with the
-  // store's domain in search, whatever site_url says. PUBLIC_SITE_NOINDEX does
-  // the same for a whole store, and as a header it also covers the pages that
-  // render outside BaseLayout.
-  if (url.hostname.endsWith('.workers.dev') || siteNoindex(runtime)) {
+  // A *.workers.dev address must never compete with a store's domain in
+  // search. The platform subdomain's noindex once a custom primary is active
+  // belongs to the hostname service (T-25).
+  if (url.hostname.endsWith('.workers.dev')) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
 

@@ -10,7 +10,7 @@ import {
 } from "../../../lib/embed-security.ts";
 import { parseHeadlessAllowedOrigins } from "../../../lib/headless-api.ts";
 import { isAcceptedSiteProtocol, LOCALE_PATTERN, SUPPORT_EMAIL_PATTERN, THEME_COLOR_PATTERN } from "../../../lib/tenant.ts";
-import { getEnvValue, getRuntimeEnv, maskSecretValue } from "../../../lib/env.ts";
+import { maskSecretValue } from "../../../lib/env.ts";
 import {
   addStorefrontTemplate,
   listStorefrontTemplates,
@@ -270,7 +270,6 @@ async function credentialStatus(database: D1Database, locals: App.Locals) {
 }
 
 export const GET: APIRoute = async ({ locals }) => {
-  const runtime = getRuntimeEnv(locals);
   const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database pengaturan belum tersedia.", 503);
@@ -279,10 +278,7 @@ export const GET: APIRoute = async ({ locals }) => {
   try {
     const row = await getSettingsRow(database as D1Database);
     if (!row) return jsonError("Store belum tersedia.", 404);
-    const embedOriginPolicy = resolveEmbedAllowedOrigins(
-      row.embed_allowed_origins,
-      getEnvValue("PUBLIC_EMBED_ALLOWED_ORIGINS", runtime),
-    );
+    const embedOriginPolicy = resolveEmbedAllowedOrigins(row.embed_allowed_origins, "");
 
     const templateList = await listStorefrontTemplates(
       database as D1Database,

@@ -5,7 +5,7 @@ import {
   AUTOLARIS_CHANNEL_OPTIONS,
   parseAutoLarisPaymentResponse,
 } from "./autolaris-client.ts";
-import { envTenantConfig } from "./tenant.ts";
+import { defaultTenantConfig } from "./tenant.ts";
 import {
   buyerEmail,
   createAutoLarisPaymentForOrder,
@@ -157,7 +157,7 @@ function createAutoLarisOrderDatabase(autoLarisApiKey: string | null, paymentFee
 }
 
 const QA_LOCALS = {
-  tenant: { ...envTenantConfig, siteUrl: "https://store.example.test" },
+  tenant: { ...defaultTenantConfig, siteUrl: "https://store.example.test" },
   runtimeEnv: {
     AUTOLARIS_ORDER_ORIGIN_ID: "3517100",
     AUTOLARIS_ORDER_DESTINATION_ID: "3518010",

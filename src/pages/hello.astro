@@ -19,7 +19,6 @@ import {
 } from '../lib/auth';
 import { storeAdminSession } from '../lib/admin-session';
 import { resolveAuthSecret } from '../lib/auth-secret';
-import { getEnvValue, getRuntimeEnv } from '../lib/env';
 import {
   checkAdminLoginRateLimit,
   spendAdminLoginAttempt,
@@ -36,9 +35,7 @@ let errorMessage = '';
 let submittedUsername = '';
 let focusPassword = false;
 
-const env = getRuntimeEnv(Astro.locals);
 const database = tenantDatabase(Astro.locals);
-const bootstrapAdminPassword = getEnvValue('BOOTSTRAP_ADMIN_PASSWORD', env);
 
 // The middleware's cross-site guard only covers /api/admin/*, and this form
 // posts to itself — so the login POST needs its own origin check. Without it a
@@ -53,7 +50,7 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
   Astro.response.status = 403;
   errorMessage = 'Permintaan login ditolak karena berasal dari domain lain.';
 } else if (Astro.request.method === 'POST') {
-  const authSecret = await resolveAuthSecret(env, database);
+  const authSecret = await resolveAuthSecret(database, Astro.locals.tenantContext?.tenantId);
   const clientIp = getClientIp(Astro.request.headers);
 
   try {
@@ -96,7 +93,7 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
         const [usernameMatches, passwordMatches] = await Promise.all([
           credential ? secureEqual(username, credential.username) : Promise.resolve(false),
           credential
-            ? verifyAdminLoginPassword(password, credential, bootstrapAdminPassword)
+            ? verifyAdminLoginPassword(password, credential, '')
             : Promise.resolve(false),
           needsWorkFloor
             ? verifyPasswordHash(password, DEFAULT_ADMIN_PASSWORD_HASH)
@@ -134,14 +131,13 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
 
 /**
  * LOGIN-6. The seeded credential is announced only while it is the credential
- * that actually opens this install: the stored row is still the seeded default
- * *and* no BOOTSTRAP_ADMIN_PASSWORD is configured. Once the operator rotates,
- * the hash changes and this goes quiet on its own. Where a bootstrap password
- * is configured the default never opened anything (LOGIN-2), so announcing it
- * would be both false and a free hint about the account name.
+ * that actually opens this store: the stored row is still the seeded default.
+ * Once the owner rotates, the hash changes and this goes quiet on its own.
+ * There is no Worker-wide BOOTSTRAP_ADMIN_PASSWORD any more (T-21): one env
+ * value would be a password for every tenant at once.
  */
 let showsDefaultCredential = false;
-if (database && !bootstrapAdminPassword) {
+if (database) {
   try {
     const seeded = await getAdminCredential(database, DEFAULT_ADMIN_USERNAME);
     showsDefaultCredential = seeded !== null && isDefaultAdminCredential(seeded);

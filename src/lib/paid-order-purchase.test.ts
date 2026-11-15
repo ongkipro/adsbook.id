@@ -445,7 +445,7 @@ test("the CS conversion route reports the converted order to Meta", () => {
 // are stubbed (the same two stubs as health-snapshot.test.ts).
 
 import { registerHooks } from "node:module";
-import { envTenantConfig } from "./tenant.ts";
+import { defaultTenantConfig } from "./tenant.ts";
 
 const HANDLER_STUB = "stub:astro-cloudflare-handler";
 const MIGRATIONS_STUB = "stub:bundled-migrations";
@@ -582,7 +582,7 @@ async function cronStore() {
 }
 
 test("a scheduled Purchase carries the store's own URL from D1, and its minted email is not sent", async () => {
-  assert.notEqual(new URL(envTenantConfig.siteUrl).host, new URL(D1_SITE).host, "the env fallback must differ for this to prove anything");
+  assert.notEqual(new URL(defaultTenantConfig.siteUrl).host, new URL(D1_SITE).host, "the env fallback must differ for this to prove anything");
   const { run, sent, queued } = await cronStore();
   await run();
 
@@ -601,6 +601,6 @@ test("the scheduled run still sends the Purchase when the store identity cannot 
   await run();
 
   assert.ok(errors.includes("tenant-identity-load"), "the failed read is logged");
-  assert.equal(queued().eventSourceUrl, new URL("/thanks", envTenantConfig.siteUrl).toString());
+  assert.equal(queued().eventSourceUrl, new URL("/thanks", defaultTenantConfig.siteUrl).toString());
   assert.ok(sent.some((event) => event.event_id === "INV-10001"));
 });

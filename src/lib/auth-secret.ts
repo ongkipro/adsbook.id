@@ -1,14 +1,9 @@
-import { getEnvValue } from "./env.ts";
-
 /**
- * The key admin sessions are signed with.
- *
- * An `AUTH_SECRET` Worker secret of 32+ characters wins, so every install that
- * already sets one keeps its sessions. Without it — a one-click install, where
- * asking an operator to invent a 32-character random string is exactly the
- * ceremony the installer exists to remove — the Worker generates 256 random
- * bits once, keeps them in `install_secrets`, and uses those (ADR-026). Setting
- * the env secret later simply takes over, which signs every operator out once.
+ * The key a tenant's admin sessions are signed with: 256 random bits kept in
+ * that tenant's own `install_secrets` (ADR-026), generated on first use and at
+ * provisioning (T-26). Never from the environment (T-21, TEN-4): the Worker's
+ * `AUTH_SECRET` would be one key for every tenant, so a session of one tenant
+ * would verify on another.
  *
  * `INSERT OR IGNORE` then `SELECT` makes two first requests agree on one key.
  * Cached per tenant id (T-18): the value never changes once written, and the
@@ -26,13 +21,10 @@ function randomSecret(): string {
 }
 
 export async function resolveAuthSecret(
-  env: Parameters<typeof getEnvValue>[1],
   database: D1Database | undefined,
   tenantId?: string,
 ): Promise<string> {
-  const configured = getEnvValue("AUTH_SECRET", env);
-  if (configured.length >= 32) return configured;
-  if (!database) return configured;
+  if (!database) return "";
 
   const cached = tenantId ? cache.get(tenantId) : undefined;
   if (cached) return cached;
@@ -61,5 +53,5 @@ export async function resolveAuthSecret(
     // read return null. Never fall back to a guessable key.
     console.error("auth-secret-unavailable", error);
   }
-  return configured;
+  return "";
 }

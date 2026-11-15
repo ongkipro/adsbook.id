@@ -109,16 +109,21 @@ test('parseHeadlessAllowedOrigins accepts scoped patterns and rejects broad or m
   }
 });
 
-test('headless origins stay separate from iframe embed origins', () => {
+test('headless origins come from the tenant, never from a Worker-wide env value (T-21)', () => {
   const locals = {
+    tenant: { siteUrl: 'https://toko-a.belanja.cc' },
     runtimeEnv: {
       PUBLIC_EMBED_ALLOWED_ORIGINS: 'https://embed-only.example',
       PUBLIC_HEADLESS_ALLOWED_ORIGINS: 'https://api-client.example',
+      PUBLIC_SITE_URL: 'https://another-store.example',
     },
   } as unknown as App.Locals;
-  const patterns = resolveAllowedOrigins(locals);
-  assert.equal(patterns.includes('https://api-client.example'), true);
-  assert.equal(patterns.includes('https://embed-only.example'), false);
+  const patterns = resolveAllowedOrigins(locals, 'https://stored-client.example');
+  assert.equal(patterns.includes('https://toko-a.belanja.cc'), true);
+  assert.equal(patterns.includes('https://stored-client.example'), true);
+  for (const leaked of ['https://api-client.example', 'https://embed-only.example', 'https://another-store.example']) {
+    assert.equal(patterns.includes(leaked), false, leaked);
+  }
 });
 
 

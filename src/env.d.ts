@@ -10,30 +10,14 @@ type R2Bucket = import("@cloudflare/workers-types/index.ts").R2Bucket;
 type Ai = import("@cloudflare/workers-types/index.ts").Ai;
 
 interface SharedEnvVars {
-  PUBLIC_COD_DISABLED_PROVINCES?: string;
-  PUBLIC_SITE_NAME?: string;
-  PUBLIC_SITE_URL?: string;
-  PUBLIC_SITE_DESCRIPTION?: string;
-  PUBLIC_SITE_LOGO?: string;
-  PUBLIC_SITE_BRAND_MARK?: string;
-  PUBLIC_SITE_NOINDEX?: string;
-  PUBLIC_SITE_TAGLINE?: string;
-  PUBLIC_DEFAULT_BRAND?: string;
-  PUBLIC_SITE_THEME_COLOR?: string;
-  PUBLIC_SITE_LOCALE?: string;
-  PUBLIC_STOREFRONT_TEMPLATE?: string;
-  PUBLIC_ADMIN_NAME?: string;
-  PUBLIC_EMBED_ALLOWED_ORIGINS?: string;
-  PUBLIC_HEADLESS_ALLOWED_ORIGINS?: string;
+  // No store identity, AUTH_SECRET or INSTALL_TOKEN here (T-21): each is a row
+  // in the tenant's own store. Provider keys below leave with T-45.
   MENGANTAR_API_KEY?: string;
-  AUTH_SECRET?: string;
-  INSTALL_TOKEN?: string;
   /** Optional per-install HTTPS endpoint for redacted operational alerts. */
   OPS_ALERT_WEBHOOK_URL?: string;
   /** Kelola plugin fallback webhook pair; used only while the plugin is active (ADR-028). */
   KELOLA_ORDER_WEBHOOK_URL?: string;
   KELOLA_ORDER_WEBHOOK_SECRET?: string;
-  BOOTSTRAP_ADMIN_PASSWORD?: string;
   MENGANTAR_ORIGIN_AREA_ID?: string;
   MENGANTAR_PICKUP_ADDRESS_ID?: string;
   AUTOLARIS_API_KEY?: string;

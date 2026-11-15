@@ -46,6 +46,7 @@ export async function runTenantMaintenance(
   tenantId: string,
   scheduledTime: number,
   context: ExecutionContext,
+  primaryHost?: string | null,
 ) {  // No step takes the ones after it down: payment reconciliation, both outbox
   // drains and the health evaluation each run even when an earlier step hit a
   // transient D1 or provider error. The failure is logged and reads as -1.
@@ -114,7 +115,7 @@ export async function runTenantMaintenance(
   const scheduledLocals = {
     runtimeEnv: env,
     tenantDb: database,
-    tenant: resolveTenantConfig(await loadStoreIdentity(database)),
+    tenant: resolveTenantConfig(await loadStoreIdentity(database), primaryHost ?? undefined),
     cfContext: context,
   } satisfies App.Locals;
   let autoLarisReconciliation = {
@@ -269,14 +270,18 @@ export async function runPlatformCron(
   await ensureControlPlane(platformDb);
   const tenants = (
     await platformDb
-      .prepare("SELECT id, cache_version FROM tenants WHERE status = 'active' ORDER BY id")
-      .all<{ id: string; cache_version: number }>()
+      .prepare(
+        `SELECT t.id, t.cache_version, h.host AS primary_host FROM tenants t
+         LEFT JOIN tenant_hosts h ON h.tenant_id = t.id AND h.is_primary = 1 AND h.status = 'active'
+         WHERE t.status = 'active' ORDER BY t.id`,
+      )
+      .all<{ id: string; cache_version: number; primary_host: string | null }>()
   ).results;
   const failed: string[] = [];
-  for (const { id, cache_version } of tenants) {
+  for (const { id, cache_version, primary_host } of tenants) {
     try {
       const database = await openTenantDb(env, { tenantId: id, cacheVersion: Number(cache_version) }, CMS_VERSION.schemaVersion);
-      await runTenantMaintenance(env, database, id, scheduledTime, context);
+      await runTenantMaintenance(env, database, id, scheduledTime, context, primary_host);
     } catch (error) {
       failed.push(id);
       console.error("scheduled-tenant-failed", {

@@ -530,7 +530,9 @@ type CredentialRow = { updated_at: string; role: string } | null;
 function createCredentialDatabase(row: CredentialRow, stored: string | null = null) {
   return {
     prepare: (query: string) => ({
-      first: async () => ({ name: 'Test Store', slug: 'test-store' }),
+      // The tenant's own stored session key (T-21: never the Worker environment).
+      first: async () =>
+        query.includes('install_secrets') ? { value: AUTH_SECRET } : { name: 'Test Store', slug: 'test-store' },
       bind: () => ({
         first: async () => {
           if (!query.includes('FROM admin_sessions s')) return row;
