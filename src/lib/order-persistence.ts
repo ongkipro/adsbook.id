@@ -337,16 +337,26 @@ export async function recordAbandonedOrder(
       )
     ];
     if (selectedVariant) {
+      // Checkout can promote this row between the read above and this batch.
+      // The UPDATE then matches nothing, and the items must not move either:
+      // they are the order's now, not the lead's (PR-3).
       statements.push(
         database
-          .prepare("DELETE FROM order_items WHERE order_id = ?")
+          .prepare(
+            `DELETE FROM order_items
+             WHERE order_id IN (
+               SELECT id FROM orders WHERE id = ? AND shipping_status = 'abandoned'
+             )`,
+          )
           .bind(existing.id),
         database
           .prepare(
             `INSERT INTO order_items (order_id, variant_id, quantity, unit_price)
-             VALUES (?, ?, 1, ?)`,
+             SELECT id, ?, 1, ?
+             FROM orders
+             WHERE id = ? AND shipping_status = 'abandoned'`,
           )
-          .bind(existing.id, selectedVariant.id, totalAmount),
+          .bind(selectedVariant.id, totalAmount, existing.id),
       );
     }
     await database.batch(statements);
