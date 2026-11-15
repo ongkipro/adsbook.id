@@ -1,0 +1,548 @@
+{
+  "base": "http://127.0.0.1:8797",
+  "at": "2026-11-15T19:30:36.720Z",
+  "node": "v24.22.1",
+  "replay": {
+    "tenantA": {
+      "applied": 80,
+      "migrated": 80,
+      "bookmarkId": 1,
+      "bookmark": "00000000-00000000-00000000-00000000000000000000000000000000"
+    },
+    "ref": {
+      "state": "match",
+      "expected": 80,
+      "applied": 80,
+      "upgraded": 80
+    },
+    "objects": {
+      "store": 92,
+      "d1": 91
+    },
+    "ignored": [
+      "table:__miniflare_do_name"
+    ],
+    "diff": []
+  },
+  "tenantB": {
+    "applied": 80,
+    "migrated": 80,
+    "bookmarkId": 2,
+    "bookmark": "00000000-00000000-00000000-00000000000000000000000000000000"
+  },
+  "isolation": {
+    "a": {
+      "id": 34,
+      "order_number": "INV-20033",
+      "total_amount": 60000
+    },
+    "bOrders": 200
+  },
+  "upgradeFrom0060": {
+    "to0060": {
+      "applied": 61,
+      "migrated": 61,
+      "bookmarkId": 3,
+      "bookmark": "00000000-00000000-00000000-00000000000000000000000000000000"
+    },
+    "seeded": {
+      "ok": true
+    },
+    "toHead": {
+      "applied": 80,
+      "migrated": 19,
+      "bookmarkId": 4,
+      "bookmark": "00000000-00000001-00000000-00000000000000000000000000000000"
+    },
+    "counts": {
+      "orders": 20,
+      "items": 20,
+      "stamped": 20,
+      "store": "Toko Spike"
+    }
+  },
+  "parity": {
+    "store": {
+      "indexed_insert": {
+        "changes": 1,
+        "last_row_id": 1,
+        "changed_db": true,
+        "rows_read": 6,
+        "rows_written": 4,
+        "results": 0
+      },
+      "indexed_insert_2": {
+        "changes": 1,
+        "last_row_id": 2,
+        "changed_db": true,
+        "rows_read": 7,
+        "rows_written": 4,
+        "results": 0
+      },
+      "on_conflict_do_nothing": {
+        "changes": 0,
+        "last_row_id": 2,
+        "changed_db": false,
+        "rows_read": 7,
+        "rows_written": 1,
+        "results": 0
+      },
+      "noop_update": {
+        "changes": 0,
+        "last_row_id": 2,
+        "changed_db": false,
+        "rows_read": 0,
+        "rows_written": 0,
+        "results": 0
+      },
+      "same_value_update": {
+        "changes": 1,
+        "last_row_id": 2,
+        "changed_db": true,
+        "rows_read": 1,
+        "rows_written": 2,
+        "results": 0
+      },
+      "returning": {
+        "changes": 2,
+        "last_row_id": 2,
+        "changed_db": true,
+        "rows_read": 8,
+        "rows_written": 4,
+        "results": 2
+      },
+      "select": {
+        "changes": 0,
+        "last_row_id": 2,
+        "changed_db": false,
+        "rows_read": 2,
+        "rows_written": 0,
+        "results": 2
+      },
+      "trigger_update_two_orders": {
+        "changes": 4,
+        "last_row_id": 2,
+        "changed_db": true,
+        "rows_read": 10,
+        "rows_written": 10,
+        "results": 0
+      },
+      "batch": [
+        {
+          "changes": 1,
+          "last_row_id": 4,
+          "changed_db": true,
+          "rows_read": 7,
+          "rows_written": 4,
+          "results": 0
+        },
+        {
+          "changes": 0,
+          "last_row_id": 4,
+          "changed_db": false,
+          "rows_read": 3,
+          "rows_written": 0,
+          "results": 1
+        }
+      ],
+      "batch_atomic": {
+        "outcome": "rolled back: UNIQUE constraint failed: parity_t.k: SQLITE_CONSTRAINT (extended: SQLITE_CONSTR",
+        "d_present": 0
+      },
+      "first_column": 2,
+      "raw_with_columns": [
+        [
+          "k",
+          "v"
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "b",
+          3
+        ]
+      ],
+      "numbered_params": {
+        "a": "x",
+        "b": "xy"
+      },
+      "unique_error": "UNIQUE constraint failed: parity_t.k: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)"
+    },
+    "d1": {
+      "indexed_insert": {
+        "changes": 1,
+        "last_row_id": 1,
+        "changed_db": true,
+        "rows_read": 6,
+        "rows_written": 4,
+        "results": 0
+      },
+      "indexed_insert_2": {
+        "changes": 1,
+        "last_row_id": 2,
+        "changed_db": true,
+        "rows_read": 7,
+        "rows_written": 4,
+        "results": 0
+      },
+      "on_conflict_do_nothing": {
+        "changes": 0,
+        "last_row_id": 2,
+        "changed_db": false,
+        "rows_read": 7,
+        "rows_written": 1,
+        "results": 0
+      },
+      "noop_update": {
+        "changes": 0,
+        "last_row_id": 2,
+        "changed_db": false,
+        "rows_read": 0,
+        "rows_written": 0,
+        "results": 0
+      },
+      "same_value_update": {
+        "changes": 1,
+        "last_row_id": 2,
+        "changed_db": true,
+        "rows_read": 1,
+        "rows_written": 2,
+        "results": 0
+      },
+      "returning": {
+        "changes": 2,
+        "last_row_id": 2,
+        "changed_db": true,
+        "rows_read": 8,
+        "rows_written": 4,
+        "results": 2
+      },
+      "select": {
+        "changes": 0,
+        "last_row_id": 2,
+        "changed_db": false,
+        "rows_read": 2,
+        "rows_written": 0,
+        "results": 2
+      },
+      "trigger_update_two_orders": {
+        "changes": 4,
+        "last_row_id": 2,
+        "changed_db": true,
+        "rows_read": 10,
+        "rows_written": 10,
+        "results": 0
+      },
+      "batch": [
+        {
+          "changes": 1,
+          "last_row_id": 4,
+          "changed_db": true,
+          "rows_read": 7,
+          "rows_written": 4,
+          "results": 0
+        },
+        {
+          "changes": 0,
+          "last_row_id": 4,
+          "changed_db": false,
+          "rows_read": 3,
+          "rows_written": 0,
+          "results": 1
+        }
+      ],
+      "batch_atomic": {
+        "outcome": "rolled back: UNIQUE constraint failed: parity_t.k: SQLITE_CONSTRAINT (extended: SQLITE_CONSTR",
+        "d_present": 0
+      },
+      "first_column": 2,
+      "raw_with_columns": [
+        [
+          "k",
+          "v"
+        ],
+        [
+          "a",
+          2
+        ],
+        [
+          "b",
+          3
+        ]
+      ],
+      "numbered_params": {
+        "a": "x",
+        "b": "xy"
+      },
+      "unique_error": "D1_ERROR: UNIQUE constraint failed: parity_t.k: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)"
+    },
+    "mismatches": [
+      "unique_error"
+    ]
+  },
+  "lib": {
+    "store": {
+      "order": {
+        "created": true,
+        "orderNumber": "INV-10001",
+        "totalAmount": 113663,
+        "unitPrice": 50000
+      },
+      "lead": {
+        "action": "created",
+        "again": "updated",
+        "same": true
+      },
+      "bulk": {
+        "updatedIds": [
+          3,
+          4
+        ],
+        "conflictIds": []
+      },
+      "deleted": 1,
+      "leadDelete": "ABN-10002 adalah lead dan tidak pernah d",
+      "items": [
+        {
+          "order_id": 1,
+          "variant_id": 101,
+          "quantity": 2,
+          "unit_price": 50000
+        },
+        {
+          "order_id": 2,
+          "variant_id": 101,
+          "quantity": 1,
+          "unit_price": 50000
+        },
+        {
+          "order_id": 4,
+          "variant_id": 101,
+          "quantity": 1,
+          "unit_price": 50000
+        }
+      ],
+      "orders": [
+        {
+          "order_number": "INV-10001",
+          "shipping_status": "pending",
+          "payment_status": "unpaid",
+          "total_amount": 113663,
+          "voided": 0
+        },
+        {
+          "order_number": "ABN-10002",
+          "shipping_status": "abandoned",
+          "payment_status": "unpaid",
+          "total_amount": 50000,
+          "voided": 0
+        },
+        {
+          "order_number": "INV-20501",
+          "shipping_status": "cancelled",
+          "payment_status": "unpaid",
+          "total_amount": 60000,
+          "voided": 1
+        }
+      ]
+    },
+    "d1": {
+      "order": {
+        "created": true,
+        "orderNumber": "INV-10001",
+        "totalAmount": 113663,
+        "unitPrice": 50000
+      },
+      "lead": {
+        "action": "created",
+        "again": "updated",
+        "same": true
+      },
+      "bulk": {
+        "updatedIds": [
+          3,
+          4
+        ],
+        "conflictIds": []
+      },
+      "deleted": 1,
+      "leadDelete": "ABN-10002 adalah lead dan tidak pernah d",
+      "items": [
+        {
+          "order_id": 1,
+          "variant_id": 101,
+          "quantity": 2,
+          "unit_price": 50000
+        },
+        {
+          "order_id": 2,
+          "variant_id": 101,
+          "quantity": 1,
+          "unit_price": 50000
+        },
+        {
+          "order_id": 4,
+          "variant_id": 101,
+          "quantity": 1,
+          "unit_price": 50000
+        }
+      ],
+      "orders": [
+        {
+          "order_number": "INV-10001",
+          "shipping_status": "pending",
+          "payment_status": "unpaid",
+          "total_amount": 113663,
+          "voided": 0
+        },
+        {
+          "order_number": "ABN-10002",
+          "shipping_status": "abandoned",
+          "payment_status": "unpaid",
+          "total_amount": 50000,
+          "voided": 0
+        },
+        {
+          "order_number": "INV-20501",
+          "shipping_status": "cancelled",
+          "payment_status": "unpaid",
+          "total_amount": 60000,
+          "voided": 1
+        }
+      ]
+    },
+    "mismatches": []
+  },
+  "probe": {
+    "foreign_keys": {
+      "ok": true,
+      "rows": [
+        {
+          "foreign_keys": 1
+        }
+      ]
+    },
+    "user_version": {
+      "ok": false,
+      "error": "not authorized: SQLITE_AUTH"
+    },
+    "begin": {
+      "ok": false,
+      "error": "To execute a transaction, please use the state.storage.transaction() or state.storage.transactionSync() APIs instead of "
+    },
+    "optimize": {
+      "ok": true,
+      "rows": []
+    },
+    "defer_fk": {
+      "ok": true,
+      "rows": []
+    },
+    "current_timestamp": {
+      "ok": true,
+      "rows": [
+        {
+          "now": "2026-11-15 19:30:41"
+        }
+      ]
+    },
+    "json": {
+      "ok": true,
+      "rows": [
+        {
+          "v": 2
+        }
+      ]
+    },
+    "sequence": {
+      "ok": true,
+      "rows": [
+        {
+          "name": "d1_migrations"
+        }
+      ]
+    }
+  },
+  "protocol": {
+    "bookmarkFails": {
+      "error": "TENANT_MIGRATION_BOOKMARK_FAILED",
+      "applied": 0
+    },
+    "stateAfterFailedBookmark": {
+      "applied": 0,
+      "recovery": false,
+      "protocol": 1
+    },
+    "bookmarkDelayed": {
+      "applied": 81,
+      "migrated": 81,
+      "bookmarkId": 7,
+      "bookmark": "00000000-00000001-00000000-00000000000000000000000000000000"
+    },
+    "failing": {
+      "error": "TENANT_MIGRATION_FAILED: 0081_spike_fail.sql: no such table: no_such_table: SQLITE_ERROR"
+    },
+    "stateAfterFailure": {
+      "applied": 81,
+      "recovery": true,
+      "protocol": 1
+    },
+    "retryRefused": {
+      "error": "TENANT_IN_RECOVERY"
+    },
+    "otherTenantStillServes": 200,
+    "before": {
+      "applied": 81,
+      "recovery": false,
+      "protocol": 1
+    },
+    "restore": {
+      "applied": 81,
+      "recovery": true,
+      "protocol": 1
+    },
+    "afterRestore": {
+      "applied": 81,
+      "recovery": true,
+      "protocol": 1
+    }
+  },
+  "latency": {
+    "store": {
+      "read": {
+        "n": 300,
+        "p50": 1,
+        "p95": 2,
+        "max": 5
+      },
+      "insert_batch": {
+        "n": 300,
+        "p50": 5,
+        "p95": 28,
+        "max": 180
+      }
+    },
+    "d1": {
+      "read": {
+        "n": 300,
+        "p50": 4,
+        "p95": 69,
+        "max": 696
+      },
+      "insert_batch": {
+        "n": 300,
+        "p50": 6,
+        "p95": 133,
+        "max": 851
+      }
+    },
+    "resolve": {
+      "n": 300,
+      "p50": 4,
+      "p95": 8,
+      "max": 134
+    }
+  }
+}

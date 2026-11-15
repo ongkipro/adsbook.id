@@ -1,0 +1,19 @@
+// SPIKE-1 (T-16). Local only: run with `npx wrangler dev --local -c spikes/tenant-do/wrangler.jsonc`.
+// No route, no workers.dev, all-zero ids: never deployed (the logged-in account is the live fleet's).
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "adsbook-spike-tenant-do",
+  "main": "./src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "durable_objects": {
+    "bindings": [{ "name": "TENANT_STORE", "class_name": "SpikeTenantStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SpikeTenantStore"] }],
+  "d1_databases": [
+    { "binding": "REF_DB", "database_name": "spike-ref", "database_id": "00000000-0000-0000-0000-000000000001" },
+    { "binding": "PLATFORM_DB", "database_name": "spike-platform", "database_id": "00000000-0000-0000-0000-000000000002" },
+    { "binding": "REF_LIB", "database_name": "spike-ref-lib", "database_id": "00000000-0000-0000-0000-000000000003" }
+  ]
+}
