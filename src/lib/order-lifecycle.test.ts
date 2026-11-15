@@ -1119,6 +1119,28 @@ for (const [name, lateWrite] of [
   });
 }
 
+test("a refusal whose cause is gone by the re-read is still a conflict, not a missing order", async () => {
+  const database = new SqliteD1Database();
+  database.exec(DISPATCH_FIXTURE);
+  // The push claims 104 before the batch, then fails and releases the claim
+  // before deletion can ask why nothing was deleted.
+  const racing = {
+    prepare: (sql: string) => database.prepare(sql),
+    async batch(statements: D1PreparedStatement[]) {
+      database.exec("UPDATE orders SET provider_dispatch_error = 'DISPATCHING', provider_dispatch_claimed_at = '2026-11-16T03:00:00.000Z' WHERE id = 104");
+      const results = await database.batch(statements);
+      database.exec("UPDATE orders SET provider_dispatch_error = 'Kurir menolak.', provider_dispatch_claimed_at = NULL WHERE id = 104");
+      return results;
+    },
+  } as unknown as D1Database;
+
+  await assert.rejects(
+    deleteOrdersReleasingReservations(racing, [104]),
+    (error: unknown) => error instanceof OrderLifecycleError && error.status === 409,
+  );
+  assert.deepEqual(ownedRows(database, 104), INTACT);
+});
+
 test("the delete routes answer 409 for a claimed order and keep it", async () => {
   const claimed = () =>
     databaseWithOrders(

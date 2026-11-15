@@ -460,6 +460,17 @@ export async function deleteOrdersReleasingReservations(
   const deleted = (results.at(-1)?.results || []) as DeletedOrder[];
   // Nothing deleted is either a repeat (the rows are gone) or the in-statement
   // guard: the reads name which, with the same message as before the batch.
-  if (deleted.length === 0) await refuseUndeletable();
+  if (deleted.length === 0) {
+    await refuseUndeletable();
+    // The guard refused, and what tripped it has already moved on (a push that
+    // failed and released its claim). The order is still there, so this is a
+    // conflict to retry, never "not found" or an empty success.
+    const survivor = await firstSelected("1 = 1");
+    if (survivor) {
+      throw new OrderLifecycleError(
+        `Order ${survivor.order_number} berubah saat akan dihapus. Muat ulang lalu coba lagi.`,
+      );
+    }
+  }
   return deleted;
 }
