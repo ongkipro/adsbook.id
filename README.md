@@ -1,10 +1,10 @@
 # AdsBookCMS
 
-> Verified against disk: 2026-11-13 @ `1403298` (test command and count, migration count, documentation repository, multi-tenant direction note). Previously: 2026-11-02 @ `f53486c` (test count only; the rest retains its recorded evidence and links to the owning documents)
+> Verified against disk: 2026-11-16 @ `96fdd8a` (test count 1227). Previously: 2026-11-16 @ `18d0a4a` (canonical `docs/spec/02-PRD.md` and `TASKS.md` pointers aligned with `adsbook.id-docs`). Previously: 2026-11-13 @ `1403298` (test command and count, migration count, documentation repository, multi-tenant direction note). Previously: 2026-11-02 @ `f53486c` (test count only; the rest retains its recorded evidence and links to the owning documents)
 
 A self-contained direct-response commerce CMS that installs onto Cloudflare Workers. One install runs one store: storefront, landing-page builder, checkout with COD and online payment, order management, courier dispatch, ad-signal tracking, and an admin dashboard — in a single Worker with its own database.
 
-> **adsbook.id** — a new **multi-tenant SaaS** built from the AdsBookCMS code base (ADR-038): many merchants on one platform Worker, one SQLite Durable Object per tenant in Asia-Pacific, merchant domains through Cloudflare for SaaS (PRD A49, ADR-039 Option D accepted; design `docs/architecture/MULTI-TENANT-DESIGN.md`). **The code in this repository is still the single-tenant base**; the sections below describe it as it is today and change as the platform tasks land. **Documentation lives in a separate private repository, adsbook.id-docs**, cloned beside this one: `../adsbook.id-docs/docs/`. Every `docs/...` path below is relative to that repository's root. Start at `../adsbook.id-docs/docs/operations/STATUS.md`.
+> **adsbook.id** — a new **multi-tenant SaaS** built from the AdsBookCMS code base (ADR-038): many merchants on one platform Worker, one SQLite Durable Object per tenant in Asia-Pacific, merchant domains through Cloudflare for SaaS (`docs/spec/02-PRD.md`, ADR-039 Option D accepted; design `docs/architecture/MULTI-TENANT-DESIGN.md`). **The code in this repository is still the single-tenant base**; the sections below describe it as it is today and change as the platform tasks land. **Documentation lives in a separate private repository, adsbook.id-docs**, cloned beside this one: `../adsbook.id-docs/docs/`. Every `docs/...` path below is relative to that repository's root. Start at `../adsbook.id-docs/docs/operations/STATUS.md`.
 
 **Install model: 1 installer = 1 Worker = 1 store.** Isolation comes from the deployment boundary, not from tenant routing inside the application (`docs/architecture/DECISIONS.md` ADR-001).
 
@@ -12,7 +12,7 @@ A self-contained direct-response commerce CMS that installs onto Cloudflare Work
 
 ## Install in one click
 
-> The inherited "Deploy to Cloudflare" one-click install (one Worker per store) does not apply to adsbook.id: merchants will sign up on the platform instead (PRD A49 REQ-290). The steps below are kept as the single-tenant reference.
+> The inherited "Deploy to Cloudflare" one-click install (one Worker per store) does not apply to adsbook.id: merchants will sign up on the platform instead (`docs/spec/02-PRD.md` PR-11). The steps below are kept as the single-tenant reference.
 
 Like a WordPress installer, with Cloudflare doing the hosting part:
 
@@ -110,7 +110,7 @@ Every command below exists in `package.json`.
 npm run dev            # astro dev on :4321 — no Worker bindings
 npm run cf:dev         # wrangler dev --local
 
-npm test               # node --test over src/lib and src/plugins tests (1207 tests)
+npm test               # node --test over src/lib and src/plugins tests (1227 tests)
 npm run route-map      # regenerate doc/ROUTE-MAP.md + doc/route-map.xml from src/pages
 npm run check          # astro check && tsc --noEmit
 npm run build          # astro build
@@ -193,4 +193,4 @@ The one document that cannot drift is the one that is not written: `doc/ROUTE-MA
 
 All ten structural gaps in `docs/architecture/ARCHITECTURE.md` §10 are closed. Remaining audited defects and blocked provider work live in `docs/product/UNIMPLEMENTED_SPECS.md`; current executable state is in `docs/operations/STATUS.md`.
 
-Current state is `docs/operations/STATUS.md`; the active backlog is Phase A in `docs/product/TASKS.md`; history is `docs/history/BUILD-LOG.md`.
+Current state is `docs/operations/STATUS.md`; the one execution queue is `docs/product/TASKS.md` (phases 2–4 in `docs/product/tasks/`); history is `docs/history/BUILD-LOG.md`.
