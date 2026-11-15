@@ -479,3 +479,109 @@ test("an inactive product's variant id never falls through to another product's 
   const database = variantDatabase(SARATOGA_AND_KOJIEN, [50510]);
   assert.equal(await findOrderVariant(database, "1"), null);
 });
+
+// ── PR-3: a capture that lost the race to checkout, on the real migration chain ──
+
+import { readdirSync, readFileSync } from "node:fs";
+import { splitMigrationStatements } from "./schema-version.ts";
+
+function chainDatabase() {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec("PRAGMA foreign_keys = ON");
+  const directory = new URL("../db/migrations/", import.meta.url);
+  for (const name of readdirSync(directory).filter((file) => file.endsWith(".sql")).sort()) {
+    for (const sql of splitMigrationStatements(readFileSync(new URL(name, directory), "utf8"))) sqlite.exec(sql);
+  }
+  sqlite.exec(`
+    INSERT INTO stores (id, name, slug, created_at) VALUES (1, 'Toko Uji', 'toko-uji', '2026-11-01T00:00:00.000Z');
+    INSERT INTO products (id, store_id, title, slug, created_at) VALUES (11111, 1, 'Pupuk', 'pupuk', '2026-11-01T00:00:00.000Z');
+    INSERT INTO product_variants (id, product_id, sku, title, price) VALUES (101, 11111, 'P-1', '1 kg', 50000);
+    INSERT INTO product_variants (id, product_id, sku, title, price) VALUES (102, 11111, 'P-2', '2 kg', 90000);
+  `);
+  type Value = null | number | string;
+  const statement = (sql: string, values: Value[] = []) => ({
+    bind: (...next: Value[]) => statement(sql, next.map((value) => value ?? null)),
+    first: async () => sqlite.prepare(sql).get(...values) ?? null,
+    all: async () => ({ results: sqlite.prepare(sql).all(...values) }),
+    run: async () => {
+      // A batch reads its last statement's rows; a write reports its changes.
+      if (/^\s*SELECT\b/i.test(sql)) return { results: sqlite.prepare(sql).all(...values), meta: { changes: 0 } };
+      return { results: [], meta: { changes: Number(sqlite.prepare(sql).run(...values).changes) } };
+    },
+  });
+  const batch = async (statements: Array<ReturnType<typeof statement>>) => {
+    // D1 runs a batch as one transaction.
+    sqlite.exec("BEGIN");
+    try {
+      const results = [];
+      for (const item of statements) results.push(await item.run());
+      sqlite.exec("COMMIT");
+      return results;
+    } catch (error) {
+      sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  };
+  const prepare = (sql: string) => statement(sql);
+  const items = (orderId: number) =>
+    sqlite
+      .prepare("SELECT variant_id, quantity, unit_price FROM order_items WHERE order_id = ? ORDER BY id")
+      .all(orderId)
+      .map((row) => ({ ...row }));
+  const order = (orderId: number) => ({
+    ...sqlite.prepare("SELECT shipping_status, total_amount, customer_name FROM orders WHERE id = ?").get(orderId),
+  });
+  return { database: { prepare, batch } as unknown as D1Database, prepare, batch, items, order };
+}
+
+const LEAD = { customerName: "Siti Rahayu", customerPhone: "081234567890", address: "Jl. Melati 10", province: "ID-JB" };
+
+test("a capture that arrives after checkout promoted its lead leaves the order's items alone", async () => {
+  const { database, prepare, batch, items, order } = chainDatabase();
+  const lead = await recordAbandonedOrder(database, { ...LEAD, variantId: 101 });
+  assert.deepEqual(items(lead.id), [{ variant_id: 101, quantity: 1, unit_price: 50000 }]);
+
+  // The late capture has already read the row as abandoned when checkout
+  // promotes it: the promotion runs between that read and the capture's batch.
+  let checkoutItems: unknown[] = [];
+  let checkoutOrder: unknown;
+  const racing = {
+    prepare,
+    async batch(statements: Parameters<typeof batch>[0]) {
+      const promoted = await persistOrder(database, {
+        submitToken: "sb_checkout_wins",
+        ...LEAD,
+        customerPhone: "6281234567890",
+        city: "Bogor",
+        district: "Bogor Tengah",
+        variantKey: "101",
+        quantity: 2,
+        shippingCost: 10000,
+        paymentMethod: "cod",
+      });
+      assert.equal(promoted.id, lead.id, "checkout must promote the lead, not open a second order");
+      checkoutItems = items(lead.id);
+      checkoutOrder = order(lead.id);
+      return batch(statements);
+    },
+  } as unknown as D1Database;
+
+  await recordAbandonedOrder(racing, { ...LEAD, customerName: "Siti R", variantId: 102 });
+
+  assert.deepEqual(checkoutItems, [{ variant_id: 101, quantity: 2, unit_price: 50000 }]);
+  assert.deepEqual(items(lead.id), checkoutItems, "a completed order's items changed after checkout");
+  assert.deepEqual(order(lead.id), checkoutOrder, "a completed order's row changed after checkout");
+  assert.equal(order(lead.id).shipping_status, "pending");
+});
+
+test("a capture on a row that is still a lead replaces its item as before", async () => {
+  const { database, items, order } = chainDatabase();
+  const lead = await recordAbandonedOrder(database, { ...LEAD, variantId: 101 });
+  const again = await recordAbandonedOrder(database, { ...LEAD, variantId: 102 });
+
+  assert.equal(again.action, "updated");
+  assert.equal(again.id, lead.id);
+  assert.deepEqual(items(lead.id), [{ variant_id: 102, quantity: 1, unit_price: 90000 }]);
+  assert.equal(order(lead.id).shipping_status, "abandoned");
+  assert.equal(order(lead.id).total_amount, 90000);
+});

@@ -30,10 +30,47 @@ interface ChangelogRelease {
 // changelog.test.ts fails when version.ts moves without a matching entry here.
 const CHANGELOG_RELEASES: ChangelogRelease[] = [
   {
+    version: "1.10.1",
+    date: "16 November 2026",
+    releaseTag: "2026.11-integrity",
+    isLatest: true,
+    highlight: "Perbaikan ketepatan data order. Tidak ada fitur baru dan tidak ada perubahan database.",
+    changes: [
+      {
+        title: "Catatan internal tidak lagi tampil sebagai halaman",
+        description: "Alamat /landing/README, sebuah catatan internal yang ikut terbuka sebagai halaman toko, sudah dihapus. Berkas sejenis kini ditolak otomatis sebelum rilis.",
+      },
+      {
+        title: "Dokumentasi diperiksa otomatis",
+        description: "Dokumentasi produk kini berada di repositori terpisah dan tautannya diperiksa otomatis. Tidak ada yang berubah di toko.",
+      },
+      {
+        title: "Item order tidak berubah setelah checkout",
+        description: "Catatan pesanan tertinggal yang datang terlambat tidak lagi mengganti item order yang sudah selesai checkout.",
+      },
+      {
+        title: "Order yang sedang dikirim ke Mengantar tidak bisa dihapus",
+        description: "Order tidak dapat dihapus selama sedang di-push ke Mengantar atau selama hasil push-nya belum pasti. Cek dashboard Mengantar dan selesaikan status push-nya dulu.",
+      },
+      {
+        title: "Checkout lewat API mengikuti saklar AutoLaris",
+        description: "Bila AutoLaris dimatikan di pengaturan, checkout lewat API ikut menolak QRIS dan Virtual Account, sama seperti form di toko.",
+      },
+      {
+        title: "Purchase terjadwal memakai alamat toko",
+        description: "Purchase yang dikirim tugas terjadwal kini memakai alamat toko dari pengaturan, bukan alamat bawaan, dan email buatan sistem tidak ikut dikirim ke Meta.",
+      },
+      {
+        title: "Perubahan status yang bentrok ditolak",
+        description: "Bila status sebuah order diubah dari dua tempat hampir bersamaan, perubahan kedua ditolak dan diminta muat ulang. Pada ubah status massal, order yang statusnya sudah berubah dilewati dan jumlahnya disebutkan.",
+      },
+    ],
+  },
+  {
     version: "1.10.0",
     date: "10 November 2026",
     releaseTag: "2026.11-signal",
-    isLatest: true,
+    isLatest: false,
     highlight: "Setiap order COD sampai ke Meta sebagai Purchase, langsung dari server.",
     changes: [
       {

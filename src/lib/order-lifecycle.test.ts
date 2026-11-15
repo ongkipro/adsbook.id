@@ -18,6 +18,7 @@ type TestOrder = OrderLifecycleState & {
   customer_name?: string;
   customer_phone?: string;
   provider_dispatch_claimed_at?: string | null;
+  provider_dispatch_error?: string | null;
   receiver_rts_score?: number | null;
   rts_risk_label?: string | null;
   receiver_performance_json?: string | null;
@@ -121,6 +122,18 @@ class FakeStatement {
         );
       return (committed ? { order_number: committed.order_number } : null) as T;
     }
+    if (this.sql.includes("o.provider_dispatch_claimed_at IS NOT NULL")) {
+      const inDoubt = this.args
+        .map((id) => this.database.state.orders.get(Number(id)))
+        .find(
+          (order) =>
+            order &&
+            (Boolean(order.provider_dispatch_claimed_at) ||
+              order.provider_dispatch_error === "DISPATCHING" ||
+              Boolean(order.provider_dispatch_error?.startsWith("DISPATCH_UNKNOWN:"))),
+        );
+      return (inDoubt ? { order_number: inDoubt.order_number } : null) as T;
+    }
     const numericArgs = this.args
       .map(Number)
       .filter((value) => Number.isInteger(value) && value > 0);
@@ -147,7 +160,7 @@ class FakeStatement {
       cod_fee_bearer: "buyer",
       confirmed_at: null,
       courier_service: null,
-      provider_dispatch_error: null,
+      provider_dispatch_error: value.provider_dispatch_error ?? null,
       provider_dispatch_claimed_at: value.provider_dispatch_claimed_at ?? null,
       receiver_delivery_rate: value.receiver_rts_score ?? null,
       receiver_risk_label: value.rts_risk_label ?? null,
@@ -167,6 +180,8 @@ class FakeD1Database {
   state: TestState;
   failOnSql: string | null = null;
   beforeCustomerUpdate: ((order: TestOrder) => void) | null = null;
+  /** Runs once, between a request's reads and its write batch. */
+  beforeNextBatch: (() => void | Promise<void>) | null = null;
 
   constructor(state: TestState) {
     this.state = cloneState(state);
@@ -177,6 +192,9 @@ class FakeD1Database {
   }
 
   async batch(statements: D1PreparedStatement[]) {
+    const interleave = this.beforeNextBatch;
+    this.beforeNextBatch = null;
+    await interleave?.();
     const before = cloneState(this.state);
     try {
       const results = [];
@@ -196,6 +214,15 @@ class FakeD1Database {
       throw new Error("injected D1 statement failure");
     }
     const ids = args.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    // The single-order write is bound to the state it was validated against:
+    // `... WHERE id = ? AND payment_method = ? AND payment_status = ? AND shipping_status = ?`.
+    const stateGuarded = sql.includes("AND payment_method = ? AND payment_status = ? AND shipping_status = ?");
+    const guardedTargetId = Number(args.at(stateGuarded ? -4 : -1));
+    const stateMoved = (current: TestOrder) =>
+      stateGuarded &&
+      (current.payment_method !== args.at(-3) ||
+        current.payment_status !== args.at(-2) ||
+        current.shipping_status !== args.at(-1));
 
     if (sql.includes("UPDATE product_variants")) {
       const releaseStateRequired = sql.includes("o.shipping_status IN");
@@ -235,10 +262,10 @@ class FakeD1Database {
       sql.includes("UPDATE orders") &&
       (sql.includes("customer_phone = ?") || sql.includes("customer_name = ?"))
     ) {
-      const targetId = Number(args.at(-1));
-      const current = this.state.orders.get(targetId);
+      const current = this.state.orders.get(guardedTargetId);
       if (!current) return result();
       this.beforeCustomerUpdate?.(current);
+      if (stateMoved(current)) return result();
       if (
         sql.includes("provider_order_id IS NULL") &&
         (current.provider_order_id ||
@@ -281,18 +308,35 @@ class FakeD1Database {
       return result(changes);
     }
 
-    if (sql.includes("UPDATE orders") && sql.includes("shipping_status")) {
-      const literalStatus = sql.match(/SET shipping_status = '([^']+)'/)?.[1];
-      const status = literalStatus || String(args[0]);
-      const targetIds = literalStatus ? ids : [Number(args.at(-1))];
-      let changes = 0;
-      for (const id of targetIds) {
+    if (sql.includes("UPDATE orders") && sql.includes("json_each")) {
+      // The bulk write: each order only while it is still in its validated state.
+      const status = sql.match(/SET shipping_status = '([^']+)'/)?.[1] || "";
+      const updated = [];
+      for (const [id, paymentMethod, paymentStatus, shippingStatus] of JSON.parse(String(args[0])) as [number, string, string, string][]) {
         const current = this.state.orders.get(id);
-        if (!current) continue;
+        if (
+          !current ||
+          current.payment_method !== paymentMethod ||
+          current.payment_status !== paymentStatus ||
+          current.shipping_status !== shippingStatus
+        ) continue;
         current.shipping_status = status;
-        changes += 1;
+        updated.push({ id });
       }
-      return result(changes);
+      return result(updated.length, updated);
+    }
+
+    if (sql.includes("UPDATE orders") && sql.includes("shipping_status")) {
+      const current = this.state.orders.get(guardedTargetId);
+      if (!current || stateMoved(current)) return result();
+      const setClause = sql.match(/SET([\s\S]+?)WHERE/i)?.[1] || "";
+      setClause
+        .split(",")
+        .map((entry) => entry.match(/^\s*([a-z_]+)\s*=\s*\?/i)?.[1])
+        .forEach((column, index) => {
+          if (column) (current as unknown as Record<string, unknown>)[column] = args[index];
+        });
+      return result(1);
     }
 
     if (sql.includes("DELETE FROM order_items")) {
@@ -352,6 +396,10 @@ class SqliteStatement {
     return (this.prepare().get(...this.values) as T | undefined) ?? null;
   }
 
+  async all<T>() {
+    return { results: this.prepare().all(...this.values) as T[] };
+  }
+
   execute() {
     const statement = this.prepare();
     if (/\bRETURNING\b/i.test(this.sql)) {
@@ -386,6 +434,8 @@ class SqliteD1Database {
         courier_code TEXT,
         cnote_no TEXT,
         provider_order_id TEXT,
+        provider_dispatch_error TEXT,
+        provider_dispatch_claimed_at TEXT,
         stock_restored_at TEXT
       );
       CREATE TABLE order_items (
@@ -709,25 +759,25 @@ test("changing a destination cannot retain a stale courier quote", async () => {
 
 test("bulk cancellation releases once across repeat attempts", async () => {
   const database = databaseWithOrders(order(21), order(22));
-  assert.equal(
+  assert.deepEqual(
     await updateAdminOrderShippingStatuses(
       database as unknown as D1Database,
       [21, 22],
       "cancelled",
     ),
-    2,
+    { updatedIds: [21, 22], conflictIds: [] },
   );
   const released = [21, 22].map((id) => database.state.orders.get(id)?.stock_restored_at);
   assert.ok(released.every(Boolean));
   assert.equal(database.state.variants.get(501), 10);
 
-  assert.equal(
+  assert.deepEqual(
     await updateAdminOrderShippingStatuses(
       database as unknown as D1Database,
       [21, 22],
       "cancelled",
     ),
-    2,
+    { updatedIds: [21, 22], conflictIds: [] },
   );
   assert.deepEqual(
     [21, 22].map((id) => database.state.orders.get(id)?.stock_restored_at),
@@ -1025,4 +1075,326 @@ test("an order paid by the provider check or already with the courier cannot be 
   }
   const deleted = await deleteOrdersReleasingReservations(database as unknown as D1Database, [93]);
   assert.deepEqual(deleted.map((row) => row.order_number), ["INV-10093"]);
+});
+
+// ── PR-4: no delete while Mengantar may hold the shipment ───────────────────
+
+const DISPATCH_FIXTURE = `
+  INSERT INTO product_variants (id, stock) VALUES (501, 10);
+  INSERT INTO orders (
+    id, order_number, payment_method, payment_status, shipping_status,
+    provider_dispatch_error, provider_dispatch_claimed_at
+  ) VALUES
+    (101, 'INV-10101', 'cod', 'unpaid', 'pending', 'DISPATCHING', '2026-11-16T03:00:00.000Z'),
+    (102, 'INV-10102', 'cod', 'unpaid', 'pending', 'DISPATCH_UNKNOWN: koneksi terputus', NULL),
+    (103, 'INV-10103', 'cod', 'unpaid', 'pending', 'Kredensial Mengantar belum lengkap.', NULL),
+    (104, 'INV-10104', 'cod', 'unpaid', 'pending', NULL, NULL);
+  INSERT INTO order_items (order_id, variant_id, quantity) VALUES
+    (101, 501, 1), (102, 501, 1), (103, 501, 1), (104, 501, 1);
+  INSERT INTO payment_transactions (order_id, reference_id) VALUES
+    (101, 'INV-10101'), (102, 'INV-10102'), (103, 'INV-10103'), (104, 'INV-10104');
+`;
+
+/** What deletion would remove, and the void marker it must not leave behind. */
+const ownedRows = (database: SqliteD1Database, id: number) =>
+  ({
+    ...database.get<Record<string, unknown>>(
+      `SELECT (SELECT COUNT(*) FROM orders WHERE id = ${id}) AS orders,
+        (SELECT COUNT(*) FROM order_items WHERE order_id = ${id}) AS items,
+        (SELECT COUNT(*) FROM payment_transactions WHERE order_id = ${id}) AS payments,
+        (SELECT stock_restored_at FROM orders WHERE id = ${id}) AS voided`,
+    ),
+  });
+const INTACT = { orders: 1, items: 1, payments: 1, voided: null };
+const refusedAsConflict = (error: unknown) =>
+  error instanceof OrderLifecycleError && error.status === 409 && /Mengantar/.test(error.message);
+
+test("an order with a dispatch claim or an unknown dispatch outcome cannot be deleted", async () => {
+  const database = new SqliteD1Database();
+  database.exec(DISPATCH_FIXTURE);
+  const d1 = database as unknown as D1Database;
+
+  // Claimed (101), unknown outcome with no provider id (102), and either one
+  // inside a selection that is otherwise deletable: the whole request refuses.
+  for (const ids of [[101], [102], [104, 101], [104, 102]]) {
+    await assert.rejects(deleteOrdersReleasingReservations(d1, ids), refusedAsConflict);
+    for (const id of ids) assert.deepEqual(ownedRows(database, id), INTACT, `order ${id}`);
+  }
+
+  // A push that failed outright released its claim: nothing is with Mengantar.
+  const deleted = await deleteOrdersReleasingReservations(d1, [103, 104]);
+  assert.deepEqual(deleted.map((row) => row.id).sort(), [103, 104]);
+  assert.deepEqual(ownedRows(database, 104), { orders: 0, items: 0, payments: 0, voided: null });
+});
+
+for (const [name, lateWrite] of [
+  ["claims the order", "UPDATE orders SET provider_dispatch_error = 'DISPATCHING', provider_dispatch_claimed_at = '2026-11-16T03:00:00.000Z' WHERE id = 104"],
+  ["leaves an unknown outcome", "UPDATE orders SET provider_dispatch_error = 'DISPATCH_UNKNOWN: timeout' WHERE id = 104"],
+  ["finishes and records the shipment", "UPDATE orders SET provider_order_id = 'MGN-104', shipping_status = 'processing' WHERE id = 104"],
+  ["is preceded by a payment", "UPDATE orders SET payment_status = 'paid' WHERE id = 104"],
+] as const) {
+  test(`delete is refused when a push ${name} after deletion's reads`, async () => {
+    const database = new SqliteD1Database();
+    database.exec(DISPATCH_FIXTURE);
+    // Deletion has read 103 and 104 as deletable; the write lands before its batch.
+    const racing = {
+      prepare: (sql: string) => database.prepare(sql),
+      batch(statements: D1PreparedStatement[]) {
+        database.exec(lateWrite);
+        return database.batch(statements);
+      },
+    } as unknown as D1Database;
+
+    await assert.rejects(
+      deleteOrdersReleasingReservations(racing, [103, 104]),
+      (error: unknown) => error instanceof OrderLifecycleError && error.status === 409,
+    );
+    assert.deepEqual(ownedRows(database, 104), INTACT);
+    assert.deepEqual(ownedRows(database, 103), INTACT, "all or nothing: the deletable sibling stays too");
+  });
+}
+
+test("a refusal whose cause is gone by the re-read is still a conflict, not a missing order", async () => {
+  const database = new SqliteD1Database();
+  database.exec(DISPATCH_FIXTURE);
+  // The push claims 104 before the batch, then fails and releases the claim
+  // before deletion can ask why nothing was deleted.
+  const racing = {
+    prepare: (sql: string) => database.prepare(sql),
+    async batch(statements: D1PreparedStatement[]) {
+      database.exec("UPDATE orders SET provider_dispatch_error = 'DISPATCHING', provider_dispatch_claimed_at = '2026-11-16T03:00:00.000Z' WHERE id = 104");
+      const results = await database.batch(statements);
+      database.exec("UPDATE orders SET provider_dispatch_error = 'Kurir menolak.', provider_dispatch_claimed_at = NULL WHERE id = 104");
+      return results;
+    },
+  } as unknown as D1Database;
+
+  await assert.rejects(
+    deleteOrdersReleasingReservations(racing, [104]),
+    (error: unknown) => error instanceof OrderLifecycleError && error.status === 409,
+  );
+  assert.deepEqual(ownedRows(database, 104), INTACT);
+});
+
+test("the delete routes answer 409 for a claimed order and keep it", async () => {
+  const claimed = () =>
+    databaseWithOrders(
+      order(111, "pending", {
+        provider_dispatch_error: "DISPATCHING",
+        provider_dispatch_claimed_at: "2026-11-16T03:00:00.000Z",
+      }),
+    );
+  const single = claimed();
+  const bulk = claimed();
+  const responses = [
+    await detailRoute.DELETE({ params: { id: "111" }, locals: locals(single) } as never),
+    await bulkRoute.DELETE({
+      request: new Request("https://example.test/api/admin/orders", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids: [111] }),
+      }),
+      locals: locals(bulk),
+    } as never),
+  ];
+  for (const response of responses) {
+    assert.equal(response.status, 409);
+    assert.match(((await response.json()) as { error: string }).error, /Mengantar/);
+  }
+  assert.equal(single.state.orders.has(111), true);
+  assert.equal(bulk.state.orders.has(111), true);
+  assert.equal(single.state.items.length, 1);
+});
+
+// ── PR-7: an admin status write lands only on the state it was validated against ──
+
+const shippedOrder = (id: number, overrides: Partial<TestOrder> = {}) =>
+  order(id, "processing", {
+    provider_order_id: `provider-${id}`,
+    courier_code: "jne",
+    cnote_no: `WAYBILL-${id}`,
+    ...overrides,
+  });
+
+const patchStatus = (database: FakeD1Database, id: number, shippingStatus: string) =>
+  detailRoute.PATCH({
+    params: { id: String(id) },
+    request: new Request(`https://example.test/api/admin/orders/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ shipping_status: shippingStatus }),
+    }),
+    locals: locals(database),
+  } as never);
+
+const bulkStatus = (database: FakeD1Database, ids: number[], status: string) =>
+  bulkRoute.POST({
+    request: new Request("https://example.test/api/admin/orders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ order_ids: ids.map(String), status }),
+    }),
+    locals: locals(database),
+  } as never);
+
+test("two status changes validated against one processing order: the second answers 409 and the first stays", async () => {
+  const database = databaseWithOrders(shippedOrder(121));
+  // `delivered` has read and validated the order as processing when `returned`
+  // is applied in full; only then does `delivered` reach its write.
+  let returned: Response | undefined;
+  database.beforeNextBatch = async () => {
+    returned = await patchStatus(database, 121, "returned");
+  };
+  const delivered = await patchStatus(database, 121, "delivered");
+
+  assert.equal(returned?.status, 200);
+  assert.equal(delivered.status, 409);
+  assert.match(((await delivered.json()) as { error: string }).error, /Status order berubah/);
+  assert.equal(database.state.orders.get(121)?.shipping_status, "returned");
+  assert.ok(database.state.orders.get(121)?.stock_restored_at, "the return that succeeded voided the order");
+});
+
+test("a refused status write never sets the void marker", async () => {
+  const database = databaseWithOrders(shippedOrder(122));
+  database.beforeNextBatch = async () => {
+    await patchStatus(database, 122, "delivered");
+  };
+  const returned = await patchStatus(database, 122, "returned");
+
+  assert.equal(returned.status, 409);
+  assert.equal(database.state.orders.get(122)?.shipping_status, "delivered");
+  assert.equal(database.state.orders.get(122)?.stock_restored_at, null);
+});
+
+test("a payment marked paid by hand is refused when the payment method changed after validation", async () => {
+  // Validated as COD, where an operator may mark `paid`; by the write the
+  // order is QRIS, where only the AutoLaris reconciliation may. The two
+  // statuses never moved, so only the method in the guard can refuse it.
+  const database = databaseWithOrders(order(124));
+  database.beforeNextBatch = () => {
+    database.state.orders.get(124)!.payment_method = "qris";
+  };
+  const response = await detailRoute.PATCH({
+    params: { id: "124" },
+    request: new Request("https://example.test/api/admin/orders/124", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ payment_status: "paid" }),
+    }),
+    locals: locals(database),
+  } as never);
+
+  assert.equal(response.status, 409);
+  assert.equal(database.state.orders.get(124)?.payment_status, "unpaid");
+});
+
+test("a single uncontended status change still applies", async () => {
+  const database = databaseWithOrders(shippedOrder(123));
+  const response = await patchStatus(database, 123, "delivered");
+  assert.equal(response.status, 200);
+  assert.equal(database.state.orders.get(123)?.shipping_status, "delivered");
+});
+
+test("the guarded write and the bulk write hold on a real SQLite engine", async () => {
+  const database = new SqliteD1Database();
+  database.exec(`
+    INSERT INTO orders (id, order_number, payment_method, payment_status, shipping_status, courier_code, cnote_no, provider_order_id) VALUES
+      (131, 'INV-10131', 'cod', 'unpaid', 'processing', 'jne', 'W-131', 'MGN-131'),
+      (132, 'INV-10132', 'cod', 'unpaid', 'processing', 'jne', 'W-132', 'MGN-132'),
+      (133, 'INV-10133', 'cod', 'unpaid', 'processing', 'jne', 'W-133', 'MGN-133'),
+      (134, 'INV-10134', 'cod', 'unpaid', 'pending', NULL, NULL, NULL),
+      (135, 'INV-10135', 'cod', 'unpaid', 'pending', NULL, NULL, NULL);
+  `);
+  const d1 = database as unknown as D1Database;
+  const row = (id: number) =>
+    ({ ...database.get<Record<string, unknown>>(`SELECT shipping_status, stock_restored_at FROM orders WHERE id = ${id}`) });
+
+  // Single: both changes carry the state they were validated against.
+  const validated = (await d1.prepare("SELECT * FROM orders WHERE id = ?").bind(131).first<OrderLifecycleState>())!;
+  const write = (status: string) =>
+    applyOrderLifecycleMutation(
+      d1,
+      validated,
+      { shippingStatus: status },
+      d1
+        .prepare("UPDATE orders SET shipping_status = ? WHERE id = ? AND payment_method = ? AND payment_status = ? AND shipping_status = ?")
+        .bind(status, 131, validated.payment_method, validated.payment_status, validated.shipping_status),
+    );
+  assert.equal((await write("returned")).updated, true);
+  assert.deepEqual(await write("delivered"), { updated: false, stockRestored: false });
+  assert.equal(row(131).shipping_status, "returned");
+  assert.ok(row(131).stock_restored_at);
+
+  // Bulk: 133 is returned by someone else after validation; 132 still applies.
+  const interleaved = (lateWrite: string) =>
+    ({
+      prepare: (sql: string) => database.prepare(sql),
+      batch(statements: D1PreparedStatement[]) {
+        database.exec(lateWrite);
+        return database.batch(statements);
+      },
+    }) as unknown as D1Database;
+  assert.deepEqual(
+    await updateAdminOrderShippingStatuses(
+      interleaved("UPDATE orders SET shipping_status = 'returned' WHERE id = 133"),
+      [132, 133],
+      "delivered",
+    ),
+    { updatedIds: [132], conflictIds: [133] },
+  );
+  assert.equal(row(132).shipping_status, "delivered");
+  assert.equal(row(133).shipping_status, "returned");
+
+  // Bulk cancel: 135 is pushed to the courier after validation. It is skipped
+  // and, unlike 134, never marked void.
+  assert.deepEqual(
+    await updateAdminOrderShippingStatuses(
+      interleaved("UPDATE orders SET shipping_status = 'processing', provider_order_id = 'MGN-135' WHERE id = 135"),
+      [134, 135],
+      "cancelled",
+    ),
+    { updatedIds: [134], conflictIds: [135] },
+  );
+  assert.equal(row(134).shipping_status, "cancelled");
+  assert.ok(row(134).stock_restored_at);
+  assert.deepEqual(row(135), { shipping_status: "processing", stock_restored_at: null });
+
+  // The payment method is part of the validated state.
+  assert.deepEqual(
+    await updateAdminOrderShippingStatuses(
+      interleaved("UPDATE orders SET payment_method = 'qris' WHERE id = 132"),
+      [132],
+      "returned",
+    ),
+    { updatedIds: [], conflictIds: [132] },
+  );
+  assert.equal(row(132).shipping_status, "delivered");
+});
+
+test("the bulk status route applies the rest and names the conflicts", async () => {
+  type BulkBody = { success: boolean; error?: string; message?: string; data: { updated_count: number; conflict_order_ids: string[] } };
+  const partial = databaseWithOrders(shippedOrder(141), shippedOrder(142));
+  partial.beforeNextBatch = () => {
+    partial.state.orders.get(142)!.shipping_status = "returned";
+  };
+  const response = await bulkStatus(partial, [141, 142], "delivered");
+  const body = (await response.json()) as BulkBody;
+  assert.equal(response.status, 200);
+  assert.equal(body.data.updated_count, 1);
+  assert.deepEqual(body.data.conflict_order_ids, ["142"]);
+  assert.match(body.message || "", /1 order tidak diubah/);
+  assert.equal(partial.state.orders.get(141)?.shipping_status, "delivered");
+  assert.equal(partial.state.orders.get(142)?.shipping_status, "returned");
+
+  // Nothing applied is a conflict, not a success with a zero.
+  const none = databaseWithOrders(shippedOrder(143));
+  none.beforeNextBatch = () => {
+    none.state.orders.get(143)!.shipping_status = "returned";
+  };
+  const refused = await bulkStatus(none, [143], "delivered");
+  const refusedBody = (await refused.json()) as BulkBody;
+  assert.equal(refused.status, 409);
+  assert.equal(refusedBody.success, false);
+  assert.deepEqual(refusedBody.data.conflict_order_ids, ["143"]);
+  assert.equal(none.state.orders.get(143)?.shipping_status, "returned");
 });

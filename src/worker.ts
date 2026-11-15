@@ -19,7 +19,7 @@ import {
   reconcileAutoLarisPaymentStatuses,
 } from "./lib/autolaris-payment.ts";
 import { enqueuePurchaseForPaidOrder, sweepMissedCodPurchases } from "./lib/paid-order-purchase.ts";
-import { envTenantConfig } from "./lib/tenant.ts";
+import { loadStoreIdentity, resolveTenantConfig } from "./lib/tenant.ts";
 import { drainCapiOutboxBacklog, purgeExpiredCapiOutboxEvents } from "./lib/capi-outbox.ts";
 import { getStoreAdsConfig } from "./lib/store-ads.ts";
 import { runPluginCron } from "./plugins/registry.ts";
@@ -96,9 +96,15 @@ async function runScheduledMaintenance(
   // A transaction is marked paid solely when the provider's own response says
   // so — an operator can still reconcile by hand from /admin/payments, and
   // every transition either way is audited.
+  // The store's identity as a request resolves it: the wizard's `stores` row
+  // first, the environment only as its fallback. With the environment alone a
+  // scheduled Purchase carried `example.com` as its source URL and hashed the
+  // store's own minted `<phone>@<host>` address as a match key (PR-6).
+  // `loadStoreIdentity` logs and answers null when D1 cannot be read, so the
+  // run goes on with the environment's identity rather than stopping.
   const scheduledLocals = {
     runtimeEnv: env,
-    tenant: envTenantConfig,
+    tenant: resolveTenantConfig(await loadStoreIdentity(env.OMS_DB)),
     cfContext: context,
   } satisfies App.Locals;
   let autoLarisReconciliation = {
