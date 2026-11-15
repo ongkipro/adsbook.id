@@ -520,12 +520,18 @@ test("T-23/API-7: a webhook writes only on its tenant's subdomain with that tena
   const evidence = (id: string) =>
     (stores.get(id).storage.db.prepare("SELECT COUNT(*) AS n FROM autolaris_callbacks").get() as { n: number }).n;
   const writes = () => [evidence("w-a"), evidence("w-b")];
+  // Every row any statement changed in either store or the control plane, not only evidence rows.
+  const changes = () =>
+    ["w-a", "w-b"].map((id) => (stores.get(id).storage.db.prepare("SELECT total_changes() AS n").get() as { n: number }).n)
+      .concat((platformDb.sqlite.prepare("SELECT total_changes() AS n").get() as { n: number }).n);
+  const before = changes();
 
   assert.equal(await call("hook-a.belanja.cc", "0".repeat(64)), 401, "a wrong token");
   assert.equal(await call("hook-a.belanja.cc", "not-a-token"), 401, "a malformed token");
   assert.equal(await call("hook-a.belanja.cc", tokenB), 401, "tenant B's token on tenant A's host");
   assert.equal(await call("shop-a.example", tokenA), 404, "A's own token on A's custom domain");
   assert.deepEqual(writes(), [0, 0], "a refused webhook wrote evidence");
+  assert.deepEqual(changes(), before, "a refused webhook changed a row (rate limit, store or control plane)");
 
   assert.equal(await call("hook-a.belanja.cc", tokenA), 200);
   assert.deepEqual(writes(), [1, 0], "the accepted call recorded for its own tenant only");
