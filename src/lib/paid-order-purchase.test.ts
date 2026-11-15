@@ -439,3 +439,153 @@ test("the CS conversion route reports the converted order to Meta", () => {
   const source = readFileSync(new URL("../pages/api/admin/abandoned-orders.ts", import.meta.url), "utf8");
   assert.match(source, /scheduleCodPurchase\(database, locals, converted\.id, "cod"\)/);
 });
+
+// ── PR-6: the scheduled run resolves the store's identity from D1 ───────────
+// `src/worker.ts` run for real; only Astro's handler and Vite's migration glob
+// are stubbed (the same two stubs as health-snapshot.test.ts).
+
+import { registerHooks } from "node:module";
+import { envTenantConfig } from "./tenant.ts";
+
+const HANDLER_STUB = "stub:astro-cloudflare-handler";
+const MIGRATIONS_STUB = "stub:bundled-migrations";
+// Not deregistered: `schema-version.ts` imports the migration chain lazily, on
+// the first scheduled run. node --test gives this file its own process.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@astrojs/cloudflare/handler") return { url: HANDLER_STUB, shortCircuit: true };
+    if (/bundled-migrations(\.ts)?$/.test(specifier)) return { url: MIGRATIONS_STUB, shortCircuit: true };
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      if (!specifier.startsWith(".") || /\.[a-z0-9]+$/i.test(specifier)) throw error;
+      return nextResolve(`${specifier}.ts`, context);
+    }
+  },
+  load(url, context, nextLoad) {
+    if (url === HANDLER_STUB) {
+      return { format: "module", source: "export const handle = () => new Response('');", shortCircuit: true };
+    }
+    if (url === MIGRATIONS_STUB) {
+      const directory = new URL("../db/migrations/", import.meta.url);
+      const migrations = readdirSync(directory)
+        .filter((name) => name.endsWith(".sql"))
+        .sort()
+        .map((name) => ({ name, sql: readFileSync(new URL(name, directory), "utf8") }));
+      return { format: "module", source: `export const BUNDLED_MIGRATIONS = ${JSON.stringify(migrations)};`, shortCircuit: true };
+    }
+    return nextLoad(url, context);
+  },
+});
+const worker = (await import("../worker.ts")).default as unknown as {
+  scheduled(controller: { scheduledTime: number }, env: Record<string, unknown>, ctx: unknown): Promise<void>;
+};
+
+const D1_SITE = "https://toko-asli.example.test";
+const CRON_TIME = Date.parse("2026-11-10T12:00:00.000Z");
+
+/** An empty database the scheduled run migrates itself, then a wizard-configured store with one missed COD order. */
+async function cronStore() {
+  const sqlite = new DatabaseSync(":memory:");
+  let failWhen: RegExp | null = null;
+  const statement = (sql: string, values: unknown[] = []) => {
+    const execute = () => {
+      if (failWhen?.test(sql)) throw new Error("D1_ERROR: injected");
+      if (/^\s*(SELECT|WITH)\b/i.test(sql)) return { success: true, results: sqlite.prepare(sql).all(...(values as never[])), meta: { changes: 0 } };
+      const info = sqlite.prepare(sql).run(...(values as never[]));
+      return { success: true, results: [], meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) } };
+    };
+    return {
+      execute,
+      bind: (...next: unknown[]) => statement(sql, next.map((value) => value ?? null)),
+      run: async () => execute(),
+      all: async () => execute(),
+      first: async () => {
+        if (failWhen?.test(sql)) throw new Error("D1_ERROR: injected");
+        return sqlite.prepare(sql).get(...(values as never[])) ?? null;
+      },
+    };
+  };
+  const database = {
+    prepare: (sql: string) => statement(sql),
+    async batch(statements: Array<ReturnType<typeof statement>>) {
+      sqlite.exec("BEGIN");
+      try {
+        const results = statements.map((item) => item.execute());
+        sqlite.exec("COMMIT");
+        return results;
+      } catch (error) {
+        sqlite.exec("ROLLBACK");
+        throw error;
+      }
+    },
+  } as unknown as D1Database;
+
+  const sent: Array<{ event_id: string; event_source_url: string; user_data: Record<string, unknown> }> = [];
+  const errors: string[] = [];
+  const run = async () => {
+    const original = { fetch: globalThis.fetch, info: console.info, error: console.error, warn: console.warn };
+    console.info = () => {};
+    console.warn = () => {};
+    console.error = (label: unknown) => {
+      errors.push(String(label));
+    };
+    globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+      const event = JSON.parse(String(init?.body ?? "{}")).data?.[0];
+      if (event) sent.push(event);
+      return Response.json({ events_received: 1 });
+    }) as typeof fetch;
+    try {
+      await worker.scheduled({ scheduledTime: CRON_TIME }, { OMS_DB: database }, { waitUntil() {}, passThroughOnException() {} });
+    } finally {
+      globalThis.fetch = original.fetch;
+      console.info = original.info;
+      console.warn = original.warn;
+      console.error = original.error;
+    }
+  };
+
+  await run(); // the first run applies the migration chain to the empty database
+  sqlite.exec(`
+    INSERT INTO stores (id, name, slug, created_at, site_url, meta_pixel_id, meta_capi_token)
+    VALUES (1, 'Toko Asli', 'toko-asli', '2026-11-01T00:00:00.000Z', '${D1_SITE}', '1234567890', 'tok');
+    INSERT INTO products (id, store_id, title, slug, created_at) VALUES (11111, 1, 'Pupuk', 'pupuk', '2026-11-01T00:00:00.000Z');
+    INSERT INTO product_variants (id, product_id, sku, title, price) VALUES (101, 11111, 'P-1', '1 kg', 50000);
+    INSERT INTO orders (id, order_number, store_id, customer_name, customer_phone, customer_email, address,
+      province, city, district, total_amount, created_at, payment_method, payment_status, shipping_status)
+    VALUES (1, 'INV-10001', 1, 'Siti Rahayu', '6281234567890', '6281234567890@toko-asli.example.test', 'Jl. Melati 10',
+      'Jawa Barat', 'Bogor', 'Kec', 60000, '2026-11-10T09:00:00.000Z', 'cod', 'unpaid', 'pending');
+    INSERT INTO order_items (order_id, variant_id, quantity, unit_price) VALUES (1, 101, 1, 50000);
+  `);
+  sent.length = 0;
+  errors.length = 0;
+  const queued = () =>
+    JSON.parse(
+      (sqlite.prepare("SELECT payload FROM capi_event_outbox WHERE event_id = 'INV-10001' AND event_name = 'Purchase'").get() as { payload: string }).payload,
+    ) as { eventSourceUrl: string; userData: { email?: string } };
+  return { run, sent, errors, queued, failIdentityRead: () => (failWhen = /SELECT name, slug, site_url/) };
+}
+
+test("a scheduled Purchase carries the store's own URL from D1, and its minted email is not sent", async () => {
+  assert.notEqual(new URL(envTenantConfig.siteUrl).host, new URL(D1_SITE).host, "the env fallback must differ for this to prove anything");
+  const { run, sent, queued } = await cronStore();
+  await run();
+
+  assert.equal(queued().eventSourceUrl, `${D1_SITE}/thanks`);
+  assert.equal(queued().userData.email, undefined, "a <phone>@<store host> address is minted, not a match key");
+  const purchase = sent.find((event) => event.event_id === "INV-10001");
+  assert.ok(purchase, "the sweep delivers the Purchase inline");
+  assert.equal(purchase.event_source_url, `${D1_SITE}/thanks`);
+  assert.equal("em" in purchase.user_data, false, "the minted email must not be hashed into user_data");
+  assert.ok(purchase.user_data.ph, "the phone is still a match key");
+});
+
+test("the scheduled run still sends the Purchase when the store identity cannot be read", async () => {
+  const { run, sent, errors, queued, failIdentityRead } = await cronStore();
+  failIdentityRead();
+  await run();
+
+  assert.ok(errors.includes("tenant-identity-load"), "the failed read is logged");
+  assert.equal(queued().eventSourceUrl, new URL("/thanks", envTenantConfig.siteUrl).toString());
+  assert.ok(sent.some((event) => event.event_id === "INV-10001"));
+});
