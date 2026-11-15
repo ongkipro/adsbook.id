@@ -99,6 +99,14 @@ test("an owner's save stamps the backfill boundary once, keeps stored secrets, a
   assert.ok(Object.values(cleared.row).every((value) => value === null));
 
   assert.equal(planGoogleAdsOfflineSave({ customerId: "12" }, null, now).ok, false);
+  assert.equal(planGoogleAdsOfflineSave({ customerId: 1234567890 } as never, null, now).ok, false);
+
+  // A request that leaves the ids out keeps them, so the upload stays on.
+  const untouched = planGoogleAdsOfflineSave({}, { ...SAVED }, now);
+  assert.ok(untouched.ok);
+  assert.equal(untouched.configured, true);
+  assert.equal(untouched.row.google_ads_customer_id, "1234567890");
+  assert.equal(untouched.row.google_ads_login_customer_id, "1122334455");
 });
 
 test("COD delivered and online paid produce one click conversion with merchandise value", () => {

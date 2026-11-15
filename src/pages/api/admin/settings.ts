@@ -646,11 +646,14 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           400,
         );
       }
-      const orderIdentity = parseAutoLarisOrderIdentity({
-        originId: body.integrations?.autolaris_order_origin_id,
-        destinationId: body.integrations?.autolaris_order_destination_id,
-        shipperEmail: body.integrations?.autolaris_shipper_email,
-      });
+      const orderIdentity = parseAutoLarisOrderIdentity(
+        {
+          originId: body.integrations?.autolaris_order_origin_id,
+          destinationId: body.integrations?.autolaris_order_destination_id,
+          shipperEmail: body.integrations?.autolaris_shipper_email,
+        },
+        (await getProviderConfig(db)).autolaris,
+      );
       if (!orderIdentity.ok) return jsonError(orderIdentity.error, 400);
 
       await db

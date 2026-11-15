@@ -163,11 +163,22 @@ export function planGoogleAdsOfflineSave(
     }>;
     return { ok: true, row, configured: false };
   }
+  const submitted = [
+    input.customerId, input.conversionActionId, input.loginCustomerId,
+    input.developerToken, input.clientId, input.clientSecret, input.refreshToken,
+  ];
+  if (submitted.some((value) => value !== undefined && value !== null && typeof value !== "string")) {
+    return { ok: false, error: "Pengaturan upload offline harus dikirim sebagai teks." };
+  }
   const text = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
-  const keep = (submitted: string, stored: string | null | undefined) => submitted || String(stored || "").trim();
-  const customerId = digits(text(input.customerId, 32));
-  const conversionActionId = digits(text(input.conversionActionId, 32));
-  const loginCustomerId = digits(text(input.loginCustomerId, 32));
+  // Secrets: empty or left out keeps the stored value (they are never shown).
+  const keep = (value: string, stored: string | null | undefined) => value || String(stored || "").trim();
+  // Ids are shown, so an empty string clears one; a field left out keeps it.
+  const id = (value: unknown, stored: string | null | undefined) =>
+    value === undefined ? digits(stored) : digits(text(value, 32));
+  const customerId = id(input.customerId, current?.google_ads_customer_id);
+  const conversionActionId = id(input.conversionActionId, current?.google_ads_offline_conversion_action_id);
+  const loginCustomerId = id(input.loginCustomerId, current?.google_ads_login_customer_id);
   if (customerId && !/^\d{5,20}$/.test(customerId)) return { ok: false, error: "Customer ID Google Ads tidak valid." };
   if (conversionActionId && !/^\d{1,20}$/.test(conversionActionId)) return { ok: false, error: "Conversion action ID harus berupa angka." };
   if (loginCustomerId && !/^\d{5,20}$/.test(loginCustomerId)) return { ok: false, error: "Login customer ID tidak valid." };

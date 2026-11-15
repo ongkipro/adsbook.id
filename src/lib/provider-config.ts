@@ -116,20 +116,26 @@ export function autoLarisOrderRailGap(input: {
 /**
  * The AutoLaris order identity an owner submits from /admin/profile: the
  * `courir_id: 1` area pair (positive integers, both or neither) and an
- * optional shipper email. Empty clears a field, which closes the QRIS/VA rail
- * (`autoLarisOrderRailGap`) rather than sending a half-filled order.
+ * optional shipper email. A field left out of the request keeps its stored
+ * value; an empty string clears it, which closes the QRIS/VA rail
+ * (`autoLarisOrderRailGap`) rather than sending a half-filled order. Anything
+ * but a string is refused, never read as a clear.
  */
-export function parseAutoLarisOrderIdentity(input: {
-  originId?: unknown;
-  destinationId?: unknown;
-  shipperEmail?: unknown;
-}):
+export function parseAutoLarisOrderIdentity(
+  input: { originId?: unknown; destinationId?: unknown; shipperEmail?: unknown },
+  current: { originId: string; destinationId: string; shipperEmail: string },
+):
   | { ok: true; originId: string | null; destinationId: string | null; shipperEmail: string | null }
   | { ok: false; error: string } {
-  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
-  const originId = text(input.originId);
-  const destinationId = text(input.destinationId);
-  const shipperEmail = text(input.shipperEmail).toLowerCase();
+  const fields = [input.originId, input.destinationId, input.shipperEmail];
+  if (fields.some((value) => value !== undefined && value !== null && typeof value !== "string")) {
+    return { ok: false, error: "Area dan email AutoLaris harus dikirim sebagai teks." };
+  }
+  const resolve = (value: unknown, stored: string) =>
+    value === undefined ? stored : String(value ?? "").trim();
+  const originId = resolve(input.originId, current.originId);
+  const destinationId = resolve(input.destinationId, current.destinationId);
+  const shipperEmail = resolve(input.shipperEmail, current.shipperEmail).toLowerCase();
   const areaId = (value: string) => /^\d{1,20}$/.test(value) && Number(value) > 0;
   if (Boolean(originId) !== Boolean(destinationId)) {
     return { ok: false, error: "Isi area origin dan destination AutoLaris bersamaan, atau kosongkan keduanya." };
