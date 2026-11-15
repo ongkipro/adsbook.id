@@ -6,7 +6,7 @@
  */
 import { DatabaseSync } from "node:sqlite";
 
-import type { CursorLike, Row, SqlLike, SqlValue, StorageLike } from "./store-core.ts";
+import type { CursorLike, Row, SqlLike, SqlValue, StorageLike } from "../store-core.ts";
 
 class NodeSql implements SqlLike {
   readonly #db: DatabaseSync;

@@ -11,10 +11,13 @@ import { getEnvValue } from "./env.ts";
  * the env secret later simply takes over, which signs every operator out once.
  *
  * `INSERT OR IGNORE` then `SELECT` makes two first requests agree on one key.
- * Cached per database binding: the value never changes once written, and the
- * middleware would otherwise read it on every admin request.
+ * Cached per tenant id (T-18): the value never changes once written, and the
+ * middleware would otherwise read it on every admin request. Keyed by the
+ * tenant, not by the database object — a tenant store handle is a new object
+ * on every request, and two tenants must never share an entry. A caller that
+ * does not pass a tenant id gets no caching.
  */
-const cache = new WeakMap<D1Database, string>();
+const cache = new Map<string, string>();
 
 function randomSecret(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
@@ -25,12 +28,13 @@ function randomSecret(): string {
 export async function resolveAuthSecret(
   env: Parameters<typeof getEnvValue>[1],
   database: D1Database | undefined,
+  tenantId?: string,
 ): Promise<string> {
   const configured = getEnvValue("AUTH_SECRET", env);
   if (configured.length >= 32) return configured;
   if (!database) return configured;
 
-  const cached = cache.get(database);
+  const cached = tenantId ? cache.get(tenantId) : undefined;
   if (cached) return cached;
 
   try {
@@ -49,7 +53,7 @@ export async function resolveAuthSecret(
       row = await read();
     }
     if (row?.value && row.value.length >= 32) {
-      cache.set(database, row.value);
+      if (tenantId) cache.set(tenantId, row.value);
       return row.value;
     }
   } catch (error) {

@@ -1,1 +1,0 @@
-{"url":"http://127.0.0.1:8797/t/load-tenant/hit","rps":50,"seconds":60,"requests":3000,"errors":0,"statuses":{"200":3000},"wallSeconds":59.995,"p50":26.43,"p95":1657.64,"p99":2915.02,"max":3463.15}

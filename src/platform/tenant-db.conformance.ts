@@ -1,4 +1,4 @@
-// §11 item 5: compiles only if the adapter satisfies the installed D1 types in
+// T-18 (SPIKE-1 item 5): compiles only if the adapter satisfies the installed D1 types in
 // every call shape the code base uses. Never executed.
 import { createTenantDb, type TenantStoreRpc } from "./tenant-db.ts";
 

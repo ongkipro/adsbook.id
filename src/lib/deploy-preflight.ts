@@ -21,7 +21,7 @@
 export type WranglerTarget = {
   /** `name` in wrangler.jsonc — the Worker this deploy would replace. */
   name?: unknown;
-  d1Databases?: { binding?: unknown; database_name?: unknown; database_id?: unknown }[];
+  d1Databases?: { binding?: unknown; database_name?: unknown; database_id?: unknown; migrations_dir?: unknown }[];
   kvNamespaces?: { binding?: unknown; id?: unknown }[];
   r2Buckets?: { binding?: unknown; bucket_name?: unknown }[];
   /** `placement` — absent means the Worker runs beside the visitor, not its D1 (ADR-030). */
@@ -85,6 +85,26 @@ export function checkDeployTarget(target: WranglerTarget): PreflightResult {
  * fatal to `JSON.parse`. Stripping them is enough for the few fields read here;
  * this is not a general JSONC parser and does not need to be.
  */
+/**
+ * Which production ledger to compare with which chain (T-18): every D1 binding
+ * against its own `migrations_dir`. `PLATFORM_DB` carries the control-plane
+ * chain (`src/platform/migrations/`); tenant data lives in `TenantStore`
+ * objects, which the Worker migrates itself, so no D1 ledger stands for it
+ * once `OMS_DB` is gone (T-46). A binding without a `migrations_dir` has no
+ * chain in this tree and is not compared.
+ */
+export function migrationLedgerTargets(
+  target: WranglerTarget,
+): { binding: string; databaseName: string; migrationsDir: string }[] {
+  return (target.d1Databases ?? [])
+    .map((database) => ({
+      binding: text(database.binding),
+      databaseName: text(database.database_name),
+      migrationsDir: text(database.migrations_dir).replace(/^\.\//, "").replace(/\/+$/, ""),
+    }))
+    .filter((entry) => entry.databaseName && entry.migrationsDir);
+}
+
 export function parseWranglerConfig(source: string): WranglerTarget {
   const withoutComments = source
     .replace(/"(?:[^"\\]|\\.)*"|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (match) =>

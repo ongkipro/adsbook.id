@@ -258,7 +258,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `crm-template` | 11 | `seller_bank_accounts` `stores` | ✓ | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/settings` |
 | `daily-rotation` | 2 | — | ✓ | `/` |
 | `dashboard-compare` | 6 | — | ✓ | `/api/admin/analytics` |
-| `deploy-preflight` | 10 | — | ✓ | — |
+| `deploy-preflight` | 11 | — | ✓ | — |
 | `developer-api-keys` | 22 | — | ✓ | `/api/admin/settings/developer` |
 | `district-catalog` | 1 | — | ✓ | `/api/locations` `/api/v1/geo/districts` |
 | `edge-cache` | 11 | — | ✓ | `/assets/[...key]` |

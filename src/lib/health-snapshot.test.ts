@@ -472,6 +472,8 @@ const MIGRATIONS_STUB = "stub:bundled-migrations";
 const workerHooks = registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "@astrojs/cloudflare/handler") return { url: HANDLER_STUB, shortCircuit: true };
+    // worker.ts re-exports TenantStore (T-18); only its base class is needed here, and no `env`.
+    if (specifier === "cloudflare:workers") return { url: "stub:cloudflare-workers", shortCircuit: true };
     if (/bundled-migrations(\.ts)?$/.test(specifier)) return { url: MIGRATIONS_STUB, shortCircuit: true };
     try {
       return nextResolve(specifier, context);
@@ -481,6 +483,9 @@ const workerHooks = registerHooks({
     }
   },
   load(url, context, nextLoad) {
+    if (url === "stub:cloudflare-workers") {
+      return { format: "module", source: "export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }", shortCircuit: true };
+    }
     if (url === HANDLER_STUB) {
       return { format: "module", source: "export const handle = () => new Response('');", shortCircuit: true };
     }

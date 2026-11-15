@@ -98,6 +98,12 @@
       "migrations_dir": "src/platform/migrations"
     }
   ],
+  // One SQLite-backed Durable Object per tenant (ADR-039, TD-3): the store is
+  // created on first use, by tenant id, with the APAC hint (DATA-1).
+  "durable_objects": {
+    "bindings": [{ "name": "TENANT_STORE", "class_name": "TenantStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TenantStore"] }],
   "r2_buckets": [
     {
       "binding": "ASSET_BUCKET",

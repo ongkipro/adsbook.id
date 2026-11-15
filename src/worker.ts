@@ -1,5 +1,7 @@
 import type { ExecutionContext, ExportedHandler } from "@cloudflare/workers-types";
 import { handle } from "@astrojs/cloudflare/handler";
+// One SQLite Durable Object per tenant (ADR-039, TD-3); bound as TENANT_STORE.
+export { TenantStore } from "./platform/tenant-store.ts";
 import { purgeExpiredAbandonedOrders } from "./lib/order-persistence.ts";
 import { getEnvValue } from "./lib/env.ts";
 import {

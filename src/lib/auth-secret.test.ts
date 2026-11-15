@@ -53,3 +53,17 @@ test("a short env value is not a key, and an unreadable table fails closed", asy
   } as unknown as D1Database;
   assert.equal(await resolveAuthSecret({}, broken), "");
 });
+
+test("the cache is keyed by tenant: a new handle to the same store hits, another tenant never does", async () => {
+  const a = database();
+  const b = database();
+  const secretA = await resolveAuthSecret({}, a.d1, "tenant-cache-a");
+  // A fresh handle (as the tenant capability returns per request) whose reads would fail.
+  const unreadable = { prepare: () => { throw new Error("must not read: cached"); } } as unknown as D1Database;
+  assert.equal(await resolveAuthSecret({}, unreadable, "tenant-cache-a"), secretA);
+  const secretB = await resolveAuthSecret({}, b.d1, "tenant-cache-b");
+  assert.notEqual(secretB, secretA);
+  // No tenant id: no cache entry is read or written.
+  const quiet = await resolveAuthSecret({}, unreadable);
+  assert.equal(quiet, "");
+});

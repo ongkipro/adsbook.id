@@ -1,1 +1,0 @@
-{"url":"http://127.0.0.1:8797/noop","rps":50,"seconds":60,"requests":3000,"errors":0,"statuses":{"200":3000},"wallSeconds":60.035,"p50":20.42,"p95":614.5,"p99":1361.44,"max":1615.45}

@@ -1,7 +1,8 @@
 /**
- * The SQL engine of a tenant store, free of any runtime import so the same
- * code runs inside a SQLite-backed Durable Object (workerd) and under
- * `node --test` against `node:sqlite`.
+ * The SQL engine of a tenant store (TD-3), free of any runtime import so the
+ * same code runs inside the `TenantStore` Durable Object (workerd) and under
+ * `node --test` against `node:sqlite`. Measured in SPIKE-1
+ * (`MULTI-TENANT-DESIGN.md` §11).
  *
  * Result shapes follow D1 (`MULTI-TENANT-DESIGN.md` §4.2): `meta.changes` is
  * the `total_changes()` delta of the statement, which counts trigger writes
@@ -150,4 +151,106 @@ export function assertKnownPrefix(applied: readonly string[], chain: readonly Mi
       throw new Error(`TENANT_SCHEMA_HISTORY_UNKNOWN: ${name} at ${index}`);
     }
   });
+}
+
+// ── The migration protocol (§4.4, MIG-1) ─────────────────────────────────────
+
+/** The object's own small key-value state: the recovery guard and restore undo. */
+export interface StoreKv {
+  get(key: string): unknown;
+  put(key: string, value: unknown): void;
+  delete(key: string): void;
+}
+
+export type SchemaState = {
+  /** Files applied, per the object's ledger. */
+  applied: number;
+  /** Files in the chain bundled with this object's code. */
+  bundled: number;
+  /** The applied ledger is not a prefix of the bundled chain, nor the reverse. */
+  historyUnknown: boolean;
+  /** The object's own copy of the recovery guard; PLATFORM_DB is authoritative. */
+  recovery: boolean;
+  protocol: number;
+};
+
+/**
+ * Everything the `TenantStore` object does, minus the runtime: the Durable
+ * Object class only wires `ctx.storage` into this. The constructor reads the
+ * ledger and nothing else — it never migrates (MIG-1).
+ */
+export class TenantStoreEngine {
+  readonly #storage: StorageLike;
+  readonly #kv: StoreKv;
+  readonly #chain: readonly MigrationFile[];
+  readonly #split: (sql: string) => string[];
+  #applied: string[];
+
+  constructor(storage: StorageLike, kv: StoreKv, chain: readonly MigrationFile[], split: (sql: string) => string[]) {
+    this.#storage = storage;
+    this.#kv = kv;
+    this.#chain = chain;
+    this.#split = split;
+    this.#applied = readLedger(storage);
+  }
+
+  checkProtocol(protocol: number): void {
+    if (protocol !== TENANT_STORE_PROTOCOL) {
+      throw new Error(`TENANT_STORE_PROTOCOL_MISMATCH: worker ${protocol}, store ${TENANT_STORE_PROTOCOL}`);
+    }
+  }
+
+  query(statement: StatementDescriptor, raw: boolean): StatementResult {
+    return executeStatement(this.#storage, statement, raw);
+  }
+
+  batch(statements: readonly StatementDescriptor[]): StatementResult[] {
+    return executeBatch(this.#storage, statements);
+  }
+
+  schemaState(): SchemaState {
+    const shared = Math.min(this.#applied.length, this.#chain.length);
+    const historyUnknown = this.#applied.slice(0, shared).some((name, index) => this.#chain[index]?.name !== name);
+    return {
+      applied: this.#applied.length,
+      bundled: this.#chain.length,
+      historyUnknown,
+      recovery: this.#kv.get("recovery") === true,
+      protocol: TENANT_STORE_PROTOCOL,
+    };
+  }
+
+  /**
+   * Step 3 of §4.4. The Worker passes the id of the bookmark row it stored
+   * first; without one nothing runs. Each file is its own transaction; a file
+   * that fails rolls back, sets the object's recovery guard and throws.
+   */
+  applyMigrations(target: number, bookmarkId: string): SchemaState {
+    if (!bookmarkId) throw new Error("TENANT_MIGRATION_NO_BOOKMARK");
+    if (this.#kv.get("recovery") === true) throw new Error("TENANT_IN_RECOVERY");
+    assertKnownPrefix(this.#applied, this.#chain);
+    const goal = Math.min(target, this.#chain.length);
+    while (this.#applied.length < goal) {
+      const file = this.#chain[this.#applied.length];
+      try {
+        applyMigrationFile(this.#storage, file, this.#split);
+      } catch (error) {
+        this.#kv.put("recovery", true);
+        throw new Error(`TENANT_MIGRATION_FAILED: ${file.name}: ${(error as Error).message}`);
+      }
+      this.#applied = [...this.#applied, file.name];
+    }
+    return this.schemaState();
+  }
+
+  /** Operator action (§4.5): automatic migration resumes only when this is cleared. */
+  setRecovery(recovery: boolean): void {
+    if (recovery) this.#kv.put("recovery", true);
+    else this.#kv.delete("recovery");
+  }
+
+  rememberRestoreUndo(bookmark: string): void {
+    this.#kv.put("restore_undo", bookmark);
+    this.#kv.put("recovery", true);
+  }
 }
