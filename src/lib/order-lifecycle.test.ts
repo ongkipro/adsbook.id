@@ -18,6 +18,7 @@ type TestOrder = OrderLifecycleState & {
   customer_name?: string;
   customer_phone?: string;
   provider_dispatch_claimed_at?: string | null;
+  provider_dispatch_error?: string | null;
   receiver_rts_score?: number | null;
   rts_risk_label?: string | null;
   receiver_performance_json?: string | null;
@@ -121,6 +122,18 @@ class FakeStatement {
         );
       return (committed ? { order_number: committed.order_number } : null) as T;
     }
+    if (this.sql.includes("o.provider_dispatch_claimed_at IS NOT NULL")) {
+      const inDoubt = this.args
+        .map((id) => this.database.state.orders.get(Number(id)))
+        .find(
+          (order) =>
+            order &&
+            (Boolean(order.provider_dispatch_claimed_at) ||
+              order.provider_dispatch_error === "DISPATCHING" ||
+              Boolean(order.provider_dispatch_error?.startsWith("DISPATCH_UNKNOWN:"))),
+        );
+      return (inDoubt ? { order_number: inDoubt.order_number } : null) as T;
+    }
     const numericArgs = this.args
       .map(Number)
       .filter((value) => Number.isInteger(value) && value > 0);
@@ -147,7 +160,7 @@ class FakeStatement {
       cod_fee_bearer: "buyer",
       confirmed_at: null,
       courier_service: null,
-      provider_dispatch_error: null,
+      provider_dispatch_error: value.provider_dispatch_error ?? null,
       provider_dispatch_claimed_at: value.provider_dispatch_claimed_at ?? null,
       receiver_delivery_rate: value.receiver_rts_score ?? null,
       receiver_risk_label: value.rts_risk_label ?? null,
@@ -386,6 +399,8 @@ class SqliteD1Database {
         courier_code TEXT,
         cnote_no TEXT,
         provider_order_id TEXT,
+        provider_dispatch_error TEXT,
+        provider_dispatch_claimed_at TEXT,
         stock_restored_at TEXT
       );
       CREATE TABLE order_items (
@@ -1025,4 +1040,111 @@ test("an order paid by the provider check or already with the courier cannot be 
   }
   const deleted = await deleteOrdersReleasingReservations(database as unknown as D1Database, [93]);
   assert.deepEqual(deleted.map((row) => row.order_number), ["INV-10093"]);
+});
+
+// ── PR-4: no delete while Mengantar may hold the shipment ───────────────────
+
+const DISPATCH_FIXTURE = `
+  INSERT INTO product_variants (id, stock) VALUES (501, 10);
+  INSERT INTO orders (
+    id, order_number, payment_method, payment_status, shipping_status,
+    provider_dispatch_error, provider_dispatch_claimed_at
+  ) VALUES
+    (101, 'INV-10101', 'cod', 'unpaid', 'pending', 'DISPATCHING', '2026-11-16T03:00:00.000Z'),
+    (102, 'INV-10102', 'cod', 'unpaid', 'pending', 'DISPATCH_UNKNOWN: koneksi terputus', NULL),
+    (103, 'INV-10103', 'cod', 'unpaid', 'pending', 'Kredensial Mengantar belum lengkap.', NULL),
+    (104, 'INV-10104', 'cod', 'unpaid', 'pending', NULL, NULL);
+  INSERT INTO order_items (order_id, variant_id, quantity) VALUES
+    (101, 501, 1), (102, 501, 1), (103, 501, 1), (104, 501, 1);
+  INSERT INTO payment_transactions (order_id, reference_id) VALUES
+    (101, 'INV-10101'), (102, 'INV-10102'), (103, 'INV-10103'), (104, 'INV-10104');
+`;
+
+/** What deletion would remove, and the void marker it must not leave behind. */
+const ownedRows = (database: SqliteD1Database, id: number) =>
+  ({
+    ...database.get<Record<string, unknown>>(
+      `SELECT (SELECT COUNT(*) FROM orders WHERE id = ${id}) AS orders,
+        (SELECT COUNT(*) FROM order_items WHERE order_id = ${id}) AS items,
+        (SELECT COUNT(*) FROM payment_transactions WHERE order_id = ${id}) AS payments,
+        (SELECT stock_restored_at FROM orders WHERE id = ${id}) AS voided`,
+    ),
+  });
+const INTACT = { orders: 1, items: 1, payments: 1, voided: null };
+const refusedAsConflict = (error: unknown) =>
+  error instanceof OrderLifecycleError && error.status === 409 && /Mengantar/.test(error.message);
+
+test("an order with a dispatch claim or an unknown dispatch outcome cannot be deleted", async () => {
+  const database = new SqliteD1Database();
+  database.exec(DISPATCH_FIXTURE);
+  const d1 = database as unknown as D1Database;
+
+  // Claimed (101), unknown outcome with no provider id (102), and either one
+  // inside a selection that is otherwise deletable: the whole request refuses.
+  for (const ids of [[101], [102], [104, 101], [104, 102]]) {
+    await assert.rejects(deleteOrdersReleasingReservations(d1, ids), refusedAsConflict);
+    for (const id of ids) assert.deepEqual(ownedRows(database, id), INTACT, `order ${id}`);
+  }
+
+  // A push that failed outright released its claim: nothing is with Mengantar.
+  const deleted = await deleteOrdersReleasingReservations(d1, [103, 104]);
+  assert.deepEqual(deleted.map((row) => row.id).sort(), [103, 104]);
+  assert.deepEqual(ownedRows(database, 104), { orders: 0, items: 0, payments: 0, voided: null });
+});
+
+for (const [name, lateWrite] of [
+  ["claims the order", "UPDATE orders SET provider_dispatch_error = 'DISPATCHING', provider_dispatch_claimed_at = '2026-11-16T03:00:00.000Z' WHERE id = 104"],
+  ["leaves an unknown outcome", "UPDATE orders SET provider_dispatch_error = 'DISPATCH_UNKNOWN: timeout' WHERE id = 104"],
+  ["finishes and records the shipment", "UPDATE orders SET provider_order_id = 'MGN-104', shipping_status = 'processing' WHERE id = 104"],
+  ["is preceded by a payment", "UPDATE orders SET payment_status = 'paid' WHERE id = 104"],
+] as const) {
+  test(`delete is refused when a push ${name} after deletion's reads`, async () => {
+    const database = new SqliteD1Database();
+    database.exec(DISPATCH_FIXTURE);
+    // Deletion has read 103 and 104 as deletable; the write lands before its batch.
+    const racing = {
+      prepare: (sql: string) => database.prepare(sql),
+      batch(statements: D1PreparedStatement[]) {
+        database.exec(lateWrite);
+        return database.batch(statements);
+      },
+    } as unknown as D1Database;
+
+    await assert.rejects(
+      deleteOrdersReleasingReservations(racing, [103, 104]),
+      (error: unknown) => error instanceof OrderLifecycleError && error.status === 409,
+    );
+    assert.deepEqual(ownedRows(database, 104), INTACT);
+    assert.deepEqual(ownedRows(database, 103), INTACT, "all or nothing: the deletable sibling stays too");
+  });
+}
+
+test("the delete routes answer 409 for a claimed order and keep it", async () => {
+  const claimed = () =>
+    databaseWithOrders(
+      order(111, "pending", {
+        provider_dispatch_error: "DISPATCHING",
+        provider_dispatch_claimed_at: "2026-11-16T03:00:00.000Z",
+      }),
+    );
+  const single = claimed();
+  const bulk = claimed();
+  const responses = [
+    await detailRoute.DELETE({ params: { id: "111" }, locals: locals(single) } as never),
+    await bulkRoute.DELETE({
+      request: new Request("https://example.test/api/admin/orders", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids: [111] }),
+      }),
+      locals: locals(bulk),
+    } as never),
+  ];
+  for (const response of responses) {
+    assert.equal(response.status, 409);
+    assert.match(((await response.json()) as { error: string }).error, /Mengantar/);
+  }
+  assert.equal(single.state.orders.has(111), true);
+  assert.equal(bulk.state.orders.has(111), true);
+  assert.equal(single.state.items.length, 1);
 });

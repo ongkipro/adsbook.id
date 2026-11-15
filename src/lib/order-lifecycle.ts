@@ -1,3 +1,5 @@
+import { DISPATCH_UNKNOWN_PREFIX } from "./payment-dispatch-policy.ts";
+
 const PAYMENT_STATUSES = new Set([
   "unpaid",
   "pending",
@@ -27,6 +29,18 @@ const SHIPPED_LIKE_STATUSES = new Set(["shipped", "delivered", "returned"]);
 /** An order in one of these states is void: released, and never dispatchable again. */
 const STOCK_RELEASED_SQL =
   "(o.shipping_status IN ('cancelled', 'returned') OR o.payment_status IN ('cancelled', 'refunded', 'failed'))";
+
+/** Money was taken, or Mengantar has the shipment: the record must outlive the order. */
+const COMMITTED_SQL =
+  "(o.payment_status IN ('paid', 'settled', 'success') OR o.provider_order_id IS NOT NULL)";
+/**
+ * A push to Mengantar has claimed this order and not finished, or finished
+ * without a readable answer (PR-4). Either way Mengantar may hold a shipment
+ * that `provider_order_id` does not record yet.
+ */
+const DISPATCH_IN_DOUBT_SQL = `(o.provider_dispatch_claimed_at IS NOT NULL
+  OR COALESCE(o.provider_dispatch_error, '') = 'DISPATCHING'
+  OR COALESCE(o.provider_dispatch_error, '') LIKE '${DISPATCH_UNKNOWN_PREFIX}%')`;
 
 export type OrderLifecycleState = {
   id: number;
@@ -221,12 +235,8 @@ function selectedOrdersCte(orderIds: readonly number[]) {
 function buildOrderReleaseStatements(
   database: D1Database,
   orderIds: readonly number[],
-  requireReleasedState: boolean,
 ) {
   const cte = selectedOrdersCte(orderIds);
-  const releaseGuard = requireReleasedState
-    ? ` AND ${STOCK_RELEASED_SQL}`
-    : " AND o.shipping_status <> 'abandoned'";
   return [
     database
       .prepare(
@@ -234,7 +244,7 @@ function buildOrderReleaseStatements(
         UPDATE orders AS o
         SET stock_restored_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         WHERE o.id IN (SELECT order_id FROM selected)
-          AND o.stock_restored_at IS NULL${releaseGuard}`,
+          AND o.stock_restored_at IS NULL AND ${STOCK_RELEASED_SQL}`,
       )
       .bind(...orderIds),
   ];
@@ -250,7 +260,7 @@ export async function applyOrderLifecycleMutation(
   const statements = [orderMutation];
   if (transition.releasesStock) {
     statements.push(
-      ...buildOrderReleaseStatements(database, [current.id], true),
+      ...buildOrderReleaseStatements(database, [current.id]),
     );
   }
   const results = await database.batch(statements);
@@ -310,7 +320,7 @@ export async function updateAdminOrderShippingStatuses(
   ];
   if (transitions.some((transition) => transition.releasesStock)) {
     statements.push(
-      ...buildOrderReleaseStatements(database, orderIds, true),
+      ...buildOrderReleaseStatements(database, orderIds),
     );
   }
   await database.batch(statements);
@@ -322,8 +332,13 @@ export async function updateAdminOrderShippingStatuses(
 }
 
 /**
- * Marks every still-open order released and deletes all order-owned rows in one
- * D1 batch transaction. D1 rolls the whole batch back if any statement fails.
+ * Deletes the orders and every row they own in one D1 batch transaction. D1
+ * rolls the whole batch back if any statement fails.
+ *
+ * All or nothing: one undeletable order refuses the whole selection. The
+ * refusal is decided twice — by the reads below, which name the order to the
+ * operator, and inside each delete statement, because a payment or a dispatch
+ * claim can land between those reads and the batch (PR-4).
  */
 export async function deleteOrdersReleasingReservations(
   database: D1Database,
@@ -340,80 +355,92 @@ export async function deleteOrdersReleasingReservations(
   }
 
   const cte = selectedOrdersCte(orderIds);
-  const auditedPayment = await database
-    .prepare(
-      `${cte}
-      SELECT audit.payment_transaction_id
-      FROM payment_reconciliation_audits audit
-      INNER JOIN payment_transactions pt
-        ON pt.id = audit.payment_transaction_id
-      WHERE pt.order_id IN (SELECT order_id FROM selected)
-      LIMIT 1`,
-    )
-    .bind(...orderIds)
-    .first<{ payment_transaction_id: number }>();
-  if (auditedPayment) {
-    throw new OrderLifecycleError(
-      "Order dengan pembayaran terverifikasi tidak dapat dihapus. Gunakan alur refund dan pertahankan catatan order.",
-    );
-  }
-  // The audit row only exists for a *manual* reconciliation. An order the
-  // hourly AutoLaris check marked paid, or one already handed to Mengantar,
-  // carries money or a live shipment just the same and was deletable.
-  const committed = await database
-    .prepare(
-      `${cte}
-      SELECT o.order_number
-      FROM orders o
-      WHERE o.id IN (SELECT order_id FROM selected)
-        AND (o.payment_status IN ('paid', 'settled', 'success') OR o.provider_order_id IS NOT NULL)
-      LIMIT 1`,
-    )
-    .bind(...orderIds)
-    .first<{ order_number: string }>();
-  if (committed) {
-    throw new OrderLifecycleError(
-      `Order ${committed.order_number} sudah dibayar atau sudah dikirim ke kurir, sehingga tidak dapat dihapus. Batalkan atau refund dan pertahankan catatannya.`,
-    );
-  }
-  // Leads are never deleted (owner decision 2026-11-10, audit F-4): this is
-  // the one delete path left, and `/api/admin/orders/[id]` accepts an
-  // `ABN-` key as readily as an order's.
-  const lead = await database
-    .prepare(
-      `${cte}
-      SELECT o.order_number
-      FROM orders o
-      WHERE o.id IN (SELECT order_id FROM selected)
-        AND o.shipping_status = 'abandoned'
-      LIMIT 1`,
-    )
-    .bind(...orderIds)
-    .first<{ order_number: string }>();
-  if (lead) {
-    throw new OrderLifecycleError(
-      `${lead.order_number} adalah lead dan tidak pernah dihapus. Tandai follow-up-nya (mis. tidak tertarik) atau ubah menjadi order.`,
-    );
-  }
+  const firstSelected = (where: string) =>
+    database
+      .prepare(
+        `${cte}
+        SELECT o.order_number
+        FROM orders o
+        WHERE o.id IN (SELECT order_id FROM selected)
+          AND ${where}
+        LIMIT 1`,
+      )
+      .bind(...orderIds)
+      .first<{ order_number: string }>();
+  const refuseUndeletable = async () => {
+    const auditedPayment = await database
+      .prepare(
+        `${cte}
+        SELECT audit.payment_transaction_id
+        FROM payment_reconciliation_audits audit
+        INNER JOIN payment_transactions pt
+          ON pt.id = audit.payment_transaction_id
+        WHERE pt.order_id IN (SELECT order_id FROM selected)
+        LIMIT 1`,
+      )
+      .bind(...orderIds)
+      .first<{ payment_transaction_id: number }>();
+    if (auditedPayment) {
+      throw new OrderLifecycleError(
+        "Order dengan pembayaran terverifikasi tidak dapat dihapus. Gunakan alur refund dan pertahankan catatan order.",
+      );
+    }
+    // The audit row only exists for a *manual* reconciliation. An order the
+    // hourly AutoLaris check marked paid, or one already handed to Mengantar,
+    // carries money or a live shipment just the same and was deletable.
+    const committed = await firstSelected(COMMITTED_SQL);
+    if (committed) {
+      throw new OrderLifecycleError(
+        `Order ${committed.order_number} sudah dibayar atau sudah dikirim ke kurir, sehingga tidak dapat dihapus. Batalkan atau refund dan pertahankan catatannya.`,
+      );
+    }
+    const inDoubt = await firstSelected(DISPATCH_IN_DOUBT_SQL);
+    if (inDoubt) {
+      throw new OrderLifecycleError(
+        `Order ${inDoubt.order_number} sedang dikirim ke Mengantar atau hasil push-nya belum pasti, sehingga tidak dapat dihapus. Cek di dashboard Mengantar dan selesaikan status push-nya dulu.`,
+      );
+    }
+    // Leads are never deleted (owner decision 2026-11-10, audit F-4): this is
+    // the one delete path left, and `/api/admin/orders/[id]` accepts an
+    // `ABN-` key as readily as an order's.
+    const lead = await firstSelected("o.shipping_status = 'abandoned'");
+    if (lead) {
+      throw new OrderLifecycleError(
+        `${lead.order_number} adalah lead dan tidak pernah dihapus. Tandai follow-up-nya (mis. tidak tertarik) atau ubah menjadi order.`,
+      );
+    }
+  };
+  await refuseUndeletable();
+
+  const stillDeletable = `NOT EXISTS (
+          SELECT 1 FROM orders o
+          WHERE o.id IN (SELECT order_id FROM selected)
+            AND (${COMMITTED_SQL} OR ${DISPATCH_IN_DOUBT_SQL} OR o.shipping_status = 'abandoned')
+        )`;
+  // No release marker is written first: every row it would mark is deleted by
+  // this same transaction, and on a refused batch it would void a live order.
   const statements = [
-    ...buildOrderReleaseStatements(database, orderIds, false),
     database
       .prepare(
         `${cte}
         DELETE FROM order_items
-        WHERE order_id IN (SELECT order_id FROM selected)`,
+        WHERE order_id IN (SELECT order_id FROM selected)
+          AND ${stillDeletable}`,
       )
       .bind(...orderIds),
     database
       .prepare(
         `${cte}
         DELETE FROM payment_transactions
-        WHERE order_id IN (SELECT order_id FROM selected)
-          OR reference_id IN (
-            SELECT o.order_number
-            FROM orders o
-            JOIN selected s ON s.order_id = o.id
-          )`,
+        WHERE (
+            order_id IN (SELECT order_id FROM selected)
+            OR reference_id IN (
+              SELECT o.order_number
+              FROM orders o
+              JOIN selected s ON s.order_id = o.id
+            )
+          )
+          AND ${stillDeletable}`,
       )
       .bind(...orderIds),
     database
@@ -421,6 +448,7 @@ export async function deleteOrdersReleasingReservations(
         `${cte}
         DELETE FROM orders
         WHERE id IN (SELECT order_id FROM selected)
+          AND ${stillDeletable}
         RETURNING id, order_number`,
       )
       .bind(...orderIds),
@@ -429,5 +457,9 @@ export async function deleteOrdersReleasingReservations(
   // The RETURNING delete is the last statement, whatever precedes it. A
   // hard-coded index here silently returned the wrong result the moment the
   // statement list changed length.
-  return (results.at(-1)?.results || []) as DeletedOrder[];
+  const deleted = (results.at(-1)?.results || []) as DeletedOrder[];
+  // Nothing deleted is either a repeat (the rows are gone) or the in-statement
+  // guard: the reads name which, with the same message as before the batch.
+  if (deleted.length === 0) await refuseUndeletable();
+  return deleted;
 }
