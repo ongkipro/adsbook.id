@@ -98,6 +98,14 @@ export class TenantStore extends DurableObject {
    */
   async armAlarm(protocol: number, tenantId: string): Promise<{ armed: boolean }> {
     this.#store.checkProtocol(protocol);
+    // This object IS the tenant's store only if its id is the one the name
+    // derives (getByName = idFromName): a caller cannot bind another tenant's
+    // id to it, not even on the first call (T-24 review).
+    const namespace = (this.env as { TENANT_STORE?: { idFromName(name: string): { equals(other: unknown): boolean } } })
+      .TENANT_STORE;
+    if (!namespace || !namespace.idFromName(tenantId).equals(this.ctx.id)) {
+      throw new Error("TENANT_STORE_ID_MISMATCH");
+    }
     const kv = this.ctx.storage.kv as StoreKv;
     const known = kv.get("tenant_id");
     if (known !== undefined && known !== tenantId) {

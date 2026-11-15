@@ -29,10 +29,30 @@ export type PlatformJobResult = {
   hostnameReapSkipped: boolean;
 };
 
-/** The ISO day 13 calendar months before `now` (UTC). */
+/** Rows each retention step removes per run; a backlog drains over several runs. */
+export const JOB_BATCH = 1000;
+/** Purges started per run. */
+export const PURGE_BATCH = 20;
+/** Cloudflare deletions per run (each is one outbound call). */
+export const HOSTNAME_BATCH = 50;
+
+/** The ISO day 13 calendar months before `now` (UTC), clamped to that month's last day. */
 export function thirteenMonthsBefore(now: Date): string {
-  const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 13, now.getUTCDate()));
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() - 13;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const cutoff = new Date(Date.UTC(year, month, Math.min(now.getUTCDate(), lastDay)));
   return cutoff.toISOString().slice(0, 10);
+}
+
+/** One step's failure is logged and the next step still runs. */
+async function step(label: string, run: () => Promise<number>): Promise<number> {
+  try {
+    return await run();
+  } catch (error) {
+    console.error(label, String(error));
+    return -1;
+  }
 }
 
 export async function runPlatformJobs(
@@ -42,61 +62,113 @@ export async function runPlatformJobs(
 ): Promise<PlatformJobResult> {
   const iso = (ms: number) => new Date(ms).toISOString();
   const changes = (result: D1Result) => Number(result.meta?.changes ?? 0);
+  const run = async (sql: string, ...values: unknown[]) =>
+    changes(await platformDb.prepare(sql).bind(...values).run());
 
-  const [events, usage, handoff] = await platformDb.batch([
-    platformDb.prepare("DELETE FROM tenant_events WHERE at < ?").bind(iso(now.getTime() - 365 * DAY_MS)),
-    platformDb.prepare("DELETE FROM tenant_usage_daily WHERE day < ?").bind(thirteenMonthsBefore(now)),
-    platformDb.prepare("DELETE FROM handoff_tokens WHERE expires_at < ?").bind(iso(now.getTime() - 7 * DAY_MS)),
-  ]);
+  const tenantEvents = await step("platform-job-events-failed", () =>
+    run(
+      "DELETE FROM tenant_events WHERE id IN (SELECT id FROM tenant_events WHERE at < ? ORDER BY at LIMIT ?)",
+      iso(now.getTime() - 365 * DAY_MS),
+      JOB_BATCH,
+    ),
+  );
+  const usageRows = await step("platform-job-usage-failed", () =>
+    run(
+      "DELETE FROM tenant_usage_daily WHERE rowid IN (SELECT rowid FROM tenant_usage_daily WHERE day < ? LIMIT ?)",
+      thirteenMonthsBefore(now),
+      JOB_BATCH,
+    ),
+  );
+  const handoffTokens = await step("platform-job-handoff-failed", () =>
+    run(
+      "DELETE FROM handoff_tokens WHERE token_hash IN (SELECT token_hash FROM handoff_tokens WHERE expires_at < ? LIMIT ?)",
+      iso(now.getTime() - 7 * DAY_MS),
+      JOB_BATCH,
+    ),
+  );
 
-  let staleHostnames = 0;
   const hostnameReapSkipped = !deleteCustomHostname;
-  if (deleteCustomHostname) {
-    const stale = (
+  const staleHostnames = deleteCustomHostname
+    ? await step("platform-job-hostnames-failed", () => reapStaleHostnames(platformDb, now, deleteCustomHostname))
+    : (console.info("platform-job-hostname-reap-skipped", { reason: "no Cloudflare client" }), 0);
+
+  const purgesStarted = await step("platform-job-purge-failed", async () => {
+    const due = (
       await platformDb
         .prepare(
-          `SELECT host, cf_custom_hostname_id FROM tenant_hosts
-           WHERE kind = 'custom' AND status = 'pending' AND created_at < ? LIMIT 100`,
+          `SELECT id FROM tenants
+           WHERE purge_after IS NOT NULL AND purge_after < ? AND status NOT IN ('purging', 'purged')
+           ORDER BY purge_after LIMIT ?`,
         )
-        .bind(iso(now.getTime() - 7 * DAY_MS))
-        .all<{ host: string; cf_custom_hostname_id: string | null }>()
+        .bind(now.toISOString(), PURGE_BATCH)
+        .all<{ id: string }>()
     ).results;
-    for (const row of stale) {
-      try {
-        if (row.cf_custom_hostname_id) await deleteCustomHostname(row.cf_custom_hostname_id);
-        await platformDb
-          .prepare("UPDATE tenant_hosts SET status = 'revoked', revoked_at = ? WHERE host = ? AND status = 'pending'")
-          .bind(now.toISOString(), row.host)
-          .run();
-        staleHostnames += 1;
-      } catch (error) {
-        // Left pending: the next run tries again rather than dropping our record
-        // of a hostname Cloudflare may still bill for.
-        console.error("platform-job-hostname-reap-failed", { host: row.host, error: String(error) });
-      }
+    let started = 0;
+    for (const { id } of due) {
+      // The audit row and the state change in one batch: a purge never starts
+      // unrecorded, and a tenant that changed meanwhile is left alone.
+      const [, update] = await platformDb.batch([
+        platformDb
+          .prepare(
+            `INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json)
+             SELECT id, 'purge_started', 'platform-job', ?, json_object('purge_after', purge_after) FROM tenants
+             WHERE id = ? AND status NOT IN ('purging', 'purged')`,
+          )
+          .bind(now.toISOString(), id),
+        platformDb
+          .prepare("UPDATE tenants SET status = 'purging' WHERE id = ? AND status NOT IN ('purging', 'purged')")
+          .bind(id),
+      ]);
+      started += changes(update);
     }
-  } else {
-    console.info("platform-job-hostname-reap-skipped", { reason: "no Cloudflare client" });
-  }
+    return started;
+  });
 
-  // The audit row and the state change in one batch: a purge never starts unrecorded.
-  const due = "purge_after IS NOT NULL AND purge_after < ? AND status NOT IN ('purging', 'purged')";
-  const [, purges] = await platformDb.batch([
-    platformDb
+  return { tenantEvents, usageRows, handoffTokens, staleHostnames, purgesStarted, hostnameReapSkipped };
+}
+
+/**
+ * DOM-5. The row is claimed first (`pending` → `revoked`), so activation,
+ * which only promotes a `pending` row, can never race the external delete.
+ * The Cloudflare id is cleared once Cloudflare confirms; a revoked row that
+ * still holds one is retried on the next run (Cloudflare bills until then).
+ */
+async function reapStaleHostnames(
+  platformDb: D1Database,
+  now: Date,
+  deleteCustomHostname: CustomHostnameDeleter,
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();
+  const claimed = (
+    await platformDb
       .prepare(
-        `INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json)
-         SELECT id, 'purge_started', 'platform-job', ?, json_object('purge_after', purge_after) FROM tenants WHERE ${due}`,
+        `UPDATE tenant_hosts SET status = 'revoked', revoked_at = ?
+         WHERE host IN (SELECT host FROM tenant_hosts
+           WHERE kind = 'custom' AND status = 'pending' AND created_at < ? LIMIT ?)
+         RETURNING host`,
       )
-      .bind(now.toISOString(), now.toISOString()),
-    platformDb.prepare(`UPDATE tenants SET status = 'purging' WHERE ${due}`).bind(now.toISOString()),
-  ]);
-
-  return {
-    tenantEvents: changes(events),
-    usageRows: changes(usage),
-    handoffTokens: changes(handoff),
-    staleHostnames,
-    purgesStarted: changes(purges),
-    hostnameReapSkipped,
-  };
+      .bind(now.toISOString(), cutoff, HOSTNAME_BATCH)
+      .all<{ host: string }>()
+  ).results.length;
+  const toDelete = (
+    await platformDb
+      .prepare(
+        `SELECT host, cf_custom_hostname_id FROM tenant_hosts
+         WHERE kind = 'custom' AND status = 'revoked' AND cf_custom_hostname_id IS NOT NULL LIMIT ?`,
+      )
+      .bind(HOSTNAME_BATCH)
+      .all<{ host: string; cf_custom_hostname_id: string }>()
+  ).results;
+  for (const row of toDelete) {
+    try {
+      await deleteCustomHostname(row.cf_custom_hostname_id);
+      await platformDb
+        .prepare("UPDATE tenant_hosts SET cf_custom_hostname_id = NULL WHERE host = ? AND status = 'revoked'")
+        .bind(row.host)
+        .run();
+    } catch (error) {
+      console.error("platform-job-hostname-reap-failed", { host: row.host, error: String(error) });
+    }
+  }
+  return claimed;
 }

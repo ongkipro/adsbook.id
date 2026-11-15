@@ -61,9 +61,12 @@ test("PRIV-4: events past a year, usage past 13 months and handoff tokens 7 days
 test("13 months is calendar months", () => {
   assert.equal(thirteenMonthsBefore(new Date("2026-11-16T05:00:00Z")), "2025-10-16");
   assert.equal(thirteenMonthsBefore(new Date("2026-01-31T00:00:00Z")), "2024-12-31");
+  // Clamped, never rolled forward: 31 March less 13 months is 28 February.
+  assert.equal(thirteenMonthsBefore(new Date("2026-03-31T00:00:00Z")), "2025-02-28");
+  assert.equal(thirteenMonthsBefore(new Date("2025-03-31T00:00:00Z")), "2024-02-29");
 });
 
-test("DOM-5: a custom hostname pending 7 days is deleted at Cloudflare, then revoked; a younger one and an active one stay", async () => {
+test("DOM-5: a custom hostname pending 7 days is claimed, then deleted at Cloudflare; a younger one and an active one stay", async () => {
   const now = new Date("2026-11-16T05:00:00.000Z");
   const { db, tenant } = await controlPlane();
   tenant("t-1", "active", null);
@@ -77,29 +80,53 @@ test("DOM-5: a custom hostname pending 7 days is deleted at Cloudflare, then rev
   host("broken.example", "pending", 9, "cf-broken");
 
   const deleted: string[] = [];
+  let cloudflareDown = true;
+  const deleter = async (id: string) => {
+    if (id === "cf-broken" && cloudflareDown) throw new Error("Cloudflare 500");
+    deleted.push(id);
+  };
   const original = console.error;
   console.error = () => undefined;
   let result;
   try {
-    result = await runPlatformJobs(db, now, async (id) => {
-      if (id === "cf-broken") throw new Error("Cloudflare 500");
-      deleted.push(id);
-    });
+    result = await runPlatformJobs(db, now, deleter);
   } finally {
     console.error = original;
   }
+  const row = (name: string) =>
+    ({ ...(db.sqlite.prepare("SELECT status, cf_custom_hostname_id AS cf FROM tenant_hosts WHERE host = ?").get(name) as object) }) as { status: string; cf: string | null };
+  assert.equal(result.staleHostnames, 2, "both stale rows are claimed before any external call");
   assert.deepEqual(deleted, ["cf-stale"]);
-  assert.equal(result.staleHostnames, 1);
-  const status = (name: string) => (db.sqlite.prepare("SELECT status FROM tenant_hosts WHERE host = ?").get(name) as { status: string }).status;
-  assert.equal(status("stale.example"), "revoked");
-  assert.equal(status("fresh.example"), "pending");
-  assert.equal(status("live.example"), "active");
-  assert.equal(status("broken.example"), "pending", "a failed Cloudflare delete keeps our record for the next run");
+  assert.deepEqual(row("stale.example"), { status: "revoked", cf: null });
+  // Claimed, so activation (which promotes only `pending`) can no longer race it; Cloudflare still owes a delete.
+  assert.deepEqual(row("broken.example"), { status: "revoked", cf: "cf-broken" });
+  assert.deepEqual(row("fresh.example"), { status: "pending", cf: "cf-fresh" });
+  assert.deepEqual(row("live.example"), { status: "active", cf: "cf-live" });
 
-  // Without a Cloudflare client nothing is reaped, and the run says so.
+  // The next run retries the delete Cloudflare refused.
+  cloudflareDown = false;
+  const retry = await runPlatformJobs(db, now, deleter);
+  assert.equal(retry.staleHostnames, 0);
+  assert.deepEqual(deleted, ["cf-stale", "cf-broken"]);
+  assert.deepEqual(row("broken.example"), { status: "revoked", cf: null });
+
+  // Without a Cloudflare client nothing is claimed, and the run says so.
+  host("later.example", "pending", 10, "cf-later");
   const skipped = await runPlatformJobs(db, now);
   assert.equal(skipped.hostnameReapSkipped, true);
-  assert.equal(status("broken.example"), "pending");
+  assert.equal(row("later.example").status, "pending");
+});
+
+test("each retention step is bounded per run and drains a backlog over several runs", async () => {
+  const now = new Date();
+  const { db, tenant } = await controlPlane();
+  tenant("t-1", "active", null);
+  const old = new Date(now.getTime() - 400 * DAY).toISOString();
+  const insert = db.sqlite.prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at) VALUES ('t-1', 'old', 'test', ?)");
+  for (let index = 0; index < 1500; index += 1) insert.run(old);
+  assert.equal((await runPlatformJobs(db, now)).tenantEvents, 1000);
+  assert.equal((await runPlatformJobs(db, now)).tenantEvents, 500);
+  assert.equal(count(db, "SELECT COUNT(*) AS n FROM tenant_events"), 0);
 });
 
 test("PRIV-4: a tenant whose purge_after has passed starts purging, with an audit row; one a day early does not", async () => {

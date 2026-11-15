@@ -58,7 +58,7 @@ const hooks = registerHooks({
   },
 });
 const { createMiddleware } = await import("../middleware.ts");
-const { runPlatformCron, CRON_MIGRATION_BATCH } = await import("../worker.ts");
+const { runPlatformCron, CRON_MIGRATION_BATCH, CRON_ARM_BATCH } = await import("../worker.ts");
 const { runTenantMaintenance } = await import("./tenant-maintenance.ts");
 const { readTenantRow, runTenantAlarm, TENANT_ALARM_INTERVAL_MS } = await import("./tenant-alarm.ts");
 const { tenantDatabase } = await import("../lib/tenant-database.ts");
@@ -247,6 +247,32 @@ test("T-24: the cron migrates quiet tenants (bookmark first), arms each active t
   // The cron runs no tenant's maintenance itself: no heartbeat until an alarm fires.
   assert.equal(stores.get("c-a").storage.db.prepare("SELECT scheduler_ran_at FROM ops_health_snapshot").get(), undefined);
   assert.ok(CRON_MIGRATION_BATCH >= 1);
+});
+
+test("T-24: a fleet larger than one arming batch is swept over the hours, each run bounded", async () => {
+  const ids = Array.from({ length: CRON_ARM_BATCH * 2 + 50 }, (_, index) => `f-${String(index).padStart(4, "0")}`);
+  const platformDb = await platform(ids.map((id) => [id, "active", `${id}.belanja.cc`] as [string, string, string]));
+  platformDb.sqlite.prepare("UPDATE tenants SET schema_version = ?").run(CHAIN.length);
+  const stores = namespace();
+  const original = { error: console.error, info: console.info };
+  console.error = console.info = () => undefined;
+  const armedPerRun: number[] = [];
+  try {
+    for (let hour = 0; hour < 3; hour += 1) {
+      const before = stores.asked.length;
+      const result = await runPlatformCron(
+        { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } as never,
+        Date.parse("2026-11-16T00:07:00.000Z") + hour * 3_600_000,
+        { waitUntil() {}, passThroughOnException() {} } as never,
+      );
+      assert.ok(stores.asked.length - before <= CRON_ARM_BATCH, "one run touched more stores than its batch");
+      armedPerRun.push(result.armed);
+    }
+  } finally {
+    Object.assign(console, original);
+  }
+  assert.equal(stores.alarms.size, ids.length, "every tenant armed after a full rotation");
+  assert.deepEqual(armedPerRun.slice().sort((a, b) => a - b), [50, CRON_ARM_BATCH, CRON_ARM_BATCH]);
 });
 
 test("T-24/ISO-10: 50 alarms, one failing and one making 900 calls: 49 heartbeats, one logged failure, no budget error", async (context) => {

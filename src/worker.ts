@@ -10,6 +10,12 @@ type AstroRequest = Parameters<typeof handle>[0];
 
 /** MIG-1: tenants migrated by the cron per run, oldest schema first. */
 export const CRON_MIGRATION_BATCH = 50;
+/**
+ * Alarms checked per run. Alarms re-arm themselves; this is the safety net, so
+ * a fleet larger than one batch is swept over several hours (a stateless
+ * rotation by the hour), and the run stays inside one invocation's budget.
+ */
+export const CRON_ARM_BATCH = 200;
 
 /**
  * The platform cron (MULTI-TENANT-DESIGN §8). It runs no tenant's
@@ -59,8 +65,16 @@ export async function runPlatformCron(
     }
   }
 
+  const activeCount = Number(
+    (await platformDb.prepare("SELECT COUNT(*) AS n FROM tenants WHERE status = 'active'").first<{ n: number }>())?.n ?? 0,
+  );
+  const slices = Math.max(1, Math.ceil(activeCount / CRON_ARM_BATCH));
+  const slice = Math.floor(scheduledTime / 3_600_000) % slices;
   const active = (
-    await platformDb.prepare("SELECT id FROM tenants WHERE status = 'active' ORDER BY id").all<{ id: string }>()
+    await platformDb
+      .prepare("SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT ? OFFSET ?")
+      .bind(CRON_ARM_BATCH, slice * CRON_ARM_BATCH)
+      .all<{ id: string }>()
   ).results;
   let armed = 0;
   for (const { id } of active) {
