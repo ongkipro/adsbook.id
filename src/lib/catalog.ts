@@ -1,5 +1,4 @@
 import { type Product } from "../data/products.ts";
-import { getRuntimeEnv } from "./env.ts";
 import {
   mergeStorefrontCatalog,
   type CatalogProductRow,
@@ -10,6 +9,7 @@ import {
   mergeRuntimeProductContent,
 } from "./storefront-content.ts";
 import { catalogProductIdOrNull } from "./catalog-feed.ts";
+import { tenantDatabase } from "./tenant-database.ts";
 
 async function loadCatalogRows(database: D1Database) {
   const [products, variants] = await database.batch([
@@ -75,7 +75,7 @@ export function getStorefrontProducts(locals?: App.Locals): Promise<Product[]> {
 async function loadStorefrontProducts(
   locals?: App.Locals,
 ): Promise<Product[]> {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
 
   try {
     // In parallel, not in one batch: the content read fails soft on its own.

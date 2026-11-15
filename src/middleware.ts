@@ -18,18 +18,13 @@ import {
   buildEmbedFrameAncestors,
   resolveEmbedAllowedOrigins,
 } from './lib/embed-security';
-import {
-  ensureSchemaUpgraded,
-  SCHEMA_UPGRADE_ERROR_LABEL,
-  SchemaUpgradeError,
-} from './lib/schema-version';
-import {
-  evaluateOperationalAlerts,
-  schemaAlertFromError,
-} from './lib/operational-alerts';
+import { SCHEMA_UPGRADE_ERROR_LABEL } from './lib/schema-version';
 import { CMS_VERSION } from './lib/version';
 import { resolveHostRedirect } from './lib/host-redirect';
 import { gateRequest, type GateEnv } from './platform/gate';
+import type { TenantContext } from './platform/control-plane';
+import { statePage } from './platform/state-pages';
+import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
 import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 
@@ -146,9 +141,17 @@ function isInstallerPath(pathname: string): boolean {
   );
 }
 
+/** Opens the request's tenant store; the default is the platform capability. */
+export type OpenTenantData = (
+  env: ReturnType<typeof getRuntimeEnv>,
+  tenant: TenantContext,
+) => Promise<D1Database>;
+
+const openTenantStore: OpenTenantData = (env, tenant) =>
+  openTenantDb(env as TenantDbEnv, tenant, CMS_VERSION.schemaVersion);
+
 export function createMiddleware(
-  ensureSchemaReady: (database: D1Database) => Promise<unknown> =
-    ensureSchemaUpgraded,
+  openTenantData: OpenTenantData = openTenantStore,
   gate: typeof gateRequest = gateRequest,
 ) {
   /**
@@ -276,59 +279,24 @@ export function createMiddleware(
     }
   }
 
-  const identityDb = runtime?.OMS_DB as D1Database | undefined;
+  // The tenant's own store (TEN-2), opened from the gate's tenant id with its
+  // schema brought to this release (MIG-1). A tenant that cannot be served
+  // right now is a 503 for that tenant alone (MULTI-TENANT-DESIGN.md §4.5).
+  const tenantContext = context.locals.tenantContext;
+  let identityDb: D1Database;
   try {
-    if (!identityDb?.prepare) {
-      throw new SchemaUpgradeError(
-        'SCHEMA_UPGRADE_NO_DATABASE',
-        CMS_VERSION.schemaVersion,
-        null,
-      );
-    }
-    await ensureSchemaReady(identityDb);
+    if (!tenantContext) throw new TenantUnavailableError('protocol', 'no tenant context');
+    identityDb = await openTenantData(runtime, tenantContext);
   } catch (error) {
-    const schemaError =
-      error instanceof SchemaUpgradeError
-        ? error
-        : new SchemaUpgradeError(
-            'SCHEMA_UPGRADE_READ_FAILED',
-            CMS_VERSION.schemaVersion,
-            null,
-          );
-    console.error(SCHEMA_UPGRADE_ERROR_LABEL, {
-      code: schemaError.code,
-      expected: schemaError.expected,
-      applied: schemaError.applied,
-      migration: schemaError.migration,
-    });
-    await evaluateOperationalAlerts([schemaAlertFromError(schemaError)], {
-      store: runtime?.SESSION as KVNamespace | undefined,
-      webhookUrl: getEnvValue('OPS_ALERT_WEBHOOK_URL', runtime),
-      source: url.origin,
-    });
-
-    const apiRequest = url.pathname === '/api' || url.pathname.startsWith('/api/');
-    const response = apiRequest
-      ? new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Database belum siap menerima permintaan.',
-            code: 'SCHEMA_UPGRADE_FAILED',
-          }),
-          { status: 503, headers: JSON_HEADERS },
-        )
-      : new Response(
-          'Database toko belum siap. Periksa status migrasi di Workers Logs.',
-          {
-            status: 503,
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-              'Cache-Control': 'no-store',
-            },
-          },
-        );
-    return applySecurityHeaders(response, true);
+    const reason = error instanceof TenantUnavailableError ? error.reason : 'open_failed';
+    console.error(SCHEMA_UPGRADE_ERROR_LABEL, { tenant_id: tenantContext?.tenantId ?? null, reason });
+    return statePage(reason === 'recovery' || reason === 'migration' ? 'recovery' : 'unavailable', url.pathname);
   }
+  context.locals.tenantDb = identityDb;
+  // lazy: pages and APIs that still read `runtimeEnv.OMS_DB` see this tenant's
+  // store, never the shared binding, until T-35/T-36/T-46 move them to
+  // `tenantDatabase(locals)`; T-46 removes this line with the binding.
+  context.locals.runtimeEnv = { ...(runtime ?? {}), OMS_DB: identityDb };
 
   // Store identity is resolved once per request and handed to every consumer
   // through locals. Doing it here rather than per page keeps consumers
@@ -391,9 +359,7 @@ export function createMiddleware(
   const embedFrameAncestors = isEmbedForm
     ? buildEmbedFrameAncestors(
         resolveEmbedAllowedOrigins(
-          await loadStoredEmbedAllowedOrigins(
-            runtime?.OMS_DB as D1Database | undefined,
-          ),
+          await loadStoredEmbedAllowedOrigins(identityDb),
           getEnvValue('PUBLIC_EMBED_ALLOWED_ORIGINS', runtime),
         ).origins,
       )
@@ -424,7 +390,7 @@ export function createMiddleware(
     const session = await resolveAdminSession(
       identityDb,
       context.request,
-      await resolveAuthSecret(runtime, identityDb),
+      await resolveAuthSecret(runtime, identityDb, tenantContext.tenantId),
     );
     if (!session) {
       if (isAdminApi) {

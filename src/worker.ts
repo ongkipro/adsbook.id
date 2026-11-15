@@ -11,7 +11,9 @@ import {
 import { collectOperationalHealth, recordSchedulerRun } from "./lib/operational-health.ts";
 import { readSetupRequiredLeft, writeHealthSnapshot } from "./lib/health-snapshot.ts";
 import { backfillReceiverScores } from "./lib/rts-scoring.ts";
-import { ensureSchemaUpgraded } from "./lib/schema-version.ts";
+import { CMS_VERSION } from "./lib/version.ts";
+import { ensureControlPlane } from "./platform/control-plane.ts";
+import { openTenantDb, TenantUnavailableError } from "./platform/tenant-db.ts";
 import { purgeExpiredRateLimits } from "./lib/rate-limit.ts";
 import { reconcileNativeLandingPages } from "./lib/landing-pages.ts";
 import { purgeExpiredNotifications } from "./lib/notifications.ts";
@@ -33,13 +35,18 @@ import {
 } from "./lib/google-ads-offline.ts";
 type AstroRequest = Parameters<typeof handle>[0];
 
-async function runScheduledMaintenance(
+/**
+ * One tenant's hourly maintenance, on that tenant's own store and identity
+ * (TEN-5). The store is already on this release's schema: `openTenantDb`
+ * migrated it first (MIG-1).
+ */
+export async function runTenantMaintenance(
   env: CloudflareRuntimeEnv,
+  database: D1Database,
+  tenantId: string,
   scheduledTime: number,
   context: ExecutionContext,
-) {
-  await ensureSchemaUpgraded(env.OMS_DB);
-  // No step takes the ones after it down: payment reconciliation, both outbox
+) {  // No step takes the ones after it down: payment reconciliation, both outbox
   // drains and the health evaluation each run even when an earlier step hit a
   // transient D1 or provider error. The failure is logged and reads as -1.
   const housekeeping = async (label: string, run: () => Promise<number>) => {
@@ -54,43 +61,43 @@ async function runScheduledMaintenance(
   // A D1 column on the status row, not KV (A-379), stamped before any later
   // step can fail.
   await housekeeping("scheduled-heartbeat-failed", async () => {
-    await recordSchedulerRun(env.OMS_DB, new Date(scheduledTime));
+    await recordSchedulerRun(database, new Date(scheduledTime));
     return 0;
   });
   const purgedAbandonedOrders = await housekeeping(
     "scheduled-abandoned-order-purge-failed",
-    () => purgeExpiredAbandonedOrders(env.OMS_DB, new Date(scheduledTime)),
+    () => purgeExpiredAbandonedOrders(database, new Date(scheduledTime)),
   );
   const purgedRateLimitWindows = await housekeeping(
     "scheduled-rate-limit-purge-failed",
-    () => purgeExpiredRateLimits(env.OMS_DB, new Date(scheduledTime)),
+    () => purgeExpiredRateLimits(database, new Date(scheduledTime)),
   );
   const expiredPaymentInstructions = await housekeeping(
     "scheduled-payment-expiry-failed",
-    () => expirePendingPaymentTransactions(env.OMS_DB, new Date(scheduledTime)),
+    () => expirePendingPaymentTransactions(database, new Date(scheduledTime)),
   );
   const purgedProviderCallbacks = await housekeeping(
     "scheduled-callback-purge-failed",
-    () => purgeExpiredAutoLarisCallbacks(env.OMS_DB, new Date(scheduledTime)),
+    () => purgeExpiredAutoLarisCallbacks(database, new Date(scheduledTime)),
   );
   const purgedNotifications = await housekeeping(
     "scheduled-notification-purge-failed",
-    () => purgeExpiredNotifications(env.OMS_DB, new Date(scheduledTime)),
+    () => purgeExpiredNotifications(database, new Date(scheduledTime)),
   );
   const purgedCapiOutboxEvents = await housekeeping(
     "scheduled-capi-outbox-purge-failed",
-    () => purgeExpiredCapiOutboxEvents(env.OMS_DB, new Date(scheduledTime)),
+    () => purgeExpiredCapiOutboxEvents(database, new Date(scheduledTime)),
   );
   const purgedGoogleAdsConversions = await housekeeping(
     "scheduled-google-ads-purge-failed",
-    () => purgeExpiredGoogleAdsConversions(env.OMS_DB, new Date(scheduledTime)),
+    () => purgeExpiredGoogleAdsConversions(database, new Date(scheduledTime)),
   );
   // The native register reached the table only when an operator opened the
   // landing-page list, so a page deployed since stayed out of the sitemap and
   // could not take a product page until then. The re-sync writes only what
   // changed, so running it hourly costs nothing when nothing did.
   await housekeeping("scheduled-native-landing-reconcile-failed", async () => {
-    await reconcileNativeLandingPages(env.OMS_DB);
+    await reconcileNativeLandingPages(database);
     return 0;
   });
   // Payment truth for QRIS/VA. The retired webhook never answered; the
@@ -105,8 +112,11 @@ async function runScheduledMaintenance(
   // `loadStoreIdentity` logs and answers null when D1 cannot be read, so the
   // run goes on with the environment's identity rather than stopping.
   const scheduledLocals = {
-    runtimeEnv: env,
-    tenant: resolveTenantConfig(await loadStoreIdentity(env.OMS_DB)),
+    // lazy: `runtimeEnv.OMS_DB` names this tenant's store for code that still
+    // reads it (T-35/T-36/T-46 move those reads to `tenantDb`).
+    runtimeEnv: { ...env, OMS_DB: database },
+    tenantDb: database,
+    tenant: resolveTenantConfig(await loadStoreIdentity(database)),
     cfContext: context,
   } satisfies App.Locals;
   let autoLarisReconciliation = {
@@ -119,7 +129,7 @@ async function runScheduledMaintenance(
   };
   try {
     autoLarisReconciliation = await reconcileAutoLarisPaymentStatuses(
-      env.OMS_DB,
+      database,
       scheduledLocals,
       new Date(scheduledTime),
     );
@@ -128,7 +138,7 @@ async function runScheduledMaintenance(
   }
   for (const orderId of autoLarisReconciliation.paidOrderIds) {
     try {
-      await enqueuePurchaseForPaidOrder(env.OMS_DB, scheduledLocals, orderId);
+      await enqueuePurchaseForPaidOrder(database, scheduledLocals, orderId);
     } catch (error) {
       // Payment truth is authoritative. Conversion delivery is independently
       // retried by its outbox and must never roll a paid order back.
@@ -145,28 +155,28 @@ async function runScheduledMaintenance(
   // A COD buyer who never reached /thanks sent no Purchase from either leg
   // (audit 2026-11-10, F-1). Delivered inline; the drain below retries a miss.
   const sweptCodPurchases = await housekeeping("scheduled-cod-purchase-sweep-failed", () =>
-    sweepMissedCodPurchases(env.OMS_DB, scheduledLocals, new Date(scheduledTime)),
+    sweepMissedCodPurchases(database, scheduledLocals, new Date(scheduledTime)),
   );
   const drainedCapiEvents = await housekeeping("scheduled-capi-drain-failed", async () => {
     const ads = await getStoreAdsConfig({ runtimeEnv: env } as unknown as App.Locals);
     return ads.metaPixelId && ads.metaCapiToken
-      ? drainCapiOutboxBacklog(env.OMS_DB, ads.metaPixelId, ads.metaCapiToken, new Date(scheduledTime))
+      ? drainCapiOutboxBacklog(database, ads.metaPixelId, ads.metaCapiToken, new Date(scheduledTime))
       : 0;
   });
   const googleAdsOffline = readGoogleAdsOfflineConfig(env);
   const queuedGoogleAdsConversions = googleAdsOffline
     ? await housekeeping("scheduled-google-ads-reconcile-failed", () =>
-        reconcileGoogleAdsConversions(env.OMS_DB, googleAdsOffline, new Date(scheduledTime)),
+        reconcileGoogleAdsConversions(database, googleAdsOffline, new Date(scheduledTime)),
       )
     : 0;
   const drainedGoogleAdsConversions = googleAdsOffline
     ? await housekeeping("scheduled-google-ads-drain-failed", () =>
-        drainGoogleAdsConversionOutbox(env.OMS_DB, googleAdsOffline),
+        drainGoogleAdsConversionOutbox(database, googleAdsOffline),
       )
     : 0;
   // Active plugins only (ADR-028); a store with none does one cheap read.
   // runPluginCron isolates each plugin's failure; this catch is for the read.
-  const pluginCron = await runPluginCron(env.OMS_DB, env, new Date(scheduledTime)).catch((error) => {
+  const pluginCron = await runPluginCron(database, env, new Date(scheduledTime)).catch((error) => {
     console.error("scheduled-plugin-cron-failed", error);
     return {};
   });
@@ -174,10 +184,10 @@ async function runScheduledMaintenance(
   // Receiver Score is whitelisted per Mengantar account; orders taken while it
   // was refused (or never opened in /admin) score themselves here.
   const backfilledReceiverScores = await housekeeping("scheduled-receiver-score-backfill-failed", () =>
-    backfillReceiverScores(env.OMS_DB, scheduledLocals),
+    backfillReceiverScores(database, scheduledLocals),
   );
 
-  const health = await collectOperationalHealth(env.OMS_DB, scheduledLocals);
+  const health = await collectOperationalHealth(database, scheduledLocals);
   const alerts = await evaluateOperationalAlerts(
     alertsFromOperationalHealth(health),
     {
@@ -185,12 +195,13 @@ async function runScheduledMaintenance(
       webhookUrl: getEnvValue("OPS_ALERT_WEBHOOK_URL", {
         OPS_ALERT_WEBHOOK_URL: env.OPS_ALERT_WEBHOOK_URL,
       }),
-      // No request here, so the install names itself from its own config.
-      source: env.PUBLIC_SITE_URL,
+      // No request here, so the tenant names itself from its own store.
+      source: scheduledLocals.tenant.siteUrl,
     },
   );
 
   console.info("operational-health-scheduled", {
+    tenant_id: tenantId,
     overall: health.overall,
     schemaState: health.build.schemaState,
     purgedAbandonedOrders,
@@ -231,12 +242,52 @@ async function runScheduledMaintenance(
   // snapshot stays rather than a blank one.
   await housekeeping("scheduled-health-snapshot-failed", async () => {
     await writeHealthSnapshot(
-      env.OMS_DB,
+      database,
       health,
-      await readSetupRequiredLeft(env.OMS_DB, scheduledLocals),
+      await readSetupRequiredLeft(database, scheduledLocals),
     );
     return 0;
   });
+}
+
+
+/**
+ * The platform cron: every active tenant's maintenance, each on its own store.
+ * One tenant's failure is logged with its id and the next tenant runs.
+ *
+ * lazy: tenants run in sequence in this one invocation and share its
+ * subrequest budget; T-24 moves each tenant to its own `TenantStore` alarm.
+ */
+export async function runPlatformCron(
+  env: CloudflareRuntimeEnv,
+  scheduledTime: number,
+  context: ExecutionContext,
+): Promise<{ tenants: number; failed: string[] }> {
+  const platformDb = env.PLATFORM_DB;
+  if (!platformDb) {
+    console.error("scheduled-no-platform-db");
+    return { tenants: 0, failed: [] };
+  }
+  await ensureControlPlane(platformDb);
+  const tenants = (
+    await platformDb
+      .prepare("SELECT id, cache_version FROM tenants WHERE status = 'active' ORDER BY id")
+      .all<{ id: string; cache_version: number }>()
+  ).results;
+  const failed: string[] = [];
+  for (const { id, cache_version } of tenants) {
+    try {
+      const database = await openTenantDb(env, { tenantId: id, cacheVersion: Number(cache_version) }, CMS_VERSION.schemaVersion);
+      await runTenantMaintenance(env, database, id, scheduledTime, context);
+    } catch (error) {
+      failed.push(id);
+      console.error("scheduled-tenant-failed", {
+        tenant_id: id,
+        reason: error instanceof TenantUnavailableError ? error.reason : "maintenance_failed",
+      });
+    }
+  }
+  return { tenants: tenants.length, failed };
 }
 
 export default {
@@ -247,6 +298,6 @@ export default {
   },
 
   async scheduled(controller, env, ctx) {
-    await runScheduledMaintenance(env, controller.scheduledTime, ctx);
+    await runPlatformCron(env, controller.scheduledTime, ctx);
   },
 } satisfies ExportedHandler<CloudflareRuntimeEnv>;

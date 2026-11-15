@@ -48,13 +48,14 @@ platformDb.sqlite.exec(`
     ('toko-r.belanja.cc', 't-r', 'subdomain', 'active', 1, '2026-11-16');
 `);
 
-const onRequest = createMiddleware(async () => undefined, (request, url, env) =>
+const onRequest = createMiddleware(async (env) => (env as { OMS_DB: D1Database }).OMS_DB, (request, url, env) =>
   gateRequest(request, url, env, { ensureSchema: async () => undefined }),
 );
 
 async function run(href: string, routePattern = "/produk/[slug]", nextImpl?: () => Promise<Response>, env: Record<string, unknown> = {}) {
   const touched: string[] = [];
-  const omsDb = new Proxy({}, { get: (_target, property) => (touched.push(`OMS_DB.${String(property)}`), () => { throw new Error("tenant database touched"); }) });
+  // Not a thenable (`await` reads `then`); every other property records the touch.
+  const omsDb = new Proxy({}, { get: (_target, property) => (property === "then" ? undefined : (touched.push(`OMS_DB.${String(property)}`), () => { throw new Error("tenant database touched"); })) });
   const cacheReads: string[] = [];
   const previousCaches = (globalThis as { caches?: unknown }).caches;
   (globalThis as { caches?: unknown }).caches = { default: { match: async (key: Request) => (cacheReads.push(key.url), undefined), put: async () => undefined } };

@@ -1,6 +1,5 @@
 import { AD_CHANNELS, adChannelSql, type AdChannel } from "./ad-channel.ts";
 import { jsonError, jsonOk } from "./api.ts";
-import { getRuntimeEnv } from "./env.ts";
 import {
   INSIGHTS_TIMEZONE,
   jakartaDaySql,
@@ -19,6 +18,7 @@ import {
   sourceSlugPredicate,
   type SourceLabelKind,
 } from "./source-slug.ts";
+import { tenantDatabase } from "./tenant-database.ts";
 
 /**
  * The Analitik menu's reads (PRD A37). Each screen is one `D1.batch`: SQL
@@ -953,7 +953,7 @@ export async function answerInsights(
   ) => Promise<{ data: Record<string, unknown>; rowsRead: number }>,
   now = new Date(),
 ) {
-  const database = getRuntimeEnv(context.locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(context.locals);
   if (!database || typeof database.prepare !== "function") {
     return jsonError("Database analitik belum tersedia.", 503);
   }

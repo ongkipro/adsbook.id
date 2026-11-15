@@ -482,8 +482,18 @@ registerHooks({
     return nextLoad(url, context);
   },
 });
-const worker = (await import("../worker.ts")).default as unknown as {
-  scheduled(controller: { scheduledTime: number }, env: Record<string, unknown>, ctx: unknown): Promise<void>;
+const workerModule = (await import("../worker.ts")) as unknown as {
+  runTenantMaintenance(env: Record<string, unknown>, database: D1Database, tenantId: string, scheduledTime: number, ctx: unknown): Promise<void>;
+};
+const { ensureSchemaUpgraded: applyTenantChain } = await import("./schema-version.ts");
+// One tenant's maintenance (T-34). `openTenantDb` brings a store to the
+// release before maintenance runs; here the test applies the chain itself.
+const worker = {
+  async scheduled(controller: { scheduledTime: number }, env: Record<string, unknown>, ctx: unknown) {
+    const database = env.OMS_DB as D1Database;
+    await applyTenantChain(database);
+    await workerModule.runTenantMaintenance(env, database, "t-test", controller.scheduledTime, ctx);
+  },
 };
 
 const D1_SITE = "https://toko-asli.example.test";

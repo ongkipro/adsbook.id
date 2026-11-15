@@ -633,6 +633,7 @@ async function readMetaConfigured(database: D1Database, locals?: App.Locals): Pr
   try {
     const ads = await getStoreAdsConfig({
       ...(locals ?? {}),
+      tenantDb: database,
       runtimeEnv: { ...(getRuntimeEnv(locals) ?? {}), OMS_DB: database },
     } as unknown as App.Locals);
     return Boolean(ads.metaPixelId && ads.metaCapiToken);

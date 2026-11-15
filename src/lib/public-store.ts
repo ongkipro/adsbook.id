@@ -1,10 +1,10 @@
-import { getRuntimeEnv } from "./env.ts";
 import { activeThanksNumbers } from "./whatsapp-numbers.ts";
+import { tenantDatabase } from "./tenant-database.ts";
 
 export async function getStoreSupportWhatsapp(
   locals?: App.Locals,
 ): Promise<string> {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     // No binding at all: every surface that offers support loses its contact
     // route, and the storefront renders as if support were unconfigured.
@@ -45,7 +45,7 @@ export async function getStorePublicContact(locals?: App.Locals): Promise<{
 }> {
   const whatsapp = await getStoreSupportWhatsapp(locals);
   const contact = { whatsapp: whatsapp ? `+${whatsapp}` : "", email: "", address: "" };
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") return contact;
   try {
     const row = await (database as D1Database)
@@ -68,7 +68,7 @@ export async function getStorePublicContact(locals?: App.Locals): Promise<{
 export async function getThanksWhatsappSettings(
   locals?: App.Locals,
 ): Promise<{ phones: string[]; autoRedirect: boolean }> {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     console.error("storefront-support-whatsapp-no-database-binding");
     return { phones: [], autoRedirect: false };
@@ -132,7 +132,7 @@ export async function getStorePublicFacts(locals: App.Locals): Promise<{
   codExcludedProvinces: string[];
 }> {
   const facts = { couriers: [] as string[], payments: [] as string[], codExcludedProvinces: [] as string[] };
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   const [{ courierDisplayName }, { loadStoreCodDisabledProvinceCodes }, { getProvinceName }, { GET }] = await Promise.all([
     import("./courier-names.ts"),
     import("./form-mode.ts"),

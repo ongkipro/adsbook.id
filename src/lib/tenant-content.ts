@@ -1,9 +1,9 @@
-import { getRuntimeEnv } from "./env.ts";
 import {
   loadPublishedHomeContent,
   type HomeContent,
 } from "./storefront-content.ts";
 import { listPublicLandingPages } from "./landing-pages.ts";
+import { tenantDatabase } from "./tenant-database.ts";
 
 export type TenantHomeContent = HomeContent;
 
@@ -58,7 +58,7 @@ function defaultHomeContent(
 export async function getTenantHomeContent(
   locals?: App.Locals,
 ): Promise<TenantHomeContentResolution> {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     console.error("home-content-no-database-binding");
     return { state: "unavailable" };

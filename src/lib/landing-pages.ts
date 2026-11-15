@@ -1,4 +1,3 @@
-import { getRuntimeEnv } from "./env.ts";
 import { formatIdr } from "./format-idr.ts";
 import { solutionEntries } from "../data/content.ts";
 import {
@@ -12,6 +11,7 @@ import {
   nonCanonicalNativeSlugs,
   type NativeLandingPage,
 } from "./native-landing-pages.ts";
+import { tenantDatabase } from "./tenant-database.ts";
 
 type D1Statement = ReturnType<D1Database["prepare"]>;
 export type LandingSectionType =
@@ -182,12 +182,10 @@ const SECTION_COLUMNS = `
 
 function getDatabase(locals: App.Locals): D1Database {
   const localBindings = locals as unknown as LocalsWithDatabase;
-  const database =
-    localBindings.OMS_DB ??
-    (getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined);
+  const database = localBindings.OMS_DB ?? tenantDatabase(locals);
 
   if (!database || typeof database.prepare !== "function") {
-    throw new Error("OMS_DB binding is unavailable");
+    throw new Error("The tenant database is unavailable");
   }
 
   return database;

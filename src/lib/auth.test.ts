@@ -59,7 +59,7 @@ const tenantGate = async () => ({
   kind: 'tenant' as const,
   tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.belanja.cc', primaryHost: 'test.belanja.cc' },
 });
-const onRequest = createMiddleware(async () => undefined, tenantGate);
+const onRequest = createMiddleware(async (env) => (env as { OMS_DB: D1Database }).OMS_DB, tenantGate);
 
 function encodeSegment(value: unknown) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');

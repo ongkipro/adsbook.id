@@ -8,6 +8,7 @@ import {
   type ApiKeyScope,
   type HeadlessApiScope,
 } from './developer-api-keys.ts';
+import { tenantDatabase } from "./tenant-database.ts";
 
 export const HEADLESS_OPERATIONS = {
   storefrontRead: { scope: 'storefront:read', method: 'GET', path: '/api/v1/storefront' },
@@ -154,7 +155,7 @@ export async function validateHeadlessApiKey(
     };
   }
 
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) {
     return {
       allowed: false,
@@ -552,7 +553,7 @@ export function resolveAllowedOrigins(
 }
 async function loadStoredHeadlessAllowedOrigins(locals?: App.Locals) {
   try {
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     if (!database?.prepare) return null;
     const row = await database
       .prepare('SELECT headless_allowed_origins FROM stores ORDER BY id LIMIT 1')

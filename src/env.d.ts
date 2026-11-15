@@ -73,6 +73,8 @@ interface CloudflareRuntimeEnv extends SharedEnvVars {
   ASSETS: unknown;
   /** The control plane (TD-2): tenants, hosts, plans, audit. */
   PLATFORM_DB?: D1Database;
+  /** One SQLite Durable Object per tenant (TD-3); only `src/platform/` reaches it. */
+  TENANT_STORE?: unknown;
   /** Extra exact platform hosts for local development, comma separated. */
   PLATFORM_HOSTS?: string;
 }
@@ -104,6 +106,12 @@ declare namespace App {
      * request belongs to, resolved from `Host` against `PLATFORM_DB`.
      */
     tenantContext?: import("./platform/control-plane").TenantContext;
+    /**
+     * This tenant's database (TEN-2): opened by the middleware from
+     * `tenantContext.tenantId` through `src/platform/tenant-db.ts`. Read it
+     * through `tenantDatabase(locals)` (`src/lib/tenant-database.ts`).
+     */
+    tenantDb?: D1Database;
     /** Set by the request gate on a platform host only; never with `tenantContext`. */
     platform?: { host: string };
   }

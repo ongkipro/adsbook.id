@@ -138,7 +138,7 @@ const tenantGate = async () => ({
   kind: 'tenant' as const,
   tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.belanja.cc', primaryHost: 'test.belanja.cc' },
 });
-const onRequest = createMiddleware(async () => { schemaCalls += 1; }, tenantGate);
+const onRequest = createMiddleware(async (env) => { schemaCalls += 1; return (env as { OMS_DB: D1Database }).OMS_DB; }, tenantGate);
 
 async function run(
   href: string,

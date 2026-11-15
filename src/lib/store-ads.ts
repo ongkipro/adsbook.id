@@ -2,6 +2,7 @@
 // but `node --experimental-strip-types` does not, and the bare specifier is why
 // this module could not be unit-tested at all (audit 2026-08-23 §2.6).
 import { getRuntimeEnv, getEnvValue } from './env.ts';
+import { tenantDatabase } from "./tenant-database.ts";
 
 export const GOOGLE_ADS_CONVERSION_ID_PATTERN = /^AW-\d{5,20}$/;
 export const GOOGLE_ADS_CONVERSION_LABEL_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -40,7 +41,7 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
   let dbGoogleTagManagerId = '';
   let dbGoogleLabel = '';
 
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (database && typeof database === 'object' && 'prepare' in database) {
     try {
       const row = (await database

@@ -221,7 +221,7 @@ The [Modules](#modules) section is the same book read from the other side.
 
 ## Modules
 
-140 modules under `src/lib`; 14 without a sibling test.
+141 modules under `src/lib`; 15 without a sibling test.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
 
@@ -355,6 +355,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `storefront-template` | 9 | `storefront_templates` `stores` | ✓ | `/` `/api/admin/settings` |
 | `tenant-content` | 3 | — | ✓ | `/` `/api/v1/storefront` |
 | `tenant-contract` | 3 | — | ✓ | — |
+| `tenant-database` | 1 | — | **none** | — |
 | `tenant` | 15 | `stores` | ✓ | `/kebijakan-privasi` `/kontak` `/pengiriman` `/syarat-ketentuan` `/install` `/api/install` `/api/admin/settings` |
 | `thanks-whatsapp` | 6 | — | ✓ | `/thanks` |
 | `traffic-source` | 3 | — | ✓ | — |
