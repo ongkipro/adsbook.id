@@ -3,6 +3,8 @@ import { DurableObject } from "cloudflare:workers";
 
 import { BUNDLED_MIGRATIONS } from "../lib/bundled-migrations.ts";
 import { splitMigrationStatements } from "../lib/schema-version.ts";
+import { createTenantDb } from "./tenant-db.ts";
+import { readTenantRow, runTenantAlarm, TENANT_ALARM_INTERVAL_MS } from "./tenant-alarm.ts";
 import {
   TenantStoreEngine,
   type SchemaState,
@@ -87,5 +89,53 @@ export class TenantStore extends DurableObject {
   async restart(protocol: number): Promise<void> {
     this.#store.checkProtocol(protocol);
     this.ctx.abort();
+  }
+
+  /**
+   * T-24: remember whose store this is and make sure an hourly alarm is
+   * pending. Idempotent; the platform cron calls it for every active tenant.
+   * The first run is spread over the hour so a fleet does not wake at once.
+   */
+  async armAlarm(protocol: number, tenantId: string): Promise<{ armed: boolean }> {
+    this.#store.checkProtocol(protocol);
+    const kv = this.ctx.storage.kv as StoreKv;
+    const known = kv.get("tenant_id");
+    if (known !== undefined && known !== tenantId) {
+      // A store answers to one tenant for life; a different id is a routing bug.
+      throw new Error("TENANT_STORE_ID_MISMATCH");
+    }
+    if (known === undefined) kv.put("tenant_id", tenantId);
+    if ((await this.ctx.storage.getAlarm()) !== null) return { armed: false };
+    await this.ctx.storage.setAlarm(Date.now() + Math.floor(Math.random() * TENANT_ALARM_INTERVAL_MS));
+    return { armed: true };
+  }
+
+  /** TEN-5: this tenant's housekeeping, in its own invocation (`tenant-alarm.ts`). */
+  async alarm(): Promise<void> {
+    const env = this.env as CloudflareRuntimeEnv;
+    const tenantId = (this.ctx.storage.kv as StoreKv).get("tenant_id");
+    // The store's own engine, without a hop: the same D1 shape the Worker sees.
+    const local = {
+      query: async (protocol: number, statement: StatementDescriptor, raw: boolean) => this.query(protocol, statement, raw),
+      batch: async (protocol: number, statements: StatementDescriptor[]) => this.batch(protocol, statements),
+    };
+    await runTenantAlarm({
+      tenantId: typeof tenantId === "string" ? tenantId : null,
+      now: Date.now(),
+      schemaState: () => this.#store.schemaState(),
+      readTenant: (id) => readTenantRow(env.PLATFORM_DB as D1Database, id),
+      maintain: async (id, scheduledTime, primaryHost) => {
+        const { runTenantMaintenance } = await import("./tenant-maintenance.ts");
+        await runTenantMaintenance(
+          env,
+          createTenantDb(local),
+          id,
+          scheduledTime,
+          { waitUntil: (task: Promise<unknown>) => this.ctx.waitUntil(task), passThroughOnException() {} } as never,
+          primaryHost,
+        );
+      },
+      setAlarm: (at) => this.ctx.storage.setAlarm(at),
+    });
   }
 }

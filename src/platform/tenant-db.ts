@@ -357,6 +357,21 @@ type StoreNamespace = {
  * by its id with the APAC hint (DATA-1), its schema brought to `target`, and
  * the D1-shaped capability over it.
  */
+/**
+ * T-24: make sure the tenant's hourly alarm is pending (idempotent). The cron
+ * calls it for every active tenant; the store remembers its tenant id.
+ */
+export async function armTenantAlarm(env: TenantDbEnv | null | undefined, tenantId: string): Promise<boolean> {
+  const namespace = env?.TENANT_STORE as StoreNamespace | undefined;
+  if (typeof namespace?.getByName !== "function") {
+    throw new TenantUnavailableError("protocol", "TENANT_STORE is not bound");
+  }
+  const stub = namespace.getByName(tenantId, { locationHint: "apac-se" }) as unknown as {
+    armAlarm(protocol: number, tenantId: string): Promise<{ armed: boolean }>;
+  };
+  return (await stub.armAlarm(TENANT_STORE_PROTOCOL, tenantId)).armed;
+}
+
 export async function openTenantDb(
   env: TenantDbEnv | null | undefined,
   tenant: TenantRef,

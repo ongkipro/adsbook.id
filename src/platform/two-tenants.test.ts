@@ -58,7 +58,9 @@ const hooks = registerHooks({
   },
 });
 const { createMiddleware } = await import("../middleware.ts");
-const { runPlatformCron } = await import("../worker.ts");
+const { runPlatformCron, CRON_MIGRATION_BATCH } = await import("../worker.ts");
+const { runTenantMaintenance } = await import("./tenant-maintenance.ts");
+const { readTenantRow, runTenantAlarm, TENANT_ALARM_INTERVAL_MS } = await import("./tenant-alarm.ts");
 const { tenantDatabase } = await import("../lib/tenant-database.ts");
 const orderStatusRoute = await import("../pages/api/order-status.ts");
 const adminOrdersRoute = await import("../pages/api/admin/orders/index.ts");
@@ -85,8 +87,10 @@ function memoryKv(): StoreKv {
 
 /** A TENANT_STORE namespace: one engine-backed store per tenant id, created on first use. */
 function namespace(options: { migrated?: boolean; failing?: string[] } = {}) {
-  const stores = new Map<string, { storage: ReturnType<typeof createNodeStorage>; stub: TenantStoreStub }>();
+  const stores = new Map<string, { storage: ReturnType<typeof createNodeStorage>; stub: TenantStoreStub; engine: TenantStoreEngine }>();
   const asked: string[] = [];
+  /** The one pending alarm per store (DO semantics), by tenant id. */
+  const alarms = new Map<string, number>();
   const get = (id: string) => {
     let store = stores.get(id);
     if (!store) {
@@ -100,8 +104,15 @@ function namespace(options: { migrated?: boolean; failing?: string[] } = {}) {
         schemaState: (protocol) => hop(() => (engine.checkProtocol(protocol), engine.schemaState())),
         prepareMigration: (protocol) => hop(() => (engine.checkProtocol(protocol), { bookmark: `bm-${id}`, state: engine.schemaState() })),
         applyMigrations: (protocol, target, bookmarkId) => hop(() => (engine.checkProtocol(protocol), engine.applyMigrations(target, bookmarkId))),
-      };
-      store = { storage, stub };
+        armAlarm: (protocol: number, tenantId: string) =>
+          hop(() => {
+            engine.checkProtocol(protocol);
+            if (alarms.has(tenantId)) return { armed: false };
+            alarms.set(tenantId, 0);
+            return { armed: true };
+          }),
+      } as TenantStoreStub;
+      store = { storage, stub, engine };
       stores.set(id, store);
     }
     return store;
@@ -109,6 +120,7 @@ function namespace(options: { migrated?: boolean; failing?: string[] } = {}) {
   return {
     stores,
     asked,
+    alarms,
     get,
     binding: {
       getByName(id: string, location: { locationHint?: string }) {
@@ -119,6 +131,30 @@ function namespace(options: { migrated?: boolean; failing?: string[] } = {}) {
       },
     },
   };
+}
+
+/**
+ * One alarm invocation of `TenantStore.alarm()` (T-24), with its own
+ * subrequest budget: every outbound fetch in it counts against `budget` only.
+ */
+async function fireAlarm(
+  stores: ReturnType<typeof namespace>,
+  platformDb: D1Database,
+  id: string,
+  env: Record<string, unknown>,
+  now: number,
+) {
+  const { stub, engine } = stores.get(id);
+  return runTenantAlarm({
+    tenantId: id,
+    now,
+    schemaState: () => engine.schemaState(),
+    readTenant: (tenantId) => readTenantRow(platformDb, tenantId),
+    maintain: (tenantId, time, primaryHost) =>
+      runTenantMaintenance({ PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...env } as never, createTenantDb(stub), tenantId, time,
+        { waitUntil() {}, passThroughOnException() {} } as never, primaryHost),
+    setAlarm: async (at) => void stores.alarms.set(id, at),
+  });
 }
 
 async function platform(rows: Array<[id: string, status: string, host: string]>) {
@@ -172,7 +208,7 @@ test("each tenant host reaches its own store, and the shared OMS_DB binding is n
 
 // Tenant ids are never reused, so the per-isolate "ready" map is keyed by them;
 // this test uses its own ids because the first test made t-a and t-b ready.
-test("the platform cron runs each active tenant on its own store; a suspended one is skipped, a failing one isolated", async () => {
+test("T-24: the cron migrates quiet tenants (bookmark first), arms each active tenant's alarm, isolates a failing one", async () => {
   const platformDb = await platform([
     ["c-a", "active", "cron-a.belanja.cc"],
     ["c-b", "active", "cron-b.belanja.cc"],
@@ -180,7 +216,6 @@ test("the platform cron runs each active tenant on its own store; a suspended on
     ["c-d", "active", "cron-d.belanja.cc"],
   ]);
   const stores = namespace({ failing: ["c-d"] });
-  const sharedReads: string[] = [];
   const errors: string[] = [];
   const original = { error: console.error, info: console.info, warn: console.warn };
   console.error = (label: unknown, detail?: unknown) => void errors.push(`${String(label)} ${JSON.stringify(detail ?? null)}`);
@@ -189,28 +224,103 @@ test("the platform cron runs each active tenant on its own store; a suspended on
   let result: Awaited<ReturnType<typeof runPlatformCron>>;
   try {
     result = await runPlatformCron(
-      // The shared OMS_DB binding must never be read: a tenant's maintenance uses its own store only.
-      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, OMS_DB: { prepare: (sql: string) => { sharedReads.push(sql); throw new Error("shared OMS_DB read"); } } } as never,
+      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } as never,
       Date.parse("2026-11-16T05:07:00.000Z"),
       { waitUntil() {}, passThroughOnException() {} } as never,
     );
   } finally {
     Object.assign(console, original);
   }
-  assert.deepEqual(result, { tenants: 3, failed: ["c-d"] });
-  assert.deepEqual(stores.asked, ["c-a", "c-b", "c-d"], "the suspended tenant is never opened");
+  assert.deepEqual(result, { migrated: ["c-a", "c-b"], armed: 2, failed: ["c-d"] });
+  assert.equal(stores.asked.includes("c-c"), false, "the suspended tenant is never opened");
+  assert.deepEqual([...stores.alarms.keys()].sort(), ["c-a", "c-b"]);
   for (const id of ["c-a", "c-b"]) {
-    const { storage } = stores.get(id);
-    assert.equal(readLedger(storage).length, CHAIN.length, `${id} migrated before maintenance`);
-    const heartbeat = storage.db.prepare("SELECT scheduler_ran_at FROM ops_health_snapshot").get() as { scheduler_ran_at: string } | undefined;
-    assert.equal(heartbeat?.scheduler_ran_at, "2026-11-16T05:07:00.000Z", `${id} heartbeat`);
+    assert.equal(readLedger(stores.get(id).storage).length, CHAIN.length, `${id} migrated without a request`);
+    const bookmark = platformDb.sqlite.prepare("SELECT bookmark FROM migration_bookmarks WHERE tenant_id = ?").get(id) as { bookmark: string } | undefined;
+    assert.equal(bookmark?.bookmark, `bm-${id}`, `${id}: bookmark stored before migrating (MIG-1)`);
+    assert.equal(
+      (platformDb.sqlite.prepare("SELECT schema_version FROM tenants WHERE id = ?").get(id) as { schema_version: number }).schema_version,
+      CHAIN.length,
+    );
   }
-  assert.ok(errors.some((line) => line.startsWith("scheduled-tenant-failed") && line.includes("c-d")));
-  assert.deepEqual(sharedReads, [], "a maintenance step read the shared OMS_DB binding");
-  assert.equal(
-    (platformDb.sqlite.prepare("SELECT schema_version FROM tenants WHERE id = 'c-a'").get() as { schema_version: number }).schema_version,
-    CHAIN.length,
-  );
+  assert.ok(errors.some((line) => line.startsWith("scheduled-tenant-migration-failed") && line.includes("c-d")));
+  // The cron runs no tenant's maintenance itself: no heartbeat until an alarm fires.
+  assert.equal(stores.get("c-a").storage.db.prepare("SELECT scheduler_ran_at FROM ops_health_snapshot").get(), undefined);
+  assert.ok(CRON_MIGRATION_BATCH >= 1);
+});
+
+test("T-24/ISO-10: 50 alarms, one failing and one making 900 calls: 49 heartbeats, one logged failure, no budget error", async (context) => {
+  const ids = Array.from({ length: 50 }, (_, index) => `h-${String(index).padStart(2, "0")}`);
+  const platformDb = await platform(ids.map((id) => [id, "active", `${id}.belanja.cc`] as [string, string, string]));
+  const stores = namespace({ migrated: true });
+  for (const id of ids) stores.get(id).storage.db.exec(`INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16')`);
+  const FAILING = "h-07";
+  const NOISY = "h-23";
+  // The failing tenant's store throws on every query (ISO-10: B throws, A runs).
+  stores.get(FAILING).engine.query = () => { throw new Error("store broken"); };
+
+  let budget = { limit: 1000, used: 0 };
+  const budgetErrors: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    budget.used += 1;
+    if (budget.used > budget.limit) {
+      budgetErrors.push("Too many subrequests");
+      throw new Error("Too many subrequests");
+    }
+    return new Response("{}", { status: 200 });
+  }) as typeof fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+
+  const errors: string[] = [];
+  const original = { error: console.error, info: console.info, warn: console.warn, log: console.log };
+  console.error = (label: unknown, detail?: unknown) => void errors.push(`${String(label)} ${JSON.stringify(detail ?? null)}`);
+  console.info = console.warn = console.log = () => undefined;
+  const now = Date.parse("2026-11-16T06:00:00.000Z");
+  const outcomes: Record<string, string> = {};
+  try {
+    for (const id of ids) {
+      budget = { limit: 1000, used: 0 }; // each alarm is its own invocation
+      if (id === NOISY) {
+        for (let call = 0; call < 900; call += 1) await fetch("https://provider.test/");
+      }
+      outcomes[id] = await fireAlarm(stores, platformDb as never, id, {}, now);
+    }
+  } finally {
+    Object.assign(console, original);
+  }
+  const heartbeats = ids.filter((id) => {
+    if (id === FAILING) return false;
+    const row = stores.get(id).storage.db.prepare("SELECT scheduler_ran_at FROM ops_health_snapshot").get() as { scheduler_ran_at: string } | undefined;
+    return row?.scheduler_ran_at === "2026-11-16T06:00:00.000Z";
+  });
+  assert.equal(heartbeats.length, 49);
+  assert.deepEqual(budgetErrors, [], "a tenant's run hit another's subrequest budget");
+  assert.ok(errors.some((line) => line.includes(FAILING)), "the failing tenant is logged with its id");
+  assert.ok(errors.every((line) => !line.includes("tenant_id") || line.includes(FAILING)), `another tenant logged a failure: ${errors.join(" | ")}`);
+  // Every alarm re-armed for the next hour, the failing one included.
+  assert.ok(ids.every((id) => stores.alarms.get(id) === now + TENANT_ALARM_INTERVAL_MS));
+  assert.equal(Object.values(outcomes).filter((outcome) => outcome === "ran").length, 49);
+});
+
+test("T-24/MIG-1: an alarm behind the bundled chain does no maintenance, re-arms and logs; an inactive tenant does nothing", async () => {
+  const platformDb = await platform([["m-1", "active", "mig-1.belanja.cc"], ["m-2", "suspended", "mig-2.belanja.cc"]]);
+  const stores = namespace(); // not migrated: applied 0 < bundled
+  const errors: string[] = [];
+  const original = { error: console.error, info: console.info };
+  console.error = (label: unknown, detail?: unknown) => void errors.push(`${String(label)} ${JSON.stringify(detail ?? null)}`);
+  console.info = () => undefined;
+  const now = Date.parse("2026-11-16T07:00:00.000Z");
+  try {
+    assert.equal(await fireAlarm(stores, platformDb as never, "m-1", {}, now), "schema_behind");
+    assert.equal(await fireAlarm(stores, platformDb as never, "m-2", {}, now), "inactive");
+  } finally {
+    Object.assign(console, original);
+  }
+  assert.equal(readLedger(stores.get("m-1").storage).length, 0, "the alarm never migrates");
+  assert.equal(stores.alarms.get("m-1"), now + TENANT_ALARM_INTERVAL_MS, "re-armed");
+  assert.equal(stores.alarms.has("m-2"), false, "an inactive tenant is not re-armed");
+  assert.ok(errors.some((line) => line.startsWith("tenant-alarm-schema-behind") && line.includes("m-1")));
 });
 
 test("ISO-5: an order's status token answers on its own tenant's host only", async () => {
@@ -403,7 +513,8 @@ test("T-45/ISO-9: with every platform env value set, a tenant without settings i
       Date.parse("2026-11-16T05:07:00.000Z"),
       { waitUntil() {}, passThroughOnException() {} } as never,
     );
-    assert.deepEqual(result, { tenants: 1, failed: [] });
+    assert.deepEqual(result, { migrated: ["p-a"], armed: 1, failed: [] });
+    assert.equal(await fireAlarm(stores, platformDb as never, "p-a", { ...EVERY_PLATFORM_PROVIDER_ENV }, Date.parse("2026-11-16T05:07:00.000Z")), "ran");
   } finally {
     Object.assign(console, original);
   }

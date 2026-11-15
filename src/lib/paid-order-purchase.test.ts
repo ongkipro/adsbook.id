@@ -482,7 +482,7 @@ registerHooks({
     return nextLoad(url, context);
   },
 });
-const workerModule = (await import("../worker.ts")) as unknown as {
+const workerModule = (await import("../platform/tenant-maintenance.ts")) as unknown as {
   runTenantMaintenance(env: Record<string, unknown>, database: D1Database, tenantId: string, scheduledTime: number, ctx: unknown): Promise<void>;
 };
 const { ensureSchemaUpgraded: applyTenantChain } = await import("./schema-version.ts");
@@ -560,7 +560,7 @@ async function cronStore() {
     }
   };
 
-  await run(); // the first run applies the migration chain to the empty database
+  await applyTenantChain(database); // the chain on the empty database, as openTenantDb would
   sqlite.exec(`
     INSERT INTO stores (id, name, slug, created_at, site_url, meta_pixel_id, meta_capi_token)
     VALUES (1, 'Toko Asli', 'toko-asli', '2026-11-01T00:00:00.000Z', '${D1_SITE}', '1234567890', 'tok');
@@ -595,12 +595,11 @@ test("a scheduled Purchase carries the store's own URL from D1, and its minted e
   assert.ok(purchase.user_data.ph, "the phone is still a match key");
 });
 
-test("the scheduled run still sends the Purchase when the store identity cannot be read", async () => {
-  const { run, sent, errors, queued, failIdentityRead } = await cronStore();
+test("TEN-5: a tenant whose identity cannot be read skips its run and sends nothing", async () => {
+  const { run, sent, failIdentityRead } = await cronStore();
   failIdentityRead();
-  await run();
-
-  assert.ok(errors.includes("tenant-identity-load"), "the failed read is logged");
-  assert.equal(queued().eventSourceUrl, new URL("/thanks", defaultTenantConfig.siteUrl).toString());
-  assert.ok(sent.some((event) => event.event_id === "INV-10001"));
+  // Never a default identity: the run stops before any step, and the alarm
+  // logs the failure with the tenant id (tenant-alarm.ts).
+  await assert.rejects(run(), /TENANT_IDENTITY_UNAVAILABLE/);
+  assert.equal(sent.length, 0);
 });

@@ -1,300 +1,84 @@
 import type { ExecutionContext, ExportedHandler } from "@cloudflare/workers-types";
 import { handle } from "@astrojs/cloudflare/handler";
-// One SQLite Durable Object per tenant (ADR-039, TD-3); src/platform/tenant-db.ts opens it.
-export { TenantStore } from "./platform/tenant-store.ts";
-import { tenantKv } from "./platform/keys.ts";
-import { purgeExpiredAbandonedOrders } from "./lib/order-persistence.ts";
-import {
-  alertsFromOperationalHealth,
-  evaluateOperationalAlerts,
-} from "./lib/operational-alerts.ts";
-import { collectOperationalHealth, recordSchedulerRun } from "./lib/operational-health.ts";
-import { readSetupRequiredLeft, writeHealthSnapshot } from "./lib/health-snapshot.ts";
-import { backfillReceiverScores } from "./lib/rts-scoring.ts";
 import { CMS_VERSION } from "./lib/version.ts";
 import { ensureControlPlane } from "./platform/control-plane.ts";
-import { openTenantDb, TenantUnavailableError } from "./platform/tenant-db.ts";
-import { purgeExpiredRateLimits } from "./lib/rate-limit.ts";
-import { reconcileNativeLandingPages } from "./lib/landing-pages.ts";
-import { purgeExpiredNotifications } from "./lib/notifications.ts";
-import {
-  expirePendingPaymentTransactions,
-  purgeExpiredAutoLarisCallbacks,
-  reconcileAutoLarisPaymentStatuses,
-} from "./lib/autolaris-payment.ts";
-import { enqueuePurchaseForPaidOrder, sweepMissedCodPurchases } from "./lib/paid-order-purchase.ts";
-import { loadStoreIdentity, resolveTenantConfig } from "./lib/tenant.ts";
-import { drainCapiOutboxBacklog, purgeExpiredCapiOutboxEvents } from "./lib/capi-outbox.ts";
-import { getStoreAdsConfig } from "./lib/store-ads.ts";
-import { runPluginCron } from "./plugins/registry.ts";
-import {
-  drainGoogleAdsConversionOutbox,
-  purgeExpiredGoogleAdsConversions,
-  loadGoogleAdsOfflineConfig,
-  reconcileGoogleAdsConversions,
-} from "./lib/google-ads-offline.ts";
+import { armTenantAlarm, openTenantDb, TenantUnavailableError } from "./platform/tenant-db.ts";
+import { runPlatformJobs } from "./platform/jobs.ts";
+// One SQLite Durable Object per tenant (ADR-039, TD-3); src/platform/tenant-db.ts opens it.
+export { TenantStore } from "./platform/tenant-store.ts";
 type AstroRequest = Parameters<typeof handle>[0];
 
-/**
- * One tenant's hourly maintenance, on that tenant's own store and identity
- * (TEN-5). The store is already on this release's schema: `openTenantDb`
- * migrated it first (MIG-1).
- */
-export async function runTenantMaintenance(
-  env: CloudflareRuntimeEnv,
-  database: D1Database,
-  tenantId: string,
-  scheduledTime: number,
-  context: ExecutionContext,
-  primaryHost?: string | null,
-) {  // No step takes the ones after it down: payment reconciliation, both outbox
-  // drains and the health evaluation each run even when an earlier step hit a
-  // transient D1 or provider error. The failure is logged and reads as -1.
-  const housekeeping = async (label: string, run: () => Promise<number>) => {
-    try {
-      return await run();
-    } catch (error) {
-      console.error(label, error);
-      return -1;
-    }
-  };
-  // The panel's "Tugas terjadwal" signal: proof this clock still runs at all.
-  // A D1 column on the status row, not KV (A-379), stamped before any later
-  // step can fail.
-  await housekeeping("scheduled-heartbeat-failed", async () => {
-    await recordSchedulerRun(database, new Date(scheduledTime));
-    return 0;
-  });
-  const purgedAbandonedOrders = await housekeeping(
-    "scheduled-abandoned-order-purge-failed",
-    () => purgeExpiredAbandonedOrders(database, new Date(scheduledTime)),
-  );
-  const purgedRateLimitWindows = await housekeeping(
-    "scheduled-rate-limit-purge-failed",
-    () => purgeExpiredRateLimits(database, new Date(scheduledTime)),
-  );
-  const expiredPaymentInstructions = await housekeeping(
-    "scheduled-payment-expiry-failed",
-    () => expirePendingPaymentTransactions(database, new Date(scheduledTime)),
-  );
-  const purgedProviderCallbacks = await housekeeping(
-    "scheduled-callback-purge-failed",
-    () => purgeExpiredAutoLarisCallbacks(database, new Date(scheduledTime)),
-  );
-  const purgedNotifications = await housekeeping(
-    "scheduled-notification-purge-failed",
-    () => purgeExpiredNotifications(database, new Date(scheduledTime)),
-  );
-  const purgedCapiOutboxEvents = await housekeeping(
-    "scheduled-capi-outbox-purge-failed",
-    () => purgeExpiredCapiOutboxEvents(database, new Date(scheduledTime)),
-  );
-  const purgedGoogleAdsConversions = await housekeeping(
-    "scheduled-google-ads-purge-failed",
-    () => purgeExpiredGoogleAdsConversions(database, new Date(scheduledTime)),
-  );
-  // The native register reached the table only when an operator opened the
-  // landing-page list, so a page deployed since stayed out of the sitemap and
-  // could not take a product page until then. The re-sync writes only what
-  // changed, so running it hourly costs nothing when nothing did.
-  await housekeeping("scheduled-native-landing-reconcile-failed", async () => {
-    await reconcileNativeLandingPages(database);
-    return 0;
-  });
-  // Payment truth for QRIS/VA. The retired webhook never answered; the
-  // provider's Advice endpoint does, and this is the only clock that asks it.
-  // A transaction is marked paid solely when the provider's own response says
-  // so — an operator can still reconcile by hand from /admin/payments, and
-  // every transition either way is audited.
-  // The store's identity as a request resolves it: the wizard's `stores` row
-  // first, the environment only as its fallback. With the environment alone a
-  // scheduled Purchase carried `example.com` as its source URL and hashed the
-  // store's own minted `<phone>@<host>` address as a match key (PR-6).
-  // `loadStoreIdentity` logs and answers null when D1 cannot be read, so the
-  // run goes on with the environment's identity rather than stopping.
-  const scheduledLocals = {
-    runtimeEnv: env,
-    tenantDb: database,
-    tenant: resolveTenantConfig(await loadStoreIdentity(database), primaryHost ?? undefined),
-    cfContext: context,
-  } satisfies App.Locals;
-  let autoLarisReconciliation = {
-    checked: 0,
-    pending: 0,
-    unproven: 0,
-    failed: 0,
-    paidOrderIds: [] as number[],
-    unrecognisedPaidStatuses: [] as string[],
-  };
-  try {
-    autoLarisReconciliation = await reconcileAutoLarisPaymentStatuses(
-      database,
-      scheduledLocals,
-      new Date(scheduledTime),
-    );
-  } catch (error) {
-    console.error("scheduled-autolaris-advice-failed", error);
-  }
-  for (const orderId of autoLarisReconciliation.paidOrderIds) {
-    try {
-      await enqueuePurchaseForPaidOrder(database, scheduledLocals, orderId);
-    } catch (error) {
-      // Payment truth is authoritative. Conversion delivery is independently
-      // retried by its outbox and must never roll a paid order back.
-      console.error("scheduled-paid-order-purchase-failed", { orderId, error });
-    }
-  }
-  // The outbox had no clock of its own: `drainCapiOutbox` was reachable only
-  // from `/api/meta-event` and `/api/v1/tracking/events`, so a delivery that
-  // failed was retried when the next visitor arrived rather than when its
-  // backoff expired. Backoff caps at an hour, which assumes someone will be
-  // along within the hour — not true for a store between campaigns, and the
-  // health check below was already counting the overdue rows without anything
-  // acting on them.
-  // A COD buyer who never reached /thanks sent no Purchase from either leg
-  // (audit 2026-11-10, F-1). Delivered inline; the drain below retries a miss.
-  const sweptCodPurchases = await housekeeping("scheduled-cod-purchase-sweep-failed", () =>
-    sweepMissedCodPurchases(database, scheduledLocals, new Date(scheduledTime)),
-  );
-  const drainedCapiEvents = await housekeeping("scheduled-capi-drain-failed", async () => {
-    const ads = await getStoreAdsConfig(scheduledLocals);
-    return ads.metaPixelId && ads.metaCapiToken
-      ? drainCapiOutboxBacklog(database, ads.metaPixelId, ads.metaCapiToken, new Date(scheduledTime))
-      : 0;
-  });
-  // The tenant's own upload settings (T-45); an unreadable row uploads nothing.
-  const googleAdsOffline = await loadGoogleAdsOfflineConfig(database).catch((error) => {
-    console.error("scheduled-google-ads-config-failed", { tenant_id: tenantId, error: String(error) });
-    return null;
-  });
-  const queuedGoogleAdsConversions = googleAdsOffline
-    ? await housekeeping("scheduled-google-ads-reconcile-failed", () =>
-        reconcileGoogleAdsConversions(database, googleAdsOffline, new Date(scheduledTime)),
-      )
-    : 0;
-  const drainedGoogleAdsConversions = googleAdsOffline
-    ? await housekeeping("scheduled-google-ads-drain-failed", () =>
-        drainGoogleAdsConversionOutbox(database, googleAdsOffline),
-      )
-    : 0;
-  // Active plugins only (ADR-028); a store with none does one cheap read.
-  // runPluginCron isolates each plugin's failure; this catch is for the read.
-  const pluginCron = await runPluginCron(database, env, new Date(scheduledTime)).catch((error) => {
-    console.error("scheduled-plugin-cron-failed", error);
-    return {};
-  });
-
-  // Receiver Score is whitelisted per Mengantar account; orders taken while it
-  // was refused (or never opened in /admin) score themselves here.
-  const backfilledReceiverScores = await housekeeping("scheduled-receiver-score-backfill-failed", () =>
-    backfillReceiverScores(database, scheduledLocals),
-  );
-
-  const health = await collectOperationalHealth(database, scheduledLocals);
-  const alerts = await evaluateOperationalAlerts(
-    alertsFromOperationalHealth(health),
-    {
-      // The tenant's own alert state (TEN-3): one tenant's firing never mutes another's.
-      store: tenantKv(env, tenantId),
-      // The platform's alert channel (a Worker secret), not a tenant value.
-      webhookUrl: String(env.OPS_ALERT_WEBHOOK_URL ?? "").trim(),
-      // No request here, so the tenant names itself from its own store.
-      source: scheduledLocals.tenant.siteUrl,
-    },
-  );
-
-  console.info("operational-health-scheduled", {
-    tenant_id: tenantId,
-    overall: health.overall,
-    schemaState: health.build.schemaState,
-    purgedAbandonedOrders,
-    purgedRateLimitWindows,
-    expiredPaymentInstructions,
-    purgedProviderCallbacks,
-    purgedNotifications,
-    purgedCapiOutboxEvents,
-    purgedGoogleAdsConversions,
-    backfilledReceiverScores,
-    autoLarisReconciliation: {
-      checked: autoLarisReconciliation.checked,
-      paid: autoLarisReconciliation.paidOrderIds.length,
-      pending: autoLarisReconciliation.pending,
-      unproven: autoLarisReconciliation.unproven,
-      failed: autoLarisReconciliation.failed,
-      // The provider's success code with a settlement word the allowlist does
-      // not know. Non-empty here is the observation SCR1 needs, not an error.
-      unrecognisedPaidStatuses: autoLarisReconciliation.unrecognisedPaidStatuses,
-    },
-    sweptCodPurchases,
-    drainedCapiEvents,
-    queuedGoogleAdsConversions,
-    drainedGoogleAdsConversions,
-    pluginCron,
-    alerts: alerts.map(({ id, state, reason, transition, notification }) => ({
-      id,
-      state,
-      reason,
-      transition,
-      notification,
-    })),
-  });
-
-  // The admin status icon reads this one row instead of collecting health on
-  // every page (A39). Last, and isolated: its failure is logged and nothing
-  // else, and a run that failed to collect never reaches it, so the previous
-  // snapshot stays rather than a blank one.
-  await housekeeping("scheduled-health-snapshot-failed", async () => {
-    await writeHealthSnapshot(
-      database,
-      health,
-      await readSetupRequiredLeft(database, scheduledLocals),
-    );
-    return 0;
-  });
-}
-
+/** MIG-1: tenants migrated by the cron per run, oldest schema first. */
+export const CRON_MIGRATION_BATCH = 50;
 
 /**
- * The platform cron: every active tenant's maintenance, each on its own store.
+ * The platform cron (MULTI-TENANT-DESIGN §8). It runs no tenant's
+ * maintenance itself — each tenant's `TenantStore` alarm does, in its own
+ * invocation (TEN-5). It:
+ * 1. migrates up to `CRON_MIGRATION_BATCH` active tenants whose schema is
+ *    behind this release and that received no request, each through the T-18
+ *    protocol (bookmark first; `openTenantDb` records the new version);
+ * 2. arms the hourly alarm of every active tenant that has none;
+ * 3. runs the platform's own retention job (`src/platform/jobs.ts`).
  * One tenant's failure is logged with its id and the next tenant runs.
- *
- * lazy: tenants run in sequence in this one invocation and share its
- * subrequest budget; T-24 moves each tenant to its own `TenantStore` alarm.
  */
 export async function runPlatformCron(
   env: CloudflareRuntimeEnv,
   scheduledTime: number,
-  context: ExecutionContext,
-): Promise<{ tenants: number; failed: string[] }> {
+  _context: ExecutionContext,
+): Promise<{ migrated: string[]; armed: number; failed: string[] }> {
   const platformDb = env.PLATFORM_DB;
   if (!platformDb) {
-    console.error("scheduled-no-platform-db");
-    return { tenants: 0, failed: [] };
+    console.error("scheduled-no-platform-bindings");
+    return { migrated: [], armed: 0, failed: [] };
   }
   await ensureControlPlane(platformDb);
-  const tenants = (
+  const target = CMS_VERSION.schemaVersion;
+  const failed: string[] = [];
+
+  const behind = (
     await platformDb
       .prepare(
-        `SELECT t.id, t.cache_version, h.host AS primary_host FROM tenants t
-         LEFT JOIN tenant_hosts h ON h.tenant_id = t.id AND h.is_primary = 1 AND h.status = 'active'
-         WHERE t.status = 'active' ORDER BY t.id`,
+        `SELECT id, cache_version FROM tenants WHERE status = 'active' AND schema_version < ?
+         ORDER BY schema_version, id LIMIT ?`,
       )
-      .all<{ id: string; cache_version: number; primary_host: string | null }>()
+      .bind(target, CRON_MIGRATION_BATCH)
+      .all<{ id: string; cache_version: number }>()
   ).results;
-  const failed: string[] = [];
-  for (const { id, cache_version, primary_host } of tenants) {
+  const migrated: string[] = [];
+  for (const { id, cache_version } of behind) {
     try {
-      const database = await openTenantDb(env, { tenantId: id, cacheVersion: Number(cache_version) }, CMS_VERSION.schemaVersion);
-      await runTenantMaintenance(env, database, id, scheduledTime, context, primary_host);
+      await openTenantDb(env, { tenantId: id, cacheVersion: Number(cache_version) }, target);
+      migrated.push(id);
     } catch (error) {
       failed.push(id);
-      console.error("scheduled-tenant-failed", {
+      console.error("scheduled-tenant-migration-failed", {
         tenant_id: id,
-        reason: error instanceof TenantUnavailableError ? error.reason : "maintenance_failed",
+        reason: error instanceof TenantUnavailableError ? error.reason : "migration_failed",
       });
     }
   }
-  return { tenants: tenants.length, failed };
+
+  const active = (
+    await platformDb.prepare("SELECT id FROM tenants WHERE status = 'active' ORDER BY id").all<{ id: string }>()
+  ).results;
+  let armed = 0;
+  for (const { id } of active) {
+    try {
+      if (await armTenantAlarm(env, id)) armed += 1;
+    } catch (error) {
+      if (!failed.includes(id)) failed.push(id);
+      console.error("scheduled-tenant-arm-failed", { tenant_id: id, error: String(error) });
+    }
+  }
+
+  try {
+    const jobs = await runPlatformJobs(platformDb, new Date(scheduledTime));
+    console.info("scheduled-platform-jobs", jobs);
+  } catch (error) {
+    console.error("scheduled-platform-jobs-failed", String(error));
+  }
+  return { migrated, armed, failed };
 }
 
 export default {

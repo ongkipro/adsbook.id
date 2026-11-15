@@ -503,7 +503,7 @@ const workerHooks = registerHooks({
     return nextLoad(url, context);
   },
 });
-const workerModule = (await import("../worker.ts")) as unknown as {
+const workerModule = (await import("../platform/tenant-maintenance.ts")) as unknown as {
   runTenantMaintenance(env: Record<string, unknown>, database: D1Database, tenantId: string, scheduledTime: number, ctx: unknown): Promise<void>;
 };
 const { ensureSchemaUpgraded: applyTenantChain } = await import("./schema-version.ts");
@@ -513,6 +513,8 @@ const worker = {
   async scheduled(controller: { scheduledTime: number }, env: Record<string, unknown>, ctx: unknown) {
     const database = env.OMS_DB as D1Database;
     await applyTenantChain(database);
+    // A tenant's run needs its identity row (TEN-5); signup writes it.
+    await database.prepare("INSERT OR IGNORE INTO stores (id, name, slug, created_at) VALUES (1, 'Toko Uji', 'toko-uji', '2026-10-29')").run();
     await workerModule.runTenantMaintenance(env, database, "t-test", controller.scheduledTime, ctx);
   },
 };
@@ -646,8 +648,8 @@ test("the cron still fires an alert on a stalled outbox, and its only KV writes 
   assert.ok(kv.puts.every((key) => /alert/i.test(key)), `non-alert KV write: ${kv.puts.join(", ")}`);
 });
 
-test("worker.ts: the snapshot is the last step, inside housekeeping, after the alert evaluation", () => {
-  const source = readFileSync(new URL("../worker.ts", import.meta.url), "utf8");
+test("tenant maintenance: the snapshot is the last step, inside housekeeping, after the alert evaluation", () => {
+  const source = readFileSync(new URL("../platform/tenant-maintenance.ts", import.meta.url), "utf8");
   const order = [
     'housekeeping("scheduled-heartbeat-failed"',
     "reconcileAutoLarisPaymentStatuses(",
@@ -666,5 +668,6 @@ test("worker.ts: the snapshot is the last step, inside housekeeping, after the a
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   assert.doesNotMatch(source, /recordSchedulerRun\(env\.SESSION/);
   const tail = source.slice(source.indexOf('housekeeping("scheduled-health-snapshot-failed"'));
-  assert.ok(tail.indexOf("\n}\n") < tail.indexOf("export default"), "nothing runs after the snapshot");
+  // The snapshot's own call closes the function: nothing runs after it.
+  assert.match(tail, /^housekeeping\("scheduled-health-snapshot-failed"[\s\S]*?\n {2}\}\);\n\}\n/, "nothing runs after the snapshot");
 });
