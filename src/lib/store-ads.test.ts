@@ -72,8 +72,7 @@ const CONFIGURED_ROW = {
 test("the store's own configuration wins over a leftover Worker secret", async (context) => {
   withoutAdsSecrets(context);
   const config = await getStoreAdsConfig({
-    runtimeEnv: {
-      OMS_DB: storeDatabase(CONFIGURED_ROW),
+    tenantDb: storeDatabase(CONFIGURED_ROW), runtimeEnv: {
       // A stale deploy-time secret from another store must never override what
       // this store set in its dashboard.
       META_PIXEL_ID: "999999999999999",
@@ -100,12 +99,11 @@ test("the store's own configuration wins over a leftover Worker secret", async (
 test("a store row that leaves a field blank falls through to the environment", async (context) => {
   withoutAdsSecrets(context);
   const config = await getStoreAdsConfig({
-    runtimeEnv: {
-      OMS_DB: storeDatabase({
+    tenantDb: storeDatabase({
         ...CONFIGURED_ROW,
         meta_capi_token: "",
         google_tag_manager_id: null,
-      }),
+      }), runtimeEnv: {
       META_CAPI_ACCESS_TOKEN: "env-capi-token",
       GTM_ID: "GTM-ENVONLY",
     },
@@ -126,8 +124,7 @@ test("Google Ads direct conversion requires a valid complete destination", async
   assert.equal(hasValidGoogleAdsConversion("AW-111111111", "not valid"), false);
 
   const config = await getStoreAdsConfig({
-    runtimeEnv: {
-      OMS_DB: storeDatabase(null),
+    tenantDb: storeDatabase(null), runtimeEnv: {
       GOOGLE_ADS_CONVERSION_ID: "AW-111111111",
       GOOGLE_ADS_CONVERSION_LABEL: "not valid",
     },
@@ -147,7 +144,7 @@ test("every documented pixel alias resolves, so one spelling does not silently d
 
   for (const alias of aliases) {
     const config = await getStoreAdsConfig({
-      runtimeEnv: { OMS_DB: storeDatabase(null), [alias]: "222222222222222" },
+      tenantDb: storeDatabase(null), runtimeEnv: { [alias]: "222222222222222" },
     } as never);
     assert.equal(config.metaPixelId, "222222222222222", `alias ${alias}`);
   }
@@ -156,8 +153,7 @@ test("every documented pixel alias resolves, so one spelling does not silently d
 test("the first pixel alias wins when several are set", async (context) => {
   withoutAdsSecrets(context);
   const config = await getStoreAdsConfig({
-    runtimeEnv: {
-      OMS_DB: storeDatabase(null),
+    tenantDb: storeDatabase(null), runtimeEnv: {
       NEXT_PUBLIC_FB_PIXEL_ID: "111",
       PUBLIC_FB_PIXEL_ID: "222",
       FB_PIXEL_ID: "333",
@@ -172,8 +168,7 @@ test("a failed store read degrades to the environment instead of throwing", asyn
   // The read is wrapped in a bare catch, so a schema problem must not take the
   // tracking path down with it — but it must also not invent a value.
   const config = await getStoreAdsConfig({
-    runtimeEnv: {
-      OMS_DB: storeDatabase(null, { throws: true }),
+    tenantDb: storeDatabase(null, { throws: true }), runtimeEnv: {
       META_PIXEL_ID: "333333333333333",
       META_CAPI_ACCESS_TOKEN: "env-capi-token",
     },
@@ -188,7 +183,7 @@ test("an unconfigured store resolves to empty values with explicit sources", asy
   // Callers gate on truthiness and interpolate these into tag payloads; a
   // literal "undefined" pixel id would be worse than none.
   const config = await getStoreAdsConfig({
-    runtimeEnv: { OMS_DB: storeDatabase(null) },
+    tenantDb: storeDatabase(null), runtimeEnv: {},
   } as never);
 
   assert.equal(config.metaPixelId, "");
@@ -205,12 +200,11 @@ test("an unconfigured store resolves to empty values with explicit sources", asy
 test("Google Ads destination never mixes a database ID with an environment label", async (context) => {
   withoutAdsSecrets(context);
   const config = await getStoreAdsConfig({
-    runtimeEnv: {
-      OMS_DB: storeDatabase({
+    tenantDb: storeDatabase({
         ...CONFIGURED_ROW,
         google_ads_conversion_id: "AW-111111111",
         google_ads_conversion_label: null,
-      }),
+      }), runtimeEnv: {
       GOOGLE_ADS_CONVERSION_ID: "AW-999999999",
       GOOGLE_ADS_CONVERSION_LABEL: "env-label",
     },

@@ -50,7 +50,7 @@ function fakeDatabase() {
 }
 
 function locals(database: D1Database) {
-  return { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals;
+  return { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
 }
 
 test("getStorefrontProducts merges D1 product and variant rows into the storefront shape", async () => {

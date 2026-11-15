@@ -36,8 +36,7 @@ test("fresh install requires the one-time setup capability before any write", as
       }),
     }),
     locals: {
-      runtimeEnv: {
-        OMS_DB: database,
+      tenantDb: database, runtimeEnv: { OMS_DB: database,
         AUTH_SECRET: "local-auth-secret-with-at-least-32-characters",
         INSTALL_TOKEN: "correct-install-token-value",
       },

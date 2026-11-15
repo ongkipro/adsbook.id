@@ -84,7 +84,7 @@ const call = (database: D1Database, body: Record<string, unknown>) =>
       headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.5" },
       body: JSON.stringify(body),
     }),
-    locals: { runtimeEnv: { OMS_DB: database }, tenant: { siteUrl: "https://store.example.test" } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database}, tenant: { siteUrl: "https://store.example.test" } },
   } as never);
 
 test("a plain status read never reaches the payment orchestration", async () => {

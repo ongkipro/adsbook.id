@@ -67,7 +67,6 @@ interface SharedEnvVars {
 
 interface CloudflareRuntimeEnv extends SharedEnvVars {
   SESSION: KVNamespace;
-  OMS_DB: D1Database;
   ASSET_BUCKET: R2Bucket;
   AI: Ai;
   ASSETS: unknown;

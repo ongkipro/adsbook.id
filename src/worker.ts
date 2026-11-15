@@ -1,6 +1,6 @@
 import type { ExecutionContext, ExportedHandler } from "@cloudflare/workers-types";
 import { handle } from "@astrojs/cloudflare/handler";
-// One SQLite Durable Object per tenant (ADR-039, TD-3); bound as TENANT_STORE.
+// One SQLite Durable Object per tenant (ADR-039, TD-3); src/platform/tenant-db.ts opens it.
 export { TenantStore } from "./platform/tenant-store.ts";
 import { purgeExpiredAbandonedOrders } from "./lib/order-persistence.ts";
 import { getEnvValue } from "./lib/env.ts";
@@ -112,9 +112,7 @@ export async function runTenantMaintenance(
   // `loadStoreIdentity` logs and answers null when D1 cannot be read, so the
   // run goes on with the environment's identity rather than stopping.
   const scheduledLocals = {
-    // lazy: `runtimeEnv.OMS_DB` names this tenant's store for code that still
-    // reads it (T-35/T-36/T-46 move those reads to `tenantDb`).
-    runtimeEnv: { ...env, OMS_DB: database },
+    runtimeEnv: env,
     tenantDb: database,
     tenant: resolveTenantConfig(await loadStoreIdentity(database)),
     cfContext: context,

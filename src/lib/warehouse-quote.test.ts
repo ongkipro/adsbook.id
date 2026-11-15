@@ -268,7 +268,7 @@ test("one warehouse: the storefront rate route answers byte-identically (REQ-242
   const response = await shippingRatesRoute({
     request: new Request(url),
     url,
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as unknown as Parameters<typeof shippingRatesRoute>[0]);
   assert.equal(response.status, 200);
   assert.equal(
@@ -414,7 +414,7 @@ async function rateRoute(database: D1Database, query: string) {
   const response = await shippingRatesRoute({
     request: new Request(url),
     url,
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as unknown as Parameters<typeof shippingRatesRoute>[0]);
   return (await response.json()) as { origin_id: string; items: { courier_service_id: number; courier_code: string; shipping_cost: number }[] };
 }
@@ -449,7 +449,7 @@ async function submit(database: D1Database, shippingCost: number) {
         shipping_cost: shippingCost,
       }),
     }),
-    locals: { runtimeEnv: { OMS_DB: database }, tenant: { siteUrl: "https://toko.test" } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database}, tenant: { siteUrl: "https://toko.test" } },
   } as unknown as Parameters<typeof submitOrderRoute>[0]);
   return { status: response.status, body: (await response.json()) as { code?: string } };
 }

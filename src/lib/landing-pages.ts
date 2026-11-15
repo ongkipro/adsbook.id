@@ -166,10 +166,6 @@ type LandingSectionRow = Omit<LandingSection, "content_config" | "form_config"> 
   form_config: string | null;
 };
 
-type LocalsWithDatabase = {
-  OMS_DB?: D1Database;
-};
-
 const PAGE_COLUMNS = `
   id, slug, title, product_id, is_active, is_product_page, source,
   meta_title, meta_description, created_at, updated_at
@@ -181,8 +177,7 @@ const SECTION_COLUMNS = `
 `;
 
 function getDatabase(locals: App.Locals): D1Database {
-  const localBindings = locals as unknown as LocalsWithDatabase;
-  const database = localBindings.OMS_DB ?? tenantDatabase(locals);
+  const database = tenantDatabase(locals);
 
   if (!database || typeof database.prepare !== "function") {
     throw new Error("The tenant database is unavailable");

@@ -2,8 +2,8 @@ import type { APIRoute } from 'astro';
 import { handleOptions, headlessError, headlessOk, validateHeadlessRequest } from '../../../lib/headless-api';
 import { getTenantHomeContent } from '../../../lib/tenant-content';
 import { getStoreAdsConfig } from '../../../lib/store-ads';
-import { getRuntimeEnv } from '../../../lib/env';
 import { loadStoreCodDisabledProvinceCodes } from '../../../lib/form-mode';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -17,7 +17,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
   }
 
   try {
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     const [homeContent, adsConfig, disabledCodProvinces] = await Promise.all([
       getTenantHomeContent(locals),
       getStoreAdsConfig(locals),

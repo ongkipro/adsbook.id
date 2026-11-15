@@ -122,7 +122,7 @@ function stubMengantar(context: { after: (fn: () => void) => void }) {
   return { quoted, dispatched };
 }
 
-const admin = (d1: D1Database) => ({ admin: { id: "admin-1", role: "owner" }, runtimeEnv: { OMS_DB: d1 } });
+const admin = (d1: D1Database) => ({ admin: { id: "admin-1", role: "owner" }, tenantDb: d1, runtimeEnv: { OMS_DB: d1} });
 
 test("a courier re-quote after the variant is edited charges and ships the recorded weight (A-397)", async (context) => {
   const { sqlite, d1 } = openDatabase();
@@ -166,7 +166,7 @@ test("a courier re-quote after the variant is edited charges and ships the recor
     warehouse_id: "1",
   }).toString();
   const preview = (await (
-    await shippingRatesRoute({ request: new Request(previewUrl), url: previewUrl, locals: { runtimeEnv: { OMS_DB: d1 } } } as never)
+    await shippingRatesRoute({ request: new Request(previewUrl), url: previewUrl, locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} } } as never)
   ).json()) as { items: Array<{ courier_service_id: number; courier_code: string; shipping_cost: number }> };
   const picked = preview.items.find((rate) => rate.courier_code === "SiCepat");
   assert.ok(picked, `the preview offers SiCepat: ${JSON.stringify(preview)}`);

@@ -293,10 +293,6 @@ export function createMiddleware(
     return statePage(reason === 'recovery' || reason === 'migration' ? 'recovery' : 'unavailable', url.pathname);
   }
   context.locals.tenantDb = identityDb;
-  // lazy: pages and APIs that still read `runtimeEnv.OMS_DB` see this tenant's
-  // store, never the shared binding, until T-35/T-36/T-46 move them to
-  // `tenantDatabase(locals)`; T-46 removes this line with the binding.
-  context.locals.runtimeEnv = { ...(runtime ?? {}), OMS_DB: identityDb };
 
   // Store identity is resolved once per request and handed to every consumer
   // through locals. Doing it here rather than per page keeps consumers

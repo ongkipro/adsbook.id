@@ -5,12 +5,12 @@ import { parseClickIds } from '../../../../lib/click-ids';
 import { handleOptions, headlessError, headlessOk, validateHeadlessRequest } from '../../../../lib/headless-api';
 import { validateMetaEventPayload } from '../../../../lib/meta-event-contract';
 import { getStoreAdsConfig } from '../../../../lib/store-ads';
-import { getRuntimeEnv } from '../../../../lib/env';
 import { getClientIp } from '../../../../lib/rate-limit';
 import { enqueueCapiEvent, deliverCapiEvent, drainCapiOutbox } from '../../../../lib/capi-outbox';
 import { findPurchaseOrderForApiKeyCaller, isMetaPurchaseOrderEligible, resolveMetaPurchaseContentIds } from '../../../../lib/meta-purchase-order';
 import { toE164Digits } from '../../../../lib/meta-capi';
 import { matchableCustomerEmail } from '../../../../lib/autolaris-payment';
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -44,7 +44,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       ));
     }
 
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     if (!database?.prepare) {
       return validation.finalize(headlessError('Database tracking event store belum dikonfigurasi.', 503, {
         code: 'DATABASE_UNAVAILABLE',

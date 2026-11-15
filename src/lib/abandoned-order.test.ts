@@ -29,13 +29,12 @@ test("abandoned capture rejects a filled honeypot before any D1 operation", asyn
       website: "https://spam.example",
     }),
     locals: {
-      runtimeEnv: {
-        OMS_DB: {
+      tenantDb: {
           prepare() {
             databaseOperations += 1;
             throw new Error("honeypot reached D1");
           },
-        },
+        }, runtimeEnv: {
       },
     },
   } as never);
@@ -101,8 +100,7 @@ test("a qualified human lead inside the rate-limit window is recorded", async ()
   const response = await POST({
     request: abandonedRequest({ ...qualifiedLead, website: "" }),
     locals: {
-      runtimeEnv: {
-        OMS_DB: database,
+      tenantDb: database, runtimeEnv: { OMS_DB: database,
       },
     },
   } as never);
@@ -127,8 +125,7 @@ test("abandoned capture is rejected when the rate-limit window is exhausted", as
   const response = await POST({
     request: abandonedRequest(qualifiedLead),
     locals: {
-      runtimeEnv: {
-        OMS_DB: {
+      tenantDb: {
           prepare(sql: string) {
             if (sql.includes("SELECT count FROM rate_limits")) {
               return {
@@ -144,7 +141,7 @@ test("abandoned capture is rejected when the rate-limit window is exhausted", as
             databaseOperations += 1;
             throw new Error("rate-limited request reached D1");
           },
-        },
+        }, runtimeEnv: {
       },
     },
   } as never);
@@ -179,7 +176,7 @@ test("authenticated retention POST executes the write-side purge", async () => {
   const response = await POST_RETENTION({
     locals: {
       admin: { username: "owner", role: "owner" },
-      runtimeEnv: { OMS_DB: database },
+      tenantDb: database, runtimeEnv: { OMS_DB: database},
     },
   } as never);
 

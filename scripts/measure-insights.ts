@@ -21,12 +21,12 @@ const dir = mkdtempSync(join(tmpdir(), 'adsbook-insights-'));
 const configPath = join(dir, 'wrangler.json');
 writeFileSync(configPath, JSON.stringify({
   name: 'adsbook-insights-measurement', compatibility_date: '2026-10-01',
-  d1_databases: [{ binding: 'OMS_DB', database_name: 'synthetic-insights', database_id: '00000000-0000-0000-0000-000000000000' }],
+  d1_databases: [{ binding: 'SYNTHETIC_DB', database_name: 'synthetic-insights', database_id: '00000000-0000-0000-0000-000000000000' }],
 }));
-const platform = await getPlatformProxy<{ OMS_DB: D1Database }>({
+const platform = await getPlatformProxy<{ SYNTHETIC_DB: D1Database }>({
   configPath, envFiles: [], persist: false, remoteBindings: false,
 });
-const db = platform.env.OMS_DB;
+const db = platform.env.SYNTHETIC_DB;
 type Query = { sql: string; params: (string | number | null)[] };
 const queries: Query[] = [];
 // Capture the actual production builders, not SQL copied into the benchmark.
@@ -126,7 +126,7 @@ try {
   const routeResults: Record<string, any> = {};
   for (const [name, route] of Object.entries({ landing: landingRoute, trend: trendRoute, products: productsRoute, locations: locationsRoute, times: timesRoute, utm: utmRoute })) {
     const response = await route({
-      locals: { runtimeEnv: { OMS_DB: db } },
+      locals: { tenantDb: db },
       url: new URL(`http://localhost/api/admin/insights/${name}?date_filter=custom&date_start=${period.start}&date_end=${period.end}`),
     } as unknown as Parameters<typeof landingRoute>[0]);
     assert.equal(response.status, 200, name);
@@ -145,7 +145,7 @@ try {
   assert.deepEqual(routeResults.utm.totals, { leads: expected.leads, orders: expected.orders, revenue: expected.revenue });
   assert.equal(routeResults.utm.rows.length, 6, 'five normalised campaigns plus (tanpa UTM)');
   const response = await dashboard({
-    locals: { runtimeEnv: { OMS_DB: recorder } },
+    locals: { tenantDb: recorder },
     url: new URL('http://localhost/api/admin/analytics?startDate=2026-10-01&endDate=2026-10-29'),
   } as unknown as Parameters<typeof dashboard>[0]);
   assert.equal(response.status, 200);

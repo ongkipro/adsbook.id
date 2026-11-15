@@ -84,7 +84,7 @@ test("settings: the owner saves the pair, the secret never comes back, an admin 
   globalThis.fetch = (async () => new Response("{}", { status: 400 })) as typeof fetch;
   const call = (role: string, body: unknown) => updateKelola({
     request: new Request("https://store.test/api/admin/plugins/kelola", { method: "PUT", body: JSON.stringify(body) }),
-    locals: { admin: { username: "u", role, mustChangePassword: false }, runtimeEnv: { OMS_DB: database } },
+    locals: { admin: { username: "u", role, mustChangePassword: false }, tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
   const secret = "kelola-secret-must-not-leak-0123456789";
 
@@ -106,7 +106,7 @@ test("settings: the owner saves the pair, the secret never comes back, an admin 
     { webhook_url: "https://kelola.test/api/public/toko/order/twh_rotated99", webhook_secret: secret },
   );
 
-  const read = await readKelola({ locals: { runtimeEnv: { OMS_DB: database } } } as never);
+  const read = await readKelola({ locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} } } as never);
   const readText = await read.text();
   assert.equal(readText.includes(secret), false);
   assert.equal(readText.includes("twh_rotated99"), false, "the token is masked");

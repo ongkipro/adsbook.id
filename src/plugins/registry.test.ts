@@ -45,7 +45,7 @@ test("a store that never activates a plugin carries none of it, and its hooks ne
   ]);
   // Even with the env pair present, an inactive plugin sends nothing.
   assert.deepEqual(await runPluginCron(database, env, new Date()), {});
-  scheduleOrderCreated(database, 1, { runtimeEnv: { OMS_DB: database, ...env } } as never);
+  scheduleOrderCreated(database, 1, { tenantDb: database, runtimeEnv: { OMS_DB: database, ...env } } as never);
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(calls, 0);
 });
@@ -73,7 +73,7 @@ test("only the owner changes plugins through the API", async () => {
   const { database, table } = store();
   const call = (role: string, body: unknown) => pluginAction({
     request: new Request("https://store.test/api/admin/plugins", { method: "POST", body: JSON.stringify(body) }),
-    locals: { admin: { username: "u", role, mustChangePassword: false }, runtimeEnv: { OMS_DB: database } },
+    locals: { admin: { username: "u", role, mustChangePassword: false }, tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
   assert.equal((await call("admin", { id: "kelola", action: "activate" })).status, 403);
   assert.equal(table("plugin_kelola_orders"), false);

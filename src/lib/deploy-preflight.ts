@@ -90,8 +90,8 @@ export function checkDeployTarget(target: WranglerTarget): PreflightResult {
  * against its own `migrations_dir`. `PLATFORM_DB` carries the control-plane
  * chain (`src/platform/migrations/`); tenant data lives in `TenantStore`
  * objects, which the Worker migrates itself, so no D1 ledger stands for it
- * once `OMS_DB` is gone (T-46). A binding without a `migrations_dir` has no
- * chain in this tree and is not compared.
+ * (T-46). A binding without a `migrations_dir` has no chain in this tree and
+ * is not compared.
  */
 export function migrationLedgerTargets(
   target: WranglerTarget,

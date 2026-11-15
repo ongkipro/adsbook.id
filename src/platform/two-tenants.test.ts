@@ -60,13 +60,15 @@ const hooks = registerHooks({
 const { createMiddleware } = await import("../middleware.ts");
 const { runPlatformCron } = await import("../worker.ts");
 const { tenantDatabase } = await import("../lib/tenant-database.ts");
-const { getRuntimeEnv } = await import("../lib/env.ts");
 const orderStatusRoute = await import("../pages/api/order-status.ts");
 const adminOrdersRoute = await import("../pages/api/admin/orders/index.ts");
 const { resolveAuthSecret } = await import("../lib/auth-secret.ts");
 const { signJwt, SESSION_COOKIE_NAME } = await import("../lib/auth.ts");
 const { storeAdminSession } = await import("../lib/admin-session.ts");
 const { createTenantDb } = await import("./tenant-db.ts");
+const { hashApiKeySecret } = await import("../lib/developer-api-keys.ts");
+const headlessOpenApiRoute = await import("../pages/api/v1/openapi.json.ts");
+const opsOpenApiRoute = await import("../pages/api/ops/v1/openapi.json.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -124,7 +126,7 @@ async function platform(rows: Array<[id: string, status: string, host: string]>)
   return db;
 }
 
-test("each tenant host reaches its own store, through tenantDb and through the transitional OMS_DB shim", async () => {
+test("each tenant host reaches its own store, and the shared OMS_DB binding is never read", async () => {
   const platformDb = await platform([["t-a", "active", "toko-a.belanja.cc"], ["t-b", "active", "toko-b.belanja.cc"]]);
   const stores = namespace({ migrated: true });
   stores.get("t-a").storage.db.exec("INSERT INTO stores (id, name, slug, created_at, site_url) VALUES (1, 'Toko A', 'toko-a', '2026-11-16', 'https://toko-a.belanja.cc')");
@@ -150,13 +152,12 @@ test("each tenant host reaches its own store, through tenantDb and through the t
         } as never,
         (async () => {
           const viaCapability = await tenantDatabase(locals as never)!.prepare("SELECT name FROM stores").first("name");
-          const viaShim = await (getRuntimeEnv(locals as never)!.OMS_DB as D1Database).prepare("SELECT name FROM stores").first("name");
-          Object.assign(seen, { viaCapability, viaShim, identity: (locals.tenant as { name: string }).name });
+          Object.assign(seen, { viaCapability, identity: (locals.tenant as { name: string }).name });
           return new Response("ok");
         }) as never,
       )) as Response;
       assert.equal(response.status, 200, host);
-      assert.deepEqual(seen, { viaCapability: name, viaShim: name, identity: name }, host);
+      assert.deepEqual(seen, { viaCapability: name, identity: name }, host);
     }
   } finally {
     console.log = previousLog;
@@ -283,4 +284,43 @@ test("T-36: an admin session lists its own tenant's orders, and is refused on an
   const crossed = await list("admin-b.belanja.cc");
   assert.equal(crossed.status, 401, "tenant A's session must not open tenant B's admin");
   assert.doesNotMatch(crossed.text, /INV-[AB]0001/);
+});
+
+test("API-3 and ISO-4: each OpenAPI document names its own tenant's host, and a key works on its own tenant's host only", async () => {
+  const platformDb = await platform([["k-a", "active", "key-a.belanja.cc"], ["k-b", "active", "key-b.belanja.cc"]]);
+  const stores = namespace({ migrated: true });
+  const secrets: Record<string, string> = { "k-a": "adsbook_live_tenant_a_key_000000000001", "k-b": "adsbook_live_tenant_b_key_000000000002" };
+  for (const id of ["k-a", "k-b"]) {
+    stores.get(id).storage.db
+      .prepare(`INSERT INTO developer_api_keys (name, key_hash, key_preview, created_by, created_at, scopes)
+        VALUES ('Storefront', ?, 'adsbook_live_…', 'owner', '2026-11-16', 'storefront:read,ops:orders:read')`)
+      .run(await hashApiKeySecret(secrets[id]));
+    stores.get(id).storage.db.exec(`INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16')`);
+  }
+  const onRequest = createMiddleware();
+  const call = async (host: string, path: string, route: { GET: unknown }, key: string) => {
+    const href = `https://${host}${path}`;
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const request = new Request(href, { headers: { "x-app-key": key } });
+    const context = { request, url: new URL(href), locals, routePattern: path, redirect: () => new Response(null, { status: 302 }) };
+    const previous = { log: console.log, error: console.error };
+    console.log = () => undefined;
+    console.error = () => undefined;
+    try {
+      const response = (await onRequest(context as never, (async () => (route.GET as (c: unknown) => Promise<Response>)(context)) as never)) as Response;
+      return { status: response.status, body: (await response.json()) as { servers?: Array<{ url: string }> } };
+    } finally {
+      Object.assign(console, previous);
+    }
+  };
+  for (const [path, route, suffix] of [["/api/v1/openapi.json", headlessOpenApiRoute, "/api/v1"], ["/api/ops/v1/openapi.json", opsOpenApiRoute, "/api/ops/v1"]] as const) {
+    for (const id of ["k-a", "k-b"]) {
+      const host = id === "k-a" ? "key-a.belanja.cc" : "key-b.belanja.cc";
+      const own = await call(host, path, route, secrets[id]);
+      assert.equal(own.status, 200, `${path} on ${host}`);
+      assert.equal(own.body.servers?.[0]?.url, `https://${host}${suffix}`);
+    }
+    const crossed = await call("key-b.belanja.cc", path, route, secrets["k-a"]);
+    assert.equal(crossed.status, 401, `${path}: tenant A's key on tenant B's host`);
+  }
 });

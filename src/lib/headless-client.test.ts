@@ -317,7 +317,7 @@ test("documented client adapter executes catalog to quote to checkout to status 
     ]);
     const secret = "adsbook_live_adapter_fixture_secret";
     const database = createJourneyDatabase(await hashApiKeySecret(secret), provider.baseUrl);
-    const locals = { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals;
+    const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
     const transport = async (request: Request) => {
       const path = new URL(request.url).pathname;
       const context = { request, url: new URL(request.url), locals } as never;

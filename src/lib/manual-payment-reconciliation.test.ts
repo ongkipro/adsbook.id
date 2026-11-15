@@ -407,7 +407,7 @@ test("GET returns only scoped online AutoLaris rows with eligibility and bounded
   seedPayment(database, { id: 104, provider: "other" });
   const response = await GET({
     request: new Request("https://cms.test/api/admin/payment-reconciliation?page=1&page_size=20"),
-    locals: { admin: owner, runtimeEnv: { OMS_DB: asD1(database) } },
+    locals: { admin: owner, tenantDb: asD1(database), runtimeEnv: {} },
   } as never);
   assert.equal(response.status, 200);
   const payload = await response.json() as {
@@ -440,14 +440,14 @@ test("endpoint rejects scoped roles and missing or short notes without database 
     request: request("Verified in provider dashboard."),
     locals: {
       admin: { username: "cs.one", role: "customer_service" },
-      runtimeEnv: { OMS_DB: asD1(database) },
+      tenantDb: asD1(database), runtimeEnv: {},
     },
   } as never);
   assert.equal(forbidden.status, 403);
   for (const note of [undefined, "    ", "1234"]) {
     const invalid = await POST({
       request: request(note),
-      locals: { admin: owner, runtimeEnv: { OMS_DB: asD1(database) } },
+      locals: { admin: owner, tenantDb: asD1(database), runtimeEnv: {} },
     } as never);
     assert.equal(invalid.status, 422);
   }
@@ -471,7 +471,7 @@ test("admin role can confirm through the protected route contract", async () => 
     }),
     locals: {
       admin: { username: "admin.one", role: "admin" },
-      runtimeEnv: { OMS_DB: asD1(database) },
+      tenantDb: asD1(database), runtimeEnv: {},
     },
   } as never);
   assert.equal(response.status, 200);
@@ -518,7 +518,7 @@ test("an AutoLaris callback is recorded verbatim and moves no payment state", as
         headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
         body: JSON.stringify({ rc: "00", data: { trx_id: "TRX-77", reff_id: "10041", status: "PAID" } }),
       }),
-      locals: { runtimeEnv: { OMS_DB: database } },
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
     } as never);
   } finally {
     console.error = original;

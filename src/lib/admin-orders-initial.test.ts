@@ -116,7 +116,7 @@ async function firstRows(d1: D1Database, link: string, tenant?: { siteUrl: strin
   const pageQuery = new URL(`https://admin.preview.test/admin/orders${link}`).searchParams;
   const url = new URL(`https://admin.preview.test/api/admin/orders?${orderListQuery(initialOrderListFilters(pageQuery), 1, false)}`);
   const request = new Request(url, { headers: { [ORDER_LIST_PREFETCH_HEADER]: "1" } });
-  const response = await listRoute({ url, request, locals: { runtimeEnv: { OMS_DB: d1 }, tenant } } as never);
+  const response = await listRoute({ url, request, locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1}, tenant } } as never);
   const payload = (await response.json()) as {
     success: boolean;
     data: Array<{ id: number; customer_name: string; shipping_status: string; order_details_link: string | null }>;

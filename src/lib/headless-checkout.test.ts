@@ -202,7 +202,7 @@ async function switchStore() {
   } as unknown as D1Database;
   const locals = {
     // The order rail is fully configured: only the switch stands in the way.
-    runtimeEnv: { OMS_DB: database, AUTOLARIS_ORDER_ORIGIN_ID: 'origin-1', AUTOLARIS_ORDER_DESTINATION_ID: 'dest-1' },
+    tenantDb: database, runtimeEnv: { OMS_DB: database, AUTOLARIS_ORDER_ORIGIN_ID: 'origin-1', AUTOLARIS_ORDER_DESTINATION_ID: 'dest-1' },
     tenant: { siteUrl: 'https://store.example.test' },
   } as unknown as App.Locals;
   const count = (table: string) =>

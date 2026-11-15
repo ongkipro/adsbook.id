@@ -85,12 +85,6 @@
   ],
   "d1_databases": [
     {
-      "binding": "OMS_DB",
-      "database_name": "adsbookcms-d1",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "src/db/migrations"
-    },
-    {
       // The control plane (TD-2): tenants, hosts, plans, audit. Its own chain.
       "binding": "PLATFORM_DB",
       "database_name": "adsbook-platform",

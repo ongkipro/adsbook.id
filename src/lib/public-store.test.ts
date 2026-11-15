@@ -4,7 +4,7 @@ import test from "node:test";
 import { getStoreSupportWhatsapp } from "./public-store.ts";
 
 function locals(database: unknown) {
-  return { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals;
+  return { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
 }
 
 test("getStoreSupportWhatsapp strips non-digit formatting from the stored number", async () => {

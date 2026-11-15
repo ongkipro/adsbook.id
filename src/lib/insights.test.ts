@@ -125,7 +125,7 @@ function openDatabase() {
 
 const routeContext = (d1: D1Database, query: string) =>
   ({
-    locals: { runtimeEnv: { OMS_DB: d1 } },
+    locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} },
     url: new URL(`https://toko.test/api/admin/insights/x?${query}`),
   }) as unknown as Parameters<typeof landingRoute>[0];
 

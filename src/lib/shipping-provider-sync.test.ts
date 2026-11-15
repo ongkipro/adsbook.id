@@ -181,7 +181,7 @@ function invokeSync(database: ShippingSyncDatabase, orderIds: number[]) {
     }),
     locals: {
       admin: { id: "admin-1", role: "owner" },
-      runtimeEnv: { OMS_DB: database as unknown as D1Database },
+      tenantDb: database as unknown as D1Database, runtimeEnv: { OMS_DB: database as unknown as D1Database},
     },
   } as never);
 }

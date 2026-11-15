@@ -46,7 +46,7 @@ function fixture(env: Record<string, string> = {}) {
     };
     return q;
   } } as unknown as D1Database;
-  const locals = { runtimeEnv: { OMS_DB: db, ...env } } as unknown as App.Locals;
+  const locals = { tenantDb: db, runtimeEnv: { OMS_DB: db, ...env } } as unknown as App.Locals;
   const order = () => sqlite.prepare('SELECT * FROM orders WHERE id = 1').get() as Record<string, any>;
   const view = () => adminPaymentSwitchView(order() as never, 100_000);
   // The operator's switch; a refusal comes back as its HTTP status.

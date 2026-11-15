@@ -73,7 +73,7 @@ function createDatabase(options: {
 }
 
 const locals = (database: D1Database) =>
-  ({ runtimeEnv: { OMS_DB: database }, tenant: { siteUrl: "https://store.example.test" } }) as unknown as App.Locals;
+  ({ tenantDb: database, runtimeEnv: { OMS_DB: database}, tenant: { siteUrl: "https://store.example.test" } }) as unknown as App.Locals;
 
 test("a paid order enqueues one Purchase keyed on its order number", async (context) => {
   const originalFetch = globalThis.fetch;
@@ -256,7 +256,7 @@ test("the hourly sweep sends the COD Purchase /thanks never did, once, and nothi
   sqlite.exec(`INSERT INTO capi_event_outbox (event_id, event_name, payload, status, next_retry_at, created_at, updated_at)
     VALUES ('INV-10001', 'PageView', '{}', 'sent', 't', 't', 't')`);
 
-  const locals = { runtimeEnv: { OMS_DB: database }, tenant: { siteUrl: "https://store.example.test" } } as unknown as App.Locals;
+  const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database}, tenant: { siteUrl: "https://store.example.test" } } as unknown as App.Locals;
   assert.equal(await sweepMissedCodPurchases(database, locals, now), 1);
   assert.deepEqual(purchases().map((row) => row.event_id), ["INV-10001", "INV-10002"]);
   assert.deepEqual(sent, ["INV-10001"]);
@@ -277,7 +277,7 @@ test("the sweep does nothing for a store without Meta configured", async () => {
   const { sqlite, database, order, purchases } = sweepDatabase();
   sqlite.exec("UPDATE stores SET meta_pixel_id = NULL, meta_capi_token = NULL");
   order("INV-10001", "2026-11-10T09:00:00.000Z");
-  const locals = { runtimeEnv: { OMS_DB: database }, tenant: { siteUrl: "https://store.example.test" } } as unknown as App.Locals;
+  const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database}, tenant: { siteUrl: "https://store.example.test" } } as unknown as App.Locals;
   assert.equal(await sweepMissedCodPurchases(database, locals, new Date("2026-11-10T12:00:00.000Z")), 0);
   assert.equal(purchases().length, 0);
 });
@@ -298,7 +298,7 @@ test("checkout sends the COD Purchase itself; a later /thanks or sweep is a no-o
   const transfer = order("INV-10002", "2026-11-10T09:00:00.000Z", "manual_transfer", "pending");
   const waits: Promise<unknown>[] = [];
   const locals = {
-    runtimeEnv: { OMS_DB: database },
+    tenantDb: database, runtimeEnv: { OMS_DB: database},
     tenant: { siteUrl: "https://store.example.test" },
     cfContext: { waitUntil: (task: Promise<unknown>) => waits.push(task) },
   } as unknown as App.Locals;
@@ -421,7 +421,7 @@ test("a CS-converted lead becomes one Purchase carrying the buyer's own captured
   });
   const waits: Promise<unknown>[] = [];
   const locals = {
-    runtimeEnv: { OMS_DB: batchDatabase },
+    tenantDb: batchDatabase, runtimeEnv: { OMS_DB: batchDatabase},
     tenant: { siteUrl: "https://store.example.test" },
     cfContext: { waitUntil: (task: Promise<unknown>) => waits.push(task) },
   } as unknown as App.Locals;

@@ -263,7 +263,7 @@ test("a lead links to the workspace only while it is still a lead", () => {
 const asLocals = (database: NotificationDatabase, username: string, role: string) =>
   ({
     admin: { username, role },
-    runtimeEnv: { OMS_DB: asD1(database) },
+    tenantDb: asD1(database), runtimeEnv: {},
   }) as never;
 
 const getRequest = (query = "") =>

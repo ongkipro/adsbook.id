@@ -27,7 +27,7 @@ function freshInstallDatabase() {
 
 function localsFor(database: unknown, tenant: Partial<App.Locals["tenant"]> = {}) {
   return {
-    runtimeEnv: { OMS_DB: database },
+    tenantDb: database, runtimeEnv: { OMS_DB: database},
     tenant: { name: "Toko Contoh", tagline: "", description: "", ...tenant },
   } as unknown as App.Locals;
 }

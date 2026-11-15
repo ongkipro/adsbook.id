@@ -71,7 +71,7 @@ test("formatting is stripped before the length guard, so a punctuated number is 
   // not on validity.
   await assert.rejects(
     getReceiverPerformance(UNCONFIGURED_STORE, "0813-3100 0000", {
-      runtimeEnv: { OMS_DB: UNCONFIGURED_STORE },
+      tenantDb: UNCONFIGURED_STORE, runtimeEnv: { OMS_DB: UNCONFIGURED_STORE},
     } as never),
     /belum dikonfigurasi/i,
   );
@@ -82,7 +82,7 @@ test("an unconfigured Mengantar account fails loudly instead of scoring blind", 
 
   await assert.rejects(
     getReceiverPerformance(UNCONFIGURED_STORE, "081331000000", {
-      runtimeEnv: { OMS_DB: UNCONFIGURED_STORE },
+      tenantDb: UNCONFIGURED_STORE, runtimeEnv: { OMS_DB: UNCONFIGURED_STORE},
     } as never),
     /Mengantar API belum dikonfigurasi/i,
   );
@@ -101,7 +101,7 @@ test("a failed background refresh is handed to waitUntil and never reaches the r
 
   const scheduled: Promise<unknown>[] = [];
   const locals = {
-    runtimeEnv: { OMS_DB: UNCONFIGURED_STORE },
+    tenantDb: UNCONFIGURED_STORE, runtimeEnv: { OMS_DB: UNCONFIGURED_STORE},
     cfContext: {
       waitUntil(task: Promise<unknown>) {
         scheduled.push(task);
@@ -138,7 +138,7 @@ test("without a Cloudflare context the refresh still swallows its own failure", 
 
   assert.equal(
     scheduleReceiverPerformanceRefresh(UNCONFIGURED_STORE, "INV-10002", "081331000000", {
-      runtimeEnv: { OMS_DB: UNCONFIGURED_STORE },
+      tenantDb: UNCONFIGURED_STORE, runtimeEnv: { OMS_DB: UNCONFIGURED_STORE},
     } as never),
     undefined,
   );

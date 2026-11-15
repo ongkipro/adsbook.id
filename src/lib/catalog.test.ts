@@ -80,13 +80,13 @@ test("a request reads the catalogue from D1 once, however many components ask", 
     prepare: () => statement,
     batch: async () => { reads += 1; return [{ results: [] }, { results: [] }]; },
   };
-  const locals = { runtimeEnv: { OMS_DB: database } } as never;
+  const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database} } as never;
 
   // The product page and its order form, as on /produk/<slug>.
   await Promise.all([getStorefrontProduct(locals, "a"), getStorefrontProduct(locals, "a")]);
   await getStorefrontProducts(locals);
   assert.equal(reads, 2, "one catalogue batch and one content read for the whole request");
 
-  await getStorefrontProducts({ runtimeEnv: { OMS_DB: database } } as never);
+  await getStorefrontProducts({ tenantDb: database, runtimeEnv: { OMS_DB: database} } as never);
   assert.equal(reads, 4, "the next request reads again, so an admin edit shows");
 });

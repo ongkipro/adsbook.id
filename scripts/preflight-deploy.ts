@@ -8,9 +8,8 @@
  * deploy` uploads whatever is on disk and has reverted production twice; and
  * every migration each production D1 has applied must be in that database's
  * own chain in this tree (PLATFORM_DB: src/platform/migrations), or the new
- * Worker answers 503 on every database route; and every native landing page
- * production D1 lists must be in this tree's register, or the hourly reconcile
- * deletes it (overridable with ALLOW_NATIVE_LANDING_REMOVAL=1).
+ * Worker answers 503 on every database route. Tenant data lives in TenantStore
+ * objects, which the Worker migrates itself (T-18, T-46).
  *
  * It cannot cover a bare `npx wrangler deploy`: wrangler has no pre-deploy
  * hook, so RELEASE.md names `npm run deploy` as the deploy command. Anyone
@@ -24,7 +23,6 @@ import {
   evaluateDeployPreflight,
   findProductOwnedEdits,
   findUnbundledMigrations,
-  findUnregisteredNativeLandings,
   migrationLedgerTargets,
   parseWranglerConfig,
 } from "../src/lib/deploy-preflight.ts";
@@ -98,41 +96,9 @@ for (const ledgerTarget of migrationLedgerTargets(target)) {
   }
 }
 
-// The store database, by binding: native landing pages live there, not in PLATFORM_DB.
-const databaseName = String(target.d1Databases?.find((database) => database.binding === "OMS_DB")?.database_name ?? "");
-if (databaseName) {
-  // Same database, same reasoning: a fresh store has no landing_pages yet.
-  let live: string[] | null = null;
-  try {
-    const raw = execFileSync(
-      "npx",
-      ["wrangler", "d1", "execute", databaseName, "--remote", "--json", "--command", "SELECT slug FROM landing_pages WHERE source = 'native' ORDER BY slug"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
-    const parsed = JSON.parse(raw) as { results?: { slug?: unknown }[] }[];
-    live = (parsed[0]?.results ?? []).map((row) => String(row.slug));
-  } catch (error) {
-    const detail = String((error as { stdout?: unknown }).stdout ?? "") + String((error as { stderr?: unknown }).stderr ?? "");
-    if (/no such (table|column)/.test(detail)) live = [];
-    else console.warn("[preflight] could not read production native landing pages; they were not compared.");
-  }
-  if (live) {
-    const unregistered = findUnregisteredNativeLandings(live, activeNativeLandingPages().map((entry) => entry.slug));
-    if (unregistered.length && process.env.ALLOW_NATIVE_LANDING_REMOVAL !== "1") {
-      console.error("\n[preflight] Refusing to deploy:\n");
-      console.error(`  ✖ Production D1 (${databaseName}) lists ${unregistered.length} native landing page(s) this tree's register does not:`);
-      for (const slug of unregistered) console.error(`      /${slug}`);
-      console.error(
-        "\n  Within the hour the reconcile would delete those rows and any product page they claim.\n" +
-          "  Bring their route files and register entries (src/data/native-landing-pages.ts) into this\n" +
-          "  checkout. If removing them is intended, set ALLOW_NATIVE_LANDING_REMOVAL=1.\n",
-      );
-      process.exit(1);
-    }
-    if (unregistered.length) console.warn(`[preflight] ALLOW_NATIVE_LANDING_REMOVAL=1: ${unregistered.length} native landing page(s) will be removed.`);
-    else console.log(`[preflight] production native landing pages: ${live.length}, all registered.`);
-  }
-}
+// Native landing pages live in each tenant's own store now (T-46): there is no
+// store D1 to compare the register with before a deploy. The hourly reconcile
+// runs per tenant, on its own store, and only when native pages exist.
 
 // Workers Builds (the Deploy button's pipeline) deploys the pushed commit.
 const ci =

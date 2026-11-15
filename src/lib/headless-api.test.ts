@@ -181,7 +181,7 @@ test('validateHeadlessRequest returns 403 response for forbidden origin', async 
     },
   });
   const { database, auditValues, usageValues } = createPolicyDatabase({ keyHash });
-  const locals = { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals;
+  const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
   const res = await validateHeadlessRequest(req, locals, {
     operation: 'storefrontRead',
     extraAllowed: ['https://my-authorized-app.com'],
@@ -205,7 +205,7 @@ test('validateHeadlessRequest reads the persisted Headless API allowlist', async
     keyHash,
     allowedOrigins: 'https://*.partner.example',
   });
-  const locals = { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals;
+  const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
   const result = await validateHeadlessRequest(request, locals, {
     operation: 'storefrontRead',
   });
@@ -315,7 +315,7 @@ test('stored policy defaults preserve existing key access after migration', asyn
     new Request('https://api.example/api/v1/products', {
       headers: { 'x-app-key': secret },
     }),
-    { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals,
+    { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals,
     { operation: 'catalogList' },
   );
   assert.equal(result.allowed, true);
@@ -338,7 +338,7 @@ test('scope denial is server enforced and audit values exclude credentials and p
         address: 'Sensitive address',
       }),
     }),
-    { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals,
+    { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals,
     { operation: 'checkoutCreate' },
   );
   assert.equal(response.allowed, false);
@@ -371,7 +371,7 @@ test('per-key minute rate and daily quota exhaustion return distinct bounded err
       new Request('https://api.example/api/v1/products', {
         headers: { 'x-app-key': secret },
       }),
-      { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals,
+      { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals,
       { operation: 'catalogList' },
     );
     assert.equal(result.allowed, false);
@@ -396,7 +396,7 @@ test('allowed requests audit the final handler status exactly once', async () =>
       method: 'POST',
       headers: { 'x-app-key': secret },
     }),
-    { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals,
+    { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals,
     { operation: 'checkoutCreate' },
   );
   assert.equal(validation.allowed, true);
@@ -422,7 +422,7 @@ test('final audit storage failure never turns an accepted handler response into 
       method: 'POST',
       headers: { 'x-app-key': secret },
     }),
-    { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals,
+    { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals,
     { operation: 'checkoutCreate' },
   );
   assert.equal(validation.allowed, true);

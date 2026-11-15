@@ -10,6 +10,7 @@ import {
   getClientIp,
   rateLimitHeaders,
 } from "../../lib/rate-limit.ts";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 /** A-216: 16+ char tokens make guessing impractical, not impossible. */
 const INSTALL_TOKEN_WINDOW_MS = 15 * 60 * 1000;
@@ -36,7 +37,7 @@ function json(body: unknown, status = 200, extraHeaders: Record<string, string> 
  *    submissions cannot both win.
  */
 export const POST: APIRoute = async ({ request, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     console.error("install-no-database-binding");
     return json(

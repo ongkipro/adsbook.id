@@ -212,7 +212,7 @@ test("the abandoned-lead route reads the page from Referer, and a foreign one st
         headers: { "content-type": "application/json", "cf-connecting-ip": phone, ...headers },
         body: JSON.stringify({ customer_name: "Budi Santoso", customer_phone: phone }),
       }),
-      locals: { runtimeEnv: { OMS_DB: database } },
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
     } as unknown as Parameters<typeof POST>[0]);
 
   assert.equal((await post("081200000001", { referer: "https://toko.test/promo-a?fbclid=x" })).status, 200);
@@ -307,7 +307,7 @@ test("the order and lead lists filter by source; an unknown slug returns no rows
   const call = async (handler: typeof listOrders, query: string) => {
     const response = await handler({
       url: new URL(`https://toko.test/api/admin/x?${query}`),
-      locals: { runtimeEnv: { OMS_DB: database } },
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
     } as unknown as Parameters<typeof listOrders>[0]);
     assert.equal(response.status, 200);
     return response.json() as Promise<{
@@ -362,7 +362,7 @@ test("the CSV export holds the rows each list shows, under the same filters", as
   const csv = async (query: string) => {
     const response = await exportOrders({
       url: new URL(`https://toko.test/api/admin/orders/export?${query}`),
-      locals: { runtimeEnv: { OMS_DB: database } },
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
     } as unknown as Parameters<typeof exportOrders>[0]);
     return { status: response.status, type: response.headers.get("content-type"), lines: (await response.text()).slice(1).trimEnd().split("\r\n") };
   };
@@ -440,7 +440,7 @@ test("Perlu tindakan counts what the linked lists show, under the Mengantar push
   const call = async (handler: typeof listOrders, query: string) => {
     const response = await handler({
       url: new URL(`https://toko.test/api/admin/x?${query}`),
-      locals: { runtimeEnv: { OMS_DB: database } },
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
       request: new Request("https://toko.test/api/admin/x"),
     } as unknown as Parameters<typeof listOrders>[0]);
     assert.equal(response.status, 200);
@@ -476,7 +476,7 @@ test("the dashboard summary carries the funnel and the period before it", async 
   insert.run("INV-OLD", 40000, "2026-10-03T03:00:00.000Z", "pending", null);
   const response = await analytics({
     url: new URL("https://toko.test/api/admin/analytics?startDate=2026-10-08&endDate=2026-10-14"),
-    locals: { runtimeEnv: { OMS_DB: d1(sqlite) } },
+    locals: { tenantDb: d1(sqlite), runtimeEnv: {} },
   } as unknown as Parameters<typeof analytics>[0]);
   const body = (await response.json()) as { data: { funnel: Record<string, number>; previous: Record<string, unknown>; total_revenue: number } };
   assert.deepEqual(body.data.funnel, { leads: 1, orders: 3, handed_over: 2, delivered: 1, returned: 1 });
@@ -507,7 +507,7 @@ test("a lapsed QRIS/VA is not 'Belum dibayar'; it is what 'Kedaluwarsa' finds", 
   const list = async (query: string) => {
     const response = await listOrders({
       url: new URL(`https://toko.test/api/admin/x?${query}`),
-      locals: { runtimeEnv: { OMS_DB: database } },
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
       request: new Request("https://toko.test/x"),
     } as unknown as Parameters<typeof listOrders>[0]);
     return ((await response.json()) as { data: Array<{ order_number: string }> }).data.map((row) => row.order_number).sort();
@@ -543,7 +543,7 @@ test("a cut export ends on a whole order and says how many rows it kept", async 
   sqlite.exec("COMMIT");
   const response = await exportOrders({
     url: new URL("https://toko.test/api/admin/orders/export?kind=orders"),
-    locals: { runtimeEnv: { OMS_DB: d1(sqlite) } },
+    locals: { tenantDb: d1(sqlite), runtimeEnv: {} },
   } as unknown as Parameters<typeof exportOrders>[0]);
   const lines = (await response.text()).trimEnd().split("\r\n").slice(1);
   // 9 999 single-item rows fit; INV-BIG's three would straddle the limit, so none of them ship.
@@ -568,7 +568,7 @@ test("a Friday is compared with last Friday, hour by hour, with AOV, lead conver
   insert.run("INV-5", 999000, "2026-10-29T03:00:00.000Z", "cod", "unpaid", "pending");
   const response = await analytics({
     url: new URL("https://toko.test/api/admin/analytics?startDate=2026-10-30&endDate=2026-10-30&interval=hour&preset=today"),
-    locals: { runtimeEnv: { OMS_DB: d1(sqlite) } },
+    locals: { tenantDb: d1(sqlite), runtimeEnv: {} },
   } as unknown as Parameters<typeof analytics>[0]);
   const body = (await response.json()) as { data: Record<string, any> };
   const data = body.data;
@@ -586,7 +586,7 @@ test("a Friday is compared with last Friday, hour by hour, with AOV, lead conver
   // An explicit choice wins over the preset's default.
   const previous = await analytics({
     url: new URL("https://toko.test/api/admin/analytics?startDate=2026-10-30&endDate=2026-10-30&interval=hour&preset=today&compare=previous"),
-    locals: { runtimeEnv: { OMS_DB: d1(sqlite) } },
+    locals: { tenantDb: d1(sqlite), runtimeEnv: {} },
   } as unknown as Parameters<typeof analytics>[0]);
   const explicit = (await previous.json()) as { data: Record<string, any> };
   assert.equal(explicit.data.previous.start_date, "2026-10-29");

@@ -293,7 +293,7 @@ test("the heartbeat is no longer a KV key", () => {
 
 const locals = (database: D1Database, extra: Record<string, unknown> = {}) =>
   ({
-    runtimeEnv: { OMS_DB: database, ...extra },
+    tenantDb: database, runtimeEnv: { OMS_DB: database, ...extra },
     tenant: { siteUrl: "https://toko.test" },
     admin: { username: "owner", role: "owner" },
   }) as unknown as App.Locals;
