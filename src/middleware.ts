@@ -1,3 +1,4 @@
+import type { APIContext, MiddlewareNext } from 'astro';
 import { defineMiddleware } from 'astro:middleware';
 import {
   CLICK_ID_COOKIE,
@@ -28,6 +29,8 @@ import {
 } from './lib/operational-alerts';
 import { CMS_VERSION } from './lib/version';
 import { resolveHostRedirect } from './lib/host-redirect';
+import { gateRequest, type GateEnv } from './platform/gate';
+import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -146,8 +149,48 @@ function isInstallerPath(pathname: string): boolean {
 export function createMiddleware(
   ensureSchemaReady: (database: D1Database) => Promise<unknown> =
     ensureSchemaUpgraded,
+  gate: typeof gateRequest = gateRequest,
 ) {
+  /**
+   * The request gate runs first (TD-1): certificate-validation paths, host
+   * classification and the authoritative tenant read happen before any cache,
+   * schema check or store lookup. One structured log line per request (OBS-1).
+   */
   return defineMiddleware(async (context, next) => {
+    const started = Date.now();
+    const result = await gate(context.request, context.url, getRuntimeEnv(context.locals) as GateEnv);
+    let response: Response;
+    let hostKind: HostKind;
+    let tenantId: string | null = null;
+    if (result.kind === 'validation') {
+      hostKind = 'validation';
+      response = result.response;
+    } else if (result.kind === 'refused') {
+      hostKind = result.hostKind;
+      response = result.response;
+    } else if (result.kind === 'platform') {
+      hostKind = 'platform';
+      context.locals.platform = { host: result.host };
+      response = applySecurityHeaders(await next(), true);
+    } else {
+      hostKind = 'tenant';
+      tenantId = result.tenant.tenantId;
+      context.locals.tenantContext = result.tenant;
+      response = await handleTenantRequest(context, next);
+    }
+    writeRequestLog(buildRequestLog({
+      tenant_id: tenantId,
+      host_kind: hostKind,
+      route: routeLabel(context.routePattern, hostKind === 'tenant' || hostKind === 'platform' ? 'unmatched' : 'gate'),
+      method: context.request.method,
+      status: response.status,
+      duration_ms: Date.now() - started,
+      request_id: requestId(context.request),
+    }));
+    return response;
+  });
+
+  async function handleTenantRequest(context: APIContext, next: MiddlewareNext): Promise<Response> {
   // `context.url`, never a URL built from the raw request. Astro routes on a
   // normalized pathname — it decodes percent-escapes in a loop and collapses
   // duplicate slashes — and exposes the result here, while leaving
@@ -198,36 +241,18 @@ export function createMiddleware(
     if (hit) return applySecurityHeaders(hit, false);
   }
 
-  // Canonical host first. This used to sit below the installer redirects, which
-  // are relative - so `www` reached `/install` and the wizard was served on the
-  // non-canonical host, and an installed store took two hops to get home. It is
-  // also a host-level decision that needs no store row, so answering it here
-  // spares a D1 read on every `www` request.
-  const siteUrl = getEnvValue('PUBLIC_SITE_URL', runtime);
-  const hostRedirect = resolveHostRedirect(url, siteUrl, getEnvValue('PUBLIC_ALIAS_HOSTS', runtime));
+  // http → https on the same host. Alias-domain redirects (`PUBLIC_ALIAS_HOSTS`
+  // → `PUBLIC_SITE_URL`) were one store per Worker; a host is now a row of
+  // `tenant_hosts` (PR-9), and the primary host belongs to the tenant (T-25).
+  const hostRedirect = resolveHostRedirect(url);
   if (hostRedirect) {
     return applySecurityHeaders(context.redirect(hostRedirect, 301), false);
-  }
-  if (siteUrl && url.hostname.startsWith('www.')) {
-    try {
-      const canonical = new URL(siteUrl);
-      if (url.hostname.slice(4) === canonical.hostname) {
-        const targetUrl = new URL(url);
-        targetUrl.hostname = canonical.hostname;
-        targetUrl.protocol = canonical.protocol;
-        targetUrl.port = canonical.port;
-        return applySecurityHeaders(
-          context.redirect(targetUrl.toString(), 301),
-          false,
-        );
-      }
-    } catch {}
   }
 
   // The edge cache (ADR-029): an anonymous page another visitor rendered in
   // the last two minutes skips the schema check, the store lookup, the page's
-  // D1 reads and the render. It sits after the host redirects, so an alias or
-  // http host never reads an entry made for the canonical one.
+  // D1 reads and the render. It sits after the gate, so no cache is read for a
+  // host that has not resolved to an active tenant.
   const edgeKey = edgeCacheRequest(context.request, url);
   if (edgeKey) {
     const hit = await readEdgeCache(edgeKey);
@@ -475,7 +500,7 @@ export function createMiddleware(
   if (!isPrivate) persistClickIds(response);
 
   return response;
-  });
+  }
 }
 
 export const onRequest = createMiddleware();

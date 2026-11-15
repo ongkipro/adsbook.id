@@ -54,7 +54,12 @@ const middlewareHooks = registerHooks({
 });
 const { createMiddleware } = await import('../middleware.ts');
 middlewareHooks.deregister();
-const onRequest = createMiddleware(async () => undefined);
+// The request gate (T-17) is tested in src/platform/; these tests start past it, on an active tenant.
+const tenantGate = async () => ({
+  kind: 'tenant' as const,
+  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.belanja.cc', primaryHost: 'test.belanja.cc' },
+});
+const onRequest = createMiddleware(async () => undefined, tenantGate);
 
 function encodeSegment(value: unknown) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');

@@ -13,8 +13,6 @@ interface SharedEnvVars {
   PUBLIC_COD_DISABLED_PROVINCES?: string;
   PUBLIC_SITE_NAME?: string;
   PUBLIC_SITE_URL?: string;
-  /** Older domains of this store, comma separated; each 301s to PUBLIC_SITE_URL (lib/host-redirect.ts). */
-  PUBLIC_ALIAS_HOSTS?: string;
   PUBLIC_SITE_DESCRIPTION?: string;
   PUBLIC_SITE_LOGO?: string;
   PUBLIC_SITE_BRAND_MARK?: string;
@@ -73,6 +71,10 @@ interface CloudflareRuntimeEnv extends SharedEnvVars {
   ASSET_BUCKET: R2Bucket;
   AI: Ai;
   ASSETS: unknown;
+  /** The control plane (TD-2): tenants, hosts, plans, audit. */
+  PLATFORM_DB?: D1Database;
+  /** Extra exact platform hosts for local development, comma separated. */
+  PLATFORM_HOSTS?: string;
 }
 declare namespace Cloudflare {
   interface Env extends CloudflareRuntimeEnv {}
@@ -97,5 +99,12 @@ declare namespace App {
       role: import("./lib/auth").AdminRole;
       mustChangePassword: boolean;
     };
+    /**
+     * Set by the request gate (TD-1) on a tenant host only: the tenant this
+     * request belongs to, resolved from `Host` against `PLATFORM_DB`.
+     */
+    tenantContext?: import("./platform/control-plane").TenantContext;
+    /** Set by the request gate on a platform host only; never with `tenantContext`. */
+    platform?: { host: string };
   }
 }

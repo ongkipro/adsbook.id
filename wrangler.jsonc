@@ -62,6 +62,11 @@
   // canonical tags point at the store's own URL. An install may set this to
   // false in its own wrangler.jsonc once its domain is live.
   "workers_dev": true,
+  // One Worker for every seller host on the SaaS zone (ADR-039). The zone does
+  // not exist yet (PRD Q-1); nothing in this repository deploys (ADR-012).
+  "routes": [
+    { "pattern": "*/*", "zone_name": "belanja.cc" }
+  ],
   // Hourly evaluation catches a stalled conversion outbox even when no operator
   // opens the dashboard. Alert transitions are deduplicated in the install's KV.
   "triggers": {
@@ -84,6 +89,13 @@
       "database_name": "adsbookcms-d1",
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "src/db/migrations"
+    },
+    {
+      // The control plane (TD-2): tenants, hosts, plans, audit. Its own chain.
+      "binding": "PLATFORM_DB",
+      "database_name": "adsbook-platform",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "src/platform/migrations"
     }
   ],
   "r2_buckets": [
@@ -101,7 +113,12 @@
   // after the fact. See OBSERVABILITY.md.
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
+    // OBS-1: invocation logs record the full request URL (webhook tokens are
+    // path segments). The middleware writes one structured line instead.
+    "logs": {
+      "invocation_logs": false
+    }
   },
 
   // No `routes`: the store's domain is attached in the dashboard (Workers →
