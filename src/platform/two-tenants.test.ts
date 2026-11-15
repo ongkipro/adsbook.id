@@ -62,6 +62,11 @@ const { runPlatformCron } = await import("../worker.ts");
 const { tenantDatabase } = await import("../lib/tenant-database.ts");
 const { getRuntimeEnv } = await import("../lib/env.ts");
 const orderStatusRoute = await import("../pages/api/order-status.ts");
+const adminOrdersRoute = await import("../pages/api/admin/orders/index.ts");
+const { resolveAuthSecret } = await import("../lib/auth-secret.ts");
+const { signJwt, SESSION_COOKIE_NAME } = await import("../lib/auth.ts");
+const { storeAdminSession } = await import("../lib/admin-session.ts");
+const { createTenantDb } = await import("./tenant-db.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -234,4 +239,48 @@ test("ISO-5: an order's status token answers on its own tenant's host only", asy
   assert.equal(crossed.status, 404, "tenant A's token must not open an order on tenant B's host");
   assert.equal(JSON.stringify(crossed.body).includes("tok-a"), false);
   assert.equal((await ask("shop-b.belanja.cc", "tok-b")).status, 200);
+});
+
+test("T-36: an admin session lists its own tenant's orders, and is refused on another tenant's host", async () => {
+  const platformDb = await platform([["m-a", "active", "admin-a.belanja.cc"], ["m-b", "active", "admin-b.belanja.cc"]]);
+  const stores = namespace({ migrated: true });
+  for (const [id, number] of [["m-a", "INV-A0001"], ["m-b", "INV-B0001"]]) {
+    stores.get(id).storage.db.exec(`
+      INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16');
+      UPDATE admin_credentials SET username = 'owner', password_hash = 'x', must_change_password = 0,
+        updated_at = '2026-11-16T00:00:00.000Z', role = 'owner' WHERE id = 1;
+      INSERT INTO orders (id, order_number, store_id, customer_name, customer_phone, address, province, city, district,
+        total_amount, created_at)
+      VALUES (1, '${number}', 1, 'Siti Rahayu', '6281234567890', 'Jl. Melati 10', 'Jawa Barat', 'Bogor', 'Kec', 60000, '2026-11-16T00:00:00.000Z');
+    `);
+  }
+  // A real session for tenant A: its own generated secret, its own session row.
+  const aDb = createTenantDb(stores.get("m-a").stub);
+  const secretA = await resolveAuthSecret({}, aDb, "m-a");
+  const { token, session } = await signJwt({ username: "owner", role: "owner" }, secretA);
+  await storeAdminSession(aDb, session, { mustChangePassword: false, updatedAt: "2026-11-16T00:00:00.000Z" });
+
+  const onRequest = createMiddleware();
+  const list = async (host: string) => {
+    const href = `https://${host}/api/admin/orders`;
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const request = new Request(href, { headers: { cookie: `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}` } });
+    const context = { request, url: new URL(href), locals, routePattern: "/api/admin/orders", redirect: () => new Response(null, { status: 302 }) };
+    const previous = { log: console.log, error: console.error };
+    console.log = () => undefined;
+    console.error = () => undefined;
+    try {
+      const response = (await onRequest(context as never, (async () => adminOrdersRoute.GET(context as never)) as never)) as Response;
+      return { status: response.status, text: await response.text() };
+    } finally {
+      Object.assign(console, previous);
+    }
+  };
+  const own = await list("admin-a.belanja.cc");
+  assert.equal(own.status, 200);
+  assert.match(own.text, /INV-A0001/);
+  assert.doesNotMatch(own.text, /INV-B0001/);
+  const crossed = await list("admin-b.belanja.cc");
+  assert.equal(crossed.status, 401, "tenant A's session must not open tenant B's admin");
+  assert.doesNotMatch(crossed.text, /INV-[AB]0001/);
 });

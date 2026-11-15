@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../lib/api';
-import { getRuntimeEnv } from '../../../lib/env';
 import { getReceiverPerformance } from '../../../lib/rts-scoring';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
     return jsonError('Query parameter search (nomor WA) wajib diisi', 400);
   }
 
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) {
     return jsonError('Database order belum tersedia', 503);
   }

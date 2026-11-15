@@ -1,8 +1,8 @@
 ---
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { AnalyticsDashboard } from '../../components/admin/AnalyticsDashboard';
 import { canAccessAdminRoute } from '../../lib/auth';
-import { getRuntimeEnv } from '../../lib/env';
 import { buildSetupChecklist, readSetupFacts } from '../../lib/setup-checklist';
 
 export const prerender = false;
@@ -16,7 +16,7 @@ const mayReadInsights = canAccessAdminRoute(adminRole, '/api/admin/insights');
 // dashboard keeps one line while a required step is left.
 const maySetUp = adminRole === 'owner' || adminRole === 'admin';
 const setupFacts = maySetUp
-  ? await readSetupFacts(getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined, Astro.locals)
+  ? await readSetupFacts(tenantDatabase(Astro.locals), Astro.locals)
   : null;
 const setupSteps = setupFacts ? buildSetupChecklist(setupFacts) : [];
 const setupRequiredLeft = setupSteps.filter((step) => step.required && !step.done).length;

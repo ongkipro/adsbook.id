@@ -1,4 +1,5 @@
 ---
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../../../components/admin/AdminPageHeader.astro';
 import { getRuntimeEnv } from '../../../../lib/env';
@@ -7,7 +8,7 @@ export const prerender = false;
 
 // The Kelola plugin's settings (ADR-028). Reachable only while the plugin is
 // active; otherwise the plugin list is where it is turned on.
-const db = getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined;
+const db = tenantDatabase(Astro.locals);
 const active = db ? Boolean(await pluginContext(db, getRuntimeEnv(Astro.locals), 'kelola')) : false;
 if (!active) return Astro.redirect('/admin/settings/plugins');
 ---

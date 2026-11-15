@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
 import { getRuntimeEnv } from "../../../lib/env";
 import { checkRateLimit, getClientIp } from "../../../lib/rate-limit";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -63,7 +64,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const derivativeOf = String(formData.get("derivative_of") || "").trim();
     // Peek first, spend only once the object is stored: a rejected file is
     // not an upload and must not eat the operator's twenty.
-    const uploadDatabase = env?.OMS_DB as D1Database | undefined;
+    const uploadDatabase = tenantDatabase(locals);
     const uploadBucketKey = `admin-upload:${getClientIp(request.headers)}`;
     if (!derivativeOf) {
       const uploads = await checkRateLimit(uploadDatabase, uploadBucketKey, MAX_UPLOADS_PER_HOUR, 3_600_000, false);

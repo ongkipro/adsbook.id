@@ -10,7 +10,7 @@ import {
   normalizeApiKeyPolicy,
   parseStoredApiKeyScopes,
 } from "../../../../lib/developer-api-keys";
-import { getRuntimeEnv } from "../../../../lib/env";
+import { tenantDatabase } from "../../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -47,7 +47,7 @@ async function keyHasOpsScope(database: D1Database, id: number) {
 }
 
 function getDatabase(locals: App.Locals): D1Database | null {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database && typeof database === "object" ? (database as D1Database) : null;
 }
 

@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../../lib/api.ts';
-import { getRuntimeEnv } from '../../../../lib/env.ts';
 import { refreshHealthSnapshot, statusIconState } from '../../../../lib/health-snapshot.ts';
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -13,7 +13,7 @@ export const prerender = false;
  * (REQ-223): the hourly run is the only place that evaluates alerts.
  */
 export const POST: APIRoute = async ({ locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) return jsonError('Database belum tersedia.', 503);
   try {
     const now = Date.now();

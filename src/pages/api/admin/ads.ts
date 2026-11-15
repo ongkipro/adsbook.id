@@ -6,6 +6,7 @@ import {
   GOOGLE_ADS_CONVERSION_ID_PATTERN,
   GOOGLE_ADS_CONVERSION_LABEL_PATTERN,
 } from '../../../lib/store-ads';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -37,7 +38,7 @@ function json(body: unknown, status = 200) {
 }
 
 function getD1(locals: App.Locals) {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database && typeof database === 'object' ? database as D1Database : null;
 }
 

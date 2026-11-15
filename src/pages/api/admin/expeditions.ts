@@ -7,6 +7,7 @@ import {
   parseProvinceCodeList,
   validateProvinceCodeList,
 } from '../../../lib/province.ts';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -43,7 +44,7 @@ const expeditionMutationSchema = z.union([
 ]);
 
 const getDatabase = (locals: App.Locals) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database &&
     typeof database === 'object' &&
     typeof (database as D1Database).prepare === 'function'

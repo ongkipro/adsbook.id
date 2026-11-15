@@ -1,12 +1,12 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../../lib/api.ts";
-import { getRuntimeEnv } from "../../../../lib/env.ts";
 import { activatePlugin, deactivatePlugin, findPlugin, listPlugins, uninstallPlugin } from "../../../../plugins/registry.ts";
+import { tenantDatabase } from "../../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
 function database(locals: App.Locals) {
-  const db = getRuntimeEnv(locals)?.OMS_DB;
+  const db = tenantDatabase(locals);
   return db && typeof db === "object" ? (db as D1Database) : null;
 }
 

@@ -1,7 +1,6 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
 import { jsonError, jsonOk } from "../../../lib/api.ts";
-import { getRuntimeEnv } from "../../../lib/env.ts";
 import { enqueuePurchaseForPaidOrder } from "../../../lib/paid-order-purchase.ts";
 import {
   confirmManualAutoLarisPayment,
@@ -9,6 +8,7 @@ import {
   listManualAutoLarisPayments,
   ManualPaymentReconciliationError,
 } from "../../../lib/manual-payment-reconciliation.ts";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -32,7 +32,7 @@ const inquirySchema = z
   .strict();
 
 function databaseFrom(locals: App.Locals) {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database &&
     typeof database === "object" &&
     typeof (database as D1Database).prepare === "function" &&

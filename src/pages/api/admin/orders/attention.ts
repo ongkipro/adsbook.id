@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../../lib/api.ts';
 import { getRuntimeEnv } from '../../../../lib/env.ts';
 import { readOrderAttention } from '../../../../lib/order-attention.ts';
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -11,7 +12,7 @@ export const prerender = false;
  */
 export const GET: APIRoute = async ({ locals }) => {
   const env = getRuntimeEnv(locals);
-  const database = env?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database) return jsonError('Database order belum tersedia.', 503);
   try {
     const data = await readOrderAttention(database, {

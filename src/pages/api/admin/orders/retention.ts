@@ -1,10 +1,10 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../../lib/api.ts";
-import { getRuntimeEnv } from "../../../../lib/env.ts";
 import {
   ABANDONED_RETENTION_DAYS,
   purgeExpiredAbandonedOrders,
 } from "../../../../lib/order-persistence.ts";
+import { tenantDatabase } from "../../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -12,7 +12,7 @@ export const prerender = false;
 export const POST: APIRoute = async ({ locals }) => {
   if (!locals.admin) return jsonError("Unauthorized", 401);
 
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database order belum tersedia.", 503);
   }

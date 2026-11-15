@@ -27,6 +27,7 @@ import {
   sourceLabelsFromRows,
   sourceLabelsStatement,
 } from '../../../../lib/source-slug.ts';
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
 /** The order lines the CRM templates list (`{{rincian_pesanan}}`). */
 function parseItemsJson(raw: string | null) {
@@ -159,7 +160,7 @@ export function parseBulkStatusUpdate(body: unknown): BulkStatusUpdate {
 export const ORDER_LIST_PREFETCH_HEADER = 'X-Order-List-Prefetch';
 
 export const GET: APIRoute = async ({ url, locals, request }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database order belum tersedia.', 503);
   }
@@ -434,7 +435,7 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database order belum tersedia.', 503);
   }
@@ -515,7 +516,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 };
 export const DELETE: APIRoute = async ({ request, locals }) => {
   if (!locals.admin) return jsonError('Unauthorized', 401);
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database order belum tersedia.', 503);
   }

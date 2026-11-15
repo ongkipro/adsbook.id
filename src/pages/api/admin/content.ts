@@ -6,6 +6,7 @@ import {
   validateContent,
 } from "../../../lib/storefront-content";
 import { buildContentSystemInstruction } from "../../../lib/ai-content-instructions";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -22,7 +23,7 @@ const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Unknown content error.";
 
 function databaseFrom(locals: App.Locals) {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database && typeof database === "object"
     ? (database as D1Database)
     : null;

@@ -1,9 +1,9 @@
 ---
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AdminPageHeader from './AdminPageHeader.astro';
 import { InsightsReport } from './InsightsReport';
 import { INSIGHTS_REPORTS, type InsightsReport as Report } from '../../lib/insights-view';
-import { getRuntimeEnv } from '../../lib/env';
 import { canAccessAdminRoute } from '../../lib/auth';
 import { sourceLabelsStatement, sourceLabelsFromRows } from '../../lib/source-slug';
 interface Props { report: Report }
@@ -14,7 +14,7 @@ let products: Array<{ value: string; label: string }> = [];
 let catalogueUnavailable = false;
 if (report === 'trend') {
   try {
-    const db = getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined;
+    const db = tenantDatabase(Astro.locals);
     if (!db) throw new Error('database-unavailable');
     const results = await db.batch([
       sourceLabelsStatement(db),

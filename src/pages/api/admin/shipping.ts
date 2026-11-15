@@ -1,6 +1,5 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
-import { getRuntimeEnv } from "../../../lib/env";
 import { matchesShippingQueue } from "../../../lib/shipping-queue";
 import {
   mapMengantarStatusEvidence,
@@ -17,6 +16,7 @@ import {
 } from "../../../lib/order-lifecycle";
 import type { AdminShippingStatus } from "../../../lib/order-lifecycle";
 import { shippingListFilter } from "../../../lib/order-list-filter.ts";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -88,7 +88,7 @@ type ProviderSyncResult = {
 };
 
 export const GET: APIRoute = async ({ locals, url }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database pengiriman belum tersedia.", 503);
   }
@@ -215,7 +215,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
 };
 
 export const PATCH: APIRoute = async ({ locals, request }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database pengiriman belum tersedia.", 503);
   }
@@ -512,7 +512,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
 };
 
 export const POST: APIRoute = async ({ locals, request }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database pengiriman belum tersedia.", 503);
   }

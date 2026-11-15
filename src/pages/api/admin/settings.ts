@@ -30,6 +30,7 @@ import {
   getProviderConfig,
   resolveCredentialUpdate,
 } from "../../../lib/provider-config.ts";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -270,7 +271,7 @@ async function credentialStatus(database: D1Database, locals: App.Locals) {
 
 export const GET: APIRoute = async ({ locals }) => {
   const runtime = getRuntimeEnv(locals);
-  const database = runtime?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database pengaturan belum tersedia.", 503);
   }
@@ -347,7 +348,7 @@ export const GET: APIRoute = async ({ locals }) => {
 };
 
 export const PUT: APIRoute = async ({ request, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database pengaturan belum tersedia.", 503);
   }

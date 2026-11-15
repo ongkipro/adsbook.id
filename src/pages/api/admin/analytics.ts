@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../lib/api.ts';
-import { getRuntimeEnv } from '../../../lib/env.ts';
 import { LEAD_ROW, ORDER_ROW, RELEASED_ORDER } from '../../../lib/order-metrics.ts';
 import { compareCutoff, compareRange, defaultCompareMode, isCompareMode } from '../../../lib/dashboard-compare.ts';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -39,7 +39,7 @@ const isIsoDate = (value: string) => {
 };
 
 export const GET: APIRoute = async ({ locals, url }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database analytics belum tersedia.', 503);
   }

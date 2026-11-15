@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../../lib/api.ts';
-import { getRuntimeEnv } from '../../../../lib/env.ts';
 import { readHealthSnapshot, statusIconState } from '../../../../lib/health-snapshot.ts';
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -16,7 +16,7 @@ export const prerender = false;
  * header is set here.
  */
 export const GET: APIRoute = async ({ locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) return jsonError('Database belum tersedia.', 503);
   const snapshot = await readHealthSnapshot(database);
   return jsonOk({ icon: statusIconState(snapshot, Date.now()) });

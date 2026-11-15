@@ -1,6 +1,5 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
-import { getRuntimeEnv } from "../../../lib/env";
 import {
   addWhatsappNumber,
   listWhatsappNumbers,
@@ -8,6 +7,7 @@ import {
   updateWhatsappNumber,
   WhatsappNumberError,
 } from "../../../lib/whatsapp-numbers";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -17,7 +17,7 @@ export const prerender = false;
  * never has to guess what a write changed.
  */
 function database(locals: App.Locals) {
-  const db = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const db = tenantDatabase(locals);
   if (!db?.prepare) throw new WhatsappNumberError("Database belum tersedia.", 503);
   return db;
 }

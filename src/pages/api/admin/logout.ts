@@ -3,12 +3,13 @@ import { SESSION_COOKIE_NAME, getSessionCookie, verifyJwt } from '../../../lib/a
 import { deleteAdminSession } from '../../../lib/admin-session';
 import { getRuntimeEnv } from '../../../lib/env';
 import { resolveAuthSecret } from '../../../lib/auth-secret';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request, locals, cookies, redirect }) => {
   const env = getRuntimeEnv(locals);
-  const database = env?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   const token = getSessionCookie(request);
   const session = token ? await verifyJwt(token, await resolveAuthSecret(env, database)) : null;
 

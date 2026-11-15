@@ -40,6 +40,7 @@ import {
 } from '../../../../lib/shipping-quote';
 import { pluginContext } from '../../../../plugins/registry';
 import { getKelolaConfig, kelolaOrderState, resendOrderToKelola } from '../../../../plugins/kelola/sync';
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
 /** The Kelola config when the plugin is active, else `undefined` (plugin off). */
 async function activeKelolaConfig(db: D1Database, locals: App.Locals) {
@@ -243,7 +244,7 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
   const orderKey = String(params.id || '').trim();
   if (!orderKey) return jsonError('ID order wajib diisi.', 400);
 
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database order belum tersedia.', 503);
   }
@@ -413,7 +414,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
   const orderKey = String(params.id || '').trim();
   if (!orderKey) return jsonError('ID order wajib diisi.', 400);
 
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database order belum tersedia.', 503);
   }
@@ -975,7 +976,7 @@ export const DELETE: APIRoute = async ({ params, locals }) => {
   const orderKey = params.id?.trim();
   if (!orderKey) return jsonError('Order ID missing', 400);
 
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database order belum tersedia.', 503);
   }

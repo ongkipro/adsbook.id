@@ -6,7 +6,7 @@ import {
 import { revokeAdminSessions } from '../../../lib/admin-session';
 import { jsonError, jsonOk } from '../../../lib/api';
 import { SESSION_COOKIE_NAME } from '../../../lib/auth';
-import { getRuntimeEnv } from '../../../lib/env';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -18,8 +18,7 @@ type ProfilePayload = {
 };
 
 function runtime(locals: App.Locals) {
-  const env = getRuntimeEnv(locals);
-  const database = env?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   return { database };
 }
 

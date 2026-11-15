@@ -10,6 +10,7 @@ import {
   normalizeKelolaWebhookUrl,
   testKelolaConnection,
 } from "../../../../plugins/kelola/sync.ts";
+import { tenantDatabase } from "../../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -33,7 +34,7 @@ async function status(context: PluginContext) {
 }
 
 async function activeContext(locals: App.Locals) {
-  const db = getRuntimeEnv(locals)?.OMS_DB;
+  const db = tenantDatabase(locals);
   if (!db || typeof db !== "object") return null;
   return pluginContext(db as D1Database, getRuntimeEnv(locals), "kelola");
 }
