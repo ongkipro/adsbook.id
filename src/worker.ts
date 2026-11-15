@@ -4,6 +4,7 @@ import { CMS_VERSION } from "./lib/version.ts";
 import { ensureControlPlane } from "./platform/control-plane.ts";
 import { armTenantAlarm, openTenantDb, TenantUnavailableError } from "./platform/tenant-db.ts";
 import { runPlatformJobs } from "./platform/jobs.ts";
+import { deleteHostnameRef, hostnameApiFromEnv } from "./platform/hostnames.ts";
 // One SQLite Durable Object per tenant (ADR-039, TD-3); src/platform/tenant-db.ts opens it.
 export { TenantStore } from "./platform/tenant-store.ts";
 type AstroRequest = Parameters<typeof handle>[0];
@@ -87,7 +88,9 @@ export async function runPlatformCron(
   }
 
   try {
-    const jobs = await runPlatformJobs(platformDb, new Date(scheduledTime));
+    // DOM-5: stale custom hostnames are deleted at Cloudflare with the platform's client.
+    const hostnames = hostnameApiFromEnv(env as unknown as Record<string, unknown>);
+    const jobs = await runPlatformJobs(platformDb, new Date(scheduledTime), hostnames ? (reference) => deleteHostnameRef(hostnames, reference) : undefined);
     console.info("scheduled-platform-jobs", jobs);
   } catch (error) {
     console.error("scheduled-platform-jobs-failed", String(error));

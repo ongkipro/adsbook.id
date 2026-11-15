@@ -14,6 +14,11 @@ interface SharedEnvVars {
   // (T-45) here: each is a row in the tenant's own store.
   /** The platform's HTTPS endpoint for redacted operational alerts (a Worker secret). */
   OPS_ALERT_WEBHOOK_URL?: string;
+  /** Cloudflare for SaaS (T-25): the SaaS zone id and a zone-scoped "SSL and Certificates Write" token. */
+  CF_SAAS_ZONE_ID?: string;
+  CF_SAAS_TOKEN?: string;
+  /** Local development only: a stand-in for api.cloudflare.com. */
+  CF_API_BASE?: string;
 }
 
 interface CloudflareRuntimeEnv extends SharedEnvVars {

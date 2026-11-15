@@ -158,7 +158,12 @@ function storefrontTemplate(value: string): StorefrontTemplateId {
  */
 export function resolveTenantConfig(
   row: StoreIdentityRow | null | undefined,
-  /** The tenant's primary host from the gate: the site address when the row has none. */
+  /**
+   * The tenant's primary host from the control plane (T-25). It IS the site
+   * address: canonical URLs, sitemap and ad event source URLs follow the
+   * domain the owner promoted, never a free-text `site_url`, which stays only
+   * as the fallback for a context with no primary host.
+   */
   primaryHost?: string | null,
 ): Readonly<PublicTenantConfig> {
   const name = pick(row?.name, defaults.name);
@@ -170,7 +175,7 @@ export function resolveTenantConfig(
   return Object.freeze({
     slug: text(row?.slug) || defaults.slug,
     name,
-    siteUrl: siteOrigin(pick(row?.site_url, primaryHost ? `https://${primaryHost}` : defaults.siteUrl)),
+    siteUrl: siteOrigin(primaryHost ? `https://${primaryHost}` : pick(row?.site_url, defaults.siteUrl)),
     description:
       pick(row?.description, defaults.description) ||
       `Belanja online di ${name}.`,

@@ -76,6 +76,7 @@ const { getStoreAdsConfig } = await import("../lib/store-ads.ts");
 const { loadGoogleAdsOfflineConfig } = await import("../lib/google-ads-offline.ts");
 const autolarisWebhookRoute = await import("../pages/api/webhooks/autolaris/[token].ts");
 const { issueWebhookToken } = await import("./webhook-secrets.ts");
+const { probeAnswer } = await import("./hostnames.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -678,6 +679,53 @@ test("T-23/API-7: a webhook writes only on its tenant's subdomain with that tena
   assert.equal(await call("hook-a.belanja.cc", tokenA), 401);
   assert.equal(await call("hook-a.belanja.cc", rotated), 200);
   assert.deepEqual(writes(), [2, 0]);
+});
+
+test("T-25: a custom primary moves indexing off the subdomain; the probe answers the tenant; a pending host never reaches tenant code", async () => {
+  const platformDb = await platform([["d-a", "active", "dom-a.belanja.cc"]]);
+  platformDb.sqlite.exec(`
+    UPDATE tenant_hosts SET is_primary = 0 WHERE host = 'dom-a.belanja.cc';
+    INSERT INTO tenant_hosts (host, tenant_id, kind, domain_group, status, is_primary, created_at)
+      VALUES ('tokoa.com', 'd-a', 'custom', 'tokoa.com', 'active', 1, '2026-11-16'),
+             ('baru.com', 'd-a', 'custom', 'baru.com', 'pending', 0, '2026-11-16');
+  `);
+  const stores = namespace({ migrated: true });
+  stores.get("d-a").storage.db.exec("INSERT INTO stores (id, name, slug, created_at) VALUES (1, 'Toko A', 'toko-a', '2026-11-16')");
+  const onRequest = createMiddleware();
+  const visit = async (host: string, path = "/") => {
+    const href = `https://${host}${path}`;
+    let reached = false;
+    let siteUrl = "";
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const context = { request: new Request(href), url: new URL(href), locals, routePattern: path, redirect: () => new Response(null, { status: 302 }) };
+    const previous = { log: console.log, error: console.error };
+    console.log = () => undefined;
+    console.error = () => undefined;
+    try {
+      const response = (await onRequest(context as never, (async () => {
+        reached = true;
+        siteUrl = (locals.tenant as { siteUrl: string }).siteUrl;
+        return new Response("<p>ok</p>", { headers: { "content-type": "text/html" } });
+      }) as never)) as Response;
+      return { status: response.status, robots: response.headers.get("x-robots-tag"), text: await response.text(), reached, siteUrl };
+    } finally {
+      Object.assign(console, previous);
+    }
+  };
+  const sub = await visit("dom-a.belanja.cc");
+  assert.equal(sub.robots, "noindex, nofollow", "the subdomain competes with the custom primary");
+  assert.equal(sub.siteUrl, "https://tokoa.com", "canonical URLs follow the primary host");
+  const custom = await visit("tokoa.com");
+  assert.equal(custom.robots, null);
+  const nonce = "a".repeat(32);
+  const probe = await visit("tokoa.com", `/.well-known/adsbook-probe?n=${nonce}`);
+  const secret = await resolveAuthSecret(createTenantDb(stores.get("d-a").stub), "d-a");
+  assert.equal(probe.text, await probeAnswer(secret, "tokoa.com", nonce), "the proof is the tenant's own HMAC");
+  assert.equal(probe.reached, false, "the probe is answered before any page");
+  assert.equal((await visit("tokoa.com", "/.well-known/adsbook-probe")).status, 404, "no nonce, no proof");
+  const pending = await visit("baru.com");
+  assert.equal(pending.status, 404);
+  assert.equal(pending.reached, false, "a pending custom host reached tenant code");
 });
 
 test("T-21: there is no installer page or route to answer /install", () => {

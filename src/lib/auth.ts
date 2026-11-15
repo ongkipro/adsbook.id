@@ -84,6 +84,7 @@ const ADMIN_PAGE_ROUTES = [
   '/admin/settings/warehouse',
   '/admin/settings/crm',
   '/admin/settings/plugins',
+  '/admin/settings/domains',
   '/admin/settings/whatsapp',
   '/admin/status',
   '/admin/docs',
@@ -116,6 +117,7 @@ const ADMIN_API_ROUTES = [
   '/api/admin/warehouses',
   '/api/admin/profile',
   '/api/admin/plugins',
+  '/api/admin/domains',
   '/api/admin/logout',
 ] as const;
 

@@ -28,6 +28,7 @@ import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platfo
 import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 import { scopeFromLocals } from './platform/keys.ts';
+import { PROBE_NONCE, PROBE_PATH, probeAnswer } from './platform/hostnames.ts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -56,7 +57,8 @@ function applySecurityHeaders(
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   if (isPrivate) {
-    response.headers.set('Cache-Control', 'no-store');
+    // O2O: a seller's own Cloudflare cache rules run first; `private` keeps them off it (T-25).
+    response.headers.set('Cache-Control', 'private, no-store');
     // SEC-3: admin pages carry their own policy, never a seller tag host. No
     // script-src yet (Astro's hydration scripts are inline); what it does fix
     // is framing, <base> hijacking, plugins and where a form may post.
@@ -200,6 +202,12 @@ export function createMiddleware(
   // readable, and writable cross-site, with no session at all.
   const url = context.url;
   const runtime = getRuntimeEnv(context.locals);
+  // T-25: once a custom primary is active the platform subdomain stays
+  // reachable (webhooks, sign-in) but never competes with it in search.
+  const indexedElsewhere = (() => {
+    const tenant = context.locals.tenantContext;
+    return Boolean(tenant && tenant.hostKind === 'subdomain' && tenant.primaryHost && tenant.primaryHost !== tenant.host);
+  })();
 
   // Persist ad attribution click ids (Google, Meta, UTMs) from landing/embed URL.
   // A function, because a page served from the edge cache needs it too: the
@@ -256,7 +264,7 @@ export function createMiddleware(
     const hit = await readEdgeCache(edgeKey);
     if (hit) {
       const cached = applySecurityHeaders(hit, false);
-      if (url.hostname.endsWith('.workers.dev')) cached.headers.set('X-Robots-Tag', 'noindex, nofollow');
+      if (url.hostname.endsWith('.workers.dev') || indexedElsewhere) cached.headers.set('X-Robots-Tag', 'noindex, nofollow');
       persistClickIds(cached);
       return cached;
     }
@@ -298,6 +306,20 @@ export function createMiddleware(
   if (identity.state === 'uninstalled' || identity.state === 'unmigrated') {
     console.error('tenant-store-row-missing', { tenant_id: tenantContext.tenantId, state: identity.state });
     return statePage('unavailable', url.pathname);
+  }
+
+  // §4 "Probe and promote" (T-25): before a custom host may become primary,
+  // the platform asks it, over HTTPS, for a proof only this tenant's store can
+  // compute, bound to the host reached and the caller's nonce.
+  if (url.pathname === PROBE_PATH) {
+    const nonce = url.searchParams.get('n') ?? '';
+    const secret = await resolveAuthSecret(identityDb, tenantContext.tenantId);
+    if (!PROBE_NONCE.test(nonce) || secret.length < 32) {
+      return applySecurityHeaders(new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } }), false);
+    }
+    return applySecurityHeaders(new Response(await probeAnswer(secret, url.hostname, nonce), {
+      headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+    }), false);
   }
 
   // A native landing page that has taken over a product page must answer on
@@ -444,10 +466,9 @@ export function createMiddleware(
     embedFrameAncestors,
   );
 
-  // A *.workers.dev address must never compete with a store's domain in
-  // search. The platform subdomain's noindex once a custom primary is active
-  // belongs to the hostname service (T-25).
-  if (url.hostname.endsWith('.workers.dev')) {
+  // A *.workers.dev address, or the platform subdomain once a custom primary
+  // is active, must never compete with the store's domain in search.
+  if (url.hostname.endsWith('.workers.dev') || indexedElsewhere) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
 

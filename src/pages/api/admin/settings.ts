@@ -9,7 +9,7 @@ import {
   resolveEmbedAllowedOrigins,
 } from "../../../lib/embed-security.ts";
 import { parseHeadlessAllowedOrigins } from "../../../lib/headless-api.ts";
-import { isAcceptedSiteProtocol, LOCALE_PATTERN, SUPPORT_EMAIL_PATTERN, THEME_COLOR_PATTERN } from "../../../lib/tenant.ts";
+import { LOCALE_PATTERN, SUPPORT_EMAIL_PATTERN, THEME_COLOR_PATTERN } from "../../../lib/tenant.ts";
 import { getRuntimeEnv, maskSecretValue } from "../../../lib/env.ts";
 import { issueWebhookToken, webhookTokenIssuedAt, webhookUrl } from "../../../platform/webhook-secrets.ts";
 import {
@@ -765,23 +765,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       // Identity beyond the name became editable when it moved into D1
       // (ADR-003). Before that these were baked into the bundle, so the only
       // way to change a store's address or tagline was a rebuild.
-      const siteUrlRaw = clean(body.site_url, 200);
-      let siteUrl = "";
-      if (siteUrlRaw) {
-        try {
-          const parsed = new URL(siteUrlRaw);
-          if (!isAcceptedSiteProtocol(parsed)) {
-            return jsonError("Alamat toko harus memakai https.", 400);
-          }
-          siteUrl = parsed.origin;
-        } catch {
-          return jsonError(
-            "Alamat toko tidak valid. Contoh: https://tokosaya.com",
-            400,
-          );
-        }
-      }
-
+      // The site address is the tenant's primary host (T-25), chosen at
+      // /admin/settings/domains; a free-text `site_url` is no longer saved.
       const storefrontTemplate =
         clean(body.storefront_template, 40) || "compact-market";
       const templateResolution = await resolveStorefrontTemplate(
@@ -830,7 +815,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       await db
         .prepare(
           `UPDATE stores
-              SET name = ?, site_url = ?, description = ?,
+              SET name = ?, description = ?,
                   tagline = ?, logo = ?, storefront_template = ?,
                   theme_color = ?, locale = ?, admin_name = ?,
                   thanks_whatsapp_redirect = ?, support_email = ?, business_address = ?
@@ -838,7 +823,6 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         )
         .bind(
           storeName,
-          siteUrl || null,
           clean(body.store_description, 300) || null,
           clean(body.store_tagline, 120) || null,
           clean(body.store_logo, 300) || null,
