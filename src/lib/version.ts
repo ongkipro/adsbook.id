@@ -8,7 +8,8 @@ export type CmsVersionInfo = {
 };
 
 export const CMS_VERSION: CmsVersionInfo = {
-  version: "1.10.0",
+  version: "1.10.1",
+  // 1.10.1: correctness fixes, no feature. The /landing/README note is no longer a page and the test suite refuses a routable file the route map cannot list; a late abandoned capture leaves a promoted order's items alone; an order under a Mengantar dispatch claim or with an unknown dispatch outcome cannot be deleted; /api/v1/checkout refuses QRIS/VA when AutoLaris is switched off; the scheduled run resolves the store identity from D1; admin status writes are compare-and-swap (409, bulk reports conflict_order_ids); docs:check reads the adsbook.id-docs repository. No migration.
   // 1.10.0: the COD Purchase is enqueued by the server at checkout and by an hourly sweep (ADR-036); a CS-converted lead is reported with the identity stored at capture; health signal meta-purchase-coverage with webhook alert; Analitik "Purchase ke Meta"; "Transfer belum dikonfirmasi" in Action needed; leads kept 14 days and never deletable by hand (ADR-035); "Kirim ulang event gagal" on the Meta page; Meta and Google ad requests time out; no PageView post without a Pixel; /thanks requests fbevents in parallel. No migration.
   // 1.9.2: with the orange accent, a filled checkout field is neutral grey again (--sf-surface-alt, not the accent tint) and the field being typed in has an ink frame (--sf-focus-frame) with the accent only in its ring, so it cannot be mistaken for the red error frame. No migration.
   // 1.9.1: the default action colour is orange (#c2410c, hover #9a3412, 5.18:1 and 7.31:1 under white text) instead of 1.9.0's blue, which was never deployed to any store. Red is the checkout error colour and brighter oranges fail AA. Same call sites and tokens as 1.9.0; a store that overrides --sf-accent keeps its colour. No migration.
@@ -59,8 +60,8 @@ export const CMS_VERSION: CmsVersionInfo = {
   // 1.5.1: browser Meta events ordered behind the single pixel init.
   // 1.5.0: migrations 0056-0061, GA4 ecommerce payload, variant id over SKU,
   // mobile order button, deploy builds before upload (BUILD-LOG 2026-10-11).
-  releaseTag: "2026.11-signal",
+  releaseTag: "2026.11-integrity",
   coreEngine: "Astro 7 SSR + Cloudflare Workers",
   schemaVersion: 80,
-  lastUpdated: "2026-11-10",
+  lastUpdated: "2026-11-16",
 };
