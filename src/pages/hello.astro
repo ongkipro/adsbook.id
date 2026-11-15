@@ -2,9 +2,7 @@
 import { tenantDatabase } from '../lib/tenant-database.ts';
 import '../styles/admin.css';
 import {
-  BOOTSTRAP_FALLBACK_PASSWORD,
   DEFAULT_ADMIN_PASSWORD_HASH,
-  DEFAULT_ADMIN_USERNAME,
   getAdminCredential,
   isDefaultAdminCredential,
   normalizeAdminUsername,
@@ -93,7 +91,7 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
         const [usernameMatches, passwordMatches] = await Promise.all([
           credential ? secureEqual(username, credential.username) : Promise.resolve(false),
           credential
-            ? verifyAdminLoginPassword(password, credential, '')
+            ? verifyAdminLoginPassword(password, credential)
             : Promise.resolve(false),
           needsWorkFloor
             ? verifyPasswordHash(password, DEFAULT_ADMIN_PASSWORD_HASH)
@@ -129,23 +127,6 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
   }
 }
 
-/**
- * LOGIN-6. The seeded credential is announced only while it is the credential
- * that actually opens this store: the stored row is still the seeded default.
- * Once the owner rotates, the hash changes and this goes quiet on its own.
- * There is no Worker-wide BOOTSTRAP_ADMIN_PASSWORD any more (T-21): one env
- * value would be a password for every tenant at once.
- */
-let showsDefaultCredential = false;
-if (database) {
-  try {
-    const seeded = await getAdminCredential(database, DEFAULT_ADMIN_USERNAME);
-    showsDefaultCredential = seeded !== null && isDefaultAdminCredential(seeded);
-  } catch (error) {
-    // A database that cannot answer is not an install we can vouch for; say nothing.
-    console.error('admin-login-default-notice', error);
-  }
-}
 ---
 
 <!DOCTYPE html>
@@ -237,21 +218,8 @@ if (database) {
           </div>
         )}
 
-        {showsDefaultCredential && (
-          <div id="defaultCredentialNotice" class="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <div class="flex items-start gap-3">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" aria-hidden="true">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-              </svg>
-              <div>
-                <p class="font-semibold text-amber-950">Akses awal perlu diamankan</p>
-                <p class="mt-1.5 leading-relaxed">Gunakan username <strong class="font-semibold text-amber-950">{DEFAULT_ADMIN_USERNAME}</strong> dan password <strong class="font-semibold text-amber-950">{BOOTSTRAP_FALLBACK_PASSWORD}</strong>. Ganti password setelah masuk untuk membuka operasional.</p>
-              </div>
-            </div>
-          </div>
-        )}
 
-        <form id="loginForm" method="POST" class="space-y-4" aria-busy="false" aria-describedby={[errorMessage && 'loginError', showsDefaultCredential && 'defaultCredentialNotice'].filter(Boolean).join(' ') || undefined}>
+        <form id="loginForm" method="POST" class="space-y-4" aria-busy="false" aria-describedby={[errorMessage && 'loginError'].filter(Boolean).join(' ') || undefined}>
           <div class="space-y-2">
             <label for="username" class="text-sm font-semibold text-slate-900">Username operator</label>
             <input id="username" type="text" name="username" required autocomplete="username" autofocus={!focusPassword} value={submittedUsername} placeholder="Username Anda" class="admin-input-flat" spellcheck="false" />

@@ -1,15 +1,8 @@
-import { isAdminRole, secureEqual, verifyPasswordHash } from './auth.ts';
+import { isAdminRole, verifyPasswordHash } from './auth.ts';
 import type { AdminRole } from './auth.ts';
 
 export const DEFAULT_ADMIN_USERNAME = 'admin';
 export const DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2-sha256$100000$-EwKzifD04qz0rRDZxAlpQ$Hq_4WkRnBcUgAASqRR0kukVbbGOZyN3IIxpvVfm6_l4';
-/**
- * The password a fresh install accepts for the seeded `admin` credential when
- * no BOOTSTRAP_ADMIN_PASSWORD is configured. Deliberately guessable: it is a
- * first-run key, not a credential, and it opens nothing but the screen that
- * replaces it.
- */
-export const BOOTSTRAP_FALLBACK_PASSWORD = 'admin';
 const PASSWORD_ITERATIONS = 100_000;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,64}$/;
 
@@ -61,35 +54,19 @@ export function isDefaultAdminCredential(credential: Pick<AdminCredential, 'user
   return credential.username === DEFAULT_ADMIN_USERNAME && credential.passwordHash === DEFAULT_ADMIN_PASSWORD_HASH;
 }
 
+/**
+ * The seeded credential (`admin` + DEFAULT_ADMIN_PASSWORD_HASH) opens nothing
+ * (T-21). A single-tenant install once accepted `admin` or a Worker-wide
+ * BOOTSTRAP_ADMIN_PASSWORD for it until the operator rotated; on a platform
+ * that is a known password on every tenant whose owner has not signed in yet,
+ * and the forced password change it opened is an account takeover. A tenant's
+ * owner credential is written at signup (T-26), never seeded.
+ */
 export async function verifyAdminLoginPassword(
   password: string,
   credential: Pick<AdminCredential, 'username' | 'passwordHash'>,
-  bootstrapPassword: string
 ) {
-  if (isDefaultAdminCredential(credential)) {
-    const configuredBootstrap = bootstrapPassword.trim();
-
-    // An operator who sets BOOTSTRAP_ADMIN_PASSWORD gets the stronger path, and
-    // a short value is rejected outright rather than silently weakening it.
-    if (configuredBootstrap) {
-      if (configuredBootstrap.length < 16) return false;
-      return secureEqual(password, configuredBootstrap);
-    }
-
-    // Nothing configured — a fresh install. Accept the documented default so an
-    // install is reachable at all: before this, a new Worker had a seeded
-    // credential that no password could open, because the only accepted one
-    // came from an environment variable nobody had set yet.
-    //
-    // The exposure is bounded by middleware, not by hope: while
-    // must_change_password is set, this session can reach only /admin/profile,
-    // /api/admin/profile and /api/admin/logout. It cannot read an order, a
-    // customer, a payment or a provider key. Rotating the password is the only
-    // thing it can do, and validateNewAdminPassword refuses to let the new one
-    // be 'admin' or the username.
-    return secureEqual(password, BOOTSTRAP_FALLBACK_PASSWORD);
-  }
-
+  if (isDefaultAdminCredential(credential)) return false;
   return verifyPasswordHash(password, credential.passwordHash);
 }
 

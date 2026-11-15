@@ -12,35 +12,19 @@ import {
 import { canAccessAdminRoute, isAdminRole, secureEqual, verifyPasswordHash, type AdminRole } from './auth.ts';
 
 /**
- * This test previously asserted the opposite: that with no configured bootstrap
- * password nothing could open the seeded credential. That hardening made a
- * fresh install unreachable — the only accepted password came from an
- * environment variable no new Worker sets — so it was deliberately reversed on
- * 2026-08-16. See PRD-ADMIN-LOGIN.md LOGIN-1 through LOGIN-5 for the reasoning
- * and for what bounds the exposure.
+ * Reversed twice. 2026-08-16 let `admin` open the seeded credential so a fresh
+ * single-tenant install was reachable at all (LOGIN-1…5). T-21 closes it again:
+ * a platform tenant has no installer, its owner credential is written at
+ * signup, and a seeded credential that opened anything would be a known
+ * password on every tenant not yet claimed.
  */
-test('default admin credential opens a fresh install and nothing more', async () => {
+test('the seeded default credential is recognised and opens nothing (T-21)', async () => {
   const defaultCredential = {
     username: 'admin',
     passwordHash: DEFAULT_ADMIN_PASSWORD_HASH,
   };
   assert.equal(isDefaultAdminCredential(defaultCredential), true);
-
-  // Reachable on a fresh install, which is the point.
-  assert.equal(await verifyAdminLoginPassword('admin', defaultCredential, ''), true);
-
-  // A configured-but-too-short secret is still rejected outright rather than
-  // degrading to the default, so a half-hearted configuration is not worse
-  // than none.
-  assert.equal(await verifyAdminLoginPassword('admin', defaultCredential, 'short'), false);
-  assert.equal(
-    await verifyAdminLoginPassword('bootstrap-secret-1234', defaultCredential, 'bootstrap-secret-1234'),
-    true,
-  );
-  assert.equal(
-    await verifyAdminLoginPassword('admin', defaultCredential, 'bootstrap-secret-1234'),
-    false,
-  );
+  assert.equal(await verifyAdminLoginPassword('admin', defaultCredential), false);
 });
 
 test('new password hashes use random salts and verify through the login contract', async () => {

@@ -46,7 +46,7 @@ The [Modules](#modules) section is the same book read from the other side.
 
 | Route | Methods | Auth | Roles | File | Libs | Tables | Tests |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `/[slug]` | GET | public | — | `src/pages/[slug].astro` | `admin-session` `auth-secret` `catalog` `catalog-feed` `env` `json-ld` `landing-pages` `native-landing-pages` `public-store` `social-proof` `tenant-database` | `admin_credentials` `admin_sessions` `courier_rules` `install_secrets` `landing_pages` `landing_sections` `orders` `product_variants` `products` `stores` | `admin-session.test.ts` `auth-secret.test.ts` `catalog.test.ts` `catalog-feed.test.ts` `env.test.ts` `json-ld.test.ts` `landing-pages.test.ts` `native-landing-pages.test.ts` `public-store.test.ts` |
+| `/[slug]` | GET | public | — | `src/pages/[slug].astro` | `admin-session` `auth-secret` `catalog` `catalog-feed` `json-ld` `landing-pages` `native-landing-pages` `public-store` `social-proof` `tenant-database` | `admin_credentials` `admin_sessions` `courier_rules` `install_secrets` `landing_pages` `landing_sections` `orders` `product_variants` `products` `stores` | `admin-session.test.ts` `auth-secret.test.ts` `catalog.test.ts` `catalog-feed.test.ts` `json-ld.test.ts` `landing-pages.test.ts` `native-landing-pages.test.ts` `public-store.test.ts` |
 | `/contoh-landing` | GET | public | — | `src/pages/contoh-landing.astro` | `catalog` `catalog-feed` `landing-pages` | `landing_pages` `landing_sections` `product_variants` `products` | `catalog.test.ts` `catalog-feed.test.ts` `landing-pages.test.ts` |
 | `/landing-page` | GET | public | — | `src/pages/landing-page/index.astro` | `image-derivative` `landing-pages` | `landing_pages` `landing_sections` `products` | `image-derivative.test.ts` `landing-pages.test.ts` |
 | `/solusi-terbaru` | GET | public | — | `src/pages/solusi-terbaru.astro` | — | — | — |
@@ -193,7 +193,7 @@ The [Modules](#modules) section is the same book read from the other side.
 | `/api/admin/insights/utm` | GET | admin session | owner, admin, advertiser | `src/pages/api/admin/insights/utm.ts` | `insights` | `capi_event_outbox` `order_items` `orders` `product_variants` `products` | `insights.test.ts` |
 | `/api/admin/landing-pages` | GET, POST | admin session | owner, admin, advertiser | `src/pages/api/admin/landing-pages/index.ts` | `api` `landing-pages` | `landing_pages` `landing_sections` `products` | `api.test.ts` `landing-pages.test.ts` |
 | `/api/admin/landing-pages/[id]` | DELETE, GET, PUT | admin session | owner, admin, advertiser | `src/pages/api/admin/landing-pages/[id].ts` | `api` `landing-pages` | `landing_pages` `landing_sections` `products` | `api.test.ts` `landing-pages.test.ts` |
-| `/api/admin/logout` | POST | admin session | owner, admin, advertiser, customer_service | `src/pages/api/admin/logout.ts` | `admin-session` `auth` `auth-secret` `env` `tenant-database` | `admin_credentials` `admin_sessions` `install_secrets` | `admin-session.test.ts` `auth.test.ts` `auth-secret.test.ts` `env.test.ts` |
+| `/api/admin/logout` | POST | admin session | owner, admin, advertiser, customer_service | `src/pages/api/admin/logout.ts` | `admin-session` `auth` `auth-secret` `tenant-database` | `admin_credentials` `admin_sessions` `install_secrets` | `admin-session.test.ts` `auth.test.ts` `auth-secret.test.ts` |
 | `/api/admin/media` | POST | admin session | owner, admin, advertiser | `src/pages/api/admin/media.ts` | `api` `env` `storefront-media` | — | `api.test.ts` `env.test.ts` `storefront-media.test.ts` |
 | `/api/admin/notifications` | GET, POST | admin session | owner, admin, customer_service | `src/pages/api/admin/notifications.ts` | `api` `notifications` `tenant-database` | `admin_credentials` `notification_reads` `notifications` `orders` | `api.test.ts` `notifications.test.ts` |
 | `/api/admin/ongkir` | GET | admin session | owner, admin, customer_service | `src/pages/api/admin/ongkir.ts` | `api` `mengantar-client` `provider-config` `tenant-database` | `stores` | `api.test.ts` `mengantar-client.test.ts` `provider-config.test.ts` |
@@ -229,7 +229,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `abandoned-lead` | 9 | `order_items` `orders` `product_variants` `products` `stores` | ✓ | `/api/admin/abandoned-orders` |
 | `ad-channel` | 5 | — | ✓ | — |
 | `ad-taxonomy` | 4 | — | ✓ | `/admin/ads/google` |
-| `admin-credentials` | 12 | `admin_credentials` | ✓ | `/hello` `/api/admin/access` `/api/admin/profile` |
+| `admin-credentials` | 11 | `admin_credentials` | ✓ | `/hello` `/api/admin/access` `/api/admin/profile` |
 | `admin-date-filter` | 26 | — | ✓ | — |
 | `admin-orders-initial` | 3 | — | ✓ | `/admin/orders` |
 | `admin-session` | 6 | `admin_credentials` `admin_sessions` | ✓ | `/[slug]` `/hello` `/api/admin/access` `/api/admin/logout` `/api/admin/profile` |
@@ -262,7 +262,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `edge-cache` | 11 | — | ✓ | `/assets/[...key]` |
 | `embed-markup` | 5 | — | ✓ | `/embed/form` |
 | `embed-security` | 6 | — | ✓ | `/api/admin/settings` |
-| `env` | 4 | — | ✓ | `/[slug]` `/assets/[...key]` `/media/[...key]` `/api/form-config` `/api/payment-methods` `/api/submit-order` `/admin/settings/plugins/kelola` `/api/admin/ads` `/api/admin/content` `/api/admin/expeditions` `/api/admin/logout` `/api/admin/media` `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/orders/attention` `/api/admin/plugins/kelola` `/api/admin/settings` `/api/admin/upload-r2` |
+| `env` | 4 | — | ✓ | `/assets/[...key]` `/media/[...key]` `/api/form-config` `/api/payment-methods` `/api/submit-order` `/admin/settings/plugins/kelola` `/api/admin/ads` `/api/admin/content` `/api/admin/expeditions` `/api/admin/media` `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/orders/attention` `/api/admin/plugins/kelola` `/api/admin/settings` `/api/admin/upload-r2` |
 | `excluded-area` | 1 | — | ✓ | `/api/submit-middle-order` |
 | `form-config` | 7 | — | ✓ | `/embed/form` `/full-form` `/hybrid-form` `/middle-form` `/api/form-config` |
 | `form-mode` | 8 | `stores` | ✓ | `/produk/[slug]` `/geoipform` `/hybrid-form` `/api/form-config` `/api/geo-province` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/v1/storefront` `/api/admin/abandoned-orders` |

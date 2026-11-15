@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  BOOTSTRAP_FALLBACK_PASSWORD,
   DEFAULT_ADMIN_PASSWORD_HASH,
   hashAdminPassword,
   validateNewAdminPassword,
@@ -14,55 +13,23 @@ const seeded = {
   passwordHash: DEFAULT_ADMIN_PASSWORD_HASH,
 };
 
-test("a fresh install opens with the documented default", async () => {
-  // Before this existed, a new Worker seeded a credential that no password
-  // could open: the only accepted one came from BOOTSTRAP_ADMIN_PASSWORD,
-  // which nothing sets on a fresh install. The install was unreachable.
-  assert.equal(
-    await verifyAdminLoginPassword("admin", seeded, ""),
-    true,
-    "admin/admin must open a fresh install",
-  );
-  assert.equal(BOOTSTRAP_FALLBACK_PASSWORD, "admin");
+// T-21: on the platform the seeded credential is a known password on every
+// tenant whose owner has not signed in, and the forced password change it used
+// to open is an account takeover. Signup writes the owner credential (T-26).
+test("the seeded credential opens nothing, whatever password is tried", async () => {
+  for (const password of ["admin", "Admin", "admin ", "", "password", "a-sufficiently-long-bootstrap"]) {
+    assert.equal(await verifyAdminLoginPassword(password, seeded), false, JSON.stringify(password));
+  }
 });
 
-test("the default opens nothing but itself", async () => {
-  assert.equal(await verifyAdminLoginPassword("Admin", seeded, ""), false);
-  assert.equal(await verifyAdminLoginPassword("admin ", seeded, ""), false);
-  assert.equal(await verifyAdminLoginPassword("", seeded, ""), false);
-  assert.equal(await verifyAdminLoginPassword("password", seeded, ""), false);
-});
-
-test("a configured bootstrap secret replaces the default entirely", async () => {
-  const strong = "a-sufficiently-long-bootstrap";
-
-  assert.equal(await verifyAdminLoginPassword(strong, seeded, strong), true);
-  assert.equal(
-    await verifyAdminLoginPassword("admin", seeded, strong),
-    false,
-    "configuring a secret must close the default, not sit alongside it",
-  );
-});
-
-test("a bootstrap secret that is too short is rejected outright", async () => {
-  // It must not silently fall back to the weaker default, which would make a
-  // half-hearted configuration worse than none.
-  const short = "tooshort";
-  assert.equal(await verifyAdminLoginPassword(short, seeded, short), false);
-  assert.equal(await verifyAdminLoginPassword("admin", seeded, short), false);
-});
-
-test("once rotated, the default no longer opens the account", async () => {
+test("a rotated credential opens with its own password only", async () => {
   const rotated = {
     username: "admin",
     passwordHash: await hashAdminPassword("a-real-operator-password"),
   };
 
-  assert.equal(await verifyAdminLoginPassword("admin", rotated, ""), false);
-  assert.equal(
-    await verifyAdminLoginPassword("a-real-operator-password", rotated, ""),
-    true,
-  );
+  assert.equal(await verifyAdminLoginPassword("admin", rotated), false);
+  assert.equal(await verifyAdminLoginPassword("a-real-operator-password", rotated), true);
 });
 
 test("the replacement password cannot be the default or the username", () => {
