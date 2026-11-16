@@ -100,7 +100,7 @@ export const PILOT = {
   price: "Rp0",
   points: [
     "Satu toko di nama-toko.adsbook.cc",
-    "Sampai 2 domain sendiri (domain utama dan www dihitung satu)",
+    "1 domain sendiri per toko (domain utama dan www dihitung satu)",
     "60 unggahan foto per jam",
     "20 draf konten AI per jam",
     "Daftar langsung aktif, tanpa persetujuan",
@@ -115,7 +115,7 @@ export const FAQ_SHORT: Faq[] = [
   { q: "Apakah benar gratis?", a: "Ya. Paket Pilot tidak berbayar dan tidak perlu kartu. Biaya kurir dan pembayaran dibayar langsung ke penyedianya dari akun Anda sendiri." },
   { q: "Apa saja yang perlu disiapkan?", a: "Satu produk dengan harga dan berat, gudang utama dengan alamat pickup, dan API key Mengantar. Sampai semua langkah wajib selesai, pembeli melihat halaman \"Toko belum siap\" dan belum bisa memesan." },
   { q: "Uang pembeli masuk ke mana?", a: "Ke akun Anda. COD dicairkan oleh Mengantar, QRIS dan VA oleh AutoLaris, keduanya ke akun Anda sendiri. adsbook.id tidak memegang dana pembeli maupun dana Anda." },
-  { q: "Bisa pakai domain sendiri?", a: "Bisa, sampai 2 domain di paket Pilot. Domain utama (contoh.com) bisa dipakai bila DNS Anda mendukung CNAME di root; kalau tidak, pakai www." },
+  { q: "Bisa pakai domain sendiri?", a: "Bisa, 1 domain sendiri per toko. Untuk domain lain, buka toko baru. Domain utama (contoh.com) bisa dipakai bila DNS Anda mendukung CNAME di root; kalau tidak, pakai www." },
   { q: "Siapa pemilik data pembeli?", a: "Anda. Kami memprosesnya hanya untuk menjalankan toko Anda. Data tiap toko terpisah dan bisa Anda ekspor dari admin." },
 ];
 
@@ -134,7 +134,7 @@ export const FEATURES: Array<{ title: string; items: string[]; shot: Shot }> = [
   { title: "Pengiriman", items: ["Ongkir dihitung lewat Mengantar dari gudang Anda", "Rilis ke kurir satu per satu atau sekaligus", "Resi, pickup dan status kiriman di satu halaman", "Sampai 10 gudang: gudang di provinsi pembeli dipakai lebih dulu, lalu gudang satu pulau, lalu gudang utama"], shot: SHOTS.shipping },
   { title: "Pembayaran", items: ["COD", "QRIS dan virtual account lewat akun AutoLaris Anda", "Transfer ke rekening toko dengan konfirmasi manual", "Rekonsiliasi pembayaran otomatis untuk QRIS dan VA"], shot: SHOTS.payments },
   { title: "Iklan dan sinyal konversi", items: ["Meta Pixel dan Conversions API dengan event_id yang sama", "Purchase dari server untuk setiap pesanan COD", "Konversi offline Google Ads dan Google Tag Manager", "ID klik dan UTM disimpan 90 hari"], shot: SHOTS.meta },
-  { title: "Toko Anda, akun Anda", items: ["Alamat nama-toko.adsbook.cc, plus sampai 2 domain sendiri", "Akun tim dengan peran owner, admin, advertiser dan CS", "API untuk menghubungkan toko dengan aplikasi Anda sendiri", "Kebijakan privasi toko yang menyebut hanya penyedia yang Anda pakai"], shot: SHOTS.access },
+  { title: "Toko Anda, akun Anda", items: ["Alamat nama-toko.adsbook.cc, plus 1 domain sendiri", "Akun tim dengan peran owner, admin, advertiser dan CS", "API untuk menghubungkan toko dengan aplikasi Anda sendiri", "Kebijakan privasi toko yang menyebut hanya penyedia yang Anda pakai"], shot: SHOTS.access },
 ];
 
 /** The setup steps a new store sees (the readiness predicate, T-38), for the closing band. */

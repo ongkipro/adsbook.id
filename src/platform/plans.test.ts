@@ -24,7 +24,7 @@ async function setup() {
 
 test("the pilot plan's limits come from its row", async () => {
   const { db } = await setup();
-  assert.deepEqual(await tenantPlan(db, "t-a"), { planId: "pilot", maxCustomDomains: 2, mediaUploadsPerHour: 60, aiGenerationsPerHour: 20 });
+  assert.deepEqual(await tenantPlan(db, "t-a"), { planId: "pilot", maxCustomDomains: 1, mediaUploadsPerHour: 60, aiGenerationsPerHour: 20 });
   assert.equal(await tenantPlan(db, "t-none"), null);
 });
 
@@ -48,19 +48,21 @@ for (const cap of ["media", "ai"] as const) {
   });
 }
 
-test("the hostname cap follows the plan; a third domain creates no Cloudflare hostname; root + www counts once", async () => {
+test("one store = one own domain: root + www counts once, a second domain creates no Cloudflare hostname, a raised plan admits it", async () => {
   const { db, setPlan } = await setup();
   db.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES ('t-a.adsbook.cc', 't-a', 'subdomain', 'active', 1, '2026-11-16')").run();
   const cloudflare = createFakeCloudflare();
   const api = cloudflareHostnameApi({ zoneId: cloudflare.zoneId, token: cloudflare.token, base: "https://cf.test/client/v4", fetcher: cloudflare.fetch });
-  assert.ok((await claimDomain(db, api, "t-a", "satu.com", "root")).ok, "apex + www: one domain");
-  assert.ok((await claimDomain(db, api, "t-a", "dua.com", "subdomain")).ok);
   const posts = () => cloudflare.calls.filter((call) => call.method === "POST").length;
+  assert.ok((await claimDomain(db, api, "t-a", "satu.com", "root")).ok, "apex + www: one domain");
+  assert.equal(posts(), 2, "one domain, two Cloudflare hostnames (root and www)");
   const before = posts();
-  assert.equal((await claimDomain(db, api, "t-a", "tiga.com", "subdomain")).ok, false);
-  assert.equal(posts(), before, "the third domain reached Cloudflare");
-  setPlan("max_custom_domains", 3);
-  assert.ok((await claimDomain(db, api, "t-a", "tiga.com", "subdomain")).ok, "a raised plan admits it");
+  const second = await claimDomain(db, api, "t-a", "dua.com", "subdomain");
+  assert.equal(second.ok, false);
+  if (!second.ok) assert.match(second.error, /buka toko baru/);
+  assert.equal(posts(), before, "the second domain reached Cloudflare");
+  setPlan("max_custom_domains", 2);
+  assert.ok((await claimDomain(db, api, "t-a", "dua.com", "subdomain")).ok, "a raised plan admits it"); 
 });
 
 test("one usage row per tenant per day, accumulated", async () => {

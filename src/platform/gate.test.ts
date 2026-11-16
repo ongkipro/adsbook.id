@@ -97,7 +97,7 @@ test("the control-plane chain creates every table of the data model, with the pi
     "webhook_secrets",
   ]);
   assert.equal(CHAIN.length, PLATFORM_SCHEMA_VERSION);
-  assert.deepEqual({ ...db.sqlite.prepare("SELECT id, max_custom_domains FROM plans").get() }, { id: "pilot", max_custom_domains: 2 });
+  assert.deepEqual({ ...db.sqlite.prepare("SELECT id, max_custom_domains FROM plans").get() }, { id: "pilot", max_custom_domains: 1 });
 });
 
 test("a host is owned once, a tenant has one primary, and hosts are stored normalised (DATA-2, DATA-6)", async () => {

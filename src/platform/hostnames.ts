@@ -264,7 +264,12 @@ export async function claimDomain(
     .first<{ cap: number; used: number }>();
   if (!cap) return { ok: false, status: 404, error: "Toko tidak ditemukan." };
   if (Number(cap.used) >= Number(cap.cap)) {
-    return { ok: false, status: 409, error: `Batas paket tercapai: maksimal ${cap.cap} domain sendiri.` };
+    // Paduka, 2026-11-16: one store, one own domain (its `www` included); another domain is another store.
+    return {
+      ok: false,
+      status: 409,
+      error: `1 akun toko berlaku untuk ${cap.cap} domain sendiri (domain utama dan www dihitung satu). Hapus domain yang terpasang untuk menggantinya, atau buka toko baru (berlangganan lagi) untuk memakai domain lain.`,
+    };
   }
 
   // DOM-3: a recently removed host stays unclaimable until its quarantine ends.

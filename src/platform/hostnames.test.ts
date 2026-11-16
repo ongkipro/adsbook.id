@@ -122,11 +122,14 @@ test("HOST-2 / DATA-6: two tenants claiming one host concurrently — exactly on
   const winner = row("rebutan.com").tenant_id;
   assert.equal((await claimDomain(db, api, winner, "rebutan.com", "subdomain")).ok, false, "the same tenant twice");
 
-  // Pilot plan: two custom domains (a root claim counts once).
-  assert.ok((await claimDomain(db, api, winner, "kedua.com", "root")).ok);
-  const capped = await claimDomain(db, api, winner, "ketiga.com", "subdomain");
+  // Pilot plan: one custom domain per store (Paduka, 2026-11-16); a second domain is another store.
+  const capped = await claimDomain(db, api, winner, "kedua.com", "root");
   assert.equal(capped.ok, false);
-  if (!capped.ok) assert.match(capped.error, /Batas paket/);
+  if (!capped.ok) {
+    assert.equal(capped.status, 409);
+    assert.match(capped.error, /^1 akun toko berlaku untuk 1 domain sendiri/);
+    assert.match(capped.error, /buka toko baru \(berlangganan lagi\)/);
+  }
 });
 
 test("DOM-5: removal revokes, quarantines, moves the primary back and deletes at Cloudflare", async () => {
@@ -189,15 +192,14 @@ test("the probe proof is an HMAC under the tenant's own key, bound to host and n
 
 test("concurrent claims for different domains cannot pass the plan cap together (T-25 review)", async () => {
   const { db, api } = await setup();
-  assert.ok((await claimDomain(db, api, "t-a", "satu.com", "subdomain")).ok);
-  // Pilot cap 2, one used: two parallel claims race for the last slot.
+  // Pilot cap 1, none used: two parallel claims race for the only slot.
   const results = await Promise.all([
     claimDomain(db, api, "t-a", "dua.com", "root"),
     claimDomain(db, api, "t-a", "tiga.com", "root"),
   ]);
   assert.equal(results.filter((result) => result.ok).length, 1);
   const groups = db.sqlite.prepare("SELECT COUNT(DISTINCT domain_group) AS n FROM tenant_hosts WHERE tenant_id = 't-a' AND kind = 'custom' AND status != 'revoked'").get() as { n: number };
-  assert.equal(groups.n, 2);
+  assert.equal(groups.n, 1);
 });
 
 test("a host revoked into quarantine between the claim's check and its write is never replaced (T-25 review)", async () => {
