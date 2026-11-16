@@ -98,6 +98,8 @@ const worker = spawn(
     // Seller hosts are <slug>.localhost; signup's Turnstile and the custom
     // hostname API answer from the local stand-ins (scripts/dev-providers.ts).
     "--var", "TENANT_HOST_SUFFIX:localhost",
+    // Platform admin sessions (IAM-3); a fixed local value, never a deployed one.
+    "--var", "PLATFORM_AUTH_SECRET:dev-local-platform-auth-secret-0123456789",
     "--var", "TURNSTILE_SITE_KEY:local-stand-in",
     "--var", "TURNSTILE_SECRET_KEY:local-stand-in-secret",
     "--var", `TURNSTILE_VERIFY_URL:${providerBase}/turnstile/v0/siteverify`,

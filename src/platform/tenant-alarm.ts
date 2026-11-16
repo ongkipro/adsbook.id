@@ -27,6 +27,8 @@ export type TenantAlarmDeps = {
   readTenant(tenantId: string): Promise<TenantRow | null>;
   maintain(tenantId: string, scheduledTime: number, primaryHost: string | null): Promise<void>;
   setAlarm(at: number): Promise<void>;
+  /** OBS-3: the run's outcome on the control plane (heartbeat, backlog, last error). */
+  recordHealth?(tenantId: string, outcome: { ok: boolean; error?: string }): Promise<void>;
 };
 
 export type TenantAlarmOutcome = "ran" | "failed" | "schema_behind" | "inactive" | "no_tenant";
@@ -54,14 +56,16 @@ export async function runTenantAlarm(deps: TenantAlarmDeps): Promise<TenantAlarm
     await rearm();
     return "schema_behind";
   }
+  const health = (outcome: { ok: boolean; error?: string }) =>
+    deps.recordHealth?.(tenantId, outcome).catch((error) => console.error("tenant-alarm-health-failed", { tenant_id: tenantId, error: String(error) }));
   try {
     await deps.maintain(tenantId, now, tenant.primary_host);
+    await health({ ok: true });
     return "ran";
   } catch (error) {
-    console.error("tenant-alarm-failed", {
-      tenant_id: tenantId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("tenant-alarm-failed", { tenant_id: tenantId, error: message });
+    await health({ ok: false, error: message.slice(0, 300) });
     return "failed";
   } finally {
     await rearm();
@@ -78,4 +82,27 @@ export async function readTenantRow(platformDb: D1Database, tenantId: string): P
     )
     .bind(tenantId)
     .first<TenantRow>();
+}
+
+/**
+ * OBS-3: the alarm's heartbeat on the control plane. A successful run moves
+ * `heartbeat_at`; a failed one records its error and leaves the heartbeat to
+ * age, so the platform admin sees it as stale after two hours.
+ */
+export async function recordTenantHealth(
+  platformDb: D1Database,
+  tenantId: string,
+  outcome: { ok: boolean; error?: string; backlog?: number | null },
+  now = new Date(),
+): Promise<void> {
+  await platformDb
+    .prepare(
+      `INSERT INTO tenant_health (tenant_id, heartbeat_at, outbox_backlog, last_error) VALUES (?, ?, ?, ?)
+       ON CONFLICT (tenant_id) DO UPDATE SET
+         heartbeat_at = COALESCE(excluded.heartbeat_at, tenant_health.heartbeat_at),
+         outbox_backlog = COALESCE(excluded.outbox_backlog, tenant_health.outbox_backlog),
+         last_error = excluded.last_error`,
+    )
+    .bind(tenantId, outcome.ok ? now.toISOString() : null, outcome.backlog ?? null, outcome.ok ? null : outcome.error ?? "failed")
+    .run();
 }

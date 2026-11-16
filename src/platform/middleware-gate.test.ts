@@ -120,7 +120,8 @@ test("an active tenant host reaches the route with its tenant on locals and in t
 });
 
 test("a platform route on a platform host runs with platform context and no tenant work", async () => {
-  const result = await run("https://adsbook.id/platform/health", "/platform/health");
+  // A public platform route (T-27: every other one needs a platform session).
+  const result = await run("https://adsbook.id/platform/signup", "/platform/signup");
   assert.equal(result.nextCalls, 1);
   assert.deepEqual(result.locals.platform, { host: "adsbook.id" });
   assert.equal(result.locals.tenantContext, undefined);
@@ -128,6 +129,10 @@ test("a platform route on a platform host runs with platform context and no tena
   assert.deepEqual(result.cacheReads, []);
   assert.equal(result.logs[0].host_kind, "platform");
   assert.equal(result.logs[0].tenant_id, null);
+
+  const guarded = await run("https://adsbook.id/platform/health", "/platform/health");
+  assert.equal(guarded.nextCalls, 0, "platform admin without a platform session");
+  assert.equal(guarded.response.status, 302);
 });
 
 test("exactly one log line on every path: a gate refusal with its reason, and a route that throws", async () => {
@@ -136,7 +141,7 @@ test("exactly one log line on every path: a gate refusal with its reason, and a 
   assert.equal(down.logs.length, 1);
   assert.equal(down.logs[0].reason, "platform_db_unbound");
 
-  const thrown = await run("https://adsbook.id/platform/x", "/platform/x", async () => {
+  const thrown = await run("https://adsbook.id/platform/signup", "/platform/signup", async () => {
     throw new Error("route failed");
   });
   assert.equal(thrown.error?.message, "route failed");

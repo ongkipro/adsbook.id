@@ -20,6 +20,64 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** A non-secret id for one issued token: a prefix of its hash, for audit linkage. */
+export async function handoffIssuanceId(token: string): Promise<string> {
+  return (await sha256Hex(token)).slice(0, 16);
+}
+
+/**
+ * The insert of a fresh token, for a caller that writes it in one batch with
+ * its audit row (IAM-9 issuance). The token is returned once and never stored.
+ */
+export async function prepareHandoff(
+  platformDb: D1Database,
+  tenantId: string,
+  host: string,
+  purpose: HandoffPurpose,
+  now = new Date(),
+): Promise<{ token: string; issuance: string; statement: D1PreparedStatement; expiresAt: string }> {
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const hash = await sha256Hex(token);
+  const expiresAt = new Date(now.getTime() + LIFETIME_MS[purpose]).toISOString();
+  return {
+    token,
+    issuance: hash.slice(0, 16),
+    expiresAt,
+    statement: platformDb
+      .prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at) VALUES (?, ?, ?, ?, ?)")
+      .bind(hash, tenantId, purpose, host, expiresAt),
+  };
+}
+
+/** Whether a token would redeem now, without consuming it (validation before use). */
+export async function peekHandoff(
+  platformDb: D1Database,
+  token: unknown,
+  host: string,
+  purpose: HandoffPurpose,
+  now = new Date(),
+): Promise<string | null> {
+  if (typeof token !== "string" || !TOKEN.test(token)) return null;
+  const row = await platformDb
+    .prepare("SELECT tenant_id FROM handoff_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? AND host = ? AND purpose = ?")
+    .bind(await sha256Hex(token), now.toISOString(), host, purpose)
+    .first<{ tenant_id: string }>();
+  return row?.tenant_id ?? null;
+}
+
+/** The atomic single-use spend of a token, as a statement to batch with its audit row. */
+export async function spendHandoff(
+  platformDb: D1Database,
+  token: string,
+  host: string,
+  purpose: HandoffPurpose,
+  now = new Date(),
+): Promise<D1PreparedStatement> {
+  return platformDb
+    .prepare("UPDATE handoff_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? AND host = ? AND purpose = ?")
+    .bind(now.toISOString(), await sha256Hex(token), now.toISOString(), host, purpose);
+}
+
 export async function issueHandoff(
   platformDb: D1Database,
   tenantId: string,

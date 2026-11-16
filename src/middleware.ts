@@ -29,6 +29,7 @@ import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind 
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 import { scopeFromLocals } from './platform/keys.ts';
 import { PROBE_NONCE, PROBE_PATH, probeAnswer, tenantHostSuffix } from './platform/hostnames.ts';
+import { platformGuard } from './platform/admin/guard.ts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -170,7 +171,14 @@ export function createMiddleware(
       } else if (result.kind === 'platform') {
         hostKind = 'platform';
         context.locals.platform = { host: result.host };
-        response = applySecurityHeaders(await next(), true);
+        // T-27: platform admin needs a platform session (IAM-3); signup and sign-in are public.
+        const guard = await platformGuard(context.request, context.url, (getRuntimeEnv(context.locals) ?? {}) as Record<string, unknown>);
+        if (guard.kind === 'deny') {
+          response = applySecurityHeaders(guard.response, true);
+        } else {
+          if (guard.user) context.locals.platformUser = guard.user;
+          response = applySecurityHeaders(await next(), true);
+        }
         // The signup page posts the IAM-8 handoff to the new seller host.
         response.headers.set('Content-Security-Policy', platformCsp(getRuntimeEnv(context.locals)));
       } else {

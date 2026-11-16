@@ -4,7 +4,7 @@ import { DurableObject } from "cloudflare:workers";
 import { BUNDLED_MIGRATIONS } from "../lib/bundled-migrations.ts";
 import { splitMigrationStatements } from "../lib/schema-version.ts";
 import { createTenantDb } from "./tenant-db.ts";
-import { readTenantRow, runTenantAlarm, TENANT_ALARM_INTERVAL_MS } from "./tenant-alarm.ts";
+import { readTenantRow, recordTenantHealth, runTenantAlarm, TENANT_ALARM_INTERVAL_MS } from "./tenant-alarm.ts";
 import {
   TenantStoreEngine,
   type SchemaState,
@@ -161,6 +161,16 @@ export class TenantStore extends DurableObject {
         );
       },
       setAlarm: (at) => this.ctx.storage.setAlarm(at),
+      recordHealth: async (id, outcome) => {
+        let backlog: number | null = null;
+        try {
+          const result = this.#store.query({ sql: "SELECT COUNT(*) AS n FROM capi_event_outbox WHERE status = 'pending'", args: [] }, false);
+          backlog = Number((result.results[0] as { n?: number } | undefined)?.n ?? 0);
+        } catch {
+          backlog = null;
+        }
+        await recordTenantHealth(env.PLATFORM_DB as D1Database, id, { ...outcome, backlog });
+      },
     });
   }
 }

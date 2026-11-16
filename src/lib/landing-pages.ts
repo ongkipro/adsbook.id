@@ -845,7 +845,7 @@ export const RESERVED_LANDING_SLUGS: ReadonlySet<string> = new Set([
   "feed", "form-full", "form-hybrid", "form-middle", "full-form", "geoipform",
   "hello", "hybrid-form", "install", "kebijakan-cookie", "kebijakan-privasi",
   "kontak", "landing", "landing-page", "llms", "media", "middle-form", "payment", "platform",
-  "pengiriman", "produk", "robots", "sitemap", "solusi-terbaru",
+  "pemulihan", "pengiriman", "produk", "robots", "sitemap", "solusi-terbaru",
   "syarat-ketentuan", "tentang", "testimoni", "thanks",
 ]);
 

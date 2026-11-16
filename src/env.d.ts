@@ -24,6 +24,8 @@ interface SharedEnvVars {
   TURNSTILE_SECRET_KEY?: string;
   /** Local development only: a stand-in for Turnstile's siteverify. */
   TURNSTILE_VERIFY_URL?: string;
+  /** Platform admin sessions (IAM-3), 32+ characters. */
+  PLATFORM_AUTH_SECRET?: string;
   /** Local development only: seller hosts under `localhost` instead of `belanja.cc`. */
   TENANT_HOST_SUFFIX?: string;
 }
@@ -76,5 +78,7 @@ declare namespace App {
     tenantDb?: D1Database;
     /** Set by the request gate on a platform host only; never with `tenantContext`. */
     platform?: { host: string };
+    /** The signed-in platform user on a platform host (T-27); never on a seller host. */
+    platformUser?: import("./platform/admin/session").PlatformUser;
   }
 }

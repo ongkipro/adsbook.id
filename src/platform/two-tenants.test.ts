@@ -84,6 +84,15 @@ const { issueHandoff, prepareHandoffRequest, HANDOFF_ORIGIN_HEADER } = await imp
 const { RESERVED_SLUGS, SELLER_ZONE_RECORDS } = await import("./slugs.ts");
 const { runPlatformJobs } = await import("./jobs.ts");
 const handoffRoute = await import("../pages/api/handoff.ts");
+const { totpCode, base32Encode, newTotpSecret } = await import("./admin/totp.ts");
+const { platformLogin, PLATFORM_COOKIE_NAME } = await import("./admin/session.ts");
+const { runTenantAction } = await import("./admin/tenants.ts");
+const { platformHealth } = await import("./admin/health.ts");
+const { redeemOwnerRecovery } = await import("./admin/recovery.ts");
+const { recordTenantHealth } = await import("./tenant-alarm.ts");
+const platformTenantsRoute = await import("../pages/api/platform/tenants/index.ts");
+const platformActionRoute = await import("../pages/api/platform/tenants/[id]/[action].ts");
+const { hashAdminPassword } = await import("../lib/admin-credentials.ts");
 const { getAdminCredential, verifyAdminLoginPassword, validateAdminUsername } = await import("../lib/admin-credentials.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
@@ -1262,4 +1271,316 @@ test("T-26: the handoff's real Origin is carried past Astro only on its own path
   assert.equal(noOrigin.headers.get("x-adsbook-handoff-fetch-site"), null, "a client-sent fetch-site copy is dropped");
   const other = new Request("https://toko.belanja.cc/api/admin/orders", { method: "POST", headers: { origin: "https://evil.example" } });
   assert.equal(prepareHandoffRequest(other), other, "every other path keeps Astro's check");
+});
+
+// ---------------------------------------------------------------- T-27 ----
+
+test("T-27: TOTP matches the RFC 6238 SHA-1 test vector", async () => {
+  const secret = base32Encode(new TextEncoder().encode("12345678901234567890"));
+  assert.equal(await totpCode(secret, 1), "287082"); // T = 59 s
+  assert.equal(await totpCode(secret, Math.floor(1111111109 / 30)), "081804");
+});
+
+const PLATFORM_SECRET = "platform-auth-secret-for-tests-0123456789";
+
+async function platformHarness() {
+  const harness = await signupHarness();
+  harness.env.PLATFORM_AUTH_SECRET = PLATFORM_SECRET;
+  const users: Record<string, { totp: string }> = {};
+  const addUser = async (email: string, role: "platform_owner" | "platform_support", enrolled = true) => {
+    const totp = newTotpSecret();
+    harness.platformDb.sqlite
+      .prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES (?, ?, ?, ?, ?, '2026-11-16')")
+      .run(`pu_${role}_${email.length}`, email, await hashAdminPassword("operator-password-1"), enrolled ? totp : null, role);
+    users[email] = { totp };
+  };
+  const login = async (email: string, code?: string) =>
+    platformLogin(harness.env, { email, password: "operator-password-1", totp: code ?? (await totpCode(users[email].totp, Math.floor(Date.now() / 30_000))) }, `198.51.100.${email.length}`);
+  return { ...harness, addUser, login, users };
+}
+
+test("T-27/IAM-3: platform sign-in needs the password AND a TOTP code; no enrolment, no sign-in", async () => {
+  const { addUser, login } = await platformHarness();
+  await addUser("owner@ops.example", "platform_owner");
+  await addUser("unenrolled@ops.example", "platform_owner", false);
+  assert.equal((await login("owner@ops.example", "000000")).ok, false, "a wrong code");
+  assert.equal((await login("unenrolled@ops.example", "123456")).ok, false, "MFA is required");
+  const ok = await login("owner@ops.example");
+  assert.equal(ok.ok, true);
+});
+
+test("T-27: ISO-12/AUTHZ-4 — a tenant session never opens platform admin, a platform session never opens a seller admin", async () => {
+  const { env, run, stores, addUser, login } = await platformHarness();
+  await addUser("owner@ops.example", "platform_owner");
+  const signed = await login("owner@ops.example");
+  assert.ok(signed.ok);
+  const tenant = await run("iso-dua-belas");
+  assert.ok(tenant.status === 201);
+  if (tenant.status !== 201 || !signed.ok) return;
+  const database = createTenantDb(stores.get(tenant.tenantId).stub);
+  const secret = await resolveAuthSecret(database, tenant.tenantId);
+  const { token, session } = await signJwt({ username: "owner@iso-dua-belas.example", role: "owner" }, secret);
+  await storeAdminSession(database, session, { mustChangePassword: false, updatedAt: "2026-11-16T00:00:00.000Z" });
+
+  const onRequest = createMiddleware();
+  const send = async (host: string, path: string, cookie: string, route: { GET?: (context: never) => Promise<Response> | Response }) => {
+    const href = `https://${host}${path}`;
+    const context = { request: new Request(href, { headers: { cookie } }), url: new URL(href), locals: { runtimeEnv: env }, routePattern: path, redirect: () => new Response(null, { status: 302 }) };
+    const previous = console.log;
+    console.log = () => undefined;
+    try {
+      return ((await onRequest(context as never, (async () => route.GET!(context as never)) as never)) as Response).status;
+    } finally {
+      console.log = previous;
+    }
+  };
+  assert.equal(await send("app.adsbook.id", "/api/platform/tenants", `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, platformTenantsRoute), 200);
+  assert.equal(await send("app.adsbook.id", "/api/platform/tenants", `__Host-adsbook_session=${token}`, platformTenantsRoute), 401, "a tenant session on the platform");
+  assert.equal(await send("iso-dua-belas.belanja.cc", "/api/admin/orders", `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, adminOrdersRoute), 401, "a platform session on a seller host");
+  assert.equal(await send("iso-dua-belas.belanja.cc", "/api/platform/tenants", `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, platformTenantsRoute), 404, "platform routes do not exist on seller hosts");
+});
+
+test("T-27/AUTHZ-3: platform_support suspends and resumes but cannot purge, change plan or recover; every action is audited", async () => {
+  const { platformDb, run, env } = await platformHarness();
+  const tenant = await run("diaudit");
+  assert.ok(tenant.status === 201);
+  if (tenant.status !== 201) return;
+  const support = { id: "pu_s", email: "support@ops.example", role: "platform_support" as const };
+  const owner = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
+  for (const action of ["purge-request", "plan", "recover"] as const) {
+    const result = await runTenantAction(platformDb, support, tenant.tenantId, action, { slug: "diaudit", plan: "pilot", evidence: "verified by phone and signup email" });
+    assert.equal(result.ok, false, action);
+    if (!result.ok) assert.equal(result.status, 403, action);
+  }
+  const version = () => (platformDb.sqlite.prepare("SELECT cache_version AS v, status FROM tenants WHERE id = ?").get(tenant.tenantId) as { v: number; status: string });
+  const before = version().v;
+  assert.equal((await runTenantAction(platformDb, support, tenant.tenantId, "suspend", { reason: "x" })).ok, false, "a reason is required");
+  assert.ok((await runTenantAction(platformDb, support, tenant.tenantId, "suspend", { reason: "laporan penipuan" })).ok);
+  assert.deepEqual([version().status, version().v], ["suspended", before + 1], "suspend bumps the cache version");
+
+  // IAM-7: the suspended tenant's host refuses everything, sessions included.
+  const onRequest = createMiddleware();
+  const href = "https://diaudit.belanja.cc/hello";
+  const previous = console.log;
+  console.log = () => undefined;
+  let status = 0;
+  try {
+    status = ((await onRequest({ request: new Request(href), url: new URL(href), locals: { runtimeEnv: env }, routePattern: "/hello", redirect: () => new Response(null, { status: 302 }) } as never, (async () => new Response("ok")) as never)) as Response).status;
+  } finally {
+    console.log = previous;
+  }
+  assert.equal(status, 403);
+
+  assert.ok((await runTenantAction(platformDb, support, tenant.tenantId, "resume", { reason: "sudah diverifikasi" })).ok);
+  assert.ok((await runTenantAction(platformDb, owner, tenant.tenantId, "plan", { plan: "pilot" })).ok);
+  assert.equal((await runTenantAction(platformDb, owner, tenant.tenantId, "purge-request", { slug: "salah" })).ok, false, "the typed slug must match");
+  assert.ok((await runTenantAction(platformDb, owner, tenant.tenantId, "purge-request", { slug: "diaudit" })).ok);
+  const events = platformDb.sqlite
+    .prepare("SELECT kind, actor, detail_json FROM tenant_events WHERE tenant_id = ? AND actor LIKE 'platform:%' ORDER BY id")
+    .all(tenant.tenantId) as Array<{ kind: string; actor: string; detail_json: string }>;
+  assert.deepEqual(events.map((event) => event.kind), ["suspended", "resumed", "plan_changed", "purge_requested"]);
+  assert.deepEqual(JSON.parse(events[0].detail_json), { reason: "laporan penipuan", before: "active", after: "suspended" });
+  assert.equal(events[0].actor, "platform:pu_s");
+});
+
+test("T-27/IAM-9: owner recovery sets the password on the seller host and revokes every session; the platform never sees it", async () => {
+  const { platformDb, run, stores } = await platformHarness();
+  const tenant = await run("pulih");
+  assert.ok(tenant.status === 201);
+  if (tenant.status !== 201) return;
+  const database = createTenantDb(stores.get(tenant.tenantId).stub);
+  const secret = await resolveAuthSecret(database, tenant.tenantId);
+  const { session } = await signJwt({ username: "owner@pulih.example", role: "owner" }, secret);
+  await storeAdminSession(database, session, { mustChangePassword: false, updatedAt: "2026-11-16T00:00:00.000Z" });
+  const owner = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
+  const issued = await runTenantAction(platformDb, owner, tenant.tenantId, "recover", { evidence: "telepon ke nomor pendaftaran, cocok" });
+  assert.ok(issued.ok && issued.recoveryToken);
+  if (!issued.ok || !issued.recoveryToken) return;
+  const context = { tenantId: tenant.tenantId, host: "pulih.belanja.cc", hostKind: "subdomain" };
+  assert.equal((await redeemOwnerRecovery(platformDb, database, { ...context, host: "lain.belanja.cc" }, issued.recoveryToken, "password-baru-panjang")).ok, false, "wrong host");
+  const redeemed = await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "password-baru-panjang");
+  assert.equal(redeemed.ok, true);
+  const credential = await getAdminCredential(database, "owner@pulih.example");
+  assert.equal(await verifyAdminLoginPassword("password-baru-panjang", credential!), true);
+  assert.equal(await verifyAdminLoginPassword("kata-sandi-panjang-1", credential!), false, "the old password is gone");
+  const sessions = stores.get(tenant.tenantId).storage.db.prepare("SELECT COUNT(*) AS n FROM admin_sessions").get() as { n: number };
+  assert.equal(sessions.n, 0, "every session revoked");
+  assert.equal((await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "password-lain-panjang")).ok, false, "single use");
+  const kinds = (platformDb.sqlite.prepare("SELECT kind FROM tenant_events WHERE tenant_id = ? ORDER BY id").all(tenant.tenantId) as Array<{ kind: string }>).map((row) => row.kind);
+  assert.ok(kinds.includes("owner_recovery") && kinds.includes("owner_recovery_redeemed"));
+  const issuedEvent = platformDb.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE kind = 'owner_recovery'").get() as { detail_json: string };
+  assert.doesNotMatch(issuedEvent.detail_json, new RegExp(issued.recoveryToken), "the token is not in the audit row");
+});
+
+test("T-27/OBS-3: a stale heartbeat shows on the health page; a successful alarm refreshes it", async () => {
+  const { platformDb, run } = await platformHarness();
+  const fresh = await run("segar");
+  const stale = await run("basi");
+  assert.ok(fresh.status === 201 && stale.status === 201);
+  if (fresh.status !== 201 || stale.status !== 201) return;
+  await recordTenantHealth(platformDb, fresh.tenantId, { ok: true, backlog: 0 });
+  await recordTenantHealth(platformDb, stale.tenantId, { ok: true }, new Date(Date.now() - 3 * 3_600_000));
+  await recordTenantHealth(platformDb, stale.tenantId, { ok: false, error: "store broken" });
+  const health = await platformHealth(platformDb);
+  assert.deepEqual(health.staleHeartbeats.map((row) => row.slug), ["basi"]);
+  assert.equal(health.staleHeartbeats[0].last_error, "store broken");
+});
+
+test("T-27: an unsafe platform call without its own Origin is refused before any action", async () => {
+  const { env, addUser, login, run, platformDb } = await platformHarness();
+  await addUser("owner@ops.example", "platform_owner");
+  const signed = await login("owner@ops.example");
+  const tenant = await run("csrf-plat");
+  assert.ok(signed.ok && tenant.status === 201);
+  if (!signed.ok || tenant.status !== 201) return;
+  const onRequest = createMiddleware();
+  const post = async (headers: Record<string, string>) => {
+    const href = `https://app.adsbook.id/api/platform/tenants/${tenant.tenantId}/suspend`;
+    const request = new Request(href, { method: "POST", headers: { cookie: `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, "content-type": "application/json", ...headers }, body: JSON.stringify({ reason: "uji csrf" }) });
+    const context = { request, url: new URL(href), params: { id: tenant.tenantId, action: "suspend" }, locals: { runtimeEnv: env }, routePattern: "/api/platform/tenants/[id]/[action]", redirect: () => new Response(null, { status: 302 }) };
+    const previous = console.log;
+    console.log = () => undefined;
+    try {
+      return ((await onRequest(context as never, (async () => platformActionRoute.POST(context as never)) as never)) as Response).status;
+    } finally {
+      console.log = previous;
+    }
+  };
+  assert.equal(await post({ "sec-fetch-site": "same-site", origin: "https://evil.adsbook.id" }), 403);
+  assert.equal(await post({}), 403, "no Origin");
+  assert.equal((platformDb.sqlite.prepare("SELECT status FROM tenants WHERE id = ?").get(tenant.tenantId) as { status: string }).status, "active");
+  assert.equal(await post({ origin: "https://app.adsbook.id", "sec-fetch-site": "same-origin" }), 200);
+  assert.equal((platformDb.sqlite.prepare("SELECT status FROM tenants WHERE id = ?").get(tenant.tenantId) as { status: string }).status, "suspended");
+});
+
+test("T-27 review: an accepted TOTP code signs in once", async () => {
+  const { addUser, login, users } = await platformHarness();
+  await addUser("owner@ops.example", "platform_owner");
+  const code = await totpCode(users["owner@ops.example"].totp, Math.floor(Date.now() / 30_000));
+  const [first, second] = await Promise.all([login("owner@ops.example", code), login("owner@ops.example", code)]);
+  assert.equal([first.ok, second.ok].filter(Boolean).length, 1, "two sessions from one code");
+  assert.equal((await login("owner@ops.example", code)).ok, false, "a replay");
+});
+
+test("T-27 review: a refused transition, purge request or stale plan change writes no audit row", async () => {
+  const { platformDb, run } = await platformHarness();
+  const tenant = await run("audit-jujur");
+  assert.ok(tenant.status === 201);
+  if (tenant.status !== 201) return;
+  const owner = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
+  const count = () => (platformDb.sqlite.prepare("SELECT COUNT(*) AS n FROM tenant_events WHERE tenant_id = ? AND actor LIKE 'platform:%'").get(tenant.tenantId) as { n: number }).n;
+  assert.ok((await runTenantAction(platformDb, owner, tenant.tenantId, "suspend", { reason: "pertama" })).ok);
+  assert.equal((await runTenantAction(platformDb, owner, tenant.tenantId, "suspend", { reason: "kedua" })).ok, false);
+  assert.ok((await runTenantAction(platformDb, owner, tenant.tenantId, "purge-request", { slug: "audit-jujur" })).ok);
+  assert.equal((await runTenantAction(platformDb, owner, tenant.tenantId, "purge-request", { slug: "audit-jujur" })).ok, false);
+  assert.equal(count(), 2, "only the two actions that happened are audited");
+});
+
+test("T-27 review: a refused recovery attempt does not spend the token; issuance and completion are linked", async () => {
+  const { platformDb, run, stores } = await platformHarness();
+  const tenant = await run("tautan");
+  assert.ok(tenant.status === 201);
+  if (tenant.status !== 201) return;
+  const database = createTenantDb(stores.get(tenant.tenantId).stub);
+  const owner = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
+  const issued = await runTenantAction(platformDb, owner, tenant.tenantId, "recover", { evidence: "verifikasi lewat telepon terdaftar" });
+  assert.ok(issued.ok && issued.recoveryToken);
+  if (!issued.ok || !issued.recoveryToken) return;
+  const context = { tenantId: tenant.tenantId, host: "tautan.belanja.cc", hostKind: "subdomain" };
+  assert.equal((await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "owner@tautan.example")).ok, false, "the email as password");
+  assert.equal((await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "pendek")).ok, false);
+  assert.equal((await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "akhirnya-password-benar")).ok, true, "the token survived the refusals");
+  const rows = platformDb.sqlite
+    .prepare("SELECT kind, detail_json FROM tenant_events WHERE tenant_id = ? AND kind IN ('owner_recovery', 'owner_recovery_redeemed') ORDER BY id")
+    .all(tenant.tenantId) as Array<{ kind: string; detail_json: string }>;
+  assert.equal(rows.length, 2);
+  assert.equal(JSON.parse(rows[0].detail_json).issuance, JSON.parse(rows[1].detail_json).issuance, "completion linked to its issuance");
+  assert.ok(rows.every((row) => !row.detail_json.includes(issued.recoveryToken!)), "no audit row holds the token");
+});
+
+test("T-27 review: the public platform sign-in is strict same-origin too", async () => {
+  const { platformGuard } = await import("./admin/guard.ts");
+  const href = "https://app.adsbook.id/api/platform/login";
+  const guard = (headers: Record<string, string>) => platformGuard(new Request(href, { method: "POST", headers }), new URL(href), {});
+  assert.equal((await guard({})).kind, "deny", "no Origin");
+  assert.equal((await guard({ origin: "https://evil.example", "sec-fetch-site": "cross-site" })).kind, "deny");
+  assert.equal((await guard({ origin: "https://app.adsbook.id", "sec-fetch-site": "same-origin" })).kind, "pass");
+});
+
+test("T-27 review: concurrent recoveries — one wins, the loser changes nothing; a missing owner keeps sessions and token", async () => {
+  const { platformDb, run, stores } = await platformHarness();
+  const tenant = await run("balapan-pulih");
+  assert.ok(tenant.status === 201);
+  if (tenant.status !== 201) return;
+  const database = createTenantDb(stores.get(tenant.tenantId).stub);
+  const operator = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
+  const context = { tenantId: tenant.tenantId, host: "balapan-pulih.belanja.cc", hostKind: "subdomain" };
+  const issued = await runTenantAction(platformDb, operator, tenant.tenantId, "recover", { evidence: "verifikasi lewat telepon terdaftar" });
+  assert.ok(issued.ok && issued.recoveryToken);
+  if (!issued.ok || !issued.recoveryToken) return;
+  const results = await Promise.all([
+    redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "password-pemenang-satu"),
+    redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "password-pemenang-dua"),
+  ]);
+  assert.equal(results.filter((result) => result.ok).length, 1);
+  const winner = results[0].ok ? "password-pemenang-satu" : "password-pemenang-dua";
+  const credential = await getAdminCredential(database, "owner@balapan-pulih.example");
+  assert.equal(await verifyAdminLoginPassword(winner, credential!), true, "the loser overwrote the winner");
+
+  // The owner row is gone: no session is deleted and the token is not spent.
+  const second = await runTenantAction(platformDb, operator, tenant.tenantId, "recover", { evidence: "verifikasi lewat telepon terdaftar" });
+  assert.ok(second.ok && second.recoveryToken);
+  if (!second.ok || !second.recoveryToken) return;
+  const secret = await resolveAuthSecret(database, tenant.tenantId);
+  const { session } = await signJwt({ username: "staff.cs", role: "customer_service" }, secret);
+  await storeAdminSession(database, session, { mustChangePassword: false, updatedAt: "2026-11-16T00:00:00.000Z" });
+  stores.get(tenant.tenantId).storage.db.exec("UPDATE admin_credentials SET role = 'admin' WHERE role = 'owner'");
+  const original = console.error;
+  console.error = () => undefined;
+  try {
+    assert.equal((await redeemOwnerRecovery(platformDb, database, context, second.recoveryToken, "password-tanpa-owner")).ok, false);
+  } finally {
+    console.error = original;
+  }
+  assert.equal((stores.get(tenant.tenantId).storage.db.prepare("SELECT COUNT(*) AS n FROM admin_sessions").get() as { n: number }).n, 1, "sessions deleted without an owner change");
+  // The code was spent at the fence, so the failure is audited and a new code is needed.
+  const failure = platformDb.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE tenant_id = ? AND kind = 'owner_recovery_failed'").get(tenant.tenantId) as { detail_json: string };
+  assert.equal(JSON.parse(failure.detail_json).reason, "owner_missing");
+  assert.equal((await redeemOwnerRecovery(platformDb, database, context, second.recoveryToken, "password-tanpa-owner")).ok, false, "never twice");
+});
+
+test("T-27 review: a recovery whose outcome cannot be recorded stays visible as unresolved", async () => {
+  const { platformDb, run, stores } = await platformHarness();
+  const tenant = await run("tak-tercatat");
+  assert.ok(tenant.status === 201);
+  if (tenant.status !== 201) return;
+  const database = createTenantDb(stores.get(tenant.tenantId).stub);
+  const operator = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
+  const issued = await runTenantAction(platformDb, operator, tenant.tenantId, "recover", { evidence: "verifikasi lewat telepon terdaftar" });
+  assert.ok(issued.ok && issued.recoveryToken);
+  if (!issued.ok || !issued.recoveryToken) return;
+  // The tenant write fails AND the outcome row cannot be written.
+  const broken = { ...database, batch: async () => { throw new Error("store down"); } } as unknown as D1Database;
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (label: unknown) => void logged.push(String(label));
+  platformDb.failWhen = /owner_recovery_failed|VALUES \(\?, \?, 'platform'/;
+  try {
+    const result = await redeemOwnerRecovery(platformDb, broken, { tenantId: tenant.tenantId, host: "tak-tercatat.belanja.cc", hostKind: "subdomain" }, issued.recoveryToken, "password-baru-panjang", new Date(Date.now() - 10 * 60_000));
+    assert.equal(result.ok, false);
+  } finally {
+    platformDb.failWhen = null;
+    console.error = original;
+  }
+  assert.ok(logged.includes("owner-recovery-outcome-unrecorded"), "the lost audit row is logged, not swallowed");
+  const health = await platformHealth(platformDb);
+  assert.deepEqual(health.unresolvedRecoveries.map((row) => row.slug), ["tak-tercatat"]);
+});
+
+test("T-27 review: every unresolved recovery is listed, beyond any page size", async () => {
+  const { platformDb } = await platformHarness();
+  const insert = platformDb.sqlite.prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES (?, 'owner_recovery_redeemed', 'owner', ?, ?)");
+  for (let index = 0; index < 60; index += 1) insert.run(`t_r${index}`, new Date(Date.now() - (index + 10) * 60_000).toISOString(), JSON.stringify({ issuance: `i${index}`, outcome: "pending" }));
+  platformDb.sqlite.prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES ('t_r0', 'owner_recovery_completed', 'platform', ?, ?)").run(new Date().toISOString(), JSON.stringify({ issuance: "i0" }));
+  assert.equal((await platformHealth(platformDb)).unresolvedRecoveries.length, 59);
 });
