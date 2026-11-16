@@ -134,6 +134,26 @@ export async function readEdgeCache(
   }
 }
 
+/**
+ * The copy that goes into the cache: the clone itself, with its headers set.
+ * Never `new Response(response.clone().body, …)`: that keeps the clone's
+ * stream but drops the clone, and a runtime that cancels the stream of a
+ * collected Response (undici in Node 22) then leaves a cancelled body in the
+ * cache, which every later read rejects as consumed — a cache that misses at
+ * random (CI run 43827214642, reproduced on Node 22.23.5 with a forced GC).
+ * Null when the headers cannot be changed (an immutable response): not cached.
+ */
+function storedCopy(response: Response, headers: Record<string, string>): Response | null {
+  try {
+    const copy = response.clone();
+    for (const [name, value] of Object.entries(headers)) copy.headers.set(name, value);
+    return copy;
+  } catch (error) {
+    console.error("edge-cache-copy-failed", error instanceof Error ? error.name : "unknown");
+    return null;
+  }
+}
+
 /** Store a copy of a rendered page. Never throws and never delays the answer. */
 export function writeEdgeCache(
   key: Request,
@@ -142,9 +162,11 @@ export function writeEdgeCache(
   cache: EdgeCacheStore | null = defaultCache(),
 ) {
   if (!cache || !isEdgeStorable(response)) return;
-  const copy = new Response(response.clone().body, response);
-  copy.headers.set("Cache-Control", `public, max-age=${EDGE_CACHE_SECONDS}`);
-  copy.headers.set("X-Edge-Cached-At", String(Date.now()));
+  const copy = storedCopy(response, {
+    "Cache-Control": `public, max-age=${EDGE_CACHE_SECONDS}`,
+    "X-Edge-Cached-At": String(Date.now()),
+  });
+  if (!copy) return;
   const task = cache.put(key, copy).catch((error) => console.error("edge-cache-write-failed", error));
   if (locals?.cfContext) locals.cfContext.waitUntil(task);
   else void task;
@@ -209,8 +231,8 @@ export function writeUploadCache(
   // T-28 review: an answer that says it is private, or sets a cookie, is never
   // re-labelled public and stored for the next visitor.
   if (response.headers.has("set-cookie") || /no-store|private/i.test(response.headers.get("cache-control") ?? "")) return;
-  const copy = new Response(response.clone().body, response);
-  copy.headers.set("Cache-Control", `public, max-age=${UPLOAD_EDGE_CACHE_SECONDS}`);
+  const copy = storedCopy(response, { "Cache-Control": `public, max-age=${UPLOAD_EDGE_CACHE_SECONDS}` });
+  if (!copy) return;
   const task = cache.put(key, copy).catch((error) => console.error("upload-cache-write-failed", error));
   if (locals?.cfContext) locals.cfContext.waitUntil(task);
   else void task;

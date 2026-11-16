@@ -323,3 +323,30 @@ test("an upload answer that is private, no-store or sets a cookie is never store
   assert.equal(stored.length, 1, "the control: a public upload is stored");
   assert.match(stored[0].headers.get("cache-control") ?? "", /^public/);
 });
+
+test("a cached copy survives garbage collection: the stored body is never a dropped clone's stream (CI run 43827214642)", async () => {
+  // Node 22's undici cancels the body of a Response object once it is
+  // collected. Forcing collections between the write and the read proves the
+  // stored copy does not depend on an object nobody holds.
+  const { setFlagsFromString } = await import("node:v8");
+  const { runInNewContext } = await import("node:vm");
+  setFlagsFromString("--expose-gc");
+  const gc = runInNewContext("gc") as () => void;
+  const collect = async () => {
+    for (let round = 0; round < 5; round += 1) {
+      gc();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  };
+  const page = fakeCache();
+  const pageKey = new Request("https://cache.adsbook.id/t/t-gc/v1/store.example/produk/x", { method: "GET" });
+  writeEdgeCache(pageKey, new Response("<p>page</p>", { status: 200, headers: { "content-type": "text/html" } }), undefined, page);
+  const upload = fakeCache();
+  const uploadKey = new Request("https://cache.adsbook.id/t/t-gc/v1/uploads/a.webp", { method: "GET" });
+  writeUploadCache(uploadKey, new Response("bytes", { status: 200, headers: { "content-type": "image/webp" } }), undefined, upload);
+  await collect();
+  const hit = await readEdgeCache(pageKey, page);
+  assert.equal(hit?.headers.get("x-edge-cache"), "HIT");
+  assert.equal(await hit?.text(), "<p>page</p>");
+  assert.equal(await (await upload.match(uploadKey))?.text(), "bytes");
+});
