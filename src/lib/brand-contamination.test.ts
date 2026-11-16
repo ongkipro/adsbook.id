@@ -129,7 +129,10 @@ test("no image asset ships without something referencing it", (t) => {
   //
   // The discriminator is the one INSTALLATION.md already documents: the product
   // commits all-zero placeholder resource ids, an install replaces them.
-  if (!safeRead("wrangler.jsonc").includes("00000000-0000-0000-0000-000000000000")) {
+  // The platform repository (Worker adsbook-platform) is the product even with
+  // its real production ids (T-30): it still ships one fixed asset set.
+  const wrangler = safeRead("wrangler.jsonc");
+  if (!wrangler.includes("00000000-0000-0000-0000-000000000000") && !/"name":\s*"adsbook-platform"/.test(wrangler)) {
     t.skip("install tree: public/images is the merchant catalogue, referenced from D1");
     return;
   }

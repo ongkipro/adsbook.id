@@ -365,9 +365,19 @@ test("OBS-1: invocation logs are off in wrangler.jsonc, and PLATFORM_DB has its 
   const config = JSON.parse(source.replace(/^\s*\/\/.*$/gm, "").replace(/,(\s*[}\]])/g, "$1")) as {
     observability: { logs?: { invocation_logs?: boolean } };
     d1_databases: Array<{ binding: string; migrations_dir: string }>;
-    routes: Array<{ pattern: string; zone_name: string }>;
+    routes: Array<{ pattern: string; zone_name?: string; custom_domain?: boolean }>;
+    vars: Record<string, string>;
   };
   assert.equal(config.observability.logs?.invocation_logs, false);
   assert.equal(config.d1_databases.find((db) => db.binding === "PLATFORM_DB")?.migrations_dir, "src/platform/migrations");
-  assert.deepEqual(config.routes, [{ pattern: "*/*", zone_name: "adsbook.cc" }]);
+  // Every seller host on the SaaS zone; the platform hosts as Custom Domains on adsbook.id.
+  assert.deepEqual(config.routes, [
+    { pattern: "*/*", zone_name: "adsbook.cc" },
+    { pattern: "adsbook.id", custom_domain: true },
+    { pattern: "app.adsbook.id", custom_domain: true },
+  ]);
+  // Public configuration only: a secret (CF_SAAS_TOKEN, TURNSTILE_SECRET_KEY,
+  // PLATFORM_*_SECRET/KEY) is a `wrangler secret`, never a var in this file.
+  assert.equal(config.vars.CF_SAAS_ZONE_ID, "5d6f04b75008a2171f933c25988171e7");
+  assert.deepEqual(Object.keys(config.vars).sort(), ["CF_SAAS_ZONE_ID", "TURNSTILE_SITE_KEY"]);
 });

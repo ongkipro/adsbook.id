@@ -1,13 +1,14 @@
 {
-  // adsbook.id — platform Worker template.
+  // adsbook.id — the platform Worker's production configuration (T-30).
   //
-  // This file is a TEMPLATE, not a deployment. One Worker serves every tenant
-  // (ADR-039): a tenant is a row in PLATFORM_DB and a TenantStore Durable
-  // Object, created at signup, never a deploy. Nothing in this repository
-  // deploys (ADR-012); the platform runbook comes with T-30.
-  //
-  // The all-zero ids are the one thing that must never deploy, and the deploy
-  // preflight refuses them (src/lib/deploy-preflight.ts).
+  // One Worker serves every tenant (ADR-039): a tenant is a row in PLATFORM_DB
+  // and a TenantStore Durable Object, created at signup, never a deploy. The
+  // resources below are real (account ca58f2ac62b7c66e46e6ce654f585034,
+  // created 2026-11-16, APAC; docs/operations/PLATFORM-RUNBOOK.md §5). That
+  // account also holds the AdsBookCMS fleet: every name here is
+  // adsbook-platform*, and nothing names a fleet resource (ADR-038).
+  // Deploying is T-31, one approved `npm run deploy` (its preflight refuses a
+  // stale tree, an all-zero id, or a ledger this tree does not carry).
   //
   // Binding NAMES are fixed — PLATFORM_DB, TENANT_STORE, SESSION,
   // ASSET_BUCKET, AI, ASSETS — because the application resolves them by name.
@@ -38,8 +39,9 @@
   // No required secret (T-21). Each tenant's session key is generated into its
   // own store at signup (`install_secrets`, ADR-026); there is no installer and
   // no INSTALL_TOKEN. Provider keys are saved per tenant from /admin.
-  // Optional platform secrets, set with `wrangler secret put` on the platform
-  // account (T-30/T-31), never here: PLATFORM_AUTH_SECRET (platform admin),
+  // Platform secrets, set with `wrangler secret put` on the platform account
+  // (T-30/T-31), never here: PLATFORM_AUTH_SECRET (platform admin),
+  // TURNSTILE_SECRET_KEY (signup), CF_SAAS_TOKEN (custom hostnames),
   // PLATFORM_ALERT_WEBHOOK_URL (operator notices, T-44), PLATFORM_META_CAPI_TOKEN
   // (the marketing site's Conversions API, T-40). PLATFORM_CREDENTIAL_KEY is
   // required before any seller saves a provider key (ADR-040, T-48): without it
@@ -48,11 +50,24 @@
   // The workers.dev copy answers `X-Robots-Tag: noindex`; the gate refuses any
   // host that is not a platform host or a tenant row.
   "workers_dev": true,
-  // One Worker for every seller host on the SaaS zone (ADR-039). The zone does
-  // not exist yet (PRD Q-1); nothing in this repository deploys (ADR-012).
+  // One Worker for every seller host on the SaaS zone adsbook.cc (ADR-039,
+  // zone 5d6f04b75008a2171f933c25988171e7), and the platform hosts on
+  // adsbook.id (zone 981e819270e74998956d0f45abbfaecf) as Workers Custom
+  // Domains, which create their own DNS record and certificate on deploy.
   "routes": [
-    { "pattern": "*/*", "zone_name": "adsbook.cc" }
+    { "pattern": "*/*", "zone_name": "adsbook.cc" },
+    { "pattern": "adsbook.id", "custom_domain": true },
+    { "pattern": "app.adsbook.id", "custom_domain": true }
   ],
+  // Public configuration only; secrets go through `wrangler secret put`.
+  "vars": {
+    // The SaaS zone the custom-hostname API works on (T-25); its token is the
+    // secret CF_SAAS_TOKEN, scoped to this zone only.
+    "CF_SAAS_ZONE_ID": "5d6f04b75008a2171f933c25988171e7",
+    // Turnstile widget `adsbook-platform` (managed; adsbook.id, app.adsbook.id).
+    // The site key is public; the secret is TURNSTILE_SECRET_KEY.
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAGDGawKbjk1Gu9j5"
+  },
   // Hourly evaluation catches a stalled conversion outbox even when no operator
   // opens the dashboard. Alert transitions are deduplicated in the install's KV.
   "triggers": {
@@ -66,7 +81,7 @@
   "kv_namespaces": [
     {
       "binding": "SESSION",
-      "id": "00000000000000000000000000000000"
+      "id": "dc1a4916bb3349a0b31980d9dc8f1bad"
     }
   ],
   "d1_databases": [
@@ -74,7 +89,7 @@
       // The control plane (TD-2): tenants, hosts, plans, audit. Its own chain.
       "binding": "PLATFORM_DB",
       "database_name": "adsbook-platform",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "c6b8fb14-7519-463c-a942-3c75ec1731ae",
       "migrations_dir": "src/platform/migrations"
     }
   ],
