@@ -3,6 +3,7 @@ import { jsonError, jsonOk } from "../../../../lib/api.ts";
 import { getRuntimeEnv } from "../../../../lib/env.ts";
 import {
   claimDomain,
+  replaceDomain,
   CNAME_TARGET,
   hostnameApiFromEnv,
   listDomains,
@@ -35,9 +36,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const { platformDb, tenantId, api } = context(locals);
   if (!platformDb || !tenantId) return jsonError("Domain belum tersedia.", 503);
   if (!api) return jsonError("Domain sendiri belum bisa ditambahkan di platform ini.", 503);
-  const body = (await request.json().catch(() => null)) as { host?: unknown; mode?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { host?: unknown; mode?: unknown; replace?: unknown } | null;
   const mode: ClaimMode = body?.mode === "www" || body?.mode === "subdomain" ? body.mode : "root";
-  const result = await claimDomain(platformDb, api, tenantId, body?.host, mode);
+  // One store, one domain: `replace` swaps the current domain for this one (validated first).
+  const replace = body?.replace === true;
+  const result = replace
+    ? await replaceDomain(platformDb, api, tenantId, body?.host, mode)
+    : await claimDomain(platformDb, api, tenantId, body?.host, mode);
   if (!result.ok) return jsonError(result.error, result.status);
-  return jsonOk({ message: "Domain ditambahkan. Arahkan DNS lalu klik \"Cek lagi\".", data: { domains: result.value, cname_target: CNAME_TARGET } }, 201);
+  return jsonOk(
+    {
+      message: replace
+        ? "Domain diganti. Arahkan DNS domain baru lalu klik \"Cek lagi\"; sampai aktif, toko dibuka di alamat adsbook.cc."
+        : "Domain ditambahkan. Arahkan DNS lalu klik \"Cek lagi\".",
+      data: { domains: result.value, cname_target: CNAME_TARGET },
+    },
+    201,
+  );
 };

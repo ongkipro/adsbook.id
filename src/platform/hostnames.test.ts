@@ -16,11 +16,13 @@ import {
   probeHost,
   refreshDomain,
   removeDomain,
+  replaceDomain,
   setPrimaryDomain,
 } from "./hostnames.ts";
 import { createFakeCloudflare } from "./testing/fake-cloudflare.ts";
 import { runPlatformJobs } from "./jobs.ts";
 import { createSqliteD1 } from "./testing/sqlite-d1.ts";
+import { primaryHostRedirect } from "./host.ts";
 
 const dir = new URL("./migrations/", import.meta.url);
 const CHAIN = readdirSync(dir)
@@ -122,11 +124,14 @@ test("HOST-2 / DATA-6: two tenants claiming one host concurrently — exactly on
   const winner = row("rebutan.com").tenant_id;
   assert.equal((await claimDomain(db, api, winner, "rebutan.com", "subdomain")).ok, false, "the same tenant twice");
 
-  // Pilot plan: two custom domains (a root claim counts once).
-  assert.ok((await claimDomain(db, api, winner, "kedua.com", "root")).ok);
-  const capped = await claimDomain(db, api, winner, "ketiga.com", "subdomain");
+  // Pilot plan: one custom domain per store (Paduka, 2026-11-16); a second domain is another store.
+  const capped = await claimDomain(db, api, winner, "kedua.com", "root");
   assert.equal(capped.ok, false);
-  if (!capped.ok) assert.match(capped.error, /Batas paket/);
+  if (!capped.ok) {
+    assert.equal(capped.status, 409);
+    assert.match(capped.error, /^1 akun toko berlaku untuk 1 domain sendiri/);
+    assert.match(capped.error, /buka toko baru \(berlangganan lagi\)/);
+  }
 });
 
 test("DOM-5: removal revokes, quarantines, moves the primary back and deletes at Cloudflare", async () => {
@@ -189,15 +194,14 @@ test("the probe proof is an HMAC under the tenant's own key, bound to host and n
 
 test("concurrent claims for different domains cannot pass the plan cap together (T-25 review)", async () => {
   const { db, api } = await setup();
-  assert.ok((await claimDomain(db, api, "t-a", "satu.com", "subdomain")).ok);
-  // Pilot cap 2, one used: two parallel claims race for the last slot.
+  // Pilot cap 1, none used: two parallel claims race for the only slot.
   const results = await Promise.all([
     claimDomain(db, api, "t-a", "dua.com", "root"),
     claimDomain(db, api, "t-a", "tiga.com", "root"),
   ]);
   assert.equal(results.filter((result) => result.ok).length, 1);
   const groups = db.sqlite.prepare("SELECT COUNT(DISTINCT domain_group) AS n FROM tenant_hosts WHERE tenant_id = 't-a' AND kind = 'custom' AND status != 'revoked'").get() as { n: number };
-  assert.equal(groups.n, 2);
+  assert.equal(groups.n, 1);
 });
 
 test("a host revoked into quarantine between the claim's check and its write is never replaced (T-25 review)", async () => {
@@ -506,4 +510,93 @@ test("T-43 review: the claim batch itself refuses when a reused host is gone (no
   assert.equal(result.ok, false);
   assert.match(!result.ok ? result.error : "", /berubah/);
   assert.equal((db.sqlite.prepare("SELECT COUNT(*) AS n FROM tenant_hosts WHERE host = 'lain.com'").get() as { n: number }).n, 0, "no lone root row");
+});
+
+// ---- Paduka 2026-11-16: "seller juga di izinkan edit/replace domain" ----
+
+/** A tenant selling on its own active primary domain `lama.com` (root + www). */
+async function sellingOn(setupResult: Awaited<ReturnType<typeof setup>>) {
+  const { db, cloudflare, api } = setupResult;
+  assert.ok((await claimDomain(db, api, "t-a", "lama.com", "root")).ok);
+  cloudflare.activate("lama.com");
+  cloudflare.activate("www.lama.com");
+  await refreshDomain(db, api, "t-a", "lama.com");
+  await refreshDomain(db, api, "t-a", "www.lama.com");
+  assert.ok((await setPrimaryDomain(db, "t-a", "lama.com", async () => true)).ok);
+}
+
+test("replace: an invalid, platform, over-long, taken or quarantined new domain leaves the working domain untouched", async () => {
+  const ctx = await setup();
+  const { db, cloudflare, api, row } = ctx;
+  await sellingOn(ctx);
+  const before = JSON.stringify([row("lama.com"), row("www.lama.com")]);
+  const deletes = () => cloudflare.calls.filter((call) => call.method === "DELETE").length;
+  // Another store holds one host; another just released one (quarantine).
+  assert.ok((await claimDomain(db, api, "t-b", "milik-b.com", "subdomain")).ok);
+  db.sqlite
+    .prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, domain_group, status, is_primary, created_at, revoked_at, quarantine_until) VALUES ('baru-dilepas.com', 't-b', 'custom', 'baru-dilepas.com', 'revoked', 0, '2026-11-01', '2026-11-16', '2999-01-01')")
+    .run();
+  for (const [host, mode, status] of [
+    ["bukan domain", "root", 422],
+    ["toko.adsbook.cc", "subdomain", 422],
+    ["app.adsbook.id", "subdomain", 422],
+    [`${"a".repeat(57)}.com`, "root", 422],
+    ["milik-b.com", "subdomain", 409],
+    ["baru-dilepas.com", "subdomain", 409],
+  ] as const) {
+    const result = await replaceDomain(db, api, "t-a", host, mode);
+    assert.equal(result.ok, false, host);
+    if (!result.ok) assert.equal(result.status, status, host);
+  }
+  assert.equal(JSON.stringify([row("lama.com"), row("www.lama.com")]), before, "the working domain is exactly as it was");
+  assert.equal(row("lama.com").is_primary, 1);
+  assert.equal(deletes(), 0, "nothing was deleted at Cloudflare");
+});
+
+test("replace: a valid new domain revokes and deletes the old one, the subdomain serves meanwhile, and one group remains", async () => {
+  const ctx = await setup();
+  const { db, cloudflare, api, row } = ctx;
+  await sellingOn(ctx);
+  const oldIds = [row("lama.com").cf, row("www.lama.com").cf];
+  // Without `replace` a second domain is refused and points at "Ganti domain".
+  const added = await claimDomain(db, api, "t-a", "baru.com", "root");
+  assert.equal(added.ok, false);
+  if (!added.ok) assert.match(added.error, /Ganti domain/);
+
+  const replaced = await replaceDomain(db, api, "t-a", "baru.com", "root");
+  assert.ok(replaced.ok, replaced.ok ? "" : replaced.error);
+  for (const host of ["lama.com", "www.lama.com"]) {
+    assert.equal(row(host).status, "revoked", host);
+    assert.equal(row(host).cf, null, `${host} deleted at Cloudflare`);
+    assert.ok(row(host).quarantine_until, `${host} quarantined`);
+  }
+  const deleted = cloudflare.calls.filter((call) => call.method === "DELETE").map((call) => call.path.split("/").pop());
+  assert.deepEqual(deleted.sort(), [...oldIds].sort());
+  assert.equal(row("t-a.adsbook.cc").is_primary, 1, "the subdomain is the primary until the new domain is active");
+  assert.equal(row("baru.com").status, "pending");
+  assert.equal(row("www.baru.com").status, "pending");
+  const groups = db.sqlite.prepare("SELECT COUNT(DISTINCT domain_group) AS n FROM tenant_hosts WHERE tenant_id = 't-a' AND kind = 'custom' AND status != 'revoked'").get() as { n: number };
+  assert.equal(groups.n, 1, "never more than one domain group");
+  // The same domain under another mode is a branch switch, not a replacement: nothing is removed.
+  const switched = await replaceDomain(db, api, "t-a", "baru.com", "www");
+  assert.equal(switched.ok, false, "www is already part of the root claim");
+  assert.equal(row("baru.com").status, "pending", "the root stays");
+});
+
+test("301 to the active custom primary: www and the store's subdomain move, APIs, sign-in, recovery, admin and well-known stay", () => {
+  type Tenant = { hostKind: "custom" | "subdomain"; primaryHost: string | null };
+  const custom: Tenant = { hostKind: "custom", primaryHost: "domain.com" };
+  const sub: Tenant = { hostKind: "subdomain", primaryHost: "domain.com" };
+  const at = (href: string, tenant: Tenant, method = "GET") => primaryHostRedirect(new URL(href), method, tenant);
+  assert.equal(at("https://tokodia.adsbook.cc/produk/x?fbclid=123", sub), "https://domain.com/produk/x?fbclid=123");
+  assert.equal(at("https://www.domain.com/produk/x?fbclid=123", custom), "https://domain.com/produk/x?fbclid=123");
+  assert.equal(at("https://tokodia.adsbook.cc/?utm_source=fb&gclid=g", sub, "HEAD"), "https://domain.com/?utm_source=fb&gclid=g");
+  assert.equal(at("https://domain.com/produk/x", custom), null, "the primary serves");
+  for (const path of ["/api/webhooks/autolaris/tok", "/api/handoff", "/api/owner-recovery", "/api/submit-order", "/pemulihan", "/hello", "/admin", "/admin/orders", "/.well-known/adsbook-probe"]) {
+    assert.equal(at(`https://tokodia.adsbook.cc${path}`, sub), null, path);
+  }
+  assert.equal(at("https://tokodia.adsbook.cc/produk/x", sub, "POST"), null, "only GET and HEAD");
+  // No custom primary (none yet, or removed/replaced): the subdomain serves the store.
+  assert.equal(at("https://tokodia.adsbook.cc/produk/x", { hostKind: "subdomain", primaryHost: "tokodia.adsbook.cc" }), null);
+  assert.equal(at("https://tokodia.adsbook.cc/produk/x", { hostKind: "subdomain", primaryHost: null }), null);
 });

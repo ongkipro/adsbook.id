@@ -752,7 +752,7 @@ test("T-25: a custom primary moves indexing off the subdomain; the probe answers
     let reached = false;
     let siteUrl = "";
     const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } };
-    const context = { request: new Request(href), url: new URL(href), locals, routePattern: path, redirect: () => new Response(null, { status: 302 }) };
+    const context = { request: new Request(href), url: new URL(href), locals, routePattern: path, redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }) };
     const previous = { log: console.log, error: console.error };
     console.log = () => undefined;
     console.error = () => undefined;
@@ -762,14 +762,20 @@ test("T-25: a custom primary moves indexing off the subdomain; the probe answers
         siteUrl = (locals.tenant as { siteUrl: string }).siteUrl;
         return new Response("<p>ok</p>", { headers: { "content-type": "text/html" } });
       }) as never)) as Response;
-      return { status: response.status, robots: response.headers.get("x-robots-tag"), text: await response.text(), reached, siteUrl };
+      return { status: response.status, location: response.headers.get("location"), robots: response.headers.get("x-robots-tag"), text: await response.text(), reached, siteUrl };
     } finally {
       Object.assign(console, previous);
     }
   };
+  // Paduka 2026-11-16: buyer pages on the subdomain move to the custom primary for good.
   const sub = await visit("dom-a.adsbook.cc");
-  assert.equal(sub.robots, "noindex, nofollow", "the subdomain competes with the custom primary");
-  assert.equal(sub.siteUrl, "https://tokoa.com", "canonical URLs follow the primary host");
+  assert.equal(sub.status, 301);
+  assert.equal(sub.location, "https://tokoa.com/");
+  // The owner's way in stays on the subdomain, unindexed, with canonical URLs on the primary.
+  const signIn = await visit("dom-a.adsbook.cc", "/hello");
+  assert.equal(signIn.reached, true);
+  assert.equal(signIn.robots, "noindex, nofollow", "the subdomain never competes with the custom primary");
+  assert.equal(signIn.siteUrl, "https://tokoa.com", "canonical URLs follow the primary host");
   const custom = await visit("tokoa.com");
   assert.equal(custom.robots, null);
   const nonce = "a".repeat(32);
@@ -2284,4 +2290,48 @@ test("T-48: the real TenantStore.alarm binds the cipher and seals legacy plainte
   assert.match(settings.webhook_secret, /^enc:v1:/, "the maintenance run seals plugin secrets too");
   assert.doesNotMatch(JSON.stringify(row) + JSON.stringify(settings), /legacy-/);
   assert.notEqual(alarmAt, null, "the alarm re-armed itself");
+});
+
+test("Paduka 2026-11-16: the store's subdomain 301s to the active custom primary, keeps its APIs, webhooks and recovery, and serves again once the domain is removed", async () => {
+  const platformDb = await platform([["m-r", "active", "tokodia.adsbook.cc"]]);
+  const stores = namespace({ migrated: true });
+  stores.get("m-r").storage.db.exec("INSERT INTO stores (id, name, slug, created_at) VALUES (1, 'Toko Dia', 'tokodia', '2026-11-16')");
+  makeReady(stores.get("m-r").storage.db);
+  platformDb.sqlite.exec(`
+    UPDATE tenant_hosts SET is_primary = 0 WHERE tenant_id = 'm-r';
+    INSERT INTO tenant_hosts (host, tenant_id, kind, domain_group, status, is_primary, created_at) VALUES
+      ('domain.com', 'm-r', 'custom', 'domain.com', 'active', 1, '2026-11-16'),
+      ('www.domain.com', 'm-r', 'custom', 'domain.com', 'active', 0, '2026-11-16');`);
+  const onRequest = createMiddleware();
+  const ask = async (href: string, method = "GET") => {
+    let reached = false;
+    const original = { log: console.log, info: console.info, error: console.error };
+    console.log = console.info = console.error = () => undefined;
+    try {
+      const request = new Request(href, method === "GET" ? {} : { method, headers: { "content-type": "application/json" }, body: "{}" });
+      const response = (await onRequest(
+        { request, url: new URL(href), params: {}, locals: { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } }, routePattern: "/", redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }) } as never,
+        (async () => ((reached = true), new Response("ok"))) as never,
+      )) as Response;
+      return { status: response.status, location: response.headers.get("location"), reached };
+    } finally {
+      Object.assign(console, original);
+    }
+  };
+  assert.deepEqual(await ask("https://tokodia.adsbook.cc/produk/x?fbclid=123"), { status: 301, location: "https://domain.com/produk/x?fbclid=123", reached: false });
+  assert.deepEqual(await ask("https://www.domain.com/produk/x?fbclid=123"), { status: 301, location: "https://domain.com/produk/x?fbclid=123", reached: false });
+  assert.equal((await ask("https://domain.com/produk/x?fbclid=123")).reached, true, "the primary serves");
+  for (const [href, method] of [
+    ["https://tokodia.adsbook.cc/api/webhooks/autolaris/token-abc", "POST"],
+    ["https://tokodia.adsbook.cc/api/owner-recovery", "POST"],
+    ["https://tokodia.adsbook.cc/pemulihan", "GET"],
+    ["https://tokodia.adsbook.cc/hello", "GET"],
+  ] as const) {
+    assert.notEqual((await ask(href, method)).status, 301, `${method} ${href} stays on the subdomain`);
+  }
+  // The domain is removed (or replaced): the primary is the subdomain again and it serves, no loop.
+  platformDb.sqlite.exec("UPDATE tenant_hosts SET status = 'revoked', is_primary = 0 WHERE tenant_id = 'm-r' AND kind = 'custom'; UPDATE tenant_hosts SET is_primary = 1 WHERE host = 'tokodia.adsbook.cc'; UPDATE tenants SET cache_version = cache_version + 1 WHERE id = 'm-r'");
+  const served = await ask("https://tokodia.adsbook.cc/produk/x?fbclid=123");
+  assert.equal(served.status, 200);
+  assert.equal(served.reached, true, "the subdomain serves the store directly again");
 });

@@ -92,3 +92,34 @@ export function isPlatformRoute(pathname: string): boolean {
     pathname.startsWith("/api/platform/")
   );
 }
+
+/**
+ * Where a request on a non-primary tenant host is sent once a custom domain is
+ * the active primary (T-43, Paduka 2026-11-16): `www.<root>` and the store's
+ * own `<slug>.adsbook.cc` answer GET/HEAD with a 301 to the same path and query
+ * (click ids and UTMs kept) on the primary. Null when the request stays here.
+ *
+ * Never moved: `/api/*` (webhooks are bound to the subdomain, SEC-5; the
+ * handoff and owner recovery post there, IAM-8/IAM-9), `/pemulihan`, `/hello`
+ * and `/admin*` (the owner's way in survives a broken custom DNS, and the
+ * `__Host-` session cookie belongs to the host it was set on), and
+ * `/.well-known/*` (certificate validation and the HTTPS probe). A primary is
+ * custom only after its HTTPS probe; removing or replacing the domain moves
+ * the primary back to the subdomain, and the redirect stops with it.
+ */
+export function primaryHostRedirect(
+  url: URL,
+  method: string,
+  tenant: { hostKind: "subdomain" | "custom"; primaryHost: string | null } | null | undefined,
+): string | null {
+  if (!tenant?.primaryHost || url.hostname === tenant.primaryHost) return null;
+  if (method !== "GET" && method !== "HEAD") return null;
+  const path = url.pathname;
+  if (path.startsWith("/api/") || path.startsWith("/.well-known/")) return null;
+  const onWww = tenant.hostKind === "custom" && url.hostname === `www.${tenant.primaryHost}`;
+  const onSubdomain = tenant.hostKind === "subdomain";
+  if (!onWww && !onSubdomain) return null;
+  if (onSubdomain && (path === "/pemulihan" || path === "/hello" || path === "/admin" || path.startsWith("/admin/"))) return null;
+  // Same scheme and port as the request: https in production, the local port in development.
+  return `${url.protocol}//${tenant.primaryHost}${url.port ? `:${url.port}` : ""}${path}${url.search}`;
+}
