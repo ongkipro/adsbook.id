@@ -7,7 +7,7 @@ import { hasClickId, readClickIdCookie, serializeClickIds } from "../../lib/clic
 import type { ResolvedShippingRates } from "../../lib/shipping-quote";
 import type { APIRoute } from "astro";
 import { selectQuotedRate } from "../../lib/courier-rules";
-import { orderSubmitSchema } from "../../lib/order-schema";
+import { parseOrderSubmit } from "../../lib/order-schema";
 import {
   isCodBlockedForProvince,
   loadStoreCodDisabledProvinceCodes,
@@ -99,12 +99,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  const parsed = orderSubmitSchema.safeParse(body);
+  const parsed = parseOrderSubmit(body);
   if (!parsed.success) {
     return json(
       {
         success: false,
-        error: parsed.error.errors[0]?.message || "Data tidak valid",
+        error: parsed.error.issues[0]?.message || "Data tidak valid",
         code: "VALIDATION_ERROR",
       },
       422,

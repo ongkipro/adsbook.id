@@ -1,7 +1,8 @@
 import type { APIRoute } from 'astro';
 import { captureMetaOrderContext, serializeMetaOrderContext } from '../../../lib/meta-order-context';
 import { handleOptions, headlessError, headlessOk, validateHeadlessRequest } from '../../../lib/headless-api';
-import { orderSubmitSchema } from '../../../lib/order-schema';
+import { z } from 'zod';
+import { parseOrderSubmit } from '../../../lib/order-schema';
 import { checkRateLimit, getClientIp } from '../../../lib/rate-limit';
 import { loadStoreCodDisabledProvinceCodes } from '../../../lib/form-mode';
 import { isProvinceExcluded, normalizeProvinceCode } from '../../../lib/province';
@@ -48,11 +49,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }, validation.corsHeaders));
     }
 
-    const parsed = orderSubmitSchema.safeParse(body);
+    const parsed = parseOrderSubmit(body);
     if (!parsed.success) {
-      return validation.finalize(headlessError(parsed.error.errors[0]?.message || 'Data order tidak valid.', 422, {
+      return validation.finalize(headlessError(parsed.error.issues[0]?.message || 'Data order tidak valid.', 422, {
         code: 'VALIDATION_ERROR',
-        errors: parsed.error.format(),
+        errors: z.formatError(parsed.error),
       }, validation.corsHeaders));
     }
 

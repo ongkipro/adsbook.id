@@ -353,7 +353,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `order-list-filter` | 10 | `payment_transactions` | **none** | `/api/admin/abandoned-orders` `/api/admin/orders` `/api/admin/shipping` |
 | `order-metrics` | 6 | — | **none** | `/api/admin/analytics` `/api/admin/orders/[id]/follow-up` |
 | `order-persistence` | 14 | `order_items` `order_number_counters` `orders` `payment_transactions` `product_variants` `products` `seller_bank_accounts` `stores` | ✓ | `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/retention` |
-| `order-schema` | 3 | — | ✓ | `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/[id]` |
+| `order-schema` | 4 | — | ✓ | `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/[id]` |
 | `order-status` | 4 | `order_items` `orders` `payment_transactions` | ✓ | `/api/order-status` `/api/v1/orders/status` |
 | `paid-order-purchase` | 8 | `capi_event_outbox` `order_items` `orders` `product_variants` `products` | ✓ | `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` `/api/admin/payment-reconciliation` |
 | `payment-brand` | 6 | — | ✓ | `/payment` `/thanks` `/api/payment-methods` |
