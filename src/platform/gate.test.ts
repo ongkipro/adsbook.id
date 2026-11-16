@@ -406,3 +406,20 @@ test("Paduka 2026-11-16: the seller zone's apex and www go to the platform's mai
   const store = await gateRequest(new Request("https://toko.adsbook.my.id/"), new URL("https://toko.adsbook.my.id/"), {}, {});
   assert.notEqual(store.kind === "refused" && store.response.status, 301);
 });
+
+test("ADR-039 (c): 0007 moves a store's own subdomain from adsbook.cc to adsbook.my.id, and nothing else", async () => {
+  const db = await controlPlane();
+  db.sqlite.exec(`INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES ('t-a', 'agro', 'a@example.test', 'active', '2026-11-16');
+    INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES
+      ('agro.adsbook.cc', 't-a', 'subdomain', 'active', 1, '2026-11-16'),
+      ('agro.example.cc', 't-a', 'custom', 'pending', 0, '2026-11-16');`);
+  // The rows a store created on the old zone, as the live PLATFORM_DB held them; then 0007 runs.
+  db.sqlite.exec(CHAIN.find((entry) => entry.name.startsWith("0007_"))!.sql);
+  const hosts = db.sqlite.prepare("SELECT host, kind, is_primary FROM tenant_hosts ORDER BY host").all().map((row) => ({ ...(row as object) }));
+  assert.deepEqual(hosts, [
+    { host: "agro.adsbook.my.id", kind: "subdomain", is_primary: 1 },
+    { host: "agro.example.cc", kind: "custom", is_primary: 0 },
+  ]);
+  assert.equal(tenantOf((await gate(db, "https://agro.adsbook.my.id/")).result), "t-a");
+  assert.equal(statusOf((await gate(db, "https://agro.adsbook.cc/")).result), 404, "the old name no longer routes");
+});
