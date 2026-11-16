@@ -165,10 +165,11 @@ export const adminNavGroups: AdminNavGroup[] = [
         label: "Pengaturan",
         description: "Toko, gudang, dan akses",
         icon: Settings,
-        keywords: "settings system store domain warehouse crm access headless developer api plugin kelola whatsapp wa cs rotator nomor",
+        keywords: "settings system store domain warehouse crm access headless developer api plugin kelola whatsapp wa cs rotator nomor langganan billing bayar paket perpanjang",
         children: [
           { href: "/admin/settings/store", label: "Toko & CS", icon: ShoppingBag },
           { href: "/admin/settings/domains", label: "Domain", icon: Globe },
+          { href: "/admin/billing", label: "Langganan", icon: CreditCard },
           { href: "/admin/settings/whatsapp", label: "Nomor WhatsApp", icon: MessageCircle },
           { href: "/admin/settings/developer", label: "Headless API", icon: CodeXml },
           { href: "/admin/settings/warehouse", label: "Gudang", icon: Warehouse },

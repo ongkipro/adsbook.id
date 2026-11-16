@@ -30,19 +30,19 @@ test('IAM-2: the session cookie is __Host-: every set and delete is Secure, Path
 });
 
 test('IAM-5: an unsafe request needs its own Origin and Sec-Fetch-Site: same-origin', () => {
-  const url = new URL('https://toko-a.adsbook.cc/api/admin/orders');
+  const url = new URL('https://toko-a.adsbook.my.id/api/admin/orders');
   const verdict = (headers: Record<string, string>) =>
     unsafeRequestVerdict(new Request(url, { method: 'POST', headers }), url);
-  assert.equal(verdict({ origin: 'https://toko-a.adsbook.cc', 'sec-fetch-site': 'same-origin' }), 'allowed');
+  assert.equal(verdict({ origin: 'https://toko-a.adsbook.my.id', 'sec-fetch-site': 'same-origin' }), 'allowed');
   // Another seller's host is same-site: SameSite=Lax would send the cookie.
-  assert.equal(verdict({ origin: 'https://toko-b.adsbook.cc', 'sec-fetch-site': 'same-site' }), 'forbidden');
-  assert.equal(verdict({ origin: 'https://toko-a.adsbook.cc', 'sec-fetch-site': 'same-site' }), 'forbidden');
+  assert.equal(verdict({ origin: 'https://toko-b.adsbook.my.id', 'sec-fetch-site': 'same-site' }), 'forbidden');
+  assert.equal(verdict({ origin: 'https://toko-a.adsbook.my.id', 'sec-fetch-site': 'same-site' }), 'forbidden');
   assert.equal(verdict({ origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }), 'forbidden');
   assert.equal(verdict({ 'sec-fetch-site': 'same-origin' }), 'forbidden', 'a missing Origin is refused');
   assert.equal(verdict({ origin: 'null', 'sec-fetch-site': 'same-origin' }), 'forbidden');
-  assert.equal(verdict({ origin: 'http://toko-a.adsbook.cc', 'sec-fetch-site': 'same-origin' }), 'forbidden');
+  assert.equal(verdict({ origin: 'http://toko-a.adsbook.my.id', 'sec-fetch-site': 'same-origin' }), 'forbidden');
   // Safari before 16.4: the right Origin, no Fetch Metadata.
-  assert.equal(verdict({ origin: 'https://toko-a.adsbook.cc' }), 'browser_unsupported');
+  assert.equal(verdict({ origin: 'https://toko-a.adsbook.my.id' }), 'browser_unsupported');
   assert.equal(lacksFetchMetadata(new Headers()), true);
   assert.equal(lacksFetchMetadata(new Headers({ 'sec-fetch-site': 'none' })), false);
 });
@@ -82,7 +82,7 @@ middlewareHooks.deregister();
 // The request gate (T-17) is tested in src/platform/; these tests start past it, on an active tenant.
 const tenantGate = async () => ({
   kind: 'tenant' as const,
-  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.adsbook.cc', hostKind: 'subdomain' as const, primaryHost: 'test.adsbook.cc' },
+  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.adsbook.my.id', hostKind: 'subdomain' as const, primaryHost: 'test.adsbook.my.id' },
 });
 const onRequest = createMiddleware(async (env) => (env as { OMS_DB: D1Database }).OMS_DB, tenantGate);
 

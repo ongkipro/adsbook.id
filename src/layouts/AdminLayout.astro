@@ -13,6 +13,18 @@ const { title, activeMenu } = Astro.props;
 const currentPath = (Astro.url.pathname + Astro.url.search).replace(/\/$/, '') || '/';
 const adminRole = Astro.locals.admin?.role ?? 'customer_service';
 const mustChangePassword = Astro.locals.admin?.mustChangePassword ?? false;
+// ADR-041 (T-50): Preview, grace and expired say so on every admin page; the
+// owner and admin get the way to pay. Subscribed stores show nothing.
+const billingState = Astro.locals.billing?.state;
+const canPay = adminRole === 'owner' || adminRole === 'admin';
+const billingNotice =
+  billingState === 'preview'
+    ? { urgent: false, title: 'Mode Preview.', body: 'Siapkan toko sepuasnya. Pembeli belum bisa memesan dan iklan belum aktif sampai langganan diaktifkan (mulai Rp149.000/bulan).', cta: 'Aktifkan langganan' }
+    : billingState === 'grace'
+      ? { urgent: true, title: 'Langganan sudah jatuh tempo.', body: 'Toko masih menerima pesanan dan iklan tetap jalan selama masa tenggang 48 jam. Perpanjang sekarang agar tidak terhenti.', cta: 'Perpanjang sekarang' }
+      : billingState === 'expired'
+        ? { urgent: true, title: 'Langganan berakhir.', body: 'Pesanan, iklan, dan AI dijeda. Semua data toko tetap aman dan kembali aktif begitu langganan diperpanjang.', cta: 'Perpanjang langganan' }
+        : null;
 const sidebarDefaultOpen = Astro.cookies.get('sidebar_state')?.value !== 'false';
 // IAM-5: a browser that sends no Fetch Metadata cannot save anything here; say
 // so before the operator fills a form, not after.
@@ -62,6 +74,14 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
       {browserUnsupported && (
         <div id="browserUnsupportedNotice" role="alert" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
           {BROWSER_UNSUPPORTED_MESSAGE}
+        </div>
+      )}
+      {billingNotice && Astro.url.pathname !== '/admin/billing' && (
+        <div id="billingNotice" role={billingNotice.urgent ? 'alert' : 'status'} class={`mb-4 flex flex-col gap-3 rounded-xl border px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between ${billingNotice.urgent ? 'border-amber-300 bg-amber-50 text-amber-950' : 'border-blue-200 bg-blue-50 text-blue-950'}`}>
+          <p class="leading-5"><strong>{billingNotice.title}</strong> {billingNotice.body}</p>
+          {canPay && (
+            <a href="/admin/billing" class="btn-primary shrink-0 text-center">{billingNotice.cta}</a>
+          )}
         </div>
       )}
       <slot />

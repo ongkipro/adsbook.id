@@ -227,6 +227,30 @@ export function createDevProviderServer(): Server {
         },
       });
     }
+    // Payment-only instruction (the platform's subscription rail, ADR-041):
+    // the fee is added on top, as the provider's create_payment example shows.
+    if (url.pathname === "/api/h2h/create_payment" && method === "POST") {
+      const body = await readBody(request);
+      const amount = Number(body.amount) || 0;
+      const qris = String(body.channel_code) === "QRIS";
+      const admin = qris ? Math.round(amount * 0.007) : 4000;
+      const transactionId = String(Date.now()) + String((sequence += 1));
+      payments.set(transactionId, { paid: false, total: amount + admin, receiver: String(body.customer_name || ""), channel: String(body.channel_code || "") });
+      return send(response, 200, {
+        rc: "00",
+        ket: "Sukses",
+        data: {
+          trx_id: transactionId,
+          virtual_account: qris ? "" : `8808${transactionId.slice(-10)}`,
+          qr: qris ? `00020101021226DEV${transactionId}5303360540${amount + admin}6304ABCD` : "",
+          payment_code: "",
+          url: "",
+          amount,
+          admin,
+          total: amount + admin,
+        },
+      });
+    }
     if (url.pathname === "/api/h2h/advice" && method === "POST") {
       const body = await readBody(request);
       const payment = payments.get(String(body.transaction_id));

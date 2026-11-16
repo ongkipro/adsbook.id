@@ -25,6 +25,7 @@ import { gateRequest, type GateEnv } from './platform/gate';
 import type { TenantContext } from './platform/control-plane';
 import { isStoreReady, readReadiness, servedBeforeReady } from './platform/readiness.ts';
 import { demoRefusal } from './platform/demo.ts';
+import { billingState, isLive, subscriptionRefusal } from './platform/billing.ts';
 import { notifyOperator, type Notice } from './platform/notify.ts';
 import { statePage } from './platform/state-pages';
 import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
@@ -275,8 +276,16 @@ export function createMiddleware(
   const runtime = getRuntimeEnv(context.locals);
   // T-25: once a custom primary is active the platform subdomain stays
   // reachable (webhooks, sign-in) but never competes with it in search.
+  // ADR-041: a store in Preview Mode or past its grace is not live; nothing of
+  // it is indexed, and its buyer-facing pages carry a banner.
+  const billing = (() => {
+    const tenant = context.locals.tenantContext;
+    if (!tenant || tenant.isDemo) return null;
+    return billingState(tenant, new Date());
+  })();
   const indexedElsewhere = (() => {
     const tenant = context.locals.tenantContext;
+    if (billing && !isLive(billing)) return true;
     return Boolean(tenant && tenant.hostKind === 'subdomain' && tenant.primaryHost && tenant.primaryHost !== tenant.host);
   })();
 
@@ -327,7 +336,7 @@ export function createMiddleware(
   }
 
   // T-43 (PR-28) and Paduka 2026-11-16: once a custom domain is the active
-  // primary, `www.<root>` and the store's own `<slug>.adsbook.cc` answer
+  // primary, `www.<root>` and the store's own `<slug>.adsbook.my.id` answer
   // GET/HEAD with a 301 to the same path and query on the primary. APIs,
   // webhooks, the owner's sign-in and recovery, admin and `.well-known` stay
   // (`primaryHostRedirect`, src/platform/host.ts). A primary is custom only
@@ -411,6 +420,7 @@ export function createMiddleware(
   // read fails closed. The page is no-store, so nothing unready is edge-cached.
   // PR-26 (T-41): the demo store skips readiness for browsing only; instead,
   // every provider entry point and every write is refused before any route runs.
+  if (billing) context.locals.billing = { state: billing, adSignalsPaused: !isLive(billing) };
   if (tenantContext.isDemo) {
     const refusal = demoRefusal(url.pathname, context.request.method);
     if (refusal) return applySecurityHeaders(refusal, false);
@@ -426,6 +436,14 @@ export function createMiddleware(
       readyNoticed.add(tenantContext.tenantId);
       operatorNotice(context, { tenantId: tenantContext.tenantId, slug: tenantContext.slug, kind: 'ready', storeName: context.locals.tenant?.name });
     }
+  }
+
+  // ADR-041 (BILL-5), after readiness so an unready store still says so: buyer
+  // orders, anonymous quotes and custom-domain claims need a live subscription;
+  // sign-in, admin and /admin/billing never do.
+  if (billing) {
+    const refusal = subscriptionRefusal(url.pathname, context.request.method, billing);
+    if (refusal) return applySecurityHeaders(refusal, false);
   }
 
   // A native landing page that has taken over a product page must answer on

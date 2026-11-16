@@ -40,6 +40,9 @@ export type StoreAdsConfig = {
 export type AdsConfigSource = 'database' | 'none';
 
 export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsConfig> {
+  // ADR-041: a store in Preview Mode or past its grace sends no ad signal from
+  // a public request. The owner's admin still reads its own settings.
+  if (locals?.billing?.adSignalsPaused && !locals.admin) return getStoreAdsConfig(undefined);
   let dbPixelId = '';
   let dbCapiToken = '';
   let dbGoogleId = '';

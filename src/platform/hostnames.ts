@@ -15,7 +15,7 @@
  */
 import { normalizeHost } from "./host.ts";
 
-export const SELLER_ZONE = "adsbook.cc";
+export const SELLER_ZONE = "adsbook.my.id";
 export const PLATFORM_DOMAIN = "adsbook.id";
 export const CNAME_TARGET = `cname.${SELLER_ZONE}`;
 /** Certificate Common Name limit; Cloudflare refuses longer hosts (error 1469). */
@@ -23,7 +23,7 @@ export const MAX_HOST_LENGTH = 64;
 /** DOM-3: a removed host is unroutable for this long before anyone may claim it. */
 export const QUARANTINE_MS = 60_000;
 
-/** The seller-host suffix: `adsbook.cc`, or a local stand-in such as `localhost` (dev only). */
+/** The seller-host suffix: `adsbook.my.id`, or a local stand-in such as `localhost` (dev only). */
 export function tenantHostSuffix(env: Record<string, unknown>): string {
   const suffix = typeof env.TENANT_HOST_SUFFIX === "string" ? env.TENANT_HOST_SUFFIX.trim().toLowerCase() : "";
   return suffix || SELLER_ZONE;
@@ -536,7 +536,7 @@ export async function removeDomain(
  * `claimDomain` as before.
  *
  * Then the old group is removed exactly as "Hapus" removes it (revoked,
- * quarantined, the primary back on `<slug>.adsbook.cc`, its Cloudflare
+ * quarantined, the primary back on `<slug>.adsbook.my.id`, its Cloudflare
  * hostnames deleted, DOM-5), and the new one is claimed. The store never holds
  * more than one domain group.
  * lazy: the two steps are not one transaction. If the new claim still fails
@@ -585,7 +585,7 @@ export async function replaceDomain(
   }
   const claimed = await claimDomain(platformDb, api, tenantId, raw, mode, now);
   if (!claimed.ok) {
-    return { ...claimed, error: `${claimed.error} Domain lama sudah dilepas; toko tetap bisa dibuka di alamat adsbook.cc.` };
+    return { ...claimed, error: `${claimed.error} Domain lama sudah dilepas; toko tetap bisa dibuka di alamat adsbook.my.id.` };
   }
   return claimed;
 }

@@ -82,8 +82,8 @@ test("ISO-7: KV keys carry the tenant; the platform has its own prefix", async (
 
 test("ISO-8: a cache key names tenant, version, host and path", () => {
   assert.equal(
-    tenantCacheKey({ tenantId: "t-a", cacheVersion: 2 }, "Toko-A.adsbook.cc", "/produk/x?q=1"),
-    "https://cache.adsbook.id/t/t-a/v2/toko-a.adsbook.cc/produk/x?q=1",
+    tenantCacheKey({ tenantId: "t-a", cacheVersion: 2 }, "Toko-A.adsbook.my.id", "/produk/x?q=1"),
+    "https://cache.adsbook.id/t/t-a/v2/toko-a.adsbook.my.id/produk/x?q=1",
   );
   assert.throws(() => tenantCacheKey({ tenantId: "t/../b", cacheVersion: 1 }, "h", "/"), /invalid tenant id/);
 });

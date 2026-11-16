@@ -48,7 +48,7 @@ export async function noticeStuckDomains(env: Record<string, unknown> | null | u
   return sent;
 }
 
-export type NoticeKind = "signup" | "ready" | "domain_active" | "domain_failed" | "first_order";
+export type NoticeKind = "signup" | "ready" | "domain_active" | "domain_failed" | "first_order" | "subscription_paid" | "subscription_ending" | "subscription_grace";
 
 const LABELS: Record<NoticeKind, string> = {
   signup: "Seller baru mendaftar",
@@ -56,6 +56,9 @@ const LABELS: Record<NoticeKind, string> = {
   domain_active: "Domain sendiri aktif",
   domain_failed: "Domain sendiri belum aktif setelah 24 jam",
   first_order: "Pesanan pertama toko",
+  subscription_paid: "Langganan toko dibayar",
+  subscription_ending: "Langganan toko berakhir dalam 3 hari",
+  subscription_grace: "Langganan toko lewat jatuh tempo (masa tenggang 48 jam)",
 };
 
 export type Notice = {
@@ -66,6 +69,8 @@ export type Notice = {
   storeName?: string | null;
   /** The domain, for the two domain notices (one notice per host). */
   host?: string;
+  /** Makes a recurring notice once per occurrence (a subscription's end date). */
+  onceKey?: string;
 };
 
 /** The webhook, only when it is an https URL; anything else sends nothing. */
@@ -101,7 +106,7 @@ export async function notifyOperator(
   fetcher: typeof fetch = fetch,
   now = new Date(),
 ): Promise<"sent" | "duplicate" | "skipped" | "failed"> {
-  const key = notice.host ? `${notice.kind}:${notice.host}` : notice.kind;
+  const key = notice.host ? `${notice.kind}:${notice.host}` : notice.onceKey ? `${notice.kind}:${notice.onceKey}` : notice.kind;
   return sendOnce(env, platformDb, notice.tenantId, key, () => noticeText(env, notice), notice.kind, fetcher, now);
 }
 

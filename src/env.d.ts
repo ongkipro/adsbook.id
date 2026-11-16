@@ -44,7 +44,7 @@ interface SharedEnvVars {
   TURNSTILE_VERIFY_URL?: string;
   /** Platform admin sessions (IAM-3), 32+ characters. */
   PLATFORM_AUTH_SECRET?: string;
-  /** Local development only: seller hosts under `localhost` instead of `adsbook.cc`. */
+  /** Local development only: seller hosts under `localhost` instead of `adsbook.my.id`. */
   TENANT_HOST_SUFFIX?: string;
 }
 
@@ -88,6 +88,12 @@ declare namespace App {
      * request belongs to, resolved from `Host` against `PLATFORM_DB`.
      */
     tenantContext?: import("./platform/control-plane").TenantContext;
+    /**
+     * ADR-041: the store's subscription state (absent for the demo store and
+     * platform hosts). `adSignalsPaused` empties the ads config on public
+     * requests, so no pixel, tag or browser event leaves a store that is not live.
+     */
+    billing?: { state: import("./platform/billing").BillingState; adSignalsPaused: boolean };
     /**
      * This tenant's database (TEN-2): opened by the middleware from
      * `tenantContext.tenantId` through `src/platform/tenant-db.ts`. Read it

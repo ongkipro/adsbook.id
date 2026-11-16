@@ -90,6 +90,7 @@ const ADMIN_PAGE_ROUTES = [
   '/admin/status',
   '/admin/setup',
   '/admin/docs',
+  '/admin/billing',
 ] as const;
 
 const ADMIN_API_ROUTES = [
@@ -121,6 +122,8 @@ const ADMIN_API_ROUTES = [
   '/api/admin/profile',
   '/api/admin/plugins',
   '/api/admin/domains',
+  // ADR-041 (T-50): owner and admin pay and renew the subscription.
+  '/api/admin/billing',
   '/api/admin/logout',
 ] as const;
 

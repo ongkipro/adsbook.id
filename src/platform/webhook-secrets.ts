@@ -1,6 +1,6 @@
 /**
  * Per-tenant webhook tokens (SEC-5, API-7, T-23). A provider calls
- * `https://<slug>.adsbook.cc/api/webhooks/<provider>/<token>`; the token is
+ * `https://<slug>.adsbook.my.id/api/webhooks/<provider>/<token>`; the token is
  * 256 random bits shown to the owner once, and only its SHA-256 is kept in
  * `PLATFORM_DB.webhook_secrets`. The token is a path segment, so request URLs
  * are never logged (OBS-1 logs the route pattern only).
@@ -22,7 +22,7 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function constantTimeEqual(left: string, right: string): boolean {
+export function constantTimeEqual(left: string, right: string): boolean {
   if (left.length !== right.length) return false;
   let mismatch = 0;
   for (let index = 0; index < left.length; index += 1) mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);

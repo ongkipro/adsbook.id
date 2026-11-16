@@ -8,6 +8,7 @@ import {
 import { buildContentSystemInstruction } from "../../../lib/ai-content-instructions";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
 import { checkPlanCap } from "../../../platform/plans.ts";
+import { isLive, subscriptionRefusalBody } from "../../../platform/billing.ts";
 
 export const prerender = false;
 
@@ -284,6 +285,9 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     }
 
     if (action === "generate") {
+      // ADR-041: AI drafting needs a live subscription (checked before the cap is spent).
+      const billing = locals.billing;
+      if (billing && !isLive(billing.state)) return json(subscriptionRefusalBody(billing.state), 402);
       // T-37: the plan's hourly AI cap, per tenant, spent before the model runs.
       const platformDb = (getRuntimeEnv(locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database | undefined;
       const aiCap = await checkPlanCap(platformDb, locals.tenantContext?.tenantId, "ai", true);

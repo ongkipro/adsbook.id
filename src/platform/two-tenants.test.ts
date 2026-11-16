@@ -212,17 +212,18 @@ async function platform(rows: Array<[id: string, status: string, host: string]>)
   const db = createSqliteD1();
   await ensureControlPlane(db, PLATFORM_CHAIN);
   for (const [id, status, host] of rows) {
-    db.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES (?, ?, ?, ?, '2026-11-16')").run(id, id, `${id}@example.test`, status);
+    // Subscribed (ADR-041), so buyer routes answer; Preview Mode has its own tests.
+    db.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, subscription_ends_at, grace_ends_at, created_at) VALUES (?, ?, ?, ?, '2099-01-01T00:00:00.000Z', '2099-01-03T00:00:00.000Z', '2026-11-16')").run(id, id, `${id}@example.test`, status);
     db.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'active', 1, '2026-11-16')").run(host, id);
   }
   return db;
 }
 
 test("each tenant host reaches its own store, and the shared OMS_DB binding is never read", async () => {
-  const platformDb = await platform([["t-a", "active", "toko-a.adsbook.cc"], ["t-b", "active", "toko-b.adsbook.cc"]]);
+  const platformDb = await platform([["t-a", "active", "toko-a.adsbook.my.id"], ["t-b", "active", "toko-b.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
-  stores.get("t-a").storage.db.exec("INSERT INTO stores (id, name, slug, created_at, site_url) VALUES (1, 'Toko A', 'toko-a', '2026-11-16', 'https://toko-a.adsbook.cc')");
-  stores.get("t-b").storage.db.exec("INSERT INTO stores (id, name, slug, created_at, site_url) VALUES (1, 'Toko B', 'toko-b', '2026-11-16', 'https://toko-b.adsbook.cc')");
+  stores.get("t-a").storage.db.exec("INSERT INTO stores (id, name, slug, created_at, site_url) VALUES (1, 'Toko A', 'toko-a', '2026-11-16', 'https://toko-a.adsbook.my.id')");
+  stores.get("t-b").storage.db.exec("INSERT INTO stores (id, name, slug, created_at, site_url) VALUES (1, 'Toko B', 'toko-b', '2026-11-16', 'https://toko-b.adsbook.my.id')");
   makeReady(stores.get("t-a").storage.db);
   makeReady(stores.get("t-b").storage.db);
   const sharedOmsDb = { prepare: () => { throw new Error("the shared OMS_DB binding was read"); } };
@@ -230,7 +231,7 @@ test("each tenant host reaches its own store, and the shared OMS_DB binding is n
   const previousLog = console.log;
   console.log = () => undefined;
   try {
-    for (const [host, name] of [["toko-a.adsbook.cc", "Toko A"], ["toko-b.adsbook.cc", "Toko B"]]) {
+    for (const [host, name] of [["toko-a.adsbook.my.id", "Toko A"], ["toko-b.adsbook.my.id", "Toko B"]]) {
       const href = `https://${host}/produk/x`;
       const locals: Record<string, unknown> = {
         runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV, OMS_DB: sharedOmsDb },
@@ -263,10 +264,10 @@ test("each tenant host reaches its own store, and the shared OMS_DB binding is n
 // this test uses its own ids because the first test made t-a and t-b ready.
 test("T-24: the cron migrates quiet tenants (bookmark first), arms each active tenant's alarm, isolates a failing one", async () => {
   const platformDb = await platform([
-    ["c-a", "active", "cron-a.adsbook.cc"],
-    ["c-b", "active", "cron-b.adsbook.cc"],
-    ["c-c", "suspended", "cron-c.adsbook.cc"],
-    ["c-d", "active", "cron-d.adsbook.cc"],
+    ["c-a", "active", "cron-a.adsbook.my.id"],
+    ["c-b", "active", "cron-b.adsbook.my.id"],
+    ["c-c", "suspended", "cron-c.adsbook.my.id"],
+    ["c-d", "active", "cron-d.adsbook.my.id"],
   ]);
   const stores = namespace({ failing: ["c-d"] });
   const errors: string[] = [];
@@ -304,7 +305,7 @@ test("T-24: the cron migrates quiet tenants (bookmark first), arms each active t
 
 test("T-24: a fleet larger than one arming batch is swept over the hours, each run bounded", async () => {
   const ids = Array.from({ length: CRON_ARM_BATCH * 2 + 50 }, (_, index) => `f-${String(index).padStart(4, "0")}`);
-  const platformDb = await platform(ids.map((id) => [id, "active", `${id}.adsbook.cc`] as [string, string, string]));
+  const platformDb = await platform(ids.map((id) => [id, "active", `${id}.adsbook.my.id`] as [string, string, string]));
   platformDb.sqlite.prepare("UPDATE tenants SET schema_version = ?").run(CHAIN.length);
   const stores = namespace();
   const original = { error: console.error, info: console.info };
@@ -330,7 +331,7 @@ test("T-24: a fleet larger than one arming batch is swept over the hours, each r
 
 test("T-24/ISO-10: 50 alarms, one failing and one making 900 calls: 49 heartbeats, one logged failure, no budget error", async (context) => {
   const ids = Array.from({ length: 50 }, (_, index) => `h-${String(index).padStart(2, "0")}`);
-  const platformDb = await platform(ids.map((id) => [id, "active", `${id}.adsbook.cc`] as [string, string, string]));
+  const platformDb = await platform(ids.map((id) => [id, "active", `${id}.adsbook.my.id`] as [string, string, string]));
   const stores = namespace({ migrated: true });
   for (const id of ids) stores.get(id).storage.db.exec(`INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16')`);
   const FAILING = "h-07";
@@ -383,7 +384,7 @@ test("T-24/ISO-10: 50 alarms, one failing and one making 900 calls: 49 heartbeat
 });
 
 test("T-24/MIG-1: an alarm behind the bundled chain does no maintenance, re-arms and logs; an inactive tenant does nothing", async () => {
-  const platformDb = await platform([["m-1", "active", "mig-1.adsbook.cc"], ["m-2", "suspended", "mig-2.adsbook.cc"]]);
+  const platformDb = await platform([["m-1", "active", "mig-1.adsbook.my.id"], ["m-2", "suspended", "mig-2.adsbook.my.id"]]);
   const stores = namespace(); // not migrated: applied 0 < bundled
   const errors: string[] = [];
   const original = { error: console.error, info: console.info };
@@ -403,7 +404,7 @@ test("T-24/MIG-1: an alarm behind the bundled chain does no maintenance, re-arms
 });
 
 test("ISO-5: an order's status token answers on its own tenant's host only", async () => {
-  const platformDb = await platform([["s-a", "active", "shop-a.adsbook.cc"], ["s-b", "active", "shop-b.adsbook.cc"]]);
+  const platformDb = await platform([["s-a", "active", "shop-a.adsbook.my.id"], ["s-b", "active", "shop-b.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
   for (const [id, number, token] of [["s-a", "INV-10001", "tok-a"], ["s-b", "INV-10001", "tok-b"]]) {
     stores.get(id).storage.db.exec(`
@@ -429,16 +430,16 @@ test("ISO-5: an order's status token answers on its own tenant's host only", asy
       console.log = previousLog;
     }
   };
-  const own = await ask("shop-a.adsbook.cc", "tok-a");
+  const own = await ask("shop-a.adsbook.my.id", "tok-a");
   assert.equal(own.status, 200);
-  const crossed = await ask("shop-b.adsbook.cc", "tok-a");
+  const crossed = await ask("shop-b.adsbook.my.id", "tok-a");
   assert.equal(crossed.status, 404, "tenant A's token must not open an order on tenant B's host");
   assert.equal(JSON.stringify(crossed.body).includes("tok-a"), false);
-  assert.equal((await ask("shop-b.adsbook.cc", "tok-b")).status, 200);
+  assert.equal((await ask("shop-b.adsbook.my.id", "tok-b")).status, 200);
 });
 
 test("T-36: an admin session lists its own tenant's orders, and is refused on another tenant's host", async () => {
-  const platformDb = await platform([["m-a", "active", "admin-a.adsbook.cc"], ["m-b", "active", "admin-b.adsbook.cc"]]);
+  const platformDb = await platform([["m-a", "active", "admin-a.adsbook.my.id"], ["m-b", "active", "admin-b.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
   for (const [id, number] of [["m-a", "INV-A0001"], ["m-b", "INV-B0001"]]) {
     stores.get(id).storage.db.exec(`
@@ -472,17 +473,17 @@ test("T-36: an admin session lists its own tenant's orders, and is refused on an
       Object.assign(console, previous);
     }
   };
-  const own = await list("admin-a.adsbook.cc");
+  const own = await list("admin-a.adsbook.my.id");
   assert.equal(own.status, 200);
   assert.match(own.text, /INV-A0001/);
   assert.doesNotMatch(own.text, /INV-B0001/);
-  const crossed = await list("admin-b.adsbook.cc");
+  const crossed = await list("admin-b.adsbook.my.id");
   assert.equal(crossed.status, 401, "tenant A's session must not open tenant B's admin");
   assert.doesNotMatch(crossed.text, /INV-[AB]0001/);
 });
 
 test("T-21: a tenant's admin token never verifies on another tenant, even with its session row copied there", async () => {
-  const platformDb = await platform([["j-a", "active", "jwt-a.adsbook.cc"], ["j-b", "active", "jwt-b.adsbook.cc"]]);
+  const platformDb = await platform([["j-a", "active", "jwt-a.adsbook.my.id"], ["j-b", "active", "jwt-b.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
   for (const id of ["j-a", "j-b"]) {
     stores.get(id).storage.db.exec(`
@@ -521,9 +522,9 @@ test("T-21: a tenant's admin token never verifies on another tenant, even with i
       Object.assign(console, previous);
     }
   };
-  assert.equal(await open("jwt-a.adsbook.cc"), 200);
+  assert.equal(await open("jwt-a.adsbook.my.id"), 200);
   // AUTH_SECRET in the env is tenant A's key: an env secret must not be honoured on any tenant.
-  assert.equal(await open("jwt-b.adsbook.cc"), 401, "tenant A's token opened tenant B's admin");
+  assert.equal(await open("jwt-b.adsbook.my.id"), 401, "tenant A's token opened tenant B's admin");
 });
 
 /** Every provider value a single-tenant install took from Worker env, set at once. */
@@ -557,7 +558,7 @@ test("T-45/ISO-9: with every platform env value set, a tenant without settings i
     }
   });
 
-  const platformDb = await platform([["p-a", "active", "plain-a.adsbook.cc"]]);
+  const platformDb = await platform([["p-a", "active", "plain-a.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
   // A paid order with a Google click and a delivered COD order: work any configured provider would pick up.
   stores.get("p-a").storage.db.exec(`
@@ -602,7 +603,7 @@ test("T-45/ISO-9: with every platform env value set, a tenant without settings i
 });
 
 test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never stands in for a session on tenant B", async () => {
-  const platformDb = await platform([["x-a", "active", "fix-a.adsbook.cc"], ["x-b", "active", "fix-b.adsbook.cc"]]);
+  const platformDb = await platform([["x-a", "active", "fix-a.adsbook.my.id"], ["x-b", "active", "fix-b.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
   const tokens: Record<string, string> = {};
   for (const id of ["x-a", "x-b"]) {
@@ -638,10 +639,10 @@ test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never
     }
   };
 
-  // What a script on A can plant for `.adsbook.cc`: any name but a `__Host-` one.
+  // What a script on A can plant for `.adsbook.my.id`: any name but a `__Host-` one.
   const planted = `adsbook_session=${tokens["x-a"]}; __host-adsbook_session=${tokens["x-a"]}`;
-  assert.equal((await send("fix-b.adsbook.cc", { cookie: planted })).status, 401, "a planted parent-domain cookie opened B");
-  const intact = await send("fix-b.adsbook.cc", { cookie: `${planted}; ${SESSION_COOKIE_NAME}=${tokens["x-b"]}` });
+  assert.equal((await send("fix-b.adsbook.my.id", { cookie: planted })).status, 401, "a planted parent-domain cookie opened B");
+  const intact = await send("fix-b.adsbook.my.id", { cookie: `${planted}; ${SESSION_COOKIE_NAME}=${tokens["x-b"]}` });
   assert.equal(intact.status, 200, "B's own session survives the planted cookies");
   assert.match(intact.text, /INV-X-B/);
   assert.doesNotMatch(intact.text, /INV-X-A/);
@@ -651,24 +652,24 @@ test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never
 
   // IAM-5 on an unsafe admin route, with B's valid session in every case.
   const bCookie = `${SESSION_COOKIE_NAME}=${tokens["x-b"]}`;
-  const post = (headers: Record<string, string>) => send("fix-b.adsbook.cc", { method: "POST", cookie: bCookie, headers });
-  const sameSiteCrossHost = await post({ origin: "https://fix-a.adsbook.cc", "sec-fetch-site": "same-site" });
+  const post = (headers: Record<string, string>) => send("fix-b.adsbook.my.id", { method: "POST", cookie: bCookie, headers });
+  const sameSiteCrossHost = await post({ origin: "https://fix-a.adsbook.my.id", "sec-fetch-site": "same-site" });
   assert.equal(sameSiteCrossHost.status, 403, "a same-site cross-host POST was accepted");
   assert.equal(JSON.parse(sameSiteCrossHost.text).code, "forbidden_origin");
   assert.equal((await post({ "sec-fetch-site": "same-origin" })).status, 403, "a POST without Origin was accepted");
-  const oldBrowser = await post({ origin: "https://fix-b.adsbook.cc" });
+  const oldBrowser = await post({ origin: "https://fix-b.adsbook.my.id" });
   assert.equal(oldBrowser.status, 403);
   assert.deepEqual(JSON.parse(oldBrowser.text), {
     success: false,
     error: "Browser ini terlalu lama untuk menyimpan perubahan dengan aman. Perbarui browser Anda, lalu coba lagi.",
     code: "browser_unsupported",
   });
-  const sameOrigin = await post({ origin: "https://fix-b.adsbook.cc", "sec-fetch-site": "same-origin" });
+  const sameOrigin = await post({ origin: "https://fix-b.adsbook.my.id", "sec-fetch-site": "same-origin" });
   assert.notEqual(sameOrigin.status, 403, "a same-origin POST from a current browser was refused");
 
   // IAM-5 covers admin pages too, not only /api/admin (T-22 review).
-  const pageHref = "https://fix-b.adsbook.cc/admin/profile";
-  const pageRequest = new Request(pageHref, { method: "POST", headers: { cookie: bCookie, "sec-fetch-site": "same-site", origin: "https://fix-a.adsbook.cc" } });
+  const pageHref = "https://fix-b.adsbook.my.id/admin/profile";
+  const pageRequest = new Request(pageHref, { method: "POST", headers: { cookie: bCookie, "sec-fetch-site": "same-site", origin: "https://fix-a.adsbook.my.id" } });
   const pageContext = { request: pageRequest, url: new URL(pageHref), locals: { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } }, routePattern: "/admin/profile", redirect: () => new Response(null, { status: 302 }) };
   const previousLog = console.log;
   console.log = () => undefined;
@@ -681,7 +682,7 @@ test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never
 });
 
 test("T-23/API-7: a webhook writes only on its tenant's subdomain with that tenant's token", async () => {
-  const platformDb = await platform([["w-a", "active", "hook-a.adsbook.cc"], ["w-b", "active", "hook-b.adsbook.cc"]]);
+  const platformDb = await platform([["w-a", "active", "hook-a.adsbook.my.id"], ["w-b", "active", "hook-b.adsbook.my.id"]]);
   platformDb.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES ('shop-a.example', 'w-a', 'custom', 'active', 0, '2026-11-16')").run();
   const stores = namespace({ migrated: true });
   for (const id of ["w-a", "w-b"]) {
@@ -718,27 +719,27 @@ test("T-23/API-7: a webhook writes only on its tenant's subdomain with that tena
       .concat((platformDb.sqlite.prepare("SELECT total_changes() AS n").get() as { n: number }).n);
   const before = changes();
 
-  assert.equal(await call("hook-a.adsbook.cc", "0".repeat(64)), 401, "a wrong token");
-  assert.equal(await call("hook-a.adsbook.cc", "not-a-token"), 401, "a malformed token");
-  assert.equal(await call("hook-a.adsbook.cc", tokenB), 401, "tenant B's token on tenant A's host");
+  assert.equal(await call("hook-a.adsbook.my.id", "0".repeat(64)), 401, "a wrong token");
+  assert.equal(await call("hook-a.adsbook.my.id", "not-a-token"), 401, "a malformed token");
+  assert.equal(await call("hook-a.adsbook.my.id", tokenB), 401, "tenant B's token on tenant A's host");
   assert.equal(await call("shop-a.example", tokenA), 404, "A's own token on A's custom domain");
   assert.deepEqual(writes(), [0, 0], "a refused webhook wrote evidence");
   assert.deepEqual(changes(), before, "a refused webhook changed a row (rate limit, store or control plane)");
 
-  assert.equal(await call("hook-a.adsbook.cc", tokenA), 200);
+  assert.equal(await call("hook-a.adsbook.my.id", tokenA), 200);
   assert.deepEqual(writes(), [1, 0], "the accepted call recorded for its own tenant only");
 
   // A rotated token stops the old one at once.
   const rotated = await issueWebhookToken(platformDb, "w-a", "autolaris");
-  assert.equal(await call("hook-a.adsbook.cc", tokenA), 401);
-  assert.equal(await call("hook-a.adsbook.cc", rotated), 200);
+  assert.equal(await call("hook-a.adsbook.my.id", tokenA), 401);
+  assert.equal(await call("hook-a.adsbook.my.id", rotated), 200);
   assert.deepEqual(writes(), [2, 0]);
 });
 
 test("T-25: a custom primary moves indexing off the subdomain; the probe answers the tenant; a pending host never reaches tenant code", async () => {
-  const platformDb = await platform([["d-a", "active", "dom-a.adsbook.cc"]]);
+  const platformDb = await platform([["d-a", "active", "dom-a.adsbook.my.id"]]);
   platformDb.sqlite.exec(`
-    UPDATE tenant_hosts SET is_primary = 0 WHERE host = 'dom-a.adsbook.cc';
+    UPDATE tenant_hosts SET is_primary = 0 WHERE host = 'dom-a.adsbook.my.id';
     INSERT INTO tenant_hosts (host, tenant_id, kind, domain_group, status, is_primary, created_at)
       VALUES ('tokoa.com', 'd-a', 'custom', 'tokoa.com', 'active', 1, '2026-11-16'),
              ('baru.com', 'd-a', 'custom', 'baru.com', 'pending', 0, '2026-11-16');
@@ -768,11 +769,11 @@ test("T-25: a custom primary moves indexing off the subdomain; the probe answers
     }
   };
   // Paduka 2026-11-16: buyer pages on the subdomain move to the custom primary for good.
-  const sub = await visit("dom-a.adsbook.cc");
+  const sub = await visit("dom-a.adsbook.my.id");
   assert.equal(sub.status, 301);
   assert.equal(sub.location, "https://tokoa.com/");
   // The owner's way in stays on the subdomain, unindexed, with canonical URLs on the primary.
-  const signIn = await visit("dom-a.adsbook.cc", "/hello");
+  const signIn = await visit("dom-a.adsbook.my.id", "/hello");
   assert.equal(signIn.reached, true);
   assert.equal(signIn.robots, "noindex, nofollow", "the subdomain never competes with the custom primary");
   assert.equal(signIn.siteUrl, "https://tokoa.com", "canonical URLs follow the primary host");
@@ -797,7 +798,7 @@ test("T-21: there is no installer page or route to answer /install", () => {
 });
 
 test("API-3 and ISO-4: each OpenAPI document names its own tenant's host, and a key works on its own tenant's host only", async () => {
-  const platformDb = await platform([["k-a", "active", "key-a.adsbook.cc"], ["k-b", "active", "key-b.adsbook.cc"]]);
+  const platformDb = await platform([["k-a", "active", "key-a.adsbook.my.id"], ["k-b", "active", "key-b.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
   const secrets: Record<string, string> = { "k-a": "adsbook_live_tenant_a_key_000000000001", "k-b": "adsbook_live_tenant_b_key_000000000002" };
   for (const id of ["k-a", "k-b"]) {
@@ -826,12 +827,12 @@ test("API-3 and ISO-4: each OpenAPI document names its own tenant's host, and a 
   };
   for (const [path, route, suffix] of [["/api/v1/openapi.json", headlessOpenApiRoute, "/api/v1"], ["/api/ops/v1/openapi.json", opsOpenApiRoute, "/api/ops/v1"]] as const) {
     for (const id of ["k-a", "k-b"]) {
-      const host = id === "k-a" ? "key-a.adsbook.cc" : "key-b.adsbook.cc";
+      const host = id === "k-a" ? "key-a.adsbook.my.id" : "key-b.adsbook.my.id";
       const own = await call(host, path, route, secrets[id]);
       assert.equal(own.status, 200, `${path} on ${host}`);
       assert.equal(own.body.servers?.[0]?.url, `https://${host}${suffix}`);
     }
-    const crossed = await call("key-b.adsbook.cc", path, route, secrets["k-a"]);
+    const crossed = await call("key-b.adsbook.my.id", path, route, secrets["k-a"]);
     assert.equal(crossed.status, 401, `${path}: tenant A's key on tenant B's host`);
   }
 });
@@ -864,10 +865,10 @@ test("T-26/IAM-10: a signup yields an active tenant whose owner signs in with th
   const result = await run("toko-baru");
   assert.equal(result.status, 201);
   if (result.status !== 201) return;
-  assert.equal(result.host, "toko-baru.adsbook.cc");
+  assert.equal(result.host, "toko-baru.adsbook.my.id");
   const row = platformDb.sqlite.prepare("SELECT status, schema_version FROM tenants WHERE id = ?").get(result.tenantId) as { status: string; schema_version: number };
   assert.deepEqual({ ...row }, { status: "active", schema_version: CHAIN.length });
-  const host = platformDb.sqlite.prepare("SELECT status, is_primary, kind FROM tenant_hosts WHERE host = 'toko-baru.adsbook.cc'").get() as object;
+  const host = platformDb.sqlite.prepare("SELECT status, is_primary, kind FROM tenant_hosts WHERE host = 'toko-baru.adsbook.my.id'").get() as object;
   assert.deepEqual({ ...host }, { status: "active", is_primary: 1, kind: "subdomain" });
   const event = platformDb.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE tenant_id = ? AND kind = 'signup'").get(result.tenantId) as { detail_json: string };
   assert.equal(JSON.parse(event.detail_json).terms_version, TERMS_VERSION);
@@ -926,7 +927,7 @@ test("T-26: a failure at each provisioning step leaves no active tenant, its hos
       assert.equal(JSON.parse(event.detail_json).step, step);
 
       // The host never routes.
-      const href = `https://gagal-${step}.adsbook.cc/hello`;
+      const href = `https://gagal-${step}.adsbook.my.id/hello`;
       let reached = false;
       const onRequest = createMiddleware();
       const response = (await onRequest(
@@ -1012,22 +1013,22 @@ test("T-26/IAM-8: a handoff redeems once on its own host and purpose; replay, ex
     }
   };
 
-  assert.equal((await redeem("serah-b.adsbook.cc", a.handoffToken)).status, 401, "A's token on B's host");
-  assert.equal((await redeem("serah-a.adsbook.cc", a.handoffToken, { origin: "https://serah-b.adsbook.cc", "sec-fetch-site": "same-site" })).status, 401, "posted from another seller host");
-  assert.equal((await redeem("serah-a.adsbook.cc", a.handoffToken, { "sec-fetch-site": "cross-site" })).status, 401, "no Origin");
-  const first = await redeem("serah-a.adsbook.cc", a.handoffToken);
+  assert.equal((await redeem("serah-b.adsbook.my.id", a.handoffToken)).status, 401, "A's token on B's host");
+  assert.equal((await redeem("serah-a.adsbook.my.id", a.handoffToken, { origin: "https://serah-b.adsbook.my.id", "sec-fetch-site": "same-site" })).status, 401, "posted from another seller host");
+  assert.equal((await redeem("serah-a.adsbook.my.id", a.handoffToken, { "sec-fetch-site": "cross-site" })).status, 401, "no Origin");
+  const first = await redeem("serah-a.adsbook.my.id", a.handoffToken);
   assert.equal(first.status, 303);
   assert.equal(first.location, "/admin/dashboard");
   assert.ok(first.cookie?.value);
   assert.equal(first.cookie?.options.secure, true);
   assert.equal(first.cookie?.options.path, "/");
   assert.equal("domain" in (first.cookie?.options ?? {}), false);
-  assert.equal((await redeem("serah-a.adsbook.cc", a.handoffToken)).status, 401, "replay");
+  assert.equal((await redeem("serah-a.adsbook.my.id", a.handoffToken)).status, 401, "replay");
 
-  const recovery = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.cc", "owner_recovery");
-  assert.equal((await redeem("serah-a.adsbook.cc", recovery)).status, 401, "wrong purpose");
-  const expired = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.cc", "signup", new Date(Date.now() - 11 * 60_000));
-  assert.equal((await redeem("serah-a.adsbook.cc", expired)).status, 401, "expired");
+  const recovery = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "owner_recovery");
+  assert.equal((await redeem("serah-a.adsbook.my.id", recovery)).status, 401, "wrong purpose");
+  const expired = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "signup", new Date(Date.now() - 11 * 60_000));
+  assert.equal((await redeem("serah-a.adsbook.my.id", expired)).status, 401, "expired");
 
   for (const token of [a.handoffToken, b.handoffToken, recovery, expired]) {
     assert.equal(logged.some((line) => line.includes(token)), false, "a handoff token reached a log line");
@@ -1292,7 +1293,7 @@ test("the Worker entry module exports only its handler and the Durable Object cl
 });
 
 test("T-26: the handoff's real Origin is carried past Astro only on its own path, and a client copy is dropped", () => {
-  const forged = prepareHandoffRequest(new Request("https://toko.adsbook.cc/api/handoff", {
+  const forged = prepareHandoffRequest(new Request("https://toko.adsbook.my.id/api/handoff", {
     method: "POST",
     headers: {
       origin: "https://evil.example",
@@ -1302,12 +1303,12 @@ test("T-26: the handoff's real Origin is carried past Astro only on its own path
     },
   }));
   assert.equal(forged.headers.get(HANDOFF_ORIGIN_HEADER), "https://evil.example", "a client-sent copy is replaced");
-  assert.equal(forged.headers.get("origin"), "https://toko.adsbook.cc");
+  assert.equal(forged.headers.get("origin"), "https://toko.adsbook.my.id");
   assert.equal(forged.headers.get("sec-fetch-site"), "same-origin", "presented as same-origin to Astro only");
-  const noOrigin = prepareHandoffRequest(new Request("https://toko.adsbook.cc/api/handoff", { method: "POST", headers: { [HANDOFF_ORIGIN_HEADER]: "https://app.adsbook.id" } }));
+  const noOrigin = prepareHandoffRequest(new Request("https://toko.adsbook.my.id/api/handoff", { method: "POST", headers: { [HANDOFF_ORIGIN_HEADER]: "https://app.adsbook.id" } }));
   assert.equal(noOrigin.headers.get(HANDOFF_ORIGIN_HEADER), null, "no Origin, no carried origin");
   assert.equal(noOrigin.headers.get("x-adsbook-handoff-fetch-site"), null, "a client-sent fetch-site copy is dropped");
-  const other = new Request("https://toko.adsbook.cc/api/admin/orders", { method: "POST", headers: { origin: "https://evil.example" } });
+  const other = new Request("https://toko.adsbook.my.id/api/admin/orders", { method: "POST", headers: { origin: "https://evil.example" } });
   assert.equal(prepareHandoffRequest(other), other, "every other path keeps Astro's check");
 });
 
@@ -1374,8 +1375,8 @@ test("T-27: ISO-12/AUTHZ-4 — a tenant session never opens platform admin, a pl
   };
   assert.equal(await send("app.adsbook.id", "/api/platform/tenants", `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, platformTenantsRoute), 200);
   assert.equal(await send("app.adsbook.id", "/api/platform/tenants", `__Host-adsbook_session=${token}`, platformTenantsRoute), 401, "a tenant session on the platform");
-  assert.equal(await send("iso-dua-belas.adsbook.cc", "/api/admin/orders", `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, adminOrdersRoute), 401, "a platform session on a seller host");
-  assert.equal(await send("iso-dua-belas.adsbook.cc", "/api/platform/tenants", `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, platformTenantsRoute), 404, "platform routes do not exist on seller hosts");
+  assert.equal(await send("iso-dua-belas.adsbook.my.id", "/api/admin/orders", `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, adminOrdersRoute), 401, "a platform session on a seller host");
+  assert.equal(await send("iso-dua-belas.adsbook.my.id", "/api/platform/tenants", `${PLATFORM_COOKIE_NAME}=${signed.cookie}`, platformTenantsRoute), 404, "platform routes do not exist on seller hosts");
 });
 
 test("T-27/AUTHZ-3: platform_support suspends and resumes but cannot purge, change plan or recover; every action is audited", async () => {
@@ -1398,7 +1399,7 @@ test("T-27/AUTHZ-3: platform_support suspends and resumes but cannot purge, chan
 
   // IAM-7: the suspended tenant's host refuses everything, sessions included.
   const onRequest = createMiddleware();
-  const href = "https://diaudit.adsbook.cc/hello";
+  const href = "https://diaudit.adsbook.my.id/hello";
   const previous = console.log;
   console.log = () => undefined;
   let status = 0;
@@ -1434,8 +1435,8 @@ test("T-27/IAM-9: owner recovery sets the password on the seller host and revoke
   const issued = await runTenantAction(platformDb, owner, tenant.tenantId, "recover", { evidence: "telepon ke nomor pendaftaran, cocok" });
   assert.ok(issued.ok && issued.recoveryToken);
   if (!issued.ok || !issued.recoveryToken) return;
-  const context = { tenantId: tenant.tenantId, host: "pulih.adsbook.cc", hostKind: "subdomain" };
-  assert.equal((await redeemOwnerRecovery(platformDb, database, { ...context, host: "lain.adsbook.cc" }, issued.recoveryToken, "password-baru-panjang")).ok, false, "wrong host");
+  const context = { tenantId: tenant.tenantId, host: "pulih.adsbook.my.id", hostKind: "subdomain" };
+  assert.equal((await redeemOwnerRecovery(platformDb, database, { ...context, host: "lain.adsbook.my.id" }, issued.recoveryToken, "password-baru-panjang")).ok, false, "wrong host");
   const redeemed = await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "password-baru-panjang");
   assert.equal(redeemed.ok, true);
   const credential = await getAdminCredential(database, "owner@pulih.example");
@@ -1524,7 +1525,7 @@ test("T-27 review: a refused recovery attempt does not spend the token; issuance
   const issued = await runTenantAction(platformDb, owner, tenant.tenantId, "recover", { evidence: "verifikasi lewat telepon terdaftar" });
   assert.ok(issued.ok && issued.recoveryToken);
   if (!issued.ok || !issued.recoveryToken) return;
-  const context = { tenantId: tenant.tenantId, host: "tautan.adsbook.cc", hostKind: "subdomain" };
+  const context = { tenantId: tenant.tenantId, host: "tautan.adsbook.my.id", hostKind: "subdomain" };
   assert.equal((await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "owner@tautan.example")).ok, false, "the email as password");
   assert.equal((await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "pendek")).ok, false);
   assert.equal((await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "akhirnya-password-benar")).ok, true, "the token survived the refusals");
@@ -1552,7 +1553,7 @@ test("T-27 review: concurrent recoveries — one wins, the loser changes nothing
   if (tenant.status !== 201) return;
   const database = createTenantDb(stores.get(tenant.tenantId).stub);
   const operator = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
-  const context = { tenantId: tenant.tenantId, host: "balapan-pulih.adsbook.cc", hostKind: "subdomain" };
+  const context = { tenantId: tenant.tenantId, host: "balapan-pulih.adsbook.my.id", hostKind: "subdomain" };
   const issued = await runTenantAction(platformDb, operator, tenant.tenantId, "recover", { evidence: "verifikasi lewat telepon terdaftar" });
   assert.ok(issued.ok && issued.recoveryToken);
   if (!issued.ok || !issued.recoveryToken) return;
@@ -1604,7 +1605,7 @@ test("T-27 review: a recovery whose outcome cannot be recorded stays visible as 
   console.error = (label: unknown) => void logged.push(String(label));
   platformDb.failWhen = /owner_recovery_failed|VALUES \(\?, \?, 'platform'/;
   try {
-    const result = await redeemOwnerRecovery(platformDb, broken, { tenantId: tenant.tenantId, host: "tak-tercatat.adsbook.cc", hostKind: "subdomain" }, issued.recoveryToken, "password-baru-panjang", new Date(Date.now() - 10 * 60_000));
+    const result = await redeemOwnerRecovery(platformDb, broken, { tenantId: tenant.tenantId, host: "tak-tercatat.adsbook.my.id", hostKind: "subdomain" }, issued.recoveryToken, "password-baru-panjang", new Date(Date.now() - 10 * 60_000));
     assert.equal(result.ok, false);
   } finally {
     platformDb.failWhen = null;
@@ -1625,15 +1626,22 @@ test("T-27 review: every unresolved recovery is listed, beyond any page size", a
 
 // ---- T-38: store readiness (PR-23, UX-2, UX-5) ----
 
-async function readinessHarness(slug: string) {
+async function readinessHarness(slug: string, options: { preview?: boolean } = {}) {
   const { stores, env, run } = await signupHarness();
   const created = await run(slug);
   assert.equal(created.status, 201);
   if (created.status !== 201) throw new Error("signup failed");
+  // A signup lands in Preview Mode (ADR-041); these stores are paid for unless asked.
+  if (!options.preview) {
+    await (env.PLATFORM_DB as D1Database)
+      .prepare("UPDATE tenants SET subscription_ends_at = '2099-01-01T00:00:00.000Z', grace_ends_at = '2099-01-03T00:00:00.000Z' WHERE id = ?")
+      .bind(created.tenantId)
+      .run();
+  }
   const sql = stores.get(created.tenantId).storage.db;
   // Bound like the platform binds it (ADR-040): the same tenant id and env.
   const database = bindCredentials(createTenantDb(stores.get(created.tenantId).stub), created.tenantId, env);
-  const host = `${slug}.adsbook.cc`;
+  const host = `${slug}.adsbook.my.id`;
   /** One request through the real middleware: the status, and whether the route ran. */
   const open = async (path: string, method = "GET") => {
     const href = `https://${host}${path}`;
@@ -1652,7 +1660,7 @@ async function readinessHarness(slug: string) {
         } as never,
         (async () => ((reached = true), new Response("ok"))) as never,
       )) as Response;
-      return { status: response.status, reached, body: await response.text() };
+      return { status: response.status, reached, body: await response.text(), robots: response.headers.get("x-robots-tag") };
     } finally {
       Object.assign(console, original);
     }
@@ -1791,7 +1799,7 @@ test("T-39/PR-24: signup without the terms is refused; an accepted signup stores
   const created = await run("setuju-versi");
   assert.equal(created.status, 201);
   const event = platformDb.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE kind = 'signup' AND tenant_id = ?").get((created as { tenantId: string }).tenantId) as { detail_json: string };
-  // Seller terms v0.2 (2026-11-16) names the seller zone adsbook.cc; v0.1 stays served for those who accepted it.
+  // Seller terms v0.2 (2026-11-16) names the seller zone adsbook.my.id; v0.1 stays served for those who accepted it.
   assert.deepEqual(JSON.parse(event.detail_json), { terms_version: "0.2", privacy_version: "0.1" });
   assert.equal(TERMS_VERSION, "0.2");
   assert.ok(legalText("seller-terms", "0.2") && legalText("seller-terms", "0.1") && legalText("platform-privacy", "0.1"), "every accepted version is served");
@@ -1904,7 +1912,7 @@ test("T-47/A-55: an order from /embed/form through the real middleware and route
     return Response.json({ success: true, data: [] });
   }) as typeof fetch;
   const tasks: Promise<unknown>[] = [];
-  const host = "embed-satu.adsbook.cc";
+  const host = "embed-satu.adsbook.my.id";
   const href = `https://${host}/api/submit-order`;
   const body = {
     submit_token: "embed-form-token-0001", website: "", customer_name: "Rina Lestari", customer_phone: "081234567890",
@@ -1950,7 +1958,7 @@ test("T-47/A-55: an order from /embed/form through the real middleware and route
 // ---- T-43: www -> root once the root is the active primary (PR-28) ----
 
 test("T-43/HOST-6: www redirects to the root once the root is the active primary; APIs never move; a non-primary root keeps www", async () => {
-  const platformDb = await platform([["m-a", "active", "m-a.adsbook.cc"]]);
+  const platformDb = await platform([["m-a", "active", "m-a.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
   stores.get("m-a").storage.db.exec("INSERT INTO stores (id, name, slug, created_at) VALUES (1, 'Merchant', 'm-a', '2026-11-16')");
   makeReady(stores.get("m-a").storage.db);
@@ -1979,7 +1987,7 @@ test("T-43/HOST-6: www redirects to the root once the root is the active primary
   assert.equal((await ask("https://www.merchant.com/api/order-status")).status !== 301, true, "APIs and webhooks never move");
 
   // While the root is not the primary (still pending its probe), www is not redirected.
-  platformDb.sqlite.exec("UPDATE tenant_hosts SET is_primary = 0 WHERE tenant_id = 'm-a'; UPDATE tenant_hosts SET is_primary = 1 WHERE host = 'm-a.adsbook.cc'; UPDATE tenants SET cache_version = cache_version + 1 WHERE id = 'm-a'");
+  platformDb.sqlite.exec("UPDATE tenant_hosts SET is_primary = 0 WHERE tenant_id = 'm-a'; UPDATE tenant_hosts SET is_primary = 1 WHERE host = 'm-a.adsbook.my.id'; UPDATE tenants SET cache_version = cache_version + 1 WHERE id = 'm-a'");
   await new Promise((resolve) => setTimeout(resolve, 5_100)); // the gate's host cache (5 s)
   assert.equal((await ask("https://www.merchant.com/produk/kopi")).status !== 301, true);
 });
@@ -2004,7 +2012,7 @@ test("T-44/PR-29: one 'ready' and one 'first order' notice through the real midd
     if (url.includes("/getReceiverScoreByNumberUser")) return Response.json({ success: true, data: {} });
     return Response.json({ success: true, data: [] });
   }) as typeof fetch;
-  const host = "kabar-satu.adsbook.cc";
+  const host = "kabar-satu.adsbook.my.id";
   const tasks: Promise<unknown>[] = [];
   const locals = () => ({ runtimeEnv: store.env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } }) as Record<string, unknown>;
   const order = (token: string) => {
@@ -2090,7 +2098,7 @@ test("T-48: a key saved through the admin route is stored sealed, opens only on 
   const storeB = await readinessHarness("kunci-b");
   const save = (database: D1Database, env: Record<string, unknown>, key: string) =>
     adminSettingsRoute.PUT({
-      request: new Request("https://kunci-a.adsbook.cc/api/admin/settings", {
+      request: new Request("https://kunci-a.adsbook.my.id/api/admin/settings", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -2181,7 +2189,7 @@ test("T-48: every credential saved through its own admin route is stored sealed,
   const call = async (route: { PUT: unknown; GET?: unknown }, path: string, body?: unknown) => {
     const handler = (body === undefined ? route.GET : route.PUT) as (context: unknown) => Promise<Response>;
     const response = await handler({
-      request: new Request(`https://kunci-semua.adsbook.cc${path}`, body === undefined ? {} : { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+      request: new Request(`https://kunci-semua.adsbook.my.id${path}`, body === undefined ? {} : { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
       locals,
     });
     return { status: response.status, text: await response.text() };
@@ -2249,7 +2257,7 @@ test("T-48: every credential saved through its own admin route is stored sealed,
 
 test("T-48: the real TenantStore.alarm binds the cipher and seals legacy plaintext, plugin secrets included (T-48 review)", async () => {
   const { TenantStore } = workerModule as unknown as { TenantStore: new (ctx: unknown, env: unknown) => { alarm(): Promise<void> } };
-  const platformDb = await platform([["t-alarm", "active", "alarm.adsbook.cc"]]);
+  const platformDb = await platform([["t-alarm", "active", "alarm.adsbook.my.id"]]);
   const storage = createNodeStorage();
   for (const file of CHAIN) applyMigrationFile(storage, file, splitMigrationStatements);
   storage.db.exec(`
@@ -2293,7 +2301,7 @@ test("T-48: the real TenantStore.alarm binds the cipher and seals legacy plainte
 });
 
 test("Paduka 2026-11-16: the store's subdomain 301s to the active custom primary, keeps its APIs, webhooks and recovery, and serves again once the domain is removed", async () => {
-  const platformDb = await platform([["m-r", "active", "tokodia.adsbook.cc"]]);
+  const platformDb = await platform([["m-r", "active", "tokodia.adsbook.my.id"]]);
   const stores = namespace({ migrated: true });
   stores.get("m-r").storage.db.exec("INSERT INTO stores (id, name, slug, created_at) VALUES (1, 'Toko Dia', 'tokodia', '2026-11-16')");
   makeReady(stores.get("m-r").storage.db);
@@ -2318,20 +2326,84 @@ test("Paduka 2026-11-16: the store's subdomain 301s to the active custom primary
       Object.assign(console, original);
     }
   };
-  assert.deepEqual(await ask("https://tokodia.adsbook.cc/produk/x?fbclid=123"), { status: 301, location: "https://domain.com/produk/x?fbclid=123", reached: false });
+  assert.deepEqual(await ask("https://tokodia.adsbook.my.id/produk/x?fbclid=123"), { status: 301, location: "https://domain.com/produk/x?fbclid=123", reached: false });
   assert.deepEqual(await ask("https://www.domain.com/produk/x?fbclid=123"), { status: 301, location: "https://domain.com/produk/x?fbclid=123", reached: false });
   assert.equal((await ask("https://domain.com/produk/x?fbclid=123")).reached, true, "the primary serves");
   for (const [href, method] of [
-    ["https://tokodia.adsbook.cc/api/webhooks/autolaris/token-abc", "POST"],
-    ["https://tokodia.adsbook.cc/api/owner-recovery", "POST"],
-    ["https://tokodia.adsbook.cc/pemulihan", "GET"],
-    ["https://tokodia.adsbook.cc/hello", "GET"],
+    ["https://tokodia.adsbook.my.id/api/webhooks/autolaris/token-abc", "POST"],
+    ["https://tokodia.adsbook.my.id/api/owner-recovery", "POST"],
+    ["https://tokodia.adsbook.my.id/pemulihan", "GET"],
+    ["https://tokodia.adsbook.my.id/hello", "GET"],
   ] as const) {
     assert.notEqual((await ask(href, method)).status, 301, `${method} ${href} stays on the subdomain`);
   }
   // The domain is removed (or replaced): the primary is the subdomain again and it serves, no loop.
-  platformDb.sqlite.exec("UPDATE tenant_hosts SET status = 'revoked', is_primary = 0 WHERE tenant_id = 'm-r' AND kind = 'custom'; UPDATE tenant_hosts SET is_primary = 1 WHERE host = 'tokodia.adsbook.cc'; UPDATE tenants SET cache_version = cache_version + 1 WHERE id = 'm-r'");
-  const served = await ask("https://tokodia.adsbook.cc/produk/x?fbclid=123");
+  platformDb.sqlite.exec("UPDATE tenant_hosts SET status = 'revoked', is_primary = 0 WHERE tenant_id = 'm-r' AND kind = 'custom'; UPDATE tenant_hosts SET is_primary = 1 WHERE host = 'tokodia.adsbook.my.id'; UPDATE tenants SET cache_version = cache_version + 1 WHERE id = 'm-r'");
+  const served = await ask("https://tokodia.adsbook.my.id/produk/x?fbclid=123");
   assert.equal(served.status, 200);
   assert.equal(served.reached, true, "the subdomain serves the store directly again");
 });
+
+test("ADR-041 (T-49): preview → grace → expired through the real middleware; sign-in and admin never close", async () => {
+  const store = await readinessHarness("bayar-dulu", { preview: true });
+  store.product();
+  store.warehouse(1, 1, "ORIGIN-1", "pickup-1");
+  store.mengantar();
+  const platformDb = store.env.PLATFORM_DB as D1Database;
+  const setEnds = (ends: number | null) =>
+    platformDb
+      .prepare("UPDATE tenants SET subscription_ends_at = ?, grace_ends_at = ? WHERE id = ?")
+      .bind(ends === null ? null : new Date(ends).toISOString(), ends === null ? null : new Date(ends + 48 * 3_600_000).toISOString(), store.tenantId)
+      .run();
+  const hour = 3_600_000;
+  const expectState = async (label: string, code: string | null) => {
+    const page = await store.open("/produk/kopi");
+    assert.equal(page.reached, true, `${label}: the storefront renders`);
+    for (const [path, method] of [["/api/submit-order", "POST"], ["/api/submit-middle-order", "POST"], ["/api/record-abandoned-order", "POST"], ["/api/v1/checkout", "POST"], ["/api/shipping-rates", "GET"]] as const) {
+      const response = await store.open(path, method);
+      if (code) {
+        assert.equal(response.status, 402, `${label} ${path}`);
+        assert.equal(response.reached, false, `${label} ${path} reached its route`);
+        assert.equal(JSON.parse(response.body).code, code);
+      } else {
+        assert.equal(response.reached, true, `${label} ${path}`);
+      }
+    }
+    assert.equal(page.robots, code ? "noindex, nofollow" : null, `${label}: indexing`);
+    // The owner's way in and the billing screen are never behind the subscription.
+    assert.equal((await store.open("/hello")).reached, true, `${label} /hello`);
+    for (const path of ["/admin", "/admin/billing", "/api/admin/billing"]) {
+      const response = await store.open(path);
+      assert.ok(response.status === 302 || response.status === 401, `${label} ${path} → ${response.status}`);
+    }
+  };
+  await expectState("preview", "SUBSCRIPTION_REQUIRED");
+  await setEnds(Date.now() + 10 * 24 * hour);
+  await expectState("subscribed", null);
+  await setEnds(Date.now() - hour);
+  await expectState("grace", null);
+  await setEnds(Date.now() - 49 * hour);
+  await expectState("expired", "SUBSCRIPTION_EXPIRED");
+});
+
+test("T-50/BILL-7: only platform_owner grants subscription days; the grant needs a reason, is audited, and opens checkout", async () => {
+  const { platformDb, run } = await platformHarness();
+  const tenant = await run("diberi-hari");
+  assert.ok(tenant.status === 201);
+  if (tenant.status !== 201) return;
+  const support = { id: "pu_s", email: "support@ops.example", role: "platform_support" as const };
+  const owner = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
+  const ends = () => (platformDb.sqlite.prepare("SELECT subscription_ends_at AS e FROM tenants WHERE id = ?").get(tenant.tenantId) as { e: string | null }).e;
+  const refused = await runTenantAction(platformDb, support, tenant.tenantId, "grant-subscription", { days: 30, reason: "pilot Saraku" });
+  assert.equal(refused.ok || refused.status, 403);
+  assert.equal(ends(), null, "a support grant changes nothing");
+  assert.equal((await runTenantAction(platformDb, owner, tenant.tenantId, "grant-subscription", { days: 30, reason: "" })).ok, false);
+  const granted = await runTenantAction(platformDb, owner, tenant.tenantId, "grant-subscription", { days: 30, reason: "pilot Saraku" });
+  assert.ok(granted.ok);
+  assert.ok(ends() && Date.parse(ends()!) > Date.now() + 29 * 86_400_000);
+  const audit = platformDb.sqlite.prepare("SELECT actor, detail_json FROM tenant_events WHERE tenant_id = ? AND kind = 'subscription_granted'").all(tenant.tenantId) as { actor: string; detail_json: string }[];
+  assert.equal(audit.length, 1);
+  assert.equal(audit[0].actor, "platform:pu_o");
+  assert.equal(JSON.parse(audit[0].detail_json).reason, "pilot Saraku");
+});
+

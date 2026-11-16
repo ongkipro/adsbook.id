@@ -2,6 +2,7 @@
 import PlatformLayout from '../../../components/platform/PlatformLayout.astro';
 import { getRuntimeEnv } from '../../../lib/env';
 import { ACTION_ROLES, tenantDetail } from '../../../platform/admin/tenants';
+import { billingState } from '../../../platform/billing';
 export const prerender = false;
 
 // UX-4: one tenant's hosts, events and health, and the actions its role allows.
@@ -12,6 +13,7 @@ const role = Astro.locals.platformUser?.role ?? 'platform_support';
 const may = (action: keyof typeof ACTION_ROLES) => ACTION_ROLES[action].includes(role);
 const tenant = detail.tenant as Record<string, string | number | null>;
 const time = (iso: unknown) => (typeof iso === 'string' ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(iso)) : '—');
+const BILLING_LABELS = { preview: 'Mode Preview', subscribed: 'Aktif', grace: 'Masa tenggang', expired: 'Berakhir' } as const;
 const plans = (await platformDb.prepare('SELECT id FROM plans ORDER BY id').all<{ id: string }>()).results;
 ---
 <PlatformLayout title={String(tenant.slug)} active="tenants">
@@ -24,6 +26,8 @@ const plans = (await platformDb.prepare('SELECT id FROM plans ORDER BY id').all<
     <div><dt class="text-xs text-slate-500">Paket</dt><dd class="font-semibold">{tenant.plan_id}</dd></div>
     <div><dt class="text-xs text-slate-500">Dibuat</dt><dd class="font-semibold">{time(tenant.created_at)}</dd></div>
     <div><dt class="text-xs text-slate-500">Dihapus setelah</dt><dd class="font-semibold">{time(tenant.purge_after)}</dd></div>
+    <div><dt class="text-xs text-slate-500">Langganan</dt><dd class="font-semibold" id="subscriptionState">{Number(tenant.is_demo) === 1 ? 'toko contoh' : BILLING_LABELS[billingState({ subscriptionEndsAt: tenant.subscription_ends_at as string | null, graceEndsAt: tenant.grace_ends_at as string | null }, new Date())]}</dd></div>
+    <div><dt class="text-xs text-slate-500">Aktif sampai</dt><dd class="font-semibold">{time(tenant.subscription_ends_at)}</dd></div>
   </dl>
 
   <section class="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm" aria-labelledby="actionsTitle" data-tenant={String(tenant.id)} id="actions">
@@ -49,6 +53,15 @@ const plans = (await platformDb.prepare('SELECT id FROM plans ORDER BY id').all<
           <label for="plan" class="block text-xs font-semibold text-slate-700">Paket</label>
           <select id="plan" name="plan" class="admin-input-flat">{plans.map((plan) => <option value={plan.id} selected={plan.id === tenant.plan_id}>{plan.id}</option>)}</select>
           <button type="submit" class="btn-secondary">Ubah paket</button>
+        </form>
+      )}
+      {may('grant-subscription') && tenant.status === 'active' && (
+        <form data-action="grant-subscription" class="space-y-2">
+          <label for="grantDays" class="block text-xs font-semibold text-slate-700">Beri hari langganan (BILL-7, tercatat di riwayat)</label>
+          <input id="grantDays" name="days" type="number" inputmode="numeric" required min="1" max="730" value="30" class="admin-input-flat" />
+          <label for="grantReason" class="block text-xs font-semibold text-slate-700">Alasan</label>
+          <input id="grantReason" name="reason" required minlength="5" maxlength="300" class="admin-input-flat" placeholder="Contoh: pilot Saraku" />
+          <button type="submit" class="btn-secondary">Beri langganan</button>
         </form>
       )}
       {may('recover') && tenant.status === 'active' && (

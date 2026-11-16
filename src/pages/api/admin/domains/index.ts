@@ -47,7 +47,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   return jsonOk(
     {
       message: replace
-        ? "Domain diganti. Arahkan DNS domain baru lalu klik \"Cek lagi\"; sampai aktif, toko dibuka di alamat adsbook.cc."
+        ? "Domain diganti. Arahkan DNS domain baru lalu klik \"Cek lagi\"; sampai aktif, toko dibuka di alamat adsbook.my.id."
         : "Domain ditambahkan. Arahkan DNS lalu klik \"Cek lagi\".",
       data: { domains: result.value, cname_target: CNAME_TARGET },
     },

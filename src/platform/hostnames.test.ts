@@ -37,7 +37,7 @@ async function setup() {
     db.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES (?, ?, ?, 'active', '2026-11-16')").run(id, id, `${id}@example.test`);
     db.sqlite
       .prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'active', 1, '2026-11-16')")
-      .run(`${id}.adsbook.cc`, id);
+      .run(`${id}.adsbook.my.id`, id);
   }
   const cloudflare = createFakeCloudflare();
   const api = cloudflareHostnameApi({ zoneId: cloudflare.zoneId, token: cloudflare.token, base: "https://cf.test/client/v4", fetcher: cloudflare.fetch });
@@ -51,7 +51,7 @@ async function setup() {
 
 test("HOST-4: the zone, the platform domain, their subdomains and hosts over 64 characters are refused with no API call", async () => {
   const { db, cloudflare, api } = await setup();
-  for (const host of ["adsbook.cc", "toko.adsbook.cc", "adsbook.id", "app.adsbook.id", `${"a".repeat(61)}.com`, "not a host", "localhost"]) {
+  for (const host of ["adsbook.my.id", "toko.adsbook.my.id", "adsbook.id", "app.adsbook.id", `${"a".repeat(61)}.com`, "not a host", "localhost"]) {
     const result = await claimDomain(db, api, "t-a", host, "subdomain");
     assert.equal(result.ok, false, host);
     if (!result.ok) assert.equal(result.status, 422, host);
@@ -77,7 +77,7 @@ test("create → pending with the merchant's message → active only when both s
   const pending = await refreshDomain(db, api, "t-a", "tokosaya.com");
   assert.ok(pending.ok);
   assert.equal(pending.value.status, "pending");
-  assert.match(pending.value.errors[0], /DNS belum mengarah ke cname\.adsbook\.cc/);
+  assert.match(pending.value.errors[0], /DNS belum mengarah ke cname\.adsbook\.my\.id/);
 
   // Hostname active but certificate still issuing: no routing yet.
   cloudflare.activate("tokosaya.com", "pending_validation");
@@ -141,7 +141,7 @@ test("DOM-5: removal revokes, quarantines, moves the primary back and deletes at
   await refreshDomain(db, api, "t-a", "hapus.com");
   assert.ok((await setPrimaryDomain(db, "t-a", "hapus.com", async () => true)).ok);
   assert.equal(row("hapus.com").is_primary, 1);
-  assert.equal(row("t-a.adsbook.cc").is_primary, 0);
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 0);
 
   const before = cacheVersion("t-a");
   const now = new Date("2026-11-16T05:00:00.000Z");
@@ -152,7 +152,7 @@ test("DOM-5: removal revokes, quarantines, moves the primary back and deletes at
   assert.equal(row("hapus.com").cf, null, "deleted at Cloudflare, id cleared");
   assert.equal(cloudflare.byHost("hapus.com"), undefined);
   assert.equal(cloudflare.byHost("www.hapus.com"), undefined);
-  assert.equal(row("t-a.adsbook.cc").is_primary, 1, "the platform subdomain is primary again");
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 1, "the platform subdomain is primary again");
   assert.ok(cacheVersion("t-a") > before);
 
   // Quarantined: no one claims it for a minute; then it can be claimed again.
@@ -169,7 +169,7 @@ test("a custom host becomes primary only after its HTTPS probe answers this tena
   await refreshDomain(db, api, "t-a", "probe.com");
   const failed = await setPrimaryDomain(db, "t-a", "probe.com", async () => false);
   assert.equal(failed.ok, false);
-  assert.equal(row("t-a.adsbook.cc").is_primary, 1, "a failed probe keeps the old primary");
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 1, "a failed probe keeps the old primary");
   assert.ok((await setPrimaryDomain(db, "t-a", "probe.com", async () => true)).ok);
   assert.equal(row("probe.com").is_primary, 1);
 });
@@ -251,7 +251,7 @@ test("a host removed while its probe runs never leaves the tenant without a prim
     return true;
   });
   assert.equal(result.ok, false);
-  assert.equal(row("t-a.adsbook.cc").is_primary, 1);
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 1);
 });
 
 test("internal errors never reach the merchant verbatim (T-25 review)", async () => {
@@ -340,7 +340,7 @@ test("a promotion landing between a removal's read and its write still leaves a 
     return batch(statements);
   }) as typeof db.batch;
   assert.ok((await removeDomain(db, api, "t-a", "susul.com")).ok);
-  assert.equal(row("t-a.adsbook.cc").is_primary, 1, "the tenant was left without a primary");
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 1, "the tenant was left without a primary");
 });
 
 test("an internal failure while reserving is a logged 500, not a false conflict (T-25 review 2)", async () => {
@@ -388,7 +388,7 @@ test("a root claim's first hostname cannot be activated while the second is stil
   assert.ok(midClaim && !(midClaim as { ok: boolean }).ok, "a mid-claim refresh found nothing to activate");
   assert.equal(db.sqlite.prepare("SELECT 1 FROM tenant_hosts WHERE host = 'balap.com' AND status = 'active'").get(), undefined);
   assert.equal(cloudflare.byHost("balap.com"), undefined, "rolled back at Cloudflare");
-  assert.equal(row("t-a.adsbook.cc").is_primary, 1);
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 1);
 });
 
 test("a removal landing while Cloudflare creates the claim's hostnames still deletes them (T-25 review 4)", async () => {
@@ -538,7 +538,7 @@ test("replace: an invalid, platform, over-long, taken or quarantined new domain 
     .run();
   for (const [host, mode, status] of [
     ["bukan domain", "root", 422],
-    ["toko.adsbook.cc", "subdomain", 422],
+    ["toko.adsbook.my.id", "subdomain", 422],
     ["app.adsbook.id", "subdomain", 422],
     [`${"a".repeat(57)}.com`, "root", 422],
     ["milik-b.com", "subdomain", 409],
@@ -572,7 +572,7 @@ test("replace: a valid new domain revokes and deletes the old one, the subdomain
   }
   const deleted = cloudflare.calls.filter((call) => call.method === "DELETE").map((call) => call.path.split("/").pop());
   assert.deepEqual(deleted.sort(), [...oldIds].sort());
-  assert.equal(row("t-a.adsbook.cc").is_primary, 1, "the subdomain is the primary until the new domain is active");
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 1, "the subdomain is the primary until the new domain is active");
   assert.equal(row("baru.com").status, "pending");
   assert.equal(row("www.baru.com").status, "pending");
   const groups = db.sqlite.prepare("SELECT COUNT(DISTINCT domain_group) AS n FROM tenant_hosts WHERE tenant_id = 't-a' AND kind = 'custom' AND status != 'revoked'").get() as { n: number };
@@ -588,15 +588,15 @@ test("301 to the active custom primary: www and the store's subdomain move, APIs
   const custom: Tenant = { hostKind: "custom", primaryHost: "domain.com" };
   const sub: Tenant = { hostKind: "subdomain", primaryHost: "domain.com" };
   const at = (href: string, tenant: Tenant, method = "GET") => primaryHostRedirect(new URL(href), method, tenant);
-  assert.equal(at("https://tokodia.adsbook.cc/produk/x?fbclid=123", sub), "https://domain.com/produk/x?fbclid=123");
+  assert.equal(at("https://tokodia.adsbook.my.id/produk/x?fbclid=123", sub), "https://domain.com/produk/x?fbclid=123");
   assert.equal(at("https://www.domain.com/produk/x?fbclid=123", custom), "https://domain.com/produk/x?fbclid=123");
-  assert.equal(at("https://tokodia.adsbook.cc/?utm_source=fb&gclid=g", sub, "HEAD"), "https://domain.com/?utm_source=fb&gclid=g");
+  assert.equal(at("https://tokodia.adsbook.my.id/?utm_source=fb&gclid=g", sub, "HEAD"), "https://domain.com/?utm_source=fb&gclid=g");
   assert.equal(at("https://domain.com/produk/x", custom), null, "the primary serves");
   for (const path of ["/api/webhooks/autolaris/tok", "/api/handoff", "/api/owner-recovery", "/api/submit-order", "/pemulihan", "/hello", "/admin", "/admin/orders", "/.well-known/adsbook-probe"]) {
-    assert.equal(at(`https://tokodia.adsbook.cc${path}`, sub), null, path);
+    assert.equal(at(`https://tokodia.adsbook.my.id${path}`, sub), null, path);
   }
-  assert.equal(at("https://tokodia.adsbook.cc/produk/x", sub, "POST"), null, "only GET and HEAD");
+  assert.equal(at("https://tokodia.adsbook.my.id/produk/x", sub, "POST"), null, "only GET and HEAD");
   // No custom primary (none yet, or removed/replaced): the subdomain serves the store.
-  assert.equal(at("https://tokodia.adsbook.cc/produk/x", { hostKind: "subdomain", primaryHost: "tokodia.adsbook.cc" }), null);
-  assert.equal(at("https://tokodia.adsbook.cc/produk/x", { hostKind: "subdomain", primaryHost: null }), null);
+  assert.equal(at("https://tokodia.adsbook.my.id/produk/x", { hostKind: "subdomain", primaryHost: "tokodia.adsbook.my.id" }), null);
+  assert.equal(at("https://tokodia.adsbook.my.id/produk/x", { hostKind: "subdomain", primaryHost: null }), null);
 });
