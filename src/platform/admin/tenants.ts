@@ -31,6 +31,11 @@ export const STALE_HEARTBEAT_MS = 2 * 60 * 60 * 1000;
 export type TenantListRow = {
   id: string;
   slug: string;
+  owner_email: string;
+  owner_whatsapp: string | null;
+  is_demo: number;
+  subscription_ends_at: string | null;
+  grace_ends_at: string | null;
   status: string;
   plan_id: string;
   created_at: string;
@@ -41,26 +46,37 @@ export type TenantListRow = {
   purge_after: string | null;
 };
 
+/** The 200-row cap of the tenant list; the page says so when it is hit. */
+export const TENANT_LIST_LIMIT = 200;
+
 export async function listTenants(
   platformDb: D1Database,
-  filter: { status?: string | null; search?: string | null } = {},
+  filter: { status?: string | null; search?: string | null; billing?: string | null } = {},
+  now = new Date(),
 ): Promise<TenantListRow[]> {
   const status = filter.status && /^[a-z]+$/.test(filter.status) ? filter.status : null;
   const search = filter.search?.trim().toLowerCase().slice(0, 100) || null;
+  const billing = filter.billing && ["preview", "subscribed", "grace", "expired"].includes(filter.billing) ? filter.billing : null;
   return (
     await platformDb
       .prepare(
-        `SELECT t.id, t.slug, t.status, t.plan_id, t.created_at, t.purge_after,
+        `SELECT t.id, t.slug, t.owner_email, t.owner_whatsapp, t.is_demo, t.subscription_ends_at, t.grace_ends_at,
+           t.status, t.plan_id, t.created_at, t.purge_after,
            (SELECT host FROM tenant_hosts p WHERE p.tenant_id = t.id AND p.is_primary = 1) AS primary_host,
            (SELECT MAX(at) FROM tenant_events e WHERE e.tenant_id = t.id) AS last_activity,
            h.heartbeat_at, h.outbox_backlog
          FROM tenants t LEFT JOIN tenant_health h ON h.tenant_id = t.id
          WHERE (?1 IS NULL OR t.status = ?1)
-           AND (?2 IS NULL OR t.slug LIKE '%' || ?2 || '%'
+           AND (?2 IS NULL OR t.slug LIKE '%' || ?2 || '%' OR t.owner_email LIKE '%' || ?2 || '%'
                 OR EXISTS (SELECT 1 FROM tenant_hosts x WHERE x.tenant_id = t.id AND x.host LIKE '%' || ?2 || '%'))
-         ORDER BY t.created_at DESC LIMIT 200`,
+           AND (?3 IS NULL
+                OR (?3 = 'preview' AND t.subscription_ends_at IS NULL)
+                OR (?3 = 'subscribed' AND t.subscription_ends_at > ?4)
+                OR (?3 = 'grace' AND t.subscription_ends_at <= ?4 AND t.grace_ends_at > ?4)
+                OR (?3 = 'expired' AND t.grace_ends_at <= ?4))
+         ORDER BY t.created_at DESC LIMIT ${TENANT_LIST_LIMIT}`,
       )
-      .bind(status, search)
+      .bind(status, search, billing, now.toISOString())
       .all<TenantListRow>()
   ).results;
 }

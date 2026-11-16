@@ -114,7 +114,8 @@ test("unset credentials send nothing; a failing Graph never throws into the sign
 
 test("no platform tag on seller hosts: platform tracking is referenced only from platform-host code", () => {
   const root = new URL("../", import.meta.url).pathname;
-  const allowed = [/^platform\/site\//, /^pages\/platform\//, /^pages\/api\/platform\/signup\.ts$/, /\.test\.ts$/, /^env\.d\.ts$/];
+  // The console's health section names the platform Meta keys only to say whether they are set (T-52); it renders on the platform host alone.
+  const allowed = [/^platform\/site\//, /^pages\/platform\//, /^pages\/api\/platform\/signup\.ts$/, /^components\/platform\/sections\/Health\.astro$/, /\.test\.ts$/, /^env\.d\.ts$/];
   const offenders: string[] = [];
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {

@@ -1,0 +1,123 @@
+---
+import PlatformLayout from '../PlatformLayout.astro';
+import Kpi from '../Kpi.astro';
+import StatusChip from '../StatusChip.astro';
+import { getRuntimeEnv } from '../../../lib/env';
+import { formatIdr } from '../../../lib/format-idr';
+import { BILLING_CYCLES } from '../../../platform/billing';
+import { formatWibDate, formatWibDateTime, INVOICE_LIMIT, INVOICE_STATUSES, invoiceTotals, listPlatformInvoices, subscriptionWindows } from '../../../platform/admin/metrics';
+
+// UX-8: money in, the subscription calendar, every invoice across stores.
+const platformDb = (getRuntimeEnv(Astro.locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database;
+const status = Astro.url.searchParams.get('status') || '';
+const q = Astro.url.searchParams.get('q') || '';
+const now = new Date();
+const [totals, windows, invoices] = await Promise.all([
+  invoiceTotals(platformDb, now),
+  subscriptionWindows(platformDb, now),
+  listPlatformInvoices(platformDb, { status: status || null, search: q || null }),
+]);
+const STATUS_LABELS: Record<string, string> = { pending: 'Menunggu', paid: 'Lunas', expired: 'Kedaluwarsa', cancelled: 'Dibatalkan' };
+const cycleLabel = (code: string) => (BILLING_CYCLES as Record<string, { label: string }>)[code]?.label ?? code;
+const monthName = new Intl.DateTimeFormat('id-ID', { month: 'long', timeZone: 'Asia/Jakarta' }).format(now);
+const filtered = Boolean(status || q);
+const calendar = [
+  { id: 'calEnding', title: 'Berakhir ≤ 14 hari', rows: windows.ending, at: (row: { subscription_ends_at: string }) => `berakhir ${formatWibDate(row.subscription_ends_at)}`, empty: 'Tidak ada.' },
+  { id: 'calGrace', title: 'Masa tenggang', rows: windows.grace, at: (row: { grace_ends_at: string }) => `dijeda ${formatWibDateTime(row.grace_ends_at)}`, empty: 'Tidak ada.' },
+  { id: 'calExpired', title: 'Berakhir 30 hari terakhir', rows: windows.expired, at: (row: { grace_ends_at: string }) => `dijeda sejak ${formatWibDate(row.grace_ends_at)}`, empty: 'Tidak ada.' },
+];
+---
+<PlatformLayout title="Tagihan" active="billing">
+  <h1 class="text-xl font-semibold text-slate-950">Tagihan</h1>
+
+  <section aria-label="Angka tagihan" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <Kpi label={`Diterima ${monthName}`} value={formatIdr(totals.thisMonth)} basis="tagihan lunas, bulan WIB berjalan" />
+    <Kpi label="Bulan lalu" value={formatIdr(totals.lastMonth)} basis="tagihan lunas" />
+    <Kpi label="Menunggu bayar" value={String(totals.pending)} basis="tagihan belum kedaluwarsa" />
+  </section>
+
+  <section class="mt-6" aria-labelledby="calendarTitle">
+    <h2 id="calendarTitle" class="text-base font-semibold text-slate-950">Kalender langganan</h2>
+    <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+      {calendar.map((column) => (
+        <div class="rounded-xl border border-slate-200 bg-white" id={column.id}>
+          <p class="border-b border-slate-100 px-4 py-2 text-sm font-semibold text-slate-800">{column.title} <span class="font-normal text-slate-500">({column.rows.length})</span></p>
+          {column.rows.length ? (
+            <ul class="divide-y divide-slate-100 text-sm">
+              {column.rows.slice(0, 20).map((row) => (
+                <li class="flex items-center justify-between gap-3 px-4 py-2">
+                  <a href={`/platform/tenants/${row.id}`} class="font-semibold text-blue-700 hover:underline">{row.slug}</a>
+                  <span class="text-xs text-slate-500">{column.at(row as never)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p class="px-4 py-3 text-sm text-slate-500">{column.empty}</p>}
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="mt-6" aria-labelledby="invoiceListTitle">
+    <h2 id="invoiceListTitle" class="text-base font-semibold text-slate-950">Semua tagihan</h2>
+    <form method="get" class="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[11rem_1fr_auto] sm:items-end" role="search">
+      <div>
+        <label for="invoiceStatus" class="block text-xs font-semibold text-slate-700">Status</label>
+        <select id="invoiceStatus" name="status" class="admin-input-flat mt-1">
+          <option value="">Semua</option>
+          {INVOICE_STATUSES.map((value) => <option value={value} selected={value === status}>{STATUS_LABELS[value]}</option>)}
+        </select>
+      </div>
+      <div>
+        <label for="invoiceSearch" class="block text-xs font-semibold text-slate-700">Cari nomor tagihan atau slug toko</label>
+        <input id="invoiceSearch" name="q" value={q} class="admin-input-flat mt-1" placeholder="ADB-20261116-… atau toko-a" />
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="btn-primary">Terapkan</button>
+        {filtered && <a href="/platform/billing" class="btn-secondary">Reset</a>}
+      </div>
+    </form>
+    <p class="mt-3 text-xs text-slate-500" id="invoiceCount">{invoices.length} tagihan{invoices.length >= INVOICE_LIMIT ? ` (dibatasi ${INVOICE_LIMIT})` : ''}</p>
+    {invoices.length === 0 ? (
+      <div class="mt-2 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+        {filtered ? <>Tidak ada tagihan yang cocok. <a href="/platform/billing" class="font-semibold text-blue-700 underline">Hapus filter</a></> : 'Belum ada tagihan.'}
+      </div>
+    ) : (
+      <div class="mt-2 relative overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table class="w-full min-w-[720px] text-left text-sm">
+          <thead class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
+            <tr>
+              <th scope="col" class="px-4 py-3">Nomor</th>
+              <th scope="col" class="px-4 py-3">Toko</th>
+              <th scope="col" class="px-4 py-3">Paket</th>
+              <th scope="col" class="px-4 py-3 text-right">Total</th>
+              <th scope="col" class="px-4 py-3">Metode</th>
+              <th scope="col" class="px-4 py-3">Status</th>
+              <th scope="col" class="px-4 py-3">Dibuat</th>
+              <th scope="col" class="px-4 py-3">Dibayar</th>
+              <th scope="col" class="px-4 py-3"><span class="sr-only">Aksi</span></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {invoices.map((invoice) => (
+              <tr class="hover:bg-slate-50">
+                <td class="px-4 py-2 whitespace-nowrap font-mono text-xs">{invoice.invoice_number}</td>
+                <td class="px-4 py-2 whitespace-nowrap">{invoice.slug ? <a href={`/platform/tenants/${invoice.tenant_id}`} class="font-semibold text-blue-700 hover:underline">{invoice.slug}</a> : '—'}</td>
+                <td class="px-4 py-2 whitespace-nowrap">{cycleLabel(invoice.cycle_code)}</td>
+                <td class="px-4 py-2 text-right tabular-nums">{formatIdr(invoice.total_idr)}</td>
+                <td class="px-4 py-2">{invoice.channel_code}</td>
+                <td class="px-4 py-2"><StatusChip value={invoice.status} label={STATUS_LABELS[invoice.status]} /></td>
+                <td class="px-4 py-2 whitespace-nowrap">{formatWibDateTime(invoice.created_at)}</td>
+                <td class="px-4 py-2 whitespace-nowrap">{formatWibDateTime(invoice.paid_at)}</td>
+                <td class="px-4 py-2 text-right">{invoice.status === 'pending' && <button type="button" class="btn-secondary" data-check-invoice={invoice.id}>Cek status</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+  <script>
+    import { checkInvoiceButtons } from '../invoice-check';
+    checkInvoiceButtons();
+  </script>
+</PlatformLayout>

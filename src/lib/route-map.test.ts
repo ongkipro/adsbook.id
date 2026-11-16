@@ -61,14 +61,19 @@ test("platform routes are their own families, and their auth is asked of the pla
   assert.equal(classify("/platform/site"), "Platform site");
   assert.equal(classify("/platform/site/harga"), "Platform site");
   assert.equal(classify("/platform/signup"), "Platform site");
-  assert.equal(classify("/platform/tenants/[id]"), "Platform admin");
+  assert.equal(classify("/platform/[...section]"), "Platform admin");
   assert.equal(classify("/platform/login"), "Platform admin");
   assert.equal(classify("/api/platform/tenants/[id]/[action]"), "Platform API");
   const routes = new Map(buildRouteMap().map((route) => [route.path, route]));
   // Guarded by a platform session, reachable by both platform roles (per-operation limits are ACTION_ROLES').
-  for (const path of ["/platform", "/platform/tenants/[id]", "/platform/health", "/api/platform/tenants", "/api/platform/tenants/[id]/[action]", "/api/platform/logout"]) {
+  for (const path of ["/platform/[...section]", "/api/platform/tenants", "/api/platform/tenants/[id]/[action]", "/api/platform/invoices/[id]/check", "/api/platform/logout"]) {
     assert.equal(routes.get(path)?.auth, "platform session", path);
     assert.deepEqual(routes.get(path)?.roles, ["platform_owner", "platform_support"], path);
+  }
+  // T-52 (UX-10): the team API is platform_owner only (the console page answers 403 to support).
+  for (const path of ["/api/platform/team", "/api/platform/team/[id]"]) {
+    assert.equal(routes.get(path)?.auth, "platform session", path);
+    assert.deepEqual(routes.get(path)?.roles, ["platform_owner"], path);
   }
   // The signup, sign-in and marketing surfaces are public, exactly as the guard lets them through.
   for (const path of ["/platform/site", "/platform/signup", "/platform/login", "/api/platform/signup", "/api/platform/slug", "/api/platform/login"]) {

@@ -1,0 +1,10 @@
+---
+/** One KPI: label, value (largest), and the basis it was computed on (DESIGN.md §6.1). */
+interface Props { label: string; value: string; basis: string; id?: string }
+const { label, value, basis, id } = Astro.props;
+---
+<div class="rounded-xl border border-slate-200 bg-white p-4" id={id}>
+  <p class="text-xs font-semibold text-slate-500">{label}</p>
+  <p class="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{value}</p>
+  <p class="mt-1 text-xs text-slate-500">{basis}</p>
+</div>

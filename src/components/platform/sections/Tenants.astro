@@ -1,0 +1,110 @@
+---
+import PlatformLayout from '../PlatformLayout.astro';
+import StatusChip from '../StatusChip.astro';
+import { getRuntimeEnv } from '../../../lib/env';
+import { billingState } from '../../../platform/billing';
+import { listTenants, STALE_HEARTBEAT_MS, TENANT_LIST_LIMIT } from '../../../platform/admin/tenants';
+import { ageText, BILLING_FILTERS, BILLING_LABELS, formatWibDate } from '../../../platform/admin/metrics';
+
+// UX-4 (amended by T-52): both status axes, owner, and filters kept in the URL.
+const platformDb = (getRuntimeEnv(Astro.locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database;
+const status = Astro.url.searchParams.get('status') || '';
+const billing = Astro.url.searchParams.get('billing') || '';
+const q = Astro.url.searchParams.get('q') || '';
+const now = new Date();
+const tenants = await listTenants(platformDb, { status: status || null, search: q || null, billing: billing || null }, now);
+const statuses = ['', 'active', 'suspended', 'provisioning', 'recovery', 'purging', 'purged'];
+const filtered = Boolean(status || billing || q);
+const rows = tenants.map((tenant) => {
+  const state = billingState({ subscriptionEndsAt: tenant.subscription_ends_at, graceEndsAt: tenant.grace_ends_at }, now);
+  const stale = tenant.status === 'active' && (!tenant.heartbeat_at || now.getTime() - Date.parse(tenant.heartbeat_at) > STALE_HEARTBEAT_MS);
+  return { ...tenant, state, stale };
+});
+---
+<PlatformLayout title="Toko" active="tenants">
+  <h1 class="text-xl font-semibold text-slate-950">Toko</h1>
+  <form method="get" class="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[10rem_11rem_1fr_auto] lg:items-end" role="search">
+    <div>
+      <label for="status" class="block text-xs font-semibold text-slate-700">Status toko</label>
+      <select id="status" name="status" class="admin-input-flat mt-1">
+        {statuses.map((value) => <option value={value} selected={value === status}>{value || 'Semua'}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="billing" class="block text-xs font-semibold text-slate-700">Langganan</label>
+      <select id="billing" name="billing" class="admin-input-flat mt-1">
+        <option value="">Semua</option>
+        {BILLING_FILTERS.map((value) => <option value={value} selected={value === billing}>{BILLING_LABELS[value]}</option>)}
+      </select>
+    </div>
+    <div class="sm:col-span-2 lg:col-span-1">
+      <label for="q" class="block text-xs font-semibold text-slate-700">Cari slug, domain, atau email owner</label>
+      <input id="q" name="q" value={q} class="admin-input-flat mt-1" placeholder="toko-a, tokosaya.com, owner@email.com" />
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Terapkan</button>
+      {filtered && <a href="/platform/tenants" class="btn-secondary">Reset</a>}
+    </div>
+  </form>
+
+  <p class="mt-4 text-xs text-slate-500" id="tenantCount">
+    {rows.length} toko{rows.length >= TENANT_LIST_LIMIT ? ` (dibatasi ${TENANT_LIST_LIMIT}; persempit filter)` : ''}
+  </p>
+
+  {rows.length === 0 ? (
+    <div class="mt-2 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+      {filtered ? <>Tidak ada toko yang cocok dengan filter ini. <a href="/platform/tenants" class="font-semibold text-blue-700 underline">Hapus filter</a></> : 'Belum ada toko.'}
+    </div>
+  ) : (
+    <>
+      <ul class="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white md:hidden">
+        {rows.map((tenant) => (
+          <li class="p-4">
+            <div class="flex flex-wrap items-center gap-2">
+              <a href={`/platform/tenants/${tenant.id}`} class="font-semibold text-blue-700 hover:underline">{tenant.slug}</a>
+              <StatusChip value={tenant.status} />
+              {tenant.is_demo === 1 ? <StatusChip value="demo" label="contoh" /> : <StatusChip value={tenant.state} label={BILLING_LABELS[tenant.state]} />}
+            </div>
+            <p class="mt-1 break-all text-xs text-slate-600">{tenant.owner_email}</p>
+            <p class="mt-1 break-all text-xs text-slate-500">{tenant.primary_host ?? '—'}</p>
+            <p class="mt-1 text-xs text-slate-500">Dibuat {formatWibDate(tenant.created_at)} · heartbeat <span class={tenant.stale ? 'font-semibold text-rose-700' : ''}>{ageText(tenant.heartbeat_at, now)}</span></p>
+          </li>
+        ))}
+      </ul>
+      <div class="mt-2 hidden relative overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
+        <table class="w-full text-left text-sm">
+          <thead class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
+            <tr>
+              <th scope="col" class="px-4 py-3">Toko</th>
+              <th scope="col" class="px-4 py-3">Host utama</th>
+              <th scope="col" class="px-4 py-3">Status</th>
+              <th scope="col" class="px-4 py-3">Langganan</th>
+              <th scope="col" class="px-4 py-3">Dibuat</th>
+              <th scope="col" class="px-4 py-3">Heartbeat</th>
+              <th scope="col" class="px-4 py-3 text-right">Backlog</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {rows.map((tenant) => (
+              <tr class="hover:bg-slate-50">
+                <td class="px-4 py-3">
+                  <a href={`/platform/tenants/${tenant.id}`} class="font-semibold text-blue-700 hover:underline">{tenant.slug}</a>
+                  <p class="max-w-56 truncate text-xs text-slate-500">{tenant.owner_email}</p>
+                </td>
+                <td class="px-4 py-3 font-mono text-xs">{tenant.primary_host ?? '—'}</td>
+                <td class="px-4 py-3"><StatusChip value={tenant.status} /></td>
+                <td class="px-4 py-3">
+                  {tenant.is_demo === 1 ? <StatusChip value="demo" label="contoh" /> : <StatusChip value={tenant.state} label={BILLING_LABELS[tenant.state]} />}
+                  {tenant.subscription_ends_at && <p class="mt-1 text-xs text-slate-500">s.d. {formatWibDate(tenant.subscription_ends_at)}</p>}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">{formatWibDate(tenant.created_at)}</td>
+                <td class={`px-4 py-3 whitespace-nowrap ${tenant.stale ? 'font-semibold text-rose-700' : ''}`}>{ageText(tenant.heartbeat_at, now)}</td>
+                <td class="px-4 py-3 text-right tabular-nums">{tenant.outbox_backlog ?? 0}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )}
+</PlatformLayout>

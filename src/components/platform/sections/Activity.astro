@@ -1,0 +1,67 @@
+---
+import PlatformLayout from '../PlatformLayout.astro';
+import { getRuntimeEnv } from '../../../lib/env';
+import { activityKinds, actorNames, describeEvent, EVENT_LABELS, formatWibDateTime, listActivity } from '../../../platform/admin/metrics';
+
+// UX-9: the append-only audit feed across stores and the console.
+const platformDb = (getRuntimeEnv(Astro.locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database;
+const kind = Astro.url.searchParams.get('kind') || '';
+const slug = Astro.url.searchParams.get('slug') || '';
+const before = Number(Astro.url.searchParams.get('before')) || null;
+const [{ rows, nextBefore }, kinds, actors] = await Promise.all([
+  listActivity(platformDb, { kind: kind || null, slug: slug || null, before }),
+  activityKinds(platformDb),
+  actorNames(platformDb),
+]);
+const actorLabel = (actor: string) => actors.get(actor) ?? (actor.includes('@') ? `${actor} (owner)` : actor);
+const filtered = Boolean(kind || slug);
+const older = nextBefore ? `/platform/activity?${new URLSearchParams({ ...(kind ? { kind } : {}), ...(slug ? { slug } : {}), before: String(nextBefore) })}` : null;
+---
+<PlatformLayout title="Aktivitas" active="activity">
+  <h1 class="text-xl font-semibold text-slate-950">Aktivitas</h1>
+  <form method="get" class="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[14rem_1fr_auto] sm:items-end" role="search">
+    <div>
+      <label for="kind" class="block text-xs font-semibold text-slate-700">Jenis</label>
+      <select id="kind" name="kind" class="admin-input-flat mt-1">
+        <option value="">Semua</option>
+        {kinds.map((value) => <option value={value} selected={value === kind}>{EVENT_LABELS[value] ?? value}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="slug" class="block text-xs font-semibold text-slate-700">Slug toko (atau "platform")</label>
+      <input id="slug" name="slug" value={slug} class="admin-input-flat mt-1" placeholder="toko-a" />
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Terapkan</button>
+      {filtered && <a href="/platform/activity" class="btn-secondary">Reset</a>}
+    </div>
+  </form>
+
+  {rows.length === 0 ? (
+    <div class="mt-4 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+      {filtered || before ? <>Tidak ada aktivitas yang cocok. <a href="/platform/activity" class="font-semibold text-blue-700 underline">Kembali ke terbaru</a></> : 'Belum ada aktivitas.'}
+    </div>
+  ) : (
+    <ol class="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white text-sm" id="activityList">
+      {rows.map((row) => (
+        <li class="flex flex-col gap-0.5 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+          <div class="min-w-0">
+            <p>
+              <span class="font-medium text-slate-900">{EVENT_LABELS[row.kind] ?? row.kind}</span>
+              <span class="text-slate-500"> · </span>
+              {row.tenant_id === '_platform'
+                ? <span class="text-slate-700">Platform</span>
+                : <a href={`/platform/tenants/${row.tenant_id}`} class="font-semibold text-blue-700 hover:underline">{row.slug ?? row.tenant_id}</a>}
+            </p>
+            {describeEvent(row.detail_json) && <p class="text-xs text-slate-600">{describeEvent(row.detail_json)}</p>}
+          </div>
+          <p class="shrink-0 text-xs text-slate-500 sm:text-right">{formatWibDateTime(row.at)}<br class="hidden sm:block" /><span class="sm:hidden"> · </span>{actorLabel(row.actor)}</p>
+        </li>
+      ))}
+    </ol>
+  )}
+  <div class="mt-4 flex gap-2">
+    {before && <a href={`/platform/activity?${new URLSearchParams({ ...(kind ? { kind } : {}), ...(slug ? { slug } : {}) })}`} class="btn-secondary">Terbaru</a>}
+    {older && <a href={older} class="btn-secondary">Lebih lama →</a>}
+  </div>
+</PlatformLayout>

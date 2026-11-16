@@ -18,6 +18,10 @@
 @source "../components/ui";
 @source "../pages/admin";
 @source "../pages/hello.astro";
+/* The platform console (T-52) uses the same primitives on the platform host. */
+@source "../components/platform";
+@source "../pages/platform/[...section].astro";
+@source "../pages/platform/login.astro";
 
 /* shadcn's base rule, missing here since the three-way CSS split: without it a
    bare `border`/`border-b` falls back to currentColor in Tailwind v4 and draws

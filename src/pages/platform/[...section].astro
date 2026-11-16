@@ -1,0 +1,45 @@
+---
+import { getRuntimeEnv } from '../../lib/env';
+import Activity from '../../components/platform/sections/Activity.astro';
+import Billing from '../../components/platform/sections/Billing.astro';
+import Domains from '../../components/platform/sections/Domains.astro';
+import Health from '../../components/platform/sections/Health.astro';
+import Overview from '../../components/platform/sections/Overview.astro';
+import Team from '../../components/platform/sections/Team.astro';
+import TenantDetail from '../../components/platform/sections/TenantDetail.astro';
+import Tenants from '../../components/platform/sections/Tenants.astro';
+export const prerender = false;
+
+/**
+ * The platform console (T-52, UX-4 and UX-7…UX-10) behind one route. The
+ * platform guard has already required a platform session for every path here.
+ *
+ * lazy: one route on purpose. With `inlineStylesheets: 'always'` every Astro
+ * route carries its own ~184 KiB copy of the admin stylesheet in the Worker
+ * manifest; seven console routes put the bundle over the Workers Free 3 MiB
+ * gzip limit. Upgrade path: on Workers Paid, split back into one page per
+ * section (the section components already are the pages).
+ */
+const section = String(Astro.params.section ?? '').replace(/\/+$/, '');
+const tenantMatch = section.match(/^tenants\/([A-Za-z0-9_-]{1,64})$/);
+let tenantId: string | null = null;
+if (tenantMatch) {
+  const platformDb = (getRuntimeEnv(Astro.locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database;
+  const found = await platformDb.prepare('SELECT id FROM tenants WHERE id = ?').bind(tenantMatch[1]).first<{ id: string }>();
+  if (!found) return Astro.redirect('/platform/tenants');
+  tenantId = found.id;
+}
+const known = new Set(['', 'tenants', 'billing', 'domains', 'activity', 'team', 'health']);
+if (!tenantId && !known.has(section)) return new Response('Not found', { status: 404, headers: { 'cache-control': 'private, no-store' } });
+// UX-10: the team screen is platform_owner only; support sees a 403 page.
+if (section === 'team' && Astro.locals.platformUser?.role !== 'platform_owner') Astro.response.status = 403;
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+---
+{section === '' && <Overview />}
+{section === 'tenants' && <Tenants />}
+{tenantId && <TenantDetail tenantId={tenantId} />}
+{section === 'billing' && <Billing />}
+{section === 'domains' && <Domains />}
+{section === 'activity' && <Activity />}
+{section === 'team' && <Team />}
+{section === 'health' && <Health />}

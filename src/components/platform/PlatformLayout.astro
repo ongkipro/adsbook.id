@@ -1,9 +1,28 @@
 ---
 import '../../styles/admin.css';
-interface Props { title: string; active?: 'tenants' | 'health' }
+
+/** The platform console shell (T-52, docs/design/platform-admin/DESIGN.md §5). */
+export type PlatformMenu = 'overview' | 'tenants' | 'domains' | 'billing' | 'health' | 'activity' | 'team';
+interface Props { title: string; active?: PlatformMenu }
 const { title, active } = Astro.props;
 const user = Astro.locals.platformUser;
-const link = (on: boolean) => `rounded-lg px-3 py-2 text-sm font-semibold ${on ? 'bg-blue-50 text-blue-800' : 'text-slate-600 hover:bg-slate-100'}`;
+const isOwner = user?.role === 'platform_owner';
+
+const groups: { label: string | null; items: { id: PlatformMenu; label: string; href: string }[] }[] = [
+  { label: null, items: [{ id: 'overview', label: 'Ringkasan', href: '/platform' }] },
+  { label: 'Toko', items: [
+    { id: 'tenants', label: 'Toko', href: '/platform/tenants' },
+    { id: 'domains', label: 'Domain', href: '/platform/domains' },
+  ] },
+  { label: 'Keuangan', items: [{ id: 'billing', label: 'Tagihan', href: '/platform/billing' }] },
+  { label: 'Sistem', items: [
+    { id: 'health', label: 'Kesehatan', href: '/platform/health' },
+    { id: 'activity', label: 'Aktivitas', href: '/platform/activity' },
+    ...(isOwner ? [{ id: 'team' as const, label: 'Tim', href: '/platform/team' }] : []),
+  ] },
+];
+const link = (on: boolean) =>
+  `flex min-h-10 items-center rounded-lg px-3 text-sm ${on ? 'bg-blue-50 font-semibold text-blue-800' : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`;
 ---
 <!doctype html>
 <html lang="id">
@@ -14,27 +33,65 @@ const link = (on: boolean) => `rounded-lg px-3 py-2 text-sm font-semibold ${on ?
     <title>{title} - adsbook.id platform</title>
   </head>
   <body class="min-h-dvh bg-[#f6f7f9] text-slate-900 antialiased">
-    <header class="border-b border-slate-200 bg-white">
-      <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <a href="/platform" class="text-sm font-semibold text-slate-950">adsbook.id <span class="font-normal text-slate-500">platform</span></a>
-        {user && (
-          <nav class="flex flex-wrap items-center gap-1" aria-label="Platform">
-            <a href="/platform" class={link(active === 'tenants')} aria-current={active === 'tenants' ? 'page' : undefined}>Tenant</a>
-            <a href="/platform/health" class={link(active === 'health')} aria-current={active === 'health' ? 'page' : undefined}>Kesehatan</a>
-            <span class="hidden px-2 text-xs text-slate-500 sm:inline">{user.email} · {user.role === 'platform_owner' ? 'owner' : 'support'}</span>
-            <button id="platformLogout" type="button" class="btn-secondary">Keluar</button>
+    {user ? (
+      <div class="lg:flex">
+        <header class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 lg:hidden">
+          <a href="/platform" class="text-sm font-semibold text-slate-950">adsbook.id <span class="font-normal text-slate-500">platform</span></a>
+          <details class="platform-drawer relative">
+            <summary class="btn-secondary cursor-pointer list-none" aria-label="Buka menu">Menu</summary>
+            <nav class="absolute right-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg" aria-label="Platform">
+              {groups.map((group) => (
+                <div class="py-1">
+                  {group.label && <p class="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{group.label}</p>}
+                  {group.items.map((item) => <a href={item.href} class={link(active === item.id)} aria-current={active === item.id ? 'page' : undefined}>{item.label}</a>)}
+                </div>
+              ))}
+              <p class="mt-2 border-t border-slate-100 px-3 pt-2 text-xs text-slate-500 break-all">{user.email} · {isOwner ? 'owner' : 'support'}</p>
+              <button type="button" data-logout class="btn-secondary mt-2 w-full">Keluar</button>
+            </nav>
+          </details>
+        </header>
+
+        <aside class="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
+          <a href="/platform" class="px-5 py-4 text-sm font-semibold text-slate-950">adsbook.id <span class="font-normal text-slate-500">platform</span></a>
+          <nav class="flex-1 space-y-1 overflow-y-auto px-3" aria-label="Platform">
+            {groups.map((group) => (
+              <div class="py-1">
+                {group.label && <p class="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{group.label}</p>}
+                {group.items.map((item) => <a href={item.href} class={link(active === item.id)} aria-current={active === item.id ? 'page' : undefined}>{item.label}</a>)}
+              </div>
+            ))}
           </nav>
-        )}
+          <div class="border-t border-slate-200 p-4">
+            <p class="break-all text-xs text-slate-600">{user.email}</p>
+            <p class="mt-0.5 text-xs text-slate-500">{isOwner ? 'Owner platform' : 'Support platform'}</p>
+            <button type="button" data-logout class="btn-secondary mt-3 w-full">Keluar</button>
+          </div>
+        </aside>
+
+        <main class="min-w-0 flex-1 px-4 py-6 lg:px-8">
+          <div class="mx-auto w-full max-w-6xl">
+            <slot />
+          </div>
+        </main>
       </div>
-    </header>
-    <main class="mx-auto w-full max-w-6xl px-4 py-6">
-      <slot />
-    </main>
+    ) : (
+      <>
+        <header class="border-b border-slate-200 bg-white">
+          <div class="mx-auto flex w-full max-w-6xl items-center px-4 py-3">
+            <a href="/platform" class="text-sm font-semibold text-slate-950">adsbook.id <span class="font-normal text-slate-500">platform</span></a>
+          </div>
+        </header>
+        <main class="mx-auto w-full max-w-6xl px-4 py-6"><slot /></main>
+      </>
+    )}
     <script>
-      document.getElementById('platformLogout')?.addEventListener('click', async () => {
-        await fetch('/api/platform/logout', { method: 'POST' }).catch(() => undefined);
-        window.location.assign('/platform/login');
-      });
+      for (const button of document.querySelectorAll<HTMLButtonElement>('[data-logout]')) {
+        button.addEventListener('click', async () => {
+          await fetch('/api/platform/logout', { method: 'POST' }).catch(() => undefined);
+          window.location.assign('/platform/login');
+        });
+      }
     </script>
   </body>
 </html>
