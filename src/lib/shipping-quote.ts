@@ -11,6 +11,7 @@ import {
   provinceCodeForCity,
   type WarehouseCandidate,
 } from "./warehouse-choice.ts";
+import { dropRefusedDestination } from "./mengantar-areas.ts";
 
 export type ShippingQuoteInput = {
   destinationId: string;
@@ -246,6 +247,7 @@ export async function resolveEligibleShippingRates(
   const isCod = input.paymentMethod === "cod";
   const destinationCity = input.destinationCity ?? "";
   const hasCityFallback = isCod && destinationCity.trim() !== "";
+  const quoteStartedAt = new Date();
   const estimate = (origin: string) =>
     client.estimateRates({ originId: origin, destinationId, weight: weightKg }).then(
       (rates) => ({ rates, error: undefined as unknown }),
@@ -275,6 +277,14 @@ export async function resolveEligibleShippingRates(
       )
       .filter((rate) => !isCod || !rate.unsupported_cod);
   let { rates, error: rateError } = firstEstimate;
+  // A-415 (T-47): a refusal may mean a stale cached destination area. The
+  // check runs beside the rest of the quote (never before it) and never
+  // changes its outcome; it is awaited before this quote answers.
+  const areaCheck = firstEstimate.error
+    ? dropRefusedDestination(database, client, { originId, destinationId }, firstEstimate.error, quoteStartedAt).catch((error) =>
+        console.error("mengantar-area-drop-failed", { error: error instanceof Error ? error.message : String(error) }),
+      )
+    : null;
   // A branch warehouse whose rate call fails or returns no usable rate hands
   // the quote to the primary before anything else is tried: the primary is
   // the store's default origin. The order records whichever warehouse quoted
@@ -324,6 +334,7 @@ export async function resolveEligibleShippingRates(
   // A failed exact-district estimate used to end a COD checkout even though
   // the city-average fallback below exists for exactly that buyer. Prepaid
   // still fails loudly: it has no fallback (see ICO below).
+  if (areaCheck) await areaCheck;
   if (rateError && !hasCityFallback) throw rateError;
   const fallbackFrom = primaryFallbackFrom ? { primaryFallbackFrom } : {};
   const eligibleRates = eligible(rates);

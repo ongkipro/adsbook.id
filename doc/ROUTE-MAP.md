@@ -327,7 +327,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `llms-txt` | 2 | — | ✓ | `/llms.txt` |
 | `location-search` | 19 | — | ✓ | `/api/locations` `/api/v1/geo/districts` |
 | `manual-payment-reconciliation` | 6 | `admin_credentials` `orders` `payment_reconciliation_audits` `payment_transaction_attempts` `payment_transactions` `stores` | ✓ | `/api/admin/payment-reconciliation` |
-| `mengantar-areas` | 6 | `mengantar_areas` | ✓ | `/api/locations` |
+| `mengantar-areas` | 9 | `mengantar_areas` | ✓ | `/api/locations` |
 | `mengantar-client` | 21 | — | ✓ | `/api/locations` `/api/submit-order` `/api/admin/ongkir` `/api/admin/orders/[id]` `/api/admin/settings` `/api/admin/shipping` `/api/admin/warehouses` |
 | `mengantar-dispatch` | 5 | `courier_rules` `order_items` `orders` `pickup_schedules` `product_variants` `products` `provider_dispatch_locks` `warehouses` | ✓ | `/api/admin/orders` `/api/admin/orders/[id]` |
 | `mengantar-order` | 24 | — | ✓ | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/shipping` |

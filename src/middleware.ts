@@ -44,10 +44,14 @@ function applySecurityHeaders(
 ) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   if (frameAncestors) {
+    // The embed form: the storefront policy, framed only by its allowed origins.
     response.headers.delete('X-Frame-Options');
-    response.headers.set('Content-Security-Policy', frameAncestors);
+    response.headers.set('Content-Security-Policy', `${STOREFRONT_CSP}; ${frameAncestors}`);
   } else {
     response.headers.set('X-Frame-Options', 'DENY');
+    // A-214 (T-47): every public storefront response carries the storefront
+    // policy; private responses get ADMIN_CSP below.
+    if (!isPrivate) response.headers.set('Content-Security-Policy', `${STOREFRONT_CSP}; frame-ancestors 'none'`);
   }
   // Sent unconditionally on purpose. RFC 6797 section 8.1 requires a user agent
   // to ignore an STS header received over insecure transport, so this is inert
@@ -70,6 +74,31 @@ function applySecurityHeaders(
   }
   return response;
 }
+
+/**
+ * The storefront's Content-Security-Policy (A-214, T-47, SEC-3): exactly the
+ * hosts the storefront loads — the Meta Pixel, Google Tag Manager and Google
+ * Ads/Analytics per Google's tag-platform CSP guide, the GTM noscript frame —
+ * and any https image (landing pages take image URLs). Scripts stay
+ * 'unsafe-inline': the page bootstraps are inline and anonymous HTML is
+ * edge-cached (ADR-029), so a per-response nonce cannot be used. No
+ * 'unsafe-eval': GTM Custom JavaScript variables evaluate to undefined, and
+ * a seller's GTM that loads another vendor's script is blocked (T-47
+ * escalation: a per-tenant allowance would be a new requirement).
+ */
+export const STOREFRONT_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://connect.facebook.net",
+  "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.google.com https://www.google.co.id https://*.g.doubleclick.net https://ad.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://www.facebook.com https://connect.facebook.net",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob: https:",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "frame-src https://www.googletagmanager.com https://td.doubleclick.net https://www.facebook.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
 
 export const ADMIN_CSP = "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
 

@@ -98,6 +98,7 @@ const { buildSetupChecklist, readSetupFacts } = await import("../lib/setup-check
 const { readReadiness, isStoreReady } = await import("./readiness.ts");
 const { legalText, readStoreProviders, storePrivacyMarkdown } = await import("./legal.ts");
 const { recordUsage } = await import("./plans.ts");
+const submitOrderRoute = await import("../pages/api/submit-order.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -1858,4 +1859,71 @@ test("T-41/PR-26: one demo tenant at most, its usage is not counted, and an ordi
   const response = await ordinary.open("/");
   assert.equal(response.status, 503);
   assert.match(response.body, /Toko belum siap/);
+});
+
+// ---- T-47: an embed-form order sends exactly one server Purchase (A-55) ----
+
+test("T-47/A-55: an order from /embed/form through the real middleware and route sends exactly one server Purchase", async () => {
+  const store = await readinessHarness("embed-satu");
+  store.product();
+  store.warehouse(1, 1, "ORIGIN-1", "pickup-1");
+  store.mengantar();
+  store.sql.exec(`UPDATE stores SET meta_pixel_id = '100000000000009', meta_capi_token = 'tenant-capi-token';
+    INSERT INTO courier_rules (store_id, courier_code, is_enabled, is_cod_enabled) SELECT 1, 'jne', 1, 1 WHERE NOT EXISTS (SELECT 1 FROM courier_rules WHERE courier_code = 'jne');
+    UPDATE courier_rules SET is_cod_enabled = 1 WHERE courier_code = 'jne';`);
+  const variant = store.sql.prepare("SELECT id FROM product_variants WHERE sku = 'KOPI-1'").get() as { id: number };
+  const graph: Array<{ url: string; body: { data: Array<{ event_name: string; event_id: string }> } }> = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.startsWith("https://graph.facebook.com/")) {
+      graph.push({ url, body: JSON.parse(String(init?.body)) });
+      return Response.json({ events_received: 1 });
+    }
+    if (url.includes("/order/estimate")) return Response.json({ success: true, data: { JNE: { price: 18000, estimate_delivery: "2-3" } } });
+    if (url.includes("/getReceiverScoreByNumberUser")) return Response.json({ success: true, data: {} });
+    return Response.json({ success: true, data: [] });
+  }) as typeof fetch;
+  const tasks: Promise<unknown>[] = [];
+  const host = "embed-satu.belanja.cc";
+  const href = `https://${host}/api/submit-order`;
+  const body = {
+    submit_token: "embed-form-token-0001", website: "", customer_name: "Rina Lestari", customer_phone: "081234567890",
+    address: "Jl. Melati No. 12, Sukajadi", district: "Sukajadi", city: "Bandung", province: "Jawa Barat",
+    payment_method: "cod", variant_id: String(variant.id), quantity: 1, location_id: "DEST-1",
+    courier_service_id: 1, shipment_provider_code: "JNE", shipping_cost: 18000,
+  };
+  const quiet = { log: console.log, info: console.info, warn: console.warn };
+  console.log = console.info = console.warn = () => undefined;
+  try {
+    const onRequest = createMiddleware();
+    const locals: Record<string, unknown> = { runtimeEnv: store.env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } };
+    const response = (await onRequest(
+      {
+        // The embed form posts from its own frame, same origin as the store.
+        request: new Request(href, {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: `https://${host}`, "sec-fetch-site": "same-origin", referer: `https://${host}/embed/form?product=kopi` },
+          body: JSON.stringify(body),
+        }),
+        url: new URL(href),
+        locals,
+        routePattern: "/api/submit-order",
+        redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
+      } as never,
+      (async () => submitOrderRoute.POST({ request: new Request(href, { method: "POST", headers: { "content-type": "application/json", origin: `https://${host}` }, body: JSON.stringify(body) }), locals } as never)) as never,
+    )) as Response;
+    const payload = (await response.json()) as { success: boolean; order?: { order_number: string }; error?: string };
+    assert.equal(response.status, 200, JSON.stringify(payload));
+    assert.ok(payload.order?.order_number);
+    await Promise.all(tasks);
+    const purchases = graph.flatMap((call) => call.body.data).filter((event) => event.event_name === "Purchase");
+    assert.equal(purchases.length, 1, "exactly one server Purchase");
+    assert.equal(purchases[0].event_id, payload.order!.order_number, "keyed by the order number, as the browser leg");
+    const outbox = store.sql.prepare("SELECT COUNT(*) AS n FROM capi_event_outbox WHERE event_name = 'Purchase'").get() as { n: number };
+    assert.equal(outbox.n, 1, "one Purchase row in the outbox");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.assign(console, quiet);
+  }
 });
