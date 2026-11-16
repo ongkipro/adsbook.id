@@ -272,7 +272,7 @@ under both headings wherever they are named; which database a statement meant is
 | Route | Methods | Auth | Roles | File | Modules | Store tables | Platform tables | Tests |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/platform/[...section]` | GET | platform session | platform_owner, platform_support | `src/pages/platform/[...section].astro` | `env` | — | `tenants` | `lib/env.test.ts` `platform/two-tenants.test.ts` |
-| `/platform/login` | GET | public | — | `src/pages/platform/login.astro` | — | — | — | — |
+| `/platform/login` | GET | public | — | `src/pages/platform/login.astro` | `version` | — | — | `lib/changelog.test.ts` `lib/route-map.test.ts` `lib/schema-version.test.ts` |
 
 ## Platform API (12)
 
@@ -437,7 +437,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `utils` | 0 | — | — | **none** | — |
 | `utm-link` | 9 | — | — | 1 | — |
 | `validation` | 7 | — | — | 1 | `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/admin/orders/[id]` |
-| `version` | 2 | — | — | 3 | `/hello` |
+| `version` | 2 | — | — | 3 | `/hello` `/platform/login` |
 | `warehouse-choice` | 9 | — | — | 1 | `/api/v1/geo/shipping-rates` |
 | `warehouses` | 12 | `orders` `pickup_schedules` `stores` `warehouses` | — | 1 | `/api/admin/warehouses` |
 | `weight` | 10 | — | — | 2 | — |

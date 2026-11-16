@@ -198,7 +198,7 @@
   </family>
   <family name="Platform admin" count="2">
     <route path="/platform/[...section]" methods="GET" auth="platform session" roles="platform_owner,platform_support" file="src/pages/platform/[...section].astro" libs="env" platform-tables="tenants" tests="src/lib/env.test.ts,src/platform/two-tenants.test.ts"/>
-    <route path="/platform/login" methods="GET" auth="public" file="src/pages/platform/login.astro"/>
+    <route path="/platform/login" methods="GET" auth="public" file="src/pages/platform/login.astro" libs="version" tests="src/lib/changelog.test.ts,src/lib/route-map.test.ts,src/lib/schema-version.test.ts"/>
   </family>
   <family name="Platform API" count="12">
     <route path="/api/platform/health" methods="GET" auth="platform session" roles="platform_owner,platform_support" file="src/pages/api/platform/health.ts" libs="env,platform/admin/health" platform-tables="tenant_events,tenant_health,tenant_hosts,tenants" tests="src/lib/env.test.ts,src/platform/two-tenants.test.ts"/>
@@ -352,7 +352,7 @@
     <module name="utils" file="src/lib/utils.ts" tests="none"/>
     <module name="utm-link" file="src/lib/utm-link.ts" tests="src/lib/utm-link.test.ts" exports="UTM_MEDIUMS,UTM_SOURCES,UTM_TAG_MAX_LENGTH,UtmLinkInput,UtmLinkResult,UtmMedium,UtmSource,buildUtmLink,normalizeUtmTag"/>
     <module name="validation" file="src/lib/validation.ts" tests="src/lib/validation.test.ts" exports="CHECKOUT_ADDRESS_MIN,CHECKOUT_NAME_MIN,INDONESIAN_MOBILE_PREFIXES,INDONESIAN_WA_REGEX,isValidWa62,missingCheckoutContact,normalizePhone" used-by="/api/record-abandoned-order,/api/submit-middle-order,/api/submit-order,/api/admin/orders/[id]"/>
-    <module name="version" file="src/lib/version.ts" tests="src/lib/changelog.test.ts,src/lib/route-map.test.ts,src/lib/schema-version.test.ts" exports="CMS_VERSION,CmsVersionInfo" used-by="/hello"/>
+    <module name="version" file="src/lib/version.ts" tests="src/lib/changelog.test.ts,src/lib/route-map.test.ts,src/lib/schema-version.test.ts" exports="CMS_VERSION,CmsVersionInfo" used-by="/hello,/platform/login"/>
     <module name="warehouse-choice" file="src/lib/warehouse-choice.ts" tests="src/lib/warehouse-choice.test.ts" exports="ISLAND_GROUPS,WarehouseCandidate,WarehouseChoiceReason,ambiguousCityNames,chooseWarehouse,isWarehouseReady,islandGroupOf,provinceCodeForCity,servedProvinceCodes" used-by="/api/v1/geo/shipping-rates"/>
     <module name="warehouses" file="src/lib/warehouses.ts" tests="src/lib/warehouses.test.ts" exports="EnsurePickup,WAREHOUSES_MAX,Warehouse,WarehouseError,WarehouseInput,addWarehouse,deleteWarehouse,listWarehouses,servedProvincesValue,setPrimaryWarehouse,setWarehouseActive,updateWarehouse" tables="orders,pickup_schedules,stores,warehouses" used-by="/api/admin/warehouses"/>
     <module name="weight" file="src/lib/weight.ts" tests="src/lib/weight.test.ts,src/lib/admin-requote-weight.test.ts" exports="CURRENT_WEIGHT_LABEL,ItemWeight,OrderWeightSummary,RECORDED_WEIGHT_LABEL,WeighedItem,formatGrams,formatKg,formatWeight,quoteUnitWeightKg,summarizeOrderWeight"/>

@@ -1,7 +1,12 @@
 ---
 import PlatformLayout from '../PlatformLayout.astro';
+import AdminPageHeader from '../../admin/AdminPageHeader.astro';
 import Kpi from '../Kpi.astro';
 import StatusChip from '../StatusChip.astro';
+import { ConsoleFilters } from '../ConsoleFilters';
+import { InvoiceCheckButton } from '../InvoiceCheckButton';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { getRuntimeEnv } from '../../../lib/env';
 import { formatIdr } from '../../../lib/format-idr';
 import { BILLING_CYCLES } from '../../../platform/billing';
@@ -22,102 +27,89 @@ const cycleLabel = (code: string) => (BILLING_CYCLES as Record<string, { label: 
 const monthName = new Intl.DateTimeFormat('id-ID', { month: 'long', timeZone: 'Asia/Jakarta' }).format(now);
 const filtered = Boolean(status || q);
 const calendar = [
-  { id: 'calEnding', title: 'Berakhir ≤ 14 hari', rows: windows.ending, at: (row: { subscription_ends_at: string }) => `berakhir ${formatWibDate(row.subscription_ends_at)}`, empty: 'Tidak ada.' },
-  { id: 'calGrace', title: 'Masa tenggang', rows: windows.grace, at: (row: { grace_ends_at: string }) => `dijeda ${formatWibDateTime(row.grace_ends_at)}`, empty: 'Tidak ada.' },
-  { id: 'calExpired', title: 'Berakhir 30 hari terakhir', rows: windows.expired, at: (row: { grace_ends_at: string }) => `dijeda sejak ${formatWibDate(row.grace_ends_at)}`, empty: 'Tidak ada.' },
+  { id: 'calEnding', title: 'Berakhir ≤ 14 hari', rows: windows.ending.map((row) => ({ ...row, note: `berakhir ${formatWibDate(row.subscription_ends_at)}` })) },
+  { id: 'calGrace', title: 'Masa tenggang', rows: windows.grace.map((row) => ({ ...row, note: `dijeda ${formatWibDateTime(row.grace_ends_at)}` })) },
+  { id: 'calExpired', title: 'Berakhir 30 hari terakhir', rows: windows.expired.map((row) => ({ ...row, note: `sejak ${formatWibDate(row.grace_ends_at)}` })) },
 ];
 ---
-<PlatformLayout title="Tagihan" active="billing">
-  <h1 class="text-xl font-semibold text-slate-950">Tagihan</h1>
+<PlatformLayout title="Tagihan" description="Invoice langganan dan kalender perpanjangan" active="billing">
+  <div class="space-y-4 md:space-y-5">
+    <AdminPageHeader title="Tagihan" description="Langganan dibayar lewat AutoLaris platform (QRIS/VA). Hari ditambahkan sekali, saat pembayaran terkonfirmasi." />
 
-  <section aria-label="Angka tagihan" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-    <Kpi label={`Diterima ${monthName}`} value={formatIdr(totals.thisMonth)} basis="tagihan lunas, bulan WIB berjalan" />
-    <Kpi label="Bulan lalu" value={formatIdr(totals.lastMonth)} basis="tagihan lunas" />
-    <Kpi label="Menunggu bayar" value={String(totals.pending)} basis="tagihan belum kedaluwarsa" />
-  </section>
+    <section aria-label="Angka tagihan" class="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
+      <Kpi label={`Diterima ${monthName}`} value={formatIdr(totals.thisMonth)} basis="tagihan lunas, bulan WIB berjalan" />
+      <Kpi label="Bulan lalu" value={formatIdr(totals.lastMonth)} basis="tagihan lunas" />
+      <Kpi label="Menunggu bayar" value={String(totals.pending)} basis="tagihan belum kedaluwarsa" tone={totals.pending ? 'text-amber-700' : 'text-slate-950'} />
+    </section>
 
-  <section class="mt-6" aria-labelledby="calendarTitle">
-    <h2 id="calendarTitle" class="text-base font-semibold text-slate-950">Kalender langganan</h2>
-    <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+    <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
       {calendar.map((column) => (
-        <div class="rounded-xl border border-slate-200 bg-white" id={column.id}>
-          <p class="border-b border-slate-100 px-4 py-2 text-sm font-semibold text-slate-800">{column.title} <span class="font-normal text-slate-500">({column.rows.length})</span></p>
-          {column.rows.length ? (
-            <ul class="divide-y divide-slate-100 text-sm">
-              {column.rows.slice(0, 20).map((row) => (
-                <li class="flex items-center justify-between gap-3 px-4 py-2">
-                  <a href={`/platform/tenants/${row.id}`} class="font-semibold text-blue-700 hover:underline">{row.slug}</a>
-                  <span class="text-xs text-slate-500">{column.at(row as never)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : <p class="px-4 py-3 text-sm text-slate-500">{column.empty}</p>}
-        </div>
+        <Card id={column.id} className="border-slate-200 shadow-none">
+          <CardHeader className="border-b border-slate-100 pb-3">
+          <CardTitle as="h2" className="text-sm font-semibold text-slate-950 md:text-base">{column.title}</CardTitle>
+          <CardDescription>{column.rows.length} toko</CardDescription>
+        </CardHeader>
+          <CardContent className="px-0">
+            {column.rows.length ? (
+              <ul class="divide-y divide-slate-100 text-sm">
+                {column.rows.slice(0, 20).map((row) => (
+                  <li class="flex items-center justify-between gap-3 px-4 py-2">
+                    <a href={`/platform/tenants/${row.id}`} class="font-semibold text-blue-700 hover:underline">{row.slug}</a>
+                    <span class="text-xs text-slate-500">{row.note}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p class="px-4 py-2 text-sm text-slate-500">Tidak ada.</p>}
+          </CardContent>
+        </Card>
       ))}
     </div>
-  </section>
 
-  <section class="mt-6" aria-labelledby="invoiceListTitle">
-    <h2 id="invoiceListTitle" class="text-base font-semibold text-slate-950">Semua tagihan</h2>
-    <form method="get" class="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[11rem_1fr_auto] sm:items-end" role="search">
-      <div>
-        <label for="invoiceStatus" class="block text-xs font-semibold text-slate-700">Status</label>
-        <select id="invoiceStatus" name="status" class="admin-input-flat mt-1">
-          <option value="">Semua</option>
-          {INVOICE_STATUSES.map((value) => <option value={value} selected={value === status}>{STATUS_LABELS[value]}</option>)}
-        </select>
-      </div>
-      <div>
-        <label for="invoiceSearch" class="block text-xs font-semibold text-slate-700">Cari nomor tagihan atau slug toko</label>
-        <input id="invoiceSearch" name="q" value={q} class="admin-input-flat mt-1" placeholder="ADB-20261116-… atau toko-a" />
-      </div>
-      <div class="flex gap-2">
-        <button type="submit" class="btn-primary">Terapkan</button>
-        {filtered && <a href="/platform/billing" class="btn-secondary">Reset</a>}
-      </div>
-    </form>
-    <p class="mt-3 text-xs text-slate-500" id="invoiceCount">{invoices.length} tagihan{invoices.length >= INVOICE_LIMIT ? ` (dibatasi ${INVOICE_LIMIT})` : ''}</p>
+    <ConsoleFilters
+      client:load
+      path="/platform/billing"
+      values={{ q, status }}
+      search={{ name: 'q', label: 'Cari tagihan', placeholder: 'Nomor tagihan atau slug toko' }}
+      selects={[{ name: 'status', label: 'Status', options: [{ value: '', label: 'Semua status' }, ...INVOICE_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))] }]}
+    />
+    <p class="text-xs text-slate-500" id="invoiceCount">{invoices.length} tagihan{invoices.length >= INVOICE_LIMIT ? ` (dibatasi ${INVOICE_LIMIT})` : ''}</p>
     {invoices.length === 0 ? (
-      <div class="mt-2 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+      <div class="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600 shadow-sm">
         {filtered ? <>Tidak ada tagihan yang cocok. <a href="/platform/billing" class="font-semibold text-blue-700 underline">Hapus filter</a></> : 'Belum ada tagihan.'}
       </div>
     ) : (
-      <div class="mt-2 relative overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table class="w-full min-w-[720px] text-left text-sm">
-          <thead class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
-            <tr>
-              <th scope="col" class="px-4 py-3">Nomor</th>
-              <th scope="col" class="px-4 py-3">Toko</th>
-              <th scope="col" class="px-4 py-3">Paket</th>
-              <th scope="col" class="px-4 py-3 text-right">Total</th>
-              <th scope="col" class="px-4 py-3">Metode</th>
-              <th scope="col" class="px-4 py-3">Status</th>
-              <th scope="col" class="px-4 py-3">Dibuat</th>
-              <th scope="col" class="px-4 py-3">Dibayar</th>
-              <th scope="col" class="px-4 py-3"><span class="sr-only">Aksi</span></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
+      <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <Table>
+          <TableHeader className="bg-slate-50">
+            <TableRow>
+              <TableHead className="px-4 text-xs text-slate-500">Nomor</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Toko</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Paket</TableHead>
+              <TableHead className="px-4 text-right text-xs text-slate-500">Total</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Metode</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Status</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Dibuat</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Dibayar</TableHead>
+              <TableHead className="px-4"><span class="sr-only">Aksi</span></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {invoices.map((invoice) => (
-              <tr class="hover:bg-slate-50">
-                <td class="px-4 py-2 whitespace-nowrap font-mono text-xs">{invoice.invoice_number}</td>
-                <td class="px-4 py-2 whitespace-nowrap">{invoice.slug ? <a href={`/platform/tenants/${invoice.tenant_id}`} class="font-semibold text-blue-700 hover:underline">{invoice.slug}</a> : '—'}</td>
-                <td class="px-4 py-2 whitespace-nowrap">{cycleLabel(invoice.cycle_code)}</td>
-                <td class="px-4 py-2 text-right tabular-nums">{formatIdr(invoice.total_idr)}</td>
-                <td class="px-4 py-2">{invoice.channel_code}</td>
-                <td class="px-4 py-2"><StatusChip value={invoice.status} label={STATUS_LABELS[invoice.status]} /></td>
-                <td class="px-4 py-2 whitespace-nowrap">{formatWibDateTime(invoice.created_at)}</td>
-                <td class="px-4 py-2 whitespace-nowrap">{formatWibDateTime(invoice.paid_at)}</td>
-                <td class="px-4 py-2 text-right">{invoice.status === 'pending' && <button type="button" class="btn-secondary" data-check-invoice={invoice.id}>Cek status</button>}</td>
-              </tr>
+              <TableRow>
+                <TableCell className="px-4 font-mono text-xs">{invoice.invoice_number}</TableCell>
+                <TableCell className="px-4">{invoice.slug ? <a href={`/platform/tenants/${invoice.tenant_id}`} class="font-semibold text-blue-700 hover:underline">{invoice.slug}</a> : '—'}</TableCell>
+                <TableCell className="px-4">{cycleLabel(invoice.cycle_code)}</TableCell>
+                <TableCell className="px-4 text-right tabular-nums">{formatIdr(invoice.total_idr)}</TableCell>
+                <TableCell className="px-4">{invoice.channel_code}</TableCell>
+                <TableCell className="px-4"><StatusChip value={invoice.status} label={STATUS_LABELS[invoice.status]} /></TableCell>
+                <TableCell className="px-4 text-slate-700">{formatWibDateTime(invoice.created_at)}</TableCell>
+                <TableCell className="px-4 text-slate-700">{formatWibDateTime(invoice.paid_at)}</TableCell>
+                <TableCell className="px-4 text-right">{invoice.status === 'pending' && <InvoiceCheckButton client:visible invoiceId={invoice.id} />}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     )}
-  </section>
-  <script>
-    import { checkInvoiceButtons } from '../invoice-check';
-    checkInvoiceButtons();
-  </script>
+  </div>
 </PlatformLayout>

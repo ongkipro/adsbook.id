@@ -43,8 +43,9 @@ async function signIn(page: Page, email: string, password: string, code: string)
   await page.waitForURL(`${PLATFORM}/platform`);
 }
 
+// `heading` is the page header (h2, AdminPageHeader); the topbar carries the h1, as in the seller admin.
 const MENUS = [
-  { name: "Ringkasan", path: "/platform", heading: "Ringkasan" },
+  { name: "Ringkasan", path: "/platform", heading: "Ringkasan platform" },
   { name: "Toko", path: "/platform/tenants", heading: "Toko" },
   { name: "Domain", path: "/platform/domains", heading: "Domain sendiri" },
   { name: "Tagihan", path: "/platform/billing", heading: "Tagihan" },
@@ -67,30 +68,38 @@ test("platform console: every menu at 390 and 1366 px, team add, support refused
     await page.setViewportSize({ width, height: 900 });
     for (const menu of MENUS) {
       await page.goto(`${PLATFORM}${menu.path}`);
-      await expect(page.getByRole("heading", { level: 1, name: menu.heading })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 2, name: menu.heading, exact: true })).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `${menu.path} at ${width}px overflows`).toBeLessThanOrEqual(0);
       await page.screenshot({ path: `test-results/console-${width}-${menu.path.replace(/\//g, "_") || "root"}.png`, fullPage: true });
     }
-    // The current page is marked in the navigation.
+    // The current page is marked in the navigation (sidebar on desktop, bottom bar on a phone).
     await page.goto(`${PLATFORM}/platform/billing`);
-    await expect(page.locator('nav a[aria-current="page"]').first()).toHaveText("Tagihan");
+    await expect(page.locator('a[aria-current="page"]:visible').first()).toContainText("Tagihan");
     // A seeded store opens from the list.
     await page.goto(`${PLATFORM}/platform/tenants?q=toko-alfa`);
-    await page.getByRole("link", { name: "toko-alfa" }).first().click();
-    await expect(page.getByRole("heading", { level: 1, name: "toko-alfa" })).toBeVisible();
+    await page.locator('a[href^="/platform/tenants/"]:visible', { hasText: "toko-alfa" }).first().click();
+    await expect(page.getByRole("heading", { level: 2, name: "toko-alfa", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Tagihan langganan" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Beri langganan" })).toBeVisible();
   }
   expect(errors, "console errors").toEqual([]);
 
   // Add a support member, sign in as them, and see the team screen refused.
   await page.setViewportSize({ width: 1366, height: 900 });
+  // ⌘K jumps to a menu.
+  await page.keyboard.press("Control+k");
+  await page.getByRole("dialog").getByPlaceholder(/Ketik menu/).fill("aktivitas");
+  await page.keyboard.press("Enter");
+  await page.waitForURL(`${PLATFORM}/platform/activity`);
+
   await page.goto(`${PLATFORM}/platform/team`);
   const supportEmail = `cs-${Date.now()}@console.local.test`;
-  await page.getByLabel("Email", { exact: true }).fill(supportEmail);
-  await page.getByLabel("Peran").selectOption("platform_support");
-  await page.getByLabel(/Password awal/).fill("support-password-123");
-  await page.getByRole("button", { name: "Tambah" }).click();
+  await page.getByRole("button", { name: "Tambah anggota" }).click();
+  const add = page.getByRole("dialog");
+  await add.getByLabel("Email", { exact: true }).fill(supportEmail);
+  await add.getByLabel(/Password awal/).fill("support-password-123");
+  await add.getByRole("button", { name: "Tambah", exact: true }).click();
   await expect(page.locator("#enrolment")).toBeVisible();
   const supportSecret = (await page.locator("#enrolSecret").textContent())!.trim();
   await context.close();
@@ -98,10 +107,10 @@ test("platform console: every menu at 390 and 1366 px, team add, support refused
   const supportContext = await browser.newContext({ viewport: { width: 1366, height: 900 } });
   const supportPage = await supportContext.newPage();
   await signIn(supportPage, supportEmail, "support-password-123", await freshCode(supportSecret, new Set()));
-  await expect(supportPage.locator("nav").getByRole("link", { name: "Tim" })).toHaveCount(0);
+  await expect(supportPage.locator('a[href="/platform/team"]')).toHaveCount(0);
   const response = await supportPage.goto(`${PLATFORM}/platform/team`);
   expect(response?.status()).toBe(403);
-  await expect(supportPage.getByRole("alert")).toContainText("hanya untuk owner platform");
+  await expect(supportPage.getByRole("alert").filter({ hasText: "hanya untuk owner platform" })).toBeVisible();
   expect((await supportPage.request.get(`${PLATFORM}/api/platform/team`)).status()).toBe(403);
   await supportContext.close();
 });
