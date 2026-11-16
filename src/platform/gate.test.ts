@@ -381,3 +381,27 @@ test("OBS-1: invocation logs are off in wrangler.jsonc, and PLATFORM_DB has its 
   assert.equal(config.vars.CF_SAAS_ZONE_ID, "5d6f04b75008a2171f933c25988171e7");
   assert.deepEqual(Object.keys(config.vars).sort(), ["CF_SAAS_ZONE_ID", "TURNSTILE_SITE_KEY"]);
 });
+
+test("Paduka 2026-11-16: the seller zone's apex and www go to the platform's main domain; DCV paths still pass through", async () => {
+  for (const [href, location] of [
+    ["https://adsbook.cc/", "https://adsbook.id/"],
+    ["https://adsbook.cc/harga?utm_source=fb", "https://adsbook.id/harga?utm_source=fb"],
+    ["https://WWW.adsbook.cc./daftar", "https://adsbook.id/daftar"],
+  ]) {
+    const result = await gateRequest(new Request(href), new URL(href), {}, {});
+    assert.equal(result.kind, "refused", href);
+    assert.equal(result.kind === "refused" && result.response.status, 301, href);
+    assert.equal(result.kind === "refused" && result.response.headers.get("location"), location, href);
+  }
+  // No control-plane read happens for it (no PLATFORM_DB was given above), and a
+  // certificate validation on the apex is still handed on untouched.
+  let passed = false;
+  const dcv = await gateRequest(new Request("https://adsbook.cc/.well-known/acme-challenge/t"), new URL("https://adsbook.cc/.well-known/acme-challenge/t"), {}, {
+    passThrough: async () => ((passed = true), new Response("token")),
+  });
+  assert.equal(dcv.kind, "validation");
+  assert.equal(passed, true);
+  // A store subdomain is untouched by this rule (it reaches the control plane).
+  const store = await gateRequest(new Request("https://toko.adsbook.cc/"), new URL("https://toko.adsbook.cc/"), {}, {});
+  assert.notEqual(store.kind === "refused" && store.response.status, 301);
+});

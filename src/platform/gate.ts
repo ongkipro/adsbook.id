@@ -7,6 +7,7 @@
  */
 import { ensureControlPlane, resolveTenantHost, type HostCache, type TenantContext } from "./control-plane.ts";
 import { isPlatformRoute, isValidationPath, normalizeHost, platformHosts, platformSitePath } from "./host.ts";
+import { PLATFORM_DOMAIN, SELLER_ZONE } from "./hostnames.ts";
 import { statePage } from "./state-pages.ts";
 
 export type GateResult =
@@ -72,6 +73,15 @@ export async function gateRequest(
       return { kind: "refused", hostKind: "platform", response: statePage("not-found", url.pathname) };
     }
     return { kind: "platform", host };
+  }
+  // The seller zone's own apex and www are no store (slug `www` is reserved):
+  // they go to the platform's main domain (Paduka, 2026-11-16).
+  if (host === SELLER_ZONE || host === `www.${SELLER_ZONE}`) {
+    return {
+      kind: "refused",
+      hostKind: "platform",
+      response: new Response(null, { status: 301, headers: { Location: `https://${PLATFORM_DOMAIN}${url.pathname}${url.search}`, "Cache-Control": "public, max-age=3600" } }),
+    };
   }
   // Tenant host: platform routes do not exist here.
   if (isPlatformRoute(url.pathname)) {
