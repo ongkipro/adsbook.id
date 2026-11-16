@@ -123,7 +123,7 @@ export const FAMILY_ORDER: readonly RouteFamily[] = [
 ] as const;
 
 /** Marketing-site pages and the public pages beside them (served on platform hosts). */
-const PLATFORM_SITE_PAGES = new Set(["/platform/signup", "/platform/syarat", "/platform/privasi"]);
+const PLATFORM_SITE_PAGES = new Set(["/platform/signup", "/platform/masuk", "/platform/syarat", "/platform/privasi"]);
 
 /** `/platform/site` → `/`: the public URL each rewritten marketing page answers on. */
 const SERVED_AT = new Map(Object.entries(PLATFORM_SITE_ROUTES).map(([url, page]) => [page, url]));

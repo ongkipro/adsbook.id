@@ -232,7 +232,8 @@ export function createMiddleware(
           if (guard.user) context.locals.platformUser = guard.user;
           // Marketing pages are public and identical for every visitor, so
           // they are not marked private the way the admin is.
-          response = applySecurityHeaders(sitePath ? await next(sitePath) : await next(), !sitePath);
+          // The query string rides along: `/daftar?paket=12m` must reach the page.
+          response = applySecurityHeaders(sitePath ? await next(`${sitePath}${context.url.search}`) : await next(), !sitePath);
         }
         // The signup page posts the IAM-8 handoff to the new seller host.
         response.headers.set('Content-Security-Policy', platformCsp(getRuntimeEnv(context.locals)));

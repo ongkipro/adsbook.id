@@ -16,7 +16,14 @@ export const SIGNUP_LABEL = "Coba buat toko gratis";
 /** The header's small button: the same action, short enough for a 360px header. */
 export const SIGNUP_LABEL_SHORT = "Coba gratis";
 
-export type SitePage = { path: string; nav?: string; title: string; description: string };
+export type SitePage = { path: string; nav?: string; title: string; description: string; noindex?: boolean };
+
+export const SIGNUP_PAGE: SitePage = {
+  path: "/daftar",
+  title: "Buat Toko Gratis di Mode Preview - adsbook.id",
+  description: "Daftar dan siapkan toko online COD Anda di Mode Preview tanpa biaya. Aktifkan langganan mulai Rp149.000 per bulan saat toko siap beriklan.",
+  noindex: true,
+};
 
 /** One entry per indexable page; titles ≤ 70 and descriptions 120–155 characters (copy QA gate). */
 export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
@@ -127,6 +134,7 @@ export function registrationEventId(value: unknown): string {
 export type RegistrationSignal = {
   eventId: string;
   email: string;
+  phone?: string | null;
   sourceUrl: string;
   ip: string | null;
   userAgent: string | null;
@@ -165,6 +173,7 @@ export async function sendCompleteRegistration(
           event_source_url: input.sourceUrl,
           user_data: {
             em: [await sha256Hex(input.email.trim().toLowerCase())],
+            ...(input.phone ? { ph: [await sha256Hex(input.phone.replace(/\D/g, ""))] } : {}),
             client_ip_address: input.ip || undefined,
             client_user_agent: input.userAgent || undefined,
             fbp: input.fbp || undefined,

@@ -67,7 +67,7 @@ export async function listTenants(
 
 export async function tenantDetail(platformDb: D1Database, tenantId: string) {
   const tenant = await platformDb
-    .prepare("SELECT id, slug, owner_email, status, plan_id, cache_version, schema_version, purge_after, subscription_ends_at, grace_ends_at, is_demo, created_at FROM tenants WHERE id = ?")
+    .prepare("SELECT id, slug, owner_email, owner_whatsapp, status, plan_id, cache_version, schema_version, purge_after, subscription_ends_at, grace_ends_at, is_demo, created_at FROM tenants WHERE id = ?")
     .bind(tenantId)
     .first<Record<string, unknown>>();
   if (!tenant) return null;

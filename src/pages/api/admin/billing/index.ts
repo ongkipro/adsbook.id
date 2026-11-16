@@ -80,11 +80,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const ctx = await billingContext(locals);
   if (!ctx) return jsonError("Langganan belum tersedia.", 503);
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  const owner = await ctx.platformDb.prepare("SELECT owner_email FROM tenants WHERE id = ?").bind(ctx.tenantId).first<{ owner_email: string }>();
-  const warehouse = await tenantDatabase(locals)
-    ?.prepare("SELECT contact_phone FROM warehouses WHERE is_active = 1 AND contact_phone IS NOT NULL AND contact_phone <> '' ORDER BY is_primary DESC, id ASC LIMIT 1")
-    .first<{ contact_phone: string }>()
-    .catch(() => null);
+  const owner = await ctx.platformDb
+    .prepare("SELECT owner_email, owner_whatsapp FROM tenants WHERE id = ?")
+    .bind(ctx.tenantId)
+    .first<{ owner_email: string; owner_whatsapp: string | null }>();
+  const db = tenantDatabase(locals);
+  const [storeRow, warehouse] = await Promise.all([
+    db
+      ?.prepare("SELECT support_whatsapp FROM stores WHERE support_whatsapp IS NOT NULL AND support_whatsapp <> '' ORDER BY id ASC LIMIT 1")
+      .first<{ support_whatsapp: string }>()
+      .catch(() => null),
+    db
+      ?.prepare("SELECT contact_phone FROM warehouses WHERE is_active = 1 AND contact_phone IS NOT NULL AND contact_phone <> '' ORDER BY is_primary DESC, id ASC LIMIT 1")
+      .first<{ contact_phone: string }>()
+      .catch(() => null),
+  ]);
+  const phone = owner?.owner_whatsapp || storeRow?.support_whatsapp || warehouse?.contact_phone || "6281100000000";
   const created = await createInvoice(ctx.platformDb, ctx.env, {
     tenantId: ctx.tenantId,
     cycle: body?.cycle,
@@ -92,7 +103,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     customer: {
       name: locals.tenant?.name || locals.tenantContext?.slug || "Toko",
       email: owner?.owner_email ?? "",
-      phone: warehouse?.contact_phone ?? "",
+      phone,
     },
   });
   if (!created.ok) return jsonError(created.error, created.status);
