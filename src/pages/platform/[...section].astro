@@ -14,11 +14,10 @@ export const prerender = false;
  * The platform console (T-52, UX-4 and UX-7…UX-10) behind one route. The
  * platform guard has already required a platform session for every path here.
  *
- * lazy: one route on purpose. With `inlineStylesheets: 'always'` every Astro
- * route carries its own ~184 KiB copy of the admin stylesheet in the Worker
- * manifest; seven console routes put the bundle over the Workers Free 3 MiB
- * gzip limit. Upgrade path: on Workers Paid, split back into one page per
- * section (the section components already are the pages).
+ * One route keeps the Worker smaller: each Astro route inlines its own copy
+ * of the admin stylesheet (~184 KiB, `inlineStylesheets: 'always'`). The
+ * section components are the pages, so splitting them out is a move, not a
+ * rewrite, if separate routes are ever wanted.
  */
 const section = String(Astro.params.section ?? '').replace(/\/+$/, '');
 const tenantMatch = section.match(/^tenants\/([A-Za-z0-9_-]{1,64})$/);
