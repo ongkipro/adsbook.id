@@ -1,37 +1,92 @@
 ---
 import PlatformLayout from '../../components/platform/PlatformLayout.astro';
+import { CMS_VERSION } from '../../lib/version';
 export const prerender = false;
+
+// IAM-3 sign-in (T-52): the seller admin's /hello layout and classes
+// (admin-login-*), with the platform's three fields: email, password, TOTP.
+if (Astro.locals.platformUser) return Astro.redirect('/platform');
 ---
 <PlatformLayout title="Masuk">
-  <div class="mx-auto max-w-sm">
-    <h1 class="text-xl font-semibold text-slate-950">Masuk ke platform</h1>
-    <form id="loginForm" class="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm" novalidate>
-      <div>
-        <label for="email" class="block text-sm font-semibold">Email</label>
-        <input id="email" name="email" type="email" required autocomplete="username" class="admin-input-flat mt-2" />
+  <main class="admin-login-stage" aria-labelledby="loginTitle">
+    <div class="admin-login-brand relative isolate hidden flex-col justify-center overflow-hidden bg-slate-950 p-10 text-white lg:flex xl:p-14">
+      <div class="login-brand-grid" aria-hidden="true"></div>
+      <section class="relative max-w-md" aria-labelledby="loginBrandTitle">
+        <p class="text-sm font-semibold tracking-wide text-slate-400">adsbook.id platform</p>
+        <h2 id="loginBrandTitle" class="mt-3 text-3xl font-semibold leading-tight">Semua toko, langganan, dan kesehatan platform di satu console.</h2>
+      </section>
+    </div>
+
+    <div class="admin-login-form-wrapper">
+      <div class="admin-login-card">
+        <div class="admin-login-header text-center lg:text-left">
+          <h1 id="loginTitle" class="login-wordmark">
+            <a href="https://adsbook.id" class="login-wordmark-link" aria-label="adsbook.id, ke situs utama">
+              <img src="/images/adsbook-icon.svg" alt="" width="28" height="28" loading="eager" class="size-7 shrink-0" />
+              <span aria-hidden="true" class="login-wordmark-name">adsbook<span class="text-[#2563EB]">.id</span></span>
+            </a>
+          </h1>
+          <p class="mt-2 text-sm text-slate-500">Console platform · khusus tim adsbook.id</p>
+        </div>
+        <div class="admin-login-form-content">
+          <div id="loginErrorBox" class="mb-6 hidden rounded-xl border border-rose-200 bg-rose-50 p-4" role="alert" aria-live="assertive">
+            <p id="loginError" class="text-sm leading-relaxed text-rose-800"></p>
+          </div>
+          <form id="loginForm" class="space-y-4" novalidate aria-busy="false">
+            <div class="space-y-2">
+              <label for="email" class="text-sm font-semibold text-slate-900">Email</label>
+              <input id="email" name="email" type="email" required autocomplete="username" autofocus placeholder="nama@email.com" class="admin-input-flat" spellcheck="false" />
+            </div>
+            <div class="space-y-2">
+              <label for="password" class="text-sm font-semibold text-slate-900">Password</label>
+              <div class="relative flex items-center">
+                <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Masukkan password" class="admin-input-flat pr-20" />
+                <button id="togglePassword" type="button" class="absolute right-1 flex items-center justify-center rounded px-3 text-sm font-normal text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1" aria-controls="password" aria-label="Tampilkan password" aria-pressed="false">Lihat</button>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label for="totp" class="text-sm font-semibold text-slate-900">Kode autentikator</label>
+              <input id="totp" name="totp" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6 digit" class="admin-input-flat font-mono tracking-widest" />
+            </div>
+            <button id="loginSubmit" type="submit" class="mt-1 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[#1D4ED8] disabled:text-white/80">Masuk</button>
+          </form>
+        </div>
       </div>
-      <div>
-        <label for="password" class="block text-sm font-semibold">Password</label>
-        <input id="password" name="password" type="password" required autocomplete="current-password" class="admin-input-flat mt-2" />
-      </div>
-      <div>
-        <label for="totp" class="block text-sm font-semibold">Kode autentikator</label>
-        <input id="totp" name="totp" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" class="admin-input-flat mt-2 font-mono tracking-widest" />
-      </div>
-      <p id="loginError" class="min-h-5 text-sm font-semibold text-rose-700" role="alert"></p>
-      <button id="loginSubmit" type="submit" class="btn-primary w-full">Masuk</button>
-    </form>
-  </div>
+      <footer class="admin-login-foot">
+        <p class="font-mono text-slate-400">adsbook.id v{CMS_VERSION.version}</p>
+      </footer>
+    </div>
+  </main>
   <script>
     const form = document.getElementById('loginForm') as HTMLFormElement;
+    const errorBox = document.getElementById('loginErrorBox') as HTMLElement;
     const error = document.getElementById('loginError') as HTMLElement;
     const button = document.getElementById('loginSubmit') as HTMLButtonElement;
+    const password = document.getElementById('password') as HTMLInputElement;
+    const toggle = document.getElementById('togglePassword') as HTMLButtonElement;
+    const showError = (text: string) => { error.textContent = text; errorBox.classList.toggle('hidden', !text); };
+    toggle.addEventListener('click', () => {
+      const visible = password.type === 'text';
+      password.type = visible ? 'password' : 'text';
+      toggle.textContent = visible ? 'Lihat' : 'Sembunyikan';
+      toggle.setAttribute('aria-label', visible ? 'Tampilkan password' : 'Sembunyikan password');
+      toggle.setAttribute('aria-pressed', String(!visible));
+    });
+    window.addEventListener('pageshow', (event) => {
+      if (!event.persisted) return;
+      button.disabled = false;
+      button.textContent = 'Masuk';
+      form.setAttribute('aria-busy', 'false');
+    });
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!form.reportValidity() || button.disabled) return;
       button.disabled = true;
-      error.textContent = '';
+      button.textContent = 'Memverifikasi…';
+      form.setAttribute('aria-busy', 'true');
+      showError('');
       const values = new FormData(form);
+      let ok = false;
       try {
         const response = await fetch('/api/platform/login', {
           method: 'POST',
@@ -39,10 +94,17 @@ export const prerender = false;
           body: JSON.stringify({ email: values.get('email'), password: values.get('password'), totp: values.get('totp') }),
         });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload.success) { error.textContent = payload.error || 'Gagal masuk.'; return; }
+        if (!response.ok || !payload.success) { showError(payload.error || 'Gagal masuk.'); return; }
+        ok = true;
         window.location.assign('/platform');
+      } catch {
+        showError('Koneksi terputus. Coba lagi.');
       } finally {
-        button.disabled = false;
+        if (!ok) {
+          button.disabled = false;
+          button.textContent = 'Masuk';
+          form.setAttribute('aria-busy', 'false');
+        }
       }
     });
   </script>

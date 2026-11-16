@@ -1,7 +1,11 @@
 ---
 import PlatformLayout from '../PlatformLayout.astro';
+import AdminPageHeader from '../../admin/AdminPageHeader.astro';
 import StatusChip from '../StatusChip.astro';
+import { ConsoleFilters } from '../ConsoleFilters';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { getRuntimeEnv } from '../../../lib/env';
+import { CNAME_TARGET } from '../../../platform/hostnames';
 import { ageText, formatWibDateTime, HOST_STATUSES, isStuckHost, listCustomHosts } from '../../../platform/admin/metrics';
 
 // UX-9: every seller's own domain, stuck ones highlighted. Read-only; the seller fixes DNS (UX-3).
@@ -10,48 +14,52 @@ const status = Astro.url.searchParams.get('status') || '';
 const now = new Date();
 const hosts = await listCustomHosts(platformDb, { status: status || null });
 const stuck = hosts.filter((host) => isStuckHost(host, now)).length;
-const LABELS: Record<string, string> = { pending: 'Menunggu', active: 'Aktif', revoked: 'Dicabut' };
+const LABELS: Record<string, string> = { pending: 'Menunggu DNS', active: 'Aktif', revoked: 'Dicabut' };
 ---
-<PlatformLayout title="Domain" active="domains">
-  <h1 class="text-xl font-semibold text-slate-950">Domain sendiri</h1>
-  <form method="get" class="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-    <div class="w-48">
-      <label for="hostStatus" class="block text-xs font-semibold text-slate-700">Status</label>
-      <select id="hostStatus" name="status" class="admin-input-flat mt-1">
-        <option value="">Semua</option>
-        {HOST_STATUSES.map((value) => <option value={value} selected={value === status}>{LABELS[value]}</option>)}
-      </select>
-    </div>
-    <button type="submit" class="btn-primary">Terapkan</button>
-    {status && <a href="/platform/domains" class="btn-secondary">Reset</a>}
-  </form>
-  <p class="mt-4 text-xs text-slate-500" id="hostCount">{hosts.length} domain{stuck ? ` · ${stuck} belum aktif lebih dari 24 jam` : ''}</p>
-  {hosts.length === 0 ? (
-    <div class="mt-2 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-      {status ? <>Tidak ada domain dengan status ini. <a href="/platform/domains" class="font-semibold text-blue-700 underline">Hapus filter</a></> : 'Belum ada domain sendiri.'}
-    </div>
-  ) : (
-    <div class="mt-2 relative overflow-x-auto rounded-xl border border-slate-200 bg-white">
-      <table class="w-full min-w-[640px] text-left text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
-          <tr><th scope="col" class="px-4 py-3">Domain</th><th scope="col" class="px-4 py-3">Toko</th><th scope="col" class="px-4 py-3">Status</th><th scope="col" class="px-4 py-3">SSL</th><th scope="col" class="px-4 py-3">Ditambahkan</th><th scope="col" class="px-4 py-3">Umur</th></tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {hosts.map((host) => {
-            const late = isStuckHost(host, now);
-            return (
-              <tr class={late ? 'bg-amber-50/60' : ''}>
-                <td class="px-4 py-2 font-mono text-xs">{host.host}{host.is_primary === 1 && <span class="ml-2 font-sans text-xs text-slate-500">utama</span>}</td>
-                <td class="px-4 py-2"><a href={`/platform/tenants/${host.tenant_id}`} class="font-semibold text-blue-700 hover:underline">{host.slug}</a></td>
-                <td class="px-4 py-2"><StatusChip value={host.status} label={LABELS[host.status] ?? host.status} /></td>
-                <td class="px-4 py-2">{host.ssl_status ?? '—'}</td>
-                <td class="px-4 py-2 whitespace-nowrap">{formatWibDateTime(host.created_at)}</td>
-                <td class={`px-4 py-2 whitespace-nowrap ${late ? 'font-semibold text-amber-900' : ''}`}>{ageText(host.created_at, now)}{late ? ' · tertahan' : ''}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  )}
+<PlatformLayout title="Domain" description="Domain sendiri milik seller" active="domains">
+  <div class="space-y-4 md:space-y-5">
+    <AdminPageHeader title="Domain sendiri" description={`Seller mengarahkan domainnya (CNAME) ke ${CNAME_TARGET}; routing aktif setelah status dan SSL keduanya aktif.`} />
+    <ConsoleFilters
+      client:load
+      path="/platform/domains"
+      values={{ status }}
+      selects={[{ name: 'status', label: 'Status', options: [{ value: '', label: 'Semua status' }, ...HOST_STATUSES.map((value) => ({ value, label: LABELS[value] }))] }]}
+    />
+    <p class="text-xs text-slate-500" id="hostCount">{hosts.length} domain{stuck ? ` · ${stuck} belum aktif lebih dari 24 jam` : ''}</p>
+    {hosts.length === 0 ? (
+      <div class="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600 shadow-sm">
+        {status ? <>Tidak ada domain dengan status ini. <a href="/platform/domains" class="font-semibold text-blue-700 underline">Hapus filter</a></> : 'Belum ada domain sendiri.'}
+      </div>
+    ) : (
+      <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <Table>
+          <TableHeader className="bg-slate-50">
+            <TableRow>
+              <TableHead className="px-4 text-xs text-slate-500">Domain</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Toko</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Status</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">SSL</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Ditambahkan</TableHead>
+              <TableHead className="px-4 text-xs text-slate-500">Umur</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {hosts.map((host) => {
+              const late = isStuckHost(host, now);
+              return (
+                <TableRow className={late ? 'bg-amber-50/60' : ''}>
+                  <TableCell className="px-4 font-mono text-xs">{host.host}{host.is_primary === 1 && <span class="ml-2 font-sans text-xs text-slate-500">utama</span>}</TableCell>
+                  <TableCell className="px-4"><a href={`/platform/tenants/${host.tenant_id}`} class="font-semibold text-blue-700 hover:underline">{host.slug}</a></TableCell>
+                  <TableCell className="px-4"><StatusChip value={host.status} label={LABELS[host.status] ?? host.status} /></TableCell>
+                  <TableCell className="px-4 text-slate-700">{host.ssl_status ?? '—'}</TableCell>
+                  <TableCell className="px-4 text-slate-700">{formatWibDateTime(host.created_at)}</TableCell>
+                  <TableCell className={`px-4 ${late ? 'font-semibold text-amber-800' : 'text-slate-700'}`}>{ageText(host.created_at, now)}{late ? ' · tertahan' : ''}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    )}
+  </div>
 </PlatformLayout>
