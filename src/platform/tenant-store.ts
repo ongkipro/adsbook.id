@@ -151,7 +151,7 @@ export class TenantStore extends DurableObject {
       now: Date.now(),
       schemaState: () => this.#store.schemaState(),
       readTenant: (id) => readTenantRow(env.PLATFORM_DB as D1Database, id),
-      maintain: async (id, scheduledTime, primaryHost) => {
+      maintain: async (id, scheduledTime, primaryHost, adSignalsPaused) => {
         const { runTenantMaintenance } = await import("./tenant-maintenance.ts");
         await runTenantMaintenance(
           env,
@@ -161,6 +161,7 @@ export class TenantStore extends DurableObject {
           scheduledTime,
           { waitUntil: (task: Promise<unknown>) => this.ctx.waitUntil(task), passThroughOnException() {} } as never,
           primaryHost,
+          adSignalsPaused,
         );
       },
       setAlarm: (at) => this.ctx.storage.setAlarm(at),

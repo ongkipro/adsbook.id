@@ -16,10 +16,10 @@ export const prerender = false;
   <section class="hero" aria-labelledby="hero-title">
     <div class="wrap hero-grid">
       <div class="hero-text">
-        <h1 id="hero-title">Ubah klik iklan jadi pesanan COD yang terkirim dan tercatat</h1>
-        <p class="lead">Form order cepat di HP, pesanan rapi di admin, kirim lewat akun Mengantar Anda, dan setiap penjualan tercatat di Meta.</p>
+        <h1 id="hero-title">Pesanan COD dari iklan, dengan sinyal 1:1 ke Meta</h1>
+        <p class="lead">Pixel dan Conversions API mengirim setiap pesanan dengan event_id yang sama: satu penjualan dihitung satu kali. Tanpa potongan per transaksi.</p>
         <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
-        <p class="hero-note">Gratis · tanpa persetujuan · langsung aktif</p>
+        <p class="hero-note">Coba gratis di Mode Preview · berlangganan mulai Rp149.000/bulan saat siap beriklan</p>
       </div>
       <div class="hero-shot"><ShotFrame shot={SHOTS.form} eager caption /></div>
     </div>
@@ -48,9 +48,9 @@ export const prerender = false;
   <section class="section section-white" aria-labelledby="harga-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="harga-title">Mulai gratis, tanpa persetujuan</h2>
+        <h2 id="harga-title">Coba gratis, bayar saat siap beriklan</h2>
       </div>
-      <Pricing />
+      <Pricing compact />
       <p class="more"><a href="/harga">Rincian paket</a></p>
     </div>
   </section>

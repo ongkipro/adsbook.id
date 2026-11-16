@@ -1,0 +1,20 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
+import { BillingManager } from '../../components/admin/BillingManager';
+export const prerender = false;
+
+// UX-6 / API-9 (T-50, ADR-041): the store's subscription, Option A cycles and
+// the platform's QRIS/VA rail. Reachable for owner and admin in every billing
+// state, Preview and Expired included; state comes from /api/admin/billing.
+---
+
+<AdminLayout title="Langganan" activeMenu="settings">
+  <div class="space-y-6">
+    <AdminPageHeader
+      title="Langganan"
+      description="Paket toko, pembayaran QRIS atau Virtual Account, dan riwayat tagihan."
+    />
+    <BillingManager client:load />
+  </div>
+</AdminLayout>

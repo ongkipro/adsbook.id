@@ -67,7 +67,7 @@ const {
 } = Astro.props;
 // A store-wide PUBLIC_SITE_NOINDEX must not leave the meta saying "index"
 // beside the middleware's noindex header.
-const noindex = noindexProp || Astro.locals.tenant.noindex;
+const noindex = noindexProp || Astro.locals.tenant.noindex || Boolean(Astro.locals.billing?.adSignalsPaused);
 
 // Clean title: remove any "landing page" or "(landing page)" phrasing to focus strictly on product/brand name
 const title = (rawTitle || Astro.locals.tenant.defaultTitle)
@@ -259,6 +259,14 @@ const preloadImageUrls =
     {/* PR-26 (T-41): the demo store says so on every page; ordering is off there. */}
     {Astro.locals.tenantContext?.isDemo && (
       <p role="note" class="bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">Toko contoh adsbook.id: lihat-lihat saja, pemesanan tidak aktif.</p>
+    )}
+    {/* ADR-041 (BILL-5): a store that is not live says so to anyone who opens it. */}
+    {Astro.locals.billing?.adSignalsPaused && (
+      <p role="note" class="bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">
+        {Astro.locals.billing.state === 'expired'
+          ? 'Toko ini sedang tidak menerima pesanan. Pemilik toko perlu memperpanjang langganan di Admin.'
+          : 'Mode Preview — Aktifkan langganan di Admin agar toko siap diiklankan dan menerima pesanan.'}
+      </p>
     )}
     {/* The storefront is a phone-width column on every screen (compact
         template, DESIGN-SYSTEM §3). On a wide screen the grey canvas says

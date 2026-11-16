@@ -522,7 +522,7 @@ test("an AutoLaris callback is recorded verbatim and moves no payment state", as
       prepare: () => ({ bind: () => ({ first: async () => ({ secret_hash: secretHash }) }) }),
     };
     response = await LEGACY_WEBHOOK({
-      request: new Request(`https://toko.adsbook.cc/api/webhooks/autolaris/${token}`, {
+      request: new Request(`https://toko.adsbook.my.id/api/webhooks/autolaris/${token}`, {
         method: "POST",
         headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
         body: JSON.stringify({ rc: "00", data: { trx_id: "TRX-77", reff_id: "10041", status: "PAID" } }),

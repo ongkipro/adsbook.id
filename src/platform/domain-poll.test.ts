@@ -19,7 +19,7 @@ async function setup() {
   await ensureControlPlane(db, CHAIN);
   for (const id of ["t-a", "t-b"]) {
     db.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES (?, ?, ?, 'active', '2026-11-16')").run(id, id, `${id}@example.test`);
-    db.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'active', 1, '2026-11-16')").run(`${id}.adsbook.cc`, id);
+    db.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'active', 1, '2026-11-16')").run(`${id}.adsbook.my.id`, id);
   }
   const cloudflare = createFakeCloudflare();
   const api = cloudflareHostnameApi({ zoneId: cloudflare.zoneId, token: cloudflare.token, base: "https://cf.test/client/v4", fetcher: cloudflare.fetch });
@@ -47,7 +47,7 @@ test("one 'Cek lagi' refreshes root and www together and makes the root primary 
   assert.deepEqual(promotion, { outcome: "promoted", host: "domain.com" });
   assert.deepEqual(probed, ["domain.com"], "the root is the one probed and promoted");
   assert.equal(row("domain.com").is_primary, 1);
-  assert.equal(row("t-a.adsbook.cc").is_primary, 0);
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 0);
   assert.deepEqual(await promoteGroupIfReady(db, "t-a", "domain.com", async () => true), { outcome: "already-primary", host: "domain.com" });
 });
 
@@ -58,7 +58,7 @@ test("a failed probe or a domain still pending changes nothing: the subdomain st
   cloudflare.activate("domain.com");
   await refreshDomainGroup(db, api, "t-a", "domain.com");
   assert.equal((await promoteGroupIfReady(db, "t-a", "domain.com", async () => false)).outcome, "probe-failed");
-  assert.equal(row("t-a.adsbook.cc").is_primary, 1);
+  assert.equal(row("t-a.adsbook.my.id").is_primary, 1);
   assert.equal(row("domain.com").is_primary, 0);
   // www-only: the www host is the one promoted.
   const other = await setup();

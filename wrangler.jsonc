@@ -50,12 +50,13 @@
   // The workers.dev copy answers `X-Robots-Tag: noindex`; the gate refuses any
   // host that is not a platform host or a tenant row.
   "workers_dev": true,
-  // One Worker for every seller host on the SaaS zone adsbook.cc (ADR-039,
-  // zone 5d6f04b75008a2171f933c25988171e7), and the platform hosts on
+  // One Worker for every seller host on the SaaS zone adsbook.my.id (ADR-039,
+  // zone 2f704188a5333380dd6082f25d6bd74a; moved from adsbook.cc on
+  // 2026-11-16, whose Cloudflare IPs were on Indonesia's Trust+ list), and the platform hosts on
   // adsbook.id (zone 981e819270e74998956d0f45abbfaecf) as Workers Custom
   // Domains, which create their own DNS record and certificate on deploy.
   "routes": [
-    { "pattern": "*/*", "zone_name": "adsbook.cc" },
+    { "pattern": "*/*", "zone_name": "adsbook.my.id" },
     { "pattern": "adsbook.id", "custom_domain": true },
     { "pattern": "app.adsbook.id", "custom_domain": true }
   ],
@@ -63,7 +64,7 @@
   "vars": {
     // The SaaS zone the custom-hostname API works on (T-25); its token is the
     // secret CF_SAAS_TOKEN, scoped to this zone only.
-    "CF_SAAS_ZONE_ID": "5d6f04b75008a2171f933c25988171e7",
+    "CF_SAAS_ZONE_ID": "2f704188a5333380dd6082f25d6bd74a",
     // Turnstile widget `adsbook-platform` (managed; adsbook.id, app.adsbook.id).
     // The site key is public; the secret is TURNSTILE_SECRET_KEY.
     "TURNSTILE_SITE_KEY": "0x4AAAAAAGDGawKbjk1Gu9j5"

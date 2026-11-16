@@ -74,7 +74,7 @@ export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
     {
       id: "domain",
       label: "Pasang domain sendiri",
-      hint: "Opsional. Toko tetap bisa jualan di alamat adsbook.cc.",
+      hint: "Opsional. Toko tetap bisa jualan di alamat adsbook.my.id.",
       href: "/admin/settings/domains",
       done: facts.customDomain,
       required: false,

@@ -11,6 +11,14 @@ import { resolvePlatformUser, type PlatformUser } from "./session.ts";
 export const PLATFORM_PUBLIC_PATHS: ReadonlySet<string> = new Set(["/platform/signup", "/platform/login", "/platform/syarat", "/platform/privasi", "/api/platform/signup", "/api/platform/slug", "/api/platform/login"]);
 
 /** Whether a platform path is public: the signup and sign-in surfaces and the marketing site (T-40). */
+/**
+ * Provider callbacks to the platform (API-9): a server POST with no Origin and
+ * no session, authenticated by the secret token in its own path.
+ */
+export function isPlatformWebhookPath(pathname: string): boolean {
+  return /^\/api\/platform\/webhooks\/autolaris\/[^/]+\/?$/.test(pathname);
+}
+
 export function isPlatformPublicPath(pathname: string): boolean {
   const path = pathname.replace(/\/+$/, "") || "/";
   return PLATFORM_PUBLIC_PATHS.has(path) || path === "/platform/site" || path.startsWith("/platform/site/");
@@ -25,6 +33,7 @@ const json = (status: number, body: Record<string, unknown>) =>
 export async function platformGuard(request: Request, url: URL, env: Record<string, unknown>): Promise<GuardResult> {
   const path = url.pathname.replace(/\/+$/, "") || "/";
   const isApi = path === "/api/platform" || path.startsWith("/api/platform/");
+  if (request.method === "POST" && isPlatformWebhookPath(path)) return { kind: "pass", user: null };
   // Strict CSRF for every unsafe call, the public sign-in and signup included:
   // being reachable without a session is no exemption from IAM-5.
   if (UNSAFE.has(request.method)) {

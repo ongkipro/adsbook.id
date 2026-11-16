@@ -3,9 +3,10 @@ import { CMS_VERSION } from "../lib/version.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { armTenantAlarm, openTenantDb, TenantUnavailableError } from "./tenant-db.ts";
 import { runPlatformJobs } from "./jobs.ts";
-import { noticeDomainIfActive, noticeStuckDomains } from "./notify.ts";
+import { noticeDomainIfActive, noticeStuckDomains, notifyOperator } from "./notify.ts";
 import { pollPendingDomains } from "./domain-poll.ts";
 import { checkTrustPositif } from "./trust-watch.ts";
+import { pollOpenInvoices, subscriptionCalendar } from "./billing.ts";
 import { resolveAuthSecret } from "../lib/auth-secret.ts";
 import { runPurges } from "./purge.ts";
 import { deleteHostnameRef, hostnameApiFromEnv, probeHost } from "./hostnames.ts";
@@ -117,6 +118,19 @@ export async function runPlatformCron(
         onActive: (tenantId, slug, view) => noticeDomainIfActive(record, platformDb, { tenantId, slug }, view, (task) => context.waitUntil(task)),
       });
       if (polled.checked) console.info("scheduled-domain-poll", polled);
+    }
+    // ADR-041: subscription invoices are settled only through Advice; the
+    // cron asks about open and late ones every hour, then tells the operator
+    // which stores end within three days or are in their grace.
+    const record = env as unknown as Record<string, unknown>;
+    const billingRun = await pollOpenInvoices(platformDb, record, new Date(scheduledTime));
+    if (billingRun.checked) console.info("scheduled-billing-advice", billingRun);
+    const calendar = await subscriptionCalendar(platformDb, new Date(scheduledTime));
+    for (const row of calendar.ending) {
+      context.waitUntil(notifyOperator(record, platformDb, { tenantId: row.tenantId, slug: row.slug, kind: "subscription_ending", onceKey: row.endsAt }));
+    }
+    for (const row of calendar.grace) {
+      context.waitUntil(notifyOperator(record, platformDb, { tenantId: row.tenantId, slug: row.slug, kind: "subscription_grace", onceKey: row.endsAt }));
     }
     // Once a day (01:07 UTC, 08:07 WIB): are the platform's own IPs on Komdigi's Trust+ list?
     if (new Date(scheduledTime).getUTCHours() === 1) {

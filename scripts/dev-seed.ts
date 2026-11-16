@@ -20,6 +20,8 @@
  *                                 allowed for `demo`, the display-only demo store
  *                                 (PR-26, `npm run seed:demo`), which must never
  *                                 hold a provider credential.
+ *   --preview                     a ready store (keys, warehouse, products) left
+ *                                 in Preview Mode: no subscription, no orders.
  *   --orders=12                   how many checkout orders to place
  *   --store-name="Toko Dummy Lokal"  the store name given at signup
  *   --images=<dir>                product photos: <dir>/<slug>.webp|.jpg|.png, and an
@@ -41,6 +43,8 @@ const argValue = (name: string) =>
 const platform = new URL((argValue("platform") || "http://app.localhost:8787").replace(/\/$/, ""));
 const slug = argValue("slug") || "toko-uji";
 const catalogueOnly = process.argv.slice(2).includes("--catalogue-only");
+/** A ready store left in Preview Mode (ADR-041): no subscription, no orders. */
+const previewOnly = process.argv.slice(2).includes("--preview");
 if (slug === "demo" && !catalogueOnly) {
   console.error("[dev:seed] refusing slug demo without --catalogue-only: the demo store never holds provider keys (PR-26). Use npm run seed:demo.");
   process.exit(1);
@@ -530,6 +534,28 @@ async function exerciseLifecycle(placed: Placed[]) {
   }
 }
 
+/**
+ * ADR-041: a new store is in Preview Mode and refuses orders. Subscribe it the
+ * way a seller does — an Option A invoice from /admin/billing, paid at the
+ * AutoLaris stand-in, credited by the Advice check — so the run below can order.
+ */
+async function subscribe() {
+  const current = ok("billing", await call("/api/admin/billing"));
+  if (current?.data?.state === "subscribed" || current?.data?.state === "grace") {
+    console.log("[dev:seed] subscription already active — skipping");
+    return;
+  }
+  const created = ok("billing invoice", await call("/api/admin/billing", { method: "POST", json: { cycle: "1m", channel: "QRIS" } }));
+  const invoice = created.data.invoice;
+  const held = await fetch(`${providerBase}/__dev/autolaris/payments`).then((response) => response.json() as Promise<Array<{ transaction_id: string; paid: boolean; total: number }>>);
+  const match = held.filter((payment) => !payment.paid && payment.total === invoice.total).at(-1);
+  if (!match) throw new Error("the AutoLaris stand-in holds no instruction for the subscription invoice");
+  await fetch(`${providerBase}/__dev/autolaris/pay?transaction_id=${encodeURIComponent(match.transaction_id)}`, { method: "POST" });
+  const checked = ok("billing check", await call(`/api/admin/billing/${encodeURIComponent(invoice.id)}/check`, { method: "POST" }));
+  if (checked.data.state !== "subscribed") throw new Error(`subscription not active after payment (${checked.data.outcome})`);
+  console.log(`[dev:seed] subscribed until ${checked.data.subscriptionEndsAt} (${invoice.number})`);
+}
+
 async function main() {
   await signupTenant();
   await login();
@@ -541,6 +567,11 @@ async function main() {
   await providers();
   await warehouse();
   await products();
+  if (previewOnly) {
+    console.log(`[dev:seed] ready store in Preview Mode at ${base} (no subscription, no orders)`);
+    return;
+  }
+  await subscribe();
   const catalogue = await activeVariants();
   if (!catalogue.length) throw new Error("no active variant to order");
   console.log(`[dev:seed] ${catalogue.length} active variants; placing ${orderCount} orders`);

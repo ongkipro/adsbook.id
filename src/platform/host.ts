@@ -96,7 +96,7 @@ export function isPlatformRoute(pathname: string): boolean {
 /**
  * Where a request on a non-primary tenant host is sent once a custom domain is
  * the active primary (T-43, Paduka 2026-11-16): `www.<root>` and the store's
- * own `<slug>.adsbook.cc` answer GET/HEAD with a 301 to the same path and query
+ * own `<slug>.adsbook.my.id` answer GET/HEAD with a 301 to the same path and query
  * (click ids and UTMs kept) on the primary. Null when the request stays here.
  *
  * Never moved: `/api/*` (webhooks are bound to the subdomain, SEC-5; the

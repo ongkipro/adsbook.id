@@ -13,6 +13,8 @@ const PUBLISHED: Record<string, string> = {
   "seller-terms@0.1": "bb93dc2ebcfa1dc533024c578a9e1092244f9886862d3c5059fb8a682080df42",
   // v0.2 (2026-11-16): the seller zone moved from the old zone to adsbook.cc; nothing else changed.
   "seller-terms@0.2": "72b9a6b5f8fd53d9b8f4126253d799cccacf532ace00cd2f6b9532f3cff8e194",
+  // v0.3 (2026-11-16): paid subscription per store, free Preview Mode, 48-hour grace (ADR-041); seller zone adsbook.my.id.
+  "seller-terms@0.3": "60aaf8d5344f57ad083dbb0c42a1017816148035d5bbbe471a46a6202d82c0f9",
   "platform-privacy@0.1": "f4849347f4b174a7374af09732997cde447d3bf91bb674ba6565b5cd36979e4b",
   "store-privacy@0.1": "db557f2aa4be2e0a22345460c04961c25ca8c2d84f1a07841711b259763e827e",
 };

@@ -13,8 +13,8 @@ const CHAIN = readdirSync(dir).filter((name) => name.endsWith(".sql")).sort().ma
 const DNS: Record<string, string[]> = {
   "adsbook.id": ["104.21.41.93", "172.67.146.101"],
   "app.adsbook.id": ["104.21.41.93", "172.67.146.101"],
-  "adsbook.cc": ["104.21.7.149", "172.67.136.112"],
-  "cname.adsbook.cc": ["104.21.7.149", "172.67.136.112"],
+  "adsbook.my.id": ["104.21.7.149", "172.67.136.112"],
+  "cname.adsbook.my.id": ["104.21.7.149", "172.67.136.112"],
 };
 
 function fakeNet(list: string | null) {
@@ -36,7 +36,7 @@ function fakeNet(list: string | null) {
 }
 
 test("the watched hosts are the platform hosts and the seller zone; a local suffix adds none", () => {
-  assert.deepEqual(watchedHosts({}), ["adsbook.id", "app.adsbook.id", "adsbook.cc", "cname.adsbook.cc"]);
+  assert.deepEqual(watchedHosts({}), ["adsbook.id", "app.adsbook.id", "adsbook.my.id", "cname.adsbook.my.id"]);
   assert.deepEqual(watchedHosts({ TENANT_HOST_SUFFIX: "localhost" }), ["adsbook.id", "app.adsbook.id"]);
 });
 
@@ -53,11 +53,11 @@ test("a listed IP of the seller zone is reported per host and sent once a day; t
     const first = await checkTrustPositif(env, db, day, net.fetcher);
     assert.equal(first?.checked, 4);
     assert.deepEqual(first?.blocked, [
-      { host: "adsbook.cc", ip: "104.21.7.149" }, { host: "adsbook.cc", ip: "172.67.136.112" },
-      { host: "cname.adsbook.cc", ip: "104.21.7.149" }, { host: "cname.adsbook.cc", ip: "172.67.136.112" },
+      { host: "adsbook.my.id", ip: "104.21.7.149" }, { host: "adsbook.my.id", ip: "172.67.136.112" },
+      { host: "cname.adsbook.my.id", ip: "104.21.7.149" }, { host: "cname.adsbook.my.id", ip: "172.67.136.112" },
     ]);
     assert.equal(net.posts.length, 2, "one notice per IP, not per host");
-    assert.match(net.posts[0], /^\[adsbook\.id\] IP 104\.21\.7\.149 \(adsbook\.cc\) ada di daftar blokir Trust\+/);
+    assert.match(net.posts[0], /^\[adsbook\.id\] IP 104\.21\.7\.149 \(adsbook\.my\.id\) ada di daftar blokir Trust\+/);
     await checkTrustPositif(env, db, new Date("2026-11-17T23:00:00Z"), net.fetcher);
     assert.equal(net.posts.length, 2, "the same day stays quiet");
     await checkTrustPositif(env, db, new Date("2026-11-18T01:07:00Z"), net.fetcher);

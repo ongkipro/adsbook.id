@@ -50,7 +50,7 @@ for (const cap of ["media", "ai"] as const) {
 
 test("one store = one own domain: root + www counts once, a second domain creates no Cloudflare hostname, a raised plan admits it", async () => {
   const { db, setPlan } = await setup();
-  db.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES ('t-a.adsbook.cc', 't-a', 'subdomain', 'active', 1, '2026-11-16')").run();
+  db.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES ('t-a.adsbook.my.id', 't-a', 'subdomain', 'active', 1, '2026-11-16')").run();
   const cloudflare = createFakeCloudflare();
   const api = cloudflareHostnameApi({ zoneId: cloudflare.zoneId, token: cloudflare.token, base: "https://cf.test/client/v4", fetcher: cloudflare.fetch });
   const posts = () => cloudflare.calls.filter((call) => call.method === "POST").length;

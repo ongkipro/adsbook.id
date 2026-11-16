@@ -9,10 +9,11 @@
  * only (AUTHZ-3).
  */
 import { prepareHandoff } from "../handoff.ts";
+import { grantSubscription } from "../billing.ts";
 import { REMOVAL_GRACE_MS } from "../purge.ts";
 import type { PlatformRole, PlatformUser } from "./session.ts";
 
-export type TenantAction = "suspend" | "resume" | "plan" | "purge-request" | "recover";
+export type TenantAction = "suspend" | "resume" | "plan" | "purge-request" | "recover" | "grant-subscription";
 
 export const ACTION_ROLES: Record<TenantAction, readonly PlatformRole[]> = {
   suspend: ["platform_owner", "platform_support"],
@@ -20,6 +21,8 @@ export const ACTION_ROLES: Record<TenantAction, readonly PlatformRole[]> = {
   plan: ["platform_owner"],
   "purge-request": ["platform_owner"],
   recover: ["platform_owner"],
+  // BILL-7 (ADR-041): free subscription days are money; the owner role only.
+  "grant-subscription": ["platform_owner"],
 };
 
 /** A heartbeat older than this is stale (OBS-3). */
@@ -64,7 +67,7 @@ export async function listTenants(
 
 export async function tenantDetail(platformDb: D1Database, tenantId: string) {
   const tenant = await platformDb
-    .prepare("SELECT id, slug, owner_email, status, plan_id, cache_version, schema_version, purge_after, created_at FROM tenants WHERE id = ?")
+    .prepare("SELECT id, slug, owner_email, status, plan_id, cache_version, schema_version, purge_after, subscription_ends_at, grace_ends_at, is_demo, created_at FROM tenants WHERE id = ?")
     .bind(tenantId)
     .first<Record<string, unknown>>();
   if (!tenant) return null;
@@ -96,7 +99,7 @@ export async function runTenantAction(
   actor: PlatformUser,
   tenantId: string,
   action: TenantAction,
-  input: { reason?: unknown; plan?: unknown; slug?: unknown; evidence?: unknown },
+  input: { reason?: unknown; plan?: unknown; slug?: unknown; evidence?: unknown; days?: unknown },
   now = new Date(),
 ): Promise<ActionResult> {
   if (!ACTION_ROLES[action]?.includes(actor.role)) return { ok: false, status: 403, error: "Peran Anda tidak boleh melakukan aksi ini." };
@@ -127,6 +130,12 @@ export async function runTenantAction(
   };
 
   switch (action) {
+    case "grant-subscription": {
+      const granted = await grantSubscription(platformDb, { tenantId, days: input.days, reason: input.reason, actor: `platform:${actor.id}` }, now);
+      return granted.ok
+        ? { ok: true, message: `Langganan ${tenant.slug} aktif sampai ${granted.value.subscriptionEndsAt.slice(0, 10)}.` }
+        : { ok: false, status: granted.status, error: granted.error };
+    }
     case "suspend": {
       const reason = text(input.reason, 500);
       if (reason.length < 3) return { ok: false, status: 400, error: "Alasan wajib diisi." };

@@ -5,7 +5,7 @@
 import { ensureSchemaUpgraded, type MigrationSource } from "../lib/schema-version.ts";
 
 /** Files in `src/platform/migrations/`. Bump with every new control-plane file. */
-export const PLATFORM_SCHEMA_VERSION = 6;
+export const PLATFORM_SCHEMA_VERSION = 7;
 
 async function bundledPlatformMigrations(): Promise<readonly MigrationSource[]> {
   const { PLATFORM_MIGRATIONS } = await import("./bundled-migrations.ts");
@@ -37,11 +37,14 @@ export type TenantContext = {
   status: TenantStatus;
   cacheVersion: number;
   host: string;
-  /** `subdomain` is the tenant's immutable `<slug>.adsbook.cc`; webhooks answer only there (SEC-5). */
+  /** `subdomain` is the tenant's immutable `<slug>.adsbook.my.id`; webhooks answer only there (SEC-5). */
   hostKind: "subdomain" | "custom";
   primaryHost: string | null;
   /** PR-26: the one display-only demo store (`src/platform/demo.ts`). */
   isDemo?: boolean;
+  /** ADR-041: null while the store is in Preview Mode (`src/platform/billing.ts`). */
+  subscriptionEndsAt?: string | null;
+  graceEndsAt?: string | null;
 };
 
 export type HostResolution =
@@ -60,10 +63,12 @@ type HostRow = {
   cache_version: number;
   primary_host: string | null;
   is_demo?: number | null;
+  subscription_ends_at?: string | null;
+  grace_ends_at?: string | null;
 };
 
 const HOST_SQL = `SELECT h.status AS host_status, h.kind AS host_kind, h.quarantine_until,
-    t.id AS tenant_id, t.slug, t.status, t.cache_version, t.is_demo,
+    t.id AS tenant_id, t.slug, t.status, t.cache_version, t.is_demo, t.subscription_ends_at, t.grace_ends_at,
     (SELECT p.host FROM tenant_hosts p
       WHERE p.tenant_id = t.id AND p.is_primary = 1 AND p.status = 'active') AS primary_host
   FROM tenant_hosts h JOIN tenants t ON t.id = h.tenant_id
@@ -86,6 +91,8 @@ export function decideHost(row: HostRow | null, host: string, now: Date): HostRe
           hostKind: row.host_kind === "subdomain" ? "subdomain" : "custom",
           primaryHost: row.primary_host,
           isDemo: Number(row.is_demo) === 1,
+          subscriptionEndsAt: row.subscription_ends_at ?? null,
+          graceEndsAt: row.grace_ends_at ?? null,
         },
       };
     case "suspended":

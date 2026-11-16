@@ -7,7 +7,7 @@
  */
 import { getRuntimeEnv } from '../../lib/env';
 import PlatformPixel from './PlatformPixel.astro';
-import { SIGNUP_LABEL, SIGNUP_PATH, SITE_NAME, SITE_PAGES, canonicalUrl, siteJsonLd, type SitePage } from './site.ts';
+import { SIGNUP_LABEL_SHORT, SIGNUP_PATH, SITE_NAME, SITE_PAGES, canonicalUrl, siteJsonLd, type SitePage } from './site.ts';
 
 interface Props {
   page: SitePage;
@@ -51,7 +51,7 @@ const year = new Date().getFullYear();
         <nav aria-label="Utama" class="nav-wide">
           {nav.map((entry) => <a href={entry.path} aria-current={entry.path === page.path ? 'page' : undefined}>{entry.nav}</a>)}
         </nav>
-        {!quietHeader && <a class="btn btn-small" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>}
+        {!quietHeader && <a class="btn btn-small" href={SIGNUP_PATH}>{SIGNUP_LABEL_SHORT}</a>}
         <details class="nav-narrow">
           <summary>Menu</summary>
           <nav aria-label="Utama">

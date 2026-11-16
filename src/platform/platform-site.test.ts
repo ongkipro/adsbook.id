@@ -35,13 +35,19 @@ test("titles and descriptions pass the copy QA gate and are unique", () => {
   assert.equal(descriptions.size, Object.keys(SITE_PAGES).length);
 });
 
-test("JSON-LD names the organization and the application, claims no rating, and cannot close its script", () => {
+test("JSON-LD names the organization and the application, claims no rating, and cannot close its script", async () => {
   const raw = siteJsonLd({ PLATFORM_SITE_URL: "https://adsbook.id" });
   assert.doesNotMatch(raw, /</);
   const data = JSON.parse(raw) as { "@graph": Array<Record<string, unknown>> };
   assert.deepEqual(data["@graph"].map((node) => node["@type"]), ["Organization", "SoftwareApplication"]);
   assert.doesNotMatch(raw, /aggregateRating|review|ratingValue/);
-  assert.equal((data["@graph"][1].offers as { price: string }).price, "0");
+  // ADR-041 Option A, per store, in IDR — the same numbers billing charges.
+  const offers = data["@graph"][1].offers as Array<{ name: string; price: string; priceCurrency: string }>;
+  assert.deepEqual(offers.map((offer) => [offer.name, offer.price, offer.priceCurrency]), [
+    ["1 Bulan", "149000", "IDR"], ["3 Bulan", "399000", "IDR"], ["6 Bulan", "759000", "IDR"], ["1 Tahun", "1490000", "IDR"],
+  ]);
+  const { BILLING_CYCLES } = await import("./billing.ts");
+  assert.deepEqual(offers.map((offer) => Number(offer.price)), Object.values(BILLING_CYCLES).map((cycle) => cycle.amountIdr));
 });
 
 test("the platform Pixel id is read only when Pixel-shaped", () => {
@@ -122,4 +128,13 @@ test("no platform tag on seller hosts: platform tracking is referenced only from
   };
   walk(root);
   assert.deepEqual(offenders, []);
+});
+
+test("T-51: no page claims the platform is free forever, and the pricing states one store per own domain", async () => {
+  const { readFileSync, readdirSync } = await import("node:fs");
+  const pages = readdirSync("src/pages/platform/site").filter((name) => name.endsWith(".astro")).map((name) => readFileSync(`src/pages/platform/site/${name}`, "utf8"));
+  const site = [...pages, readFileSync("src/platform/site/content.ts", "utf8"), readFileSync("src/platform/site/site.ts", "utf8"), readFileSync("src/platform/site/Pricing.astro", "utf8")].join("\n");
+  assert.doesNotMatch(site, /Rp0\b|gratis selamanya|Paket Pilot|price: "0"/i);
+  assert.match(readFileSync("src/platform/site/Pricing.astro", "utf8"), /1 langganan = 1 toko dan 1 domain sendiri/);
+  assert.match(site, /Bayar 10 bulan, gratis 2 bulan/);
 });

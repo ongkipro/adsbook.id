@@ -14,18 +14,26 @@
  *    with its tenant id, and re-arm either way.
  */
 import type { SchemaState } from "./store-core.ts";
+import { billingState, isLive } from "./billing.ts";
 
 /** The hourly cadence; the platform cron re-arms an alarm that went missing. */
 export const TENANT_ALARM_INTERVAL_MS = 60 * 60 * 1000;
 
-export type TenantRow = { status: string; cache_version: number; primary_host: string | null };
+export type TenantRow = {
+  status: string;
+  cache_version: number;
+  primary_host: string | null;
+  is_demo?: number | null;
+  subscription_ends_at?: string | null;
+  grace_ends_at?: string | null;
+};
 
 export type TenantAlarmDeps = {
   tenantId: string | null;
   now: number;
   schemaState(): SchemaState;
   readTenant(tenantId: string): Promise<TenantRow | null>;
-  maintain(tenantId: string, scheduledTime: number, primaryHost: string | null): Promise<void>;
+  maintain(tenantId: string, scheduledTime: number, primaryHost: string | null, adSignalsPaused: boolean): Promise<void>;
   setAlarm(at: number): Promise<void>;
   /** OBS-3: the run's outcome on the control plane (heartbeat, backlog, last error). */
   recordHealth?(tenantId: string, outcome: { ok: boolean; error?: string }): Promise<void>;
@@ -59,7 +67,10 @@ export async function runTenantAlarm(deps: TenantAlarmDeps): Promise<TenantAlarm
   const health = (outcome: { ok: boolean; error?: string }) =>
     deps.recordHealth?.(tenantId, outcome).catch((error) => console.error("tenant-alarm-health-failed", { tenant_id: tenantId, error: String(error) }));
   try {
-    await deps.maintain(tenantId, now, tenant.primary_host);
+    // ADR-041: outbox drains (Meta CAPI, Google Ads) stop while the store is
+    // not live; the demo store never has an outbox.
+    const paused = Number(tenant.is_demo) !== 1 && !isLive(billingState({ subscriptionEndsAt: tenant.subscription_ends_at, graceEndsAt: tenant.grace_ends_at }, new Date(now)));
+    await deps.maintain(tenantId, now, tenant.primary_host, paused);
     await health({ ok: true });
     return "ran";
   } catch (error) {
@@ -76,7 +87,7 @@ export async function runTenantAlarm(deps: TenantAlarmDeps): Promise<TenantAlarm
 export async function readTenantRow(platformDb: D1Database, tenantId: string): Promise<TenantRow | null> {
   return platformDb
     .prepare(
-      `SELECT t.status, t.cache_version, h.host AS primary_host FROM tenants t
+      `SELECT t.status, t.cache_version, t.is_demo, t.subscription_ends_at, t.grace_ends_at, h.host AS primary_host FROM tenants t
        LEFT JOIN tenant_hosts h ON h.tenant_id = t.id AND h.is_primary = 1 AND h.status = 'active'
        WHERE t.id = ?`,
     )

@@ -313,7 +313,7 @@ test("middleware: an upload is fetched from R2 once, then served without D1 or t
 test("an upload answer that is private, no-store or sets a cookie is never stored as public (T-28 review)", async () => {
   const stored: Response[] = [];
   const cache = { match: async () => undefined, put: async (_key: Request, response: Response) => void stored.push(response) };
-  const key = new Request("https://toko-a.adsbook.cc/uploads/a.webp");
+  const key = new Request("https://toko-a.adsbook.my.id/uploads/a.webp");
   const image = (headers: Record<string, string>) => new Response("bytes", { status: 200, headers: { "content-type": "image/webp", ...headers } });
   writeUploadCache(key, image({ "cache-control": "private, max-age=60" }), undefined, cache);
   writeUploadCache(key, image({ "cache-control": "no-store" }), undefined, cache);

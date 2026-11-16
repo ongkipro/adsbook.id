@@ -43,6 +43,8 @@ export async function runTenantMaintenance(
   scheduledTime: number,
   context: ExecutionContext,
   primaryHost?: string | null,
+  /** ADR-041: a store in Preview Mode or past its grace sends no ad signal. */
+  adSignalsPaused = false,
 ) {
   const identity = await readStoreIdentity(database);
   if (identity.state !== "installed") {
@@ -123,6 +125,7 @@ export async function runTenantMaintenance(
     tenantDb: database,
     tenant: resolveTenantConfig(identity.row, primaryHost ?? undefined),
     cfContext: context,
+    ...(adSignalsPaused ? { billing: { state: "expired" as const, adSignalsPaused: true } } : {}),
   } satisfies App.Locals;
   let autoLarisReconciliation = {
     checked: 0,
@@ -169,7 +172,7 @@ export async function runTenantMaintenance(
       : 0;
   });
   // The tenant's own upload settings (T-45); an unreadable row uploads nothing.
-  const googleAdsOffline = await loadGoogleAdsOfflineConfig(database).catch((error) => {
+  const googleAdsOffline = adSignalsPaused ? null : await loadGoogleAdsOfflineConfig(database).catch((error) => {
     console.error("scheduled-google-ads-config-failed", { tenant_id: tenantId, error: String(error) });
     return null;
   });

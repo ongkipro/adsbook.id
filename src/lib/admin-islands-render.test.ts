@@ -288,3 +288,10 @@ test('InsightsReport renders populated source, variant, location, and heatmap da
   const times = await renderIsland('InsightsReport.tsx', 'InsightsReport', { report: 'times', initialData: { total: 168, max: 1, cells: Array.from({ length: 7 }, () => Array(24).fill(1)) } });
   assert.match(times.replace(/<!--.*?-->/g, ''), /23:00/);
 });
+
+// T-50 (UX-6): the billing island renders its loading state on the server;
+// its data arrives from /api/admin/billing after hydration.
+test("BillingManager server-renders its loading state without throwing", async () => {
+  const html = await renderIsland("BillingManager.tsx", "BillingManager", {});
+  assert.match(html, /aria-label="Memuat langganan"/);
+});

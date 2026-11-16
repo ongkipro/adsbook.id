@@ -82,7 +82,7 @@ mkdirSync(`${root}.wrangler`, { recursive: true });
 writeFileSync(envFile, "");
 
 // The built config without `routes`: with a route, wrangler dev rewrites every
-// request URL's host to the route's zone (`adsbook.cc`), and the gate — which
+// request URL's host to the route's zone (`adsbook.my.id`), and the gate — which
 // reads the request's own host — would see one host for every tenant. The copy
 // sits beside the built config so its relative paths still resolve.
 const builtConfig = `${root}dist/server/wrangler.json`;
@@ -130,6 +130,10 @@ const worker = spawn(
     "--var", "TURNSTILE_SITE_KEY:local-stand-in",
     "--var", "TURNSTILE_SECRET_KEY:local-stand-in-secret",
     "--var", `TURNSTILE_VERIFY_URL:${providerBase}/turnstile/v0/siteverify`,
+    // ADR-041: the platform's subscription rail, against the AutoLaris stand-in.
+    "--var", "PLATFORM_AUTOLARIS_API_KEY:dev-platform-autolaris-key",
+    "--var", `PLATFORM_AUTOLARIS_BASE_URL:${providerBase}`,
+    "--var", "PLATFORM_AUTOLARIS_WEBHOOK_TOKEN:dev-local-billing-webhook-token-0123456789",
     "--var", "CF_SAAS_ZONE_ID:dev-zone",
     "--var", "CF_SAAS_TOKEN:dev-token",
     "--var", `CF_API_BASE:${providerBase}/client/v4`,

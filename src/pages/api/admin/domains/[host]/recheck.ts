@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ params, locals }) => {
   const promotion = await promoteGroupIfReady(platformDb, tenantId, host, (target) => probeHost(target, secret));
   const message =
     promotion.outcome === "promoted"
-      ? `${promotion.host} aktif dan sekarang domain utama toko. Alamat www dan adsbook.cc dialihkan (301) ke domain ini.`
+      ? `${promotion.host} aktif dan sekarang domain utama toko. Alamat www dan adsbook.my.id dialihkan (301) ke domain ini.`
       : promotion.outcome === "probe-failed"
         ? `${promotion.host} aktif di Cloudflare, tetapi belum menayangkan toko lewat HTTPS. Coba "Cek lagi" beberapa menit lagi.`
         : undefined;

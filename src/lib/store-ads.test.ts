@@ -169,7 +169,7 @@ test("A-226: pixel without a CAPI token keeps the browser pixel and sends no ser
   const result = await sendMetaCapiEvent(
     "Purchase",
     "INV-10001",
-    "https://toko-a.adsbook.cc/thanks",
+    "https://toko-a.adsbook.my.id/thanks",
     { clientIp: "203.0.113.1", userAgent: "test" },
     { orderNumber: "INV-10001", value: 100000, currency: "IDR" },
     config.metaPixelId,
@@ -183,3 +183,17 @@ test("A-226: pixel without a CAPI token keeps the browser pixel and sends no ser
 function storeDatabase(...args: Parameters<typeof storeDatabase__raw>): ReturnType<typeof storeDatabase__raw> {
   return bindTestCredentialsIn(storeDatabase__raw(...args));
 }
+
+test("ADR-041: a store that is not live sends no ad signal from any request; grace keeps campaigns running", async () => {
+  const row = { meta_pixel_id: "100000000000001", meta_capi_token: null, google_tag_manager_id: "GTM-ABCD12", google_ads_conversion_id: null, google_ads_conversion_label: null };
+  const tenantDb = storeDatabase__raw(row);
+  const paused = { tenantDb, billing: { state: "preview" as const, adSignalsPaused: true } } as unknown as App.Locals;
+  const publicConfig = await getStoreAdsConfig(paused);
+  assert.equal(publicConfig.metaPixelId, "");
+  assert.equal(publicConfig.googleTagManagerId, "");
+  // R4 review: an admin request (confirming an old order's payment) sends nothing either.
+  const adminConfig = await getStoreAdsConfig({ ...paused, admin: { username: "o", role: "owner", mustChangePassword: false } } as unknown as App.Locals);
+  assert.equal(adminConfig.metaPixelId, "");
+  const live = await getStoreAdsConfig({ tenantDb, billing: { state: "grace", adSignalsPaused: false } } as unknown as App.Locals);
+  assert.equal(live.metaPixelId, "100000000000001", "grace keeps campaigns running");
+});

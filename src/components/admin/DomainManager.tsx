@@ -102,7 +102,7 @@ export function DomainManager() {
   const remove = async (domain: Domain) => {
     if (!(await confirm({
       title: `Hapus domain ${domain.host}?`,
-      description: "Toko tidak lagi bisa dibuka lewat domain ini. Bila ini domain utama, subdomain adsbook.cc kembali menjadi domain utama.",
+      description: "Toko tidak lagi bisa dibuka lewat domain ini. Bila ini domain utama, subdomain adsbook.my.id kembali menjadi domain utama.",
       confirmLabel: "Hapus domain",
     }))) return;
     await run(domain.host, () => call(path(domain), { method: "DELETE" }));
@@ -120,7 +120,7 @@ export function DomainManager() {
 
   // One store, one own domain (Paduka, 2026-11-16): with a domain in place the form replaces it.
   const current = domains?.find((domain) => domain.kind === "custom")?.group ?? null;
-  const subdomain = domains?.find((domain) => domain.kind === "subdomain")?.host ?? "subdomain adsbook.cc";
+  const subdomain = domains?.find((domain) => domain.kind === "subdomain")?.host ?? "subdomain adsbook.my.id";
 
   const add = async (event: { preventDefault(): void }) => {
     event.preventDefault();

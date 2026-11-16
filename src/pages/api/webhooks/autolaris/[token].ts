@@ -45,7 +45,7 @@ function readIdentifiers(body: string) {
  * reconciliation remains the only path to `paid`. Every delivery lands in
  * `autolaris_callbacks` so the real shape can be classified from evidence.
  *
- * SEC-5 (T-23): answered only on the tenant's own `<slug>.adsbook.cc` with
+ * SEC-5 (T-23): answered only on the tenant's own `<slug>.adsbook.my.id` with
  * that tenant's token in the path, checked before the rate limiter or any
  * write. The token is the only authentication AutoLaris can carry.
  */
