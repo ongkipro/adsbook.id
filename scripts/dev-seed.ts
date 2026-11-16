@@ -21,6 +21,7 @@
  *                                 (PR-26, `npm run seed:demo`), which must never
  *                                 hold a provider credential.
  *   --orders=12                   how many checkout orders to place
+ *   --store-name="Toko Dummy Lokal"  the store name given at signup
  *   --images=<dir>                product photos: <dir>/<slug>.webp|.jpg|.png, and an
  *                                 optional <dir>/<slug>-sm.webp card copy
  *                                 replaces the flat colour for that product.
@@ -280,7 +281,7 @@ async function signupTenant() {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: platform.origin, "Sec-Fetch-Site": "same-origin" },
     body: JSON.stringify({
-      store_name: "Toko Dummy Lokal",
+      store_name: argValue("store-name") || "Toko Dummy Lokal",
       slug,
       email: DEV_ADMIN.username,
       password: DEV_ADMIN.password,

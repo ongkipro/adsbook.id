@@ -9,3 +9,7 @@ dist/
 .dev.vars.*
 !.dev.vars.example
 tmp/
+
+# Playwright (T-28)
+playwright-report/
+test-results/

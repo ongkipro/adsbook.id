@@ -9,7 +9,10 @@
  * `scripts/dev-providers.ts` on 127.0.0.1, so checkout, dispatch and QRIS/VA
  * all work without an account anywhere.
  *
- *   --reset      wipe the local store first (only .wrangler/dev-local-state)
+ *   --reset      wipe the local store first (only its state directory)
+ *   --state=<name>  keep the store in .wrangler/<name> instead of
+ *                dev-local-state (the browser suite uses its own, so a test
+ *                run never wipes a developer's local store)
  *   --no-build   reuse the last `astro build`
  *   --port=8787  Worker port (providers use port + 1)
  *   --platform-pixel  give the platform pages a test Pixel id and send the
@@ -36,7 +39,12 @@ const portArg = process.argv.slice(2).find((arg) => arg.startsWith("--port="));
 const port = Number(portArg?.split("=")[1]) || 8787;
 const host = process.argv.slice(2).find((arg) => arg.startsWith("--ip="))?.split("=")[1] || "";
 const providerPort = port + 1;
-const stateDir = `${root}.wrangler/dev-local-state`;
+const stateName = process.argv.slice(2).find((arg) => arg.startsWith("--state="))?.split("=")[1] || "dev-local-state";
+if (!/^[a-z0-9-]+$/.test(stateName)) {
+  console.error("[dev:local] --state takes a plain name (a-z, 0-9, -): it becomes a folder under .wrangler/.");
+  process.exit(1);
+}
+const stateDir = `${root}.wrangler/${stateName}`;
 const envFile = `${root}.wrangler/dev-local.env`;
 
 // A second run while the first is still up used to die inside wrangler with
