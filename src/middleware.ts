@@ -311,6 +311,19 @@ export function createMiddleware(
     return applySecurityHeaders(context.redirect(hostRedirect, 301), false);
   }
 
+  // T-43 (PR-28, root primary): `www.<root>` answers with a permanent redirect
+  // to the root once the root is the active primary. Both hosts are active by
+  // then: an inactive `www` never resolves here, and a root becomes primary
+  // only after its HTTPS probe. Webhooks and APIs are never moved.
+  const wwwToRoot = (() => {
+    const tenant = context.locals.tenantContext;
+    if (!tenant || tenant.hostKind !== 'custom' || !tenant.primaryHost || url.pathname.startsWith('/api/')) return null;
+    return url.hostname === `www.${tenant.primaryHost}` ? `${url.protocol}//${tenant.primaryHost}${url.port ? `:${url.port}` : ''}${url.pathname}${url.search}` : null;
+  })();
+  if (wwwToRoot) {
+    return applySecurityHeaders(context.redirect(wwwToRoot, 301), false);
+  }
+
   // The edge cache (ADR-029): an anonymous page another visitor rendered in
   // the last two minutes skips the schema check, the store lookup, the page's
   // D1 reads and the render. It sits after the gate, so no cache is read for a

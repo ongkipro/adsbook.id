@@ -234,17 +234,33 @@ export async function claimDomain(
   mode: ClaimMode,
   now = new Date(),
 ): Promise<DomainResult<DomainView[]>> {
-  const plan = planClaim(raw, mode);
-  if (!plan.ok) return { ok: false, status: 422, error: plan.error };
+  const planned = planClaim(raw, mode);
+  if (!planned.ok) return { ok: false, status: 422, error: planned.error };
 
+  // T-43: switching branches reuses what the tenant already holds — a root
+  // claim after a `www`-only claim adds only the root; the `www` row (and its
+  // Cloudflare hostname) stays as it is. Nothing new to add is a conflict.
+  const held = (
+    await platformDb
+      .prepare(
+        `SELECT host FROM tenant_hosts WHERE tenant_id = ? AND status != 'revoked'
+         AND host IN (${planned.hosts.map(() => "?").join(", ")})`,
+      )
+      .bind(tenantId, ...planned.hosts)
+      .all<{ host: string }>()
+  ).results.map((row) => row.host);
+  const plan = { ...planned, hosts: planned.hosts.filter((host) => !held.includes(host)) };
+  if (!plan.hosts.length) return { ok: false, status: 409, error: "Domain ini sudah dipakai toko lain atau sudah ditambahkan." };
+
+  // The same domain group adds no domain to the plan cap (a branch switch).
   const cap = await platformDb
     .prepare(
       `SELECT p.max_custom_domains AS cap,
          (SELECT COUNT(DISTINCT h.domain_group) FROM tenant_hosts h
-           WHERE h.tenant_id = t.id AND h.kind = 'custom' AND h.status != 'revoked') AS used
+           WHERE h.tenant_id = t.id AND h.kind = 'custom' AND h.status != 'revoked' AND h.domain_group != ?) AS used
        FROM tenants t JOIN plans p ON p.id = t.plan_id WHERE t.id = ?`,
     )
-    .bind(tenantId)
+    .bind(planned.group, tenantId)
     .first<{ cap: number; used: number }>();
   if (!cap) return { ok: false, status: 404, error: "Toko tidak ditemukan." };
   if (Number(cap.used) >= Number(cap.cap)) {
@@ -285,9 +301,12 @@ export async function claimDomain(
              SELECT ?, ?, 'custom', ?, 'pending', 0, ?
              WHERE (SELECT COUNT(DISTINCT domain_group) FROM tenant_hosts
                     WHERE tenant_id = ? AND kind = 'custom' AND status != 'revoked' AND domain_group != ?)
-                 < (SELECT p.max_custom_domains FROM tenants t JOIN plans p ON p.id = t.plan_id WHERE t.id = ?)`,
+                 < (SELECT p.max_custom_domains FROM tenants t JOIN plans p ON p.id = t.plan_id WHERE t.id = ?)
+               -- T-43: the hosts this claim reuses must still be live and this tenant's.
+               AND (SELECT COUNT(*) FROM tenant_hosts WHERE tenant_id = ? AND status != 'revoked'
+                    AND host IN (${held.length ? held.map(() => "?").join(", ") : "NULL"})) = ?`,
           )
-          .bind(host, tenantId, plan.group, now.toISOString(), tenantId, plan.group, tenantId),
+          .bind(host, tenantId, plan.group, now.toISOString(), tenantId, plan.group, tenantId, tenantId, ...held, held.length),
       ),
     ]);
   } catch (error) {
@@ -298,6 +317,13 @@ export async function claimDomain(
     return { ok: false, status: 500, error: "Domain belum bisa ditambahkan. Coba lagi beberapa saat lagi." };
   }
   if (inserted.slice(plan.hosts.length).some((result) => Number(result.meta?.changes ?? 0) !== 1)) {
+    if (held.length) {
+      const still = await platformDb
+        .prepare(`SELECT COUNT(*) AS n FROM tenant_hosts WHERE tenant_id = ? AND status != 'revoked' AND host IN (${held.map(() => "?").join(", ")})`)
+        .bind(tenantId, ...held)
+        .first<{ n: number }>();
+      if (Number(still?.n ?? 0) !== held.length) return { ok: false, status: 409, error: "Domain berubah di sesi lain. Muat ulang halaman lalu coba lagi." };
+    }
     return { ok: false, status: 409, error: `Batas paket tercapai: maksimal ${cap.cap} domain sendiri.` };
   }
 
@@ -429,11 +455,18 @@ export async function removeDomain(
   tenantId: string,
   rawHost: string,
   now = new Date(),
+  /** `host`: only this hostname (T-43: root -> `www`-only keeps the `www` row); `group`: the whole domain. */
+  scope: "group" | "host" = "group",
 ): Promise<DomainResult<{ removed: string[] }>> {
   const host = normalizeHost(rawHost);
   const row = host ? await ownedRow(platformDb, tenantId, host) : null;
   if (!row || row.kind !== "custom" || !row.domain_group) {
     return { ok: false, status: 404, error: "Domain tidak ditemukan di toko ini." };
+  }
+  // T-43: removing one host is only the root -> `www`-only switch: the target is
+  // the group's root and its `www` stays (re-checked inside the revocation).
+  if (scope === "host" && host !== row.domain_group) {
+    return { ok: false, status: 409, error: "Hanya domain utama yang bisa dilepas sendiri; www tetap bersama domain utamanya." };
   }
   const group = (
     await platformDb
@@ -443,16 +476,17 @@ export async function removeDomain(
       )
       .bind(tenantId, row.domain_group)
       .all<{ host: string; is_primary: number; cf_custom_hostname_id: string | null }>()
-  ).results;
+  ).results.filter((member) => scope === "group" || member.host === host);
   const quarantine = new Date(now.getTime() + QUARANTINE_MS).toISOString();
-  await platformDb.batch([
+  if (scope === "host" && !group.length) return { ok: false, status: 404, error: "Domain tidak ditemukan di toko ini." };
+  const revoked = await platformDb.batch([
     ...group.map((member) =>
       platformDb
         .prepare(
           `UPDATE tenant_hosts SET status = 'revoked', is_primary = 0, revoked_at = ?, quarantine_until = ?
-           WHERE host = ? AND tenant_id = ?`,
+           WHERE host = ? AND tenant_id = ?${scope === "host" ? " AND EXISTS (SELECT 1 FROM tenant_hosts w WHERE w.host = 'www.' || ? AND w.tenant_id = ? AND w.status != 'revoked')" : ""}`,
         )
-        .bind(now.toISOString(), quarantine, member.host, tenantId),
+        .bind(now.toISOString(), quarantine, member.host, tenantId, ...(scope === "host" ? [host, tenantId] : [])),
     ),
     // Decided from the state inside this transaction, not from the read above:
     // a promotion that landed in between still leaves the tenant a primary.
@@ -464,6 +498,10 @@ export async function removeDomain(
       .bind(tenantId, tenantId),
     await bumpCacheVersion(platformDb, tenantId),
   ]);
+  // The `www` companion vanished meanwhile: nothing was revoked; leave Cloudflare alone.
+  if (scope === "host" && Number(revoked[0].meta?.changes ?? 0) !== 1) {
+    return { ok: false, status: 409, error: "www domain ini sudah tidak ada; hapus domainnya sekaligus bila perlu." };
+  }
   for (const member of group) {
     if (!member.cf_custom_hostname_id) continue;
     try {

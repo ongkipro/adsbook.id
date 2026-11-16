@@ -1927,3 +1927,40 @@ test("T-47/A-55: an order from /embed/form through the real middleware and route
     Object.assign(console, quiet);
   }
 });
+
+// ---- T-43: www -> root once the root is the active primary (PR-28) ----
+
+test("T-43/HOST-6: www redirects to the root once the root is the active primary; APIs never move; a non-primary root keeps www", async () => {
+  const platformDb = await platform([["m-a", "active", "m-a.belanja.cc"]]);
+  const stores = namespace({ migrated: true });
+  stores.get("m-a").storage.db.exec("INSERT INTO stores (id, name, slug, created_at) VALUES (1, 'Merchant', 'm-a', '2026-11-16')");
+  makeReady(stores.get("m-a").storage.db);
+  platformDb.sqlite.exec(`
+    UPDATE tenant_hosts SET is_primary = 0 WHERE tenant_id = 'm-a';
+    INSERT INTO tenant_hosts (host, tenant_id, kind, domain_group, status, is_primary, created_at) VALUES
+      ('merchant.com', 'm-a', 'custom', 'merchant.com', 'active', 1, '2026-11-16'),
+      ('www.merchant.com', 'm-a', 'custom', 'merchant.com', 'active', 0, '2026-11-16');`);
+  const onRequest = createMiddleware();
+  const ask = async (href: string) => {
+    let reached = false;
+    const original = { log: console.log, info: console.info };
+    console.log = console.info = () => undefined;
+    try {
+      const response = (await onRequest(
+        { request: new Request(href), url: new URL(href), locals: { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } }, routePattern: "/", redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }) } as never,
+        (async () => ((reached = true), new Response("ok"))) as never,
+      )) as Response;
+      return { status: response.status, location: response.headers.get("location"), reached };
+    } finally {
+      Object.assign(console, original);
+    }
+  };
+  assert.deepEqual(await ask("https://www.merchant.com/produk/kopi?utm_source=fb"), { status: 301, location: "https://merchant.com/produk/kopi?utm_source=fb", reached: false });
+  assert.equal((await ask("https://merchant.com/produk/kopi")).reached, true, "the root serves the store");
+  assert.equal((await ask("https://www.merchant.com/api/order-status")).status !== 301, true, "APIs and webhooks never move");
+
+  // While the root is not the primary (still pending its probe), www is not redirected.
+  platformDb.sqlite.exec("UPDATE tenant_hosts SET is_primary = 0 WHERE tenant_id = 'm-a'; UPDATE tenant_hosts SET is_primary = 1 WHERE host = 'm-a.belanja.cc'; UPDATE tenants SET cache_version = cache_version + 1 WHERE id = 'm-a'");
+  await new Promise((resolve) => setTimeout(resolve, 5_100)); // the gate's host cache (5 s)
+  assert.equal((await ask("https://www.merchant.com/produk/kopi")).status !== 301, true);
+});

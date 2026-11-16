@@ -79,6 +79,15 @@ export function DomainManager() {
 
   const path = (domain: Domain) => `/api/admin/domains/${encodeURIComponent(domain.host)}`;
 
+  // T-43: root -> `www` only. The root hostname is removed; `www` stays as it is.
+  const switchToWww = async (domain: Domain) => {
+    if (!(await confirm({
+      title: `Pakai hanya www.${domain.host}?`,
+      description: `Domain utama ${domain.host} dilepas dan tidak lagi membuka toko; www.${domain.host} tetap aktif. Arahkan ${domain.host} ke www lewat forwarding di registrar.`,
+      confirmLabel: "Pindah ke www",
+    }))) return;
+    await run(domain.host, () => call(`${path(domain)}?only=host`, { method: "DELETE" }));
+  };
   const remove = async (domain: Domain) => {
     if (!(await confirm({
       title: `Hapus domain ${domain.host}?`,
@@ -146,9 +155,18 @@ export function DomainManager() {
                 </div>
               </div>
               {pending && (
-                <p className="text-xs text-slate-600">
-                  Record DNS: <code className="rounded bg-slate-100 px-1.5 py-0.5">{record} CNAME {domain.cnameTarget}</code>
-                </p>
+                <div className="space-y-1 text-xs text-slate-600">
+                  <p>
+                    Record DNS: <code className="rounded bg-slate-100 px-1.5 py-0.5">{record} CNAME {domain.cnameTarget}</code>
+                  </p>
+                  {/* PR-28: never fixed IPs; the root needs flattening or ALIAS/ANAME. */}
+                  {record === "@" ? (
+                    <p>Di Cloudflare DNS, CNAME di domain utama otomatis di-flatten. Di DNS lain pakai record ALIAS atau ANAME bila ada; kalau tidak ada, pakai mode “Hanya www”. Jangan pakai A record atau alamat IP.</p>
+                  ) : !domains.some((other) => other.group === domain.group && other.host === domain.group) ? (
+                    <p>Arahkan domain utama ke www lewat forwarding HTTPS di registrar (atau redirect rule di Cloudflare DNS).</p>
+                  ) : null}
+                  <p className="text-slate-500">Status di sini dibaca dari Cloudflare; pengecekan DNS hanya petunjuk, tidak memastikan record sudah benar.</p>
+                </div>
               )}
               {domain.errors.map((message) => (
                 <p key={message} className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{message}</p>
@@ -162,6 +180,16 @@ export function DomainManager() {
                   )}
                   {domain.status === "active" && !domain.isPrimary && (
                     <Button variant="outline" disabled={busy !== null} onClick={() => void makePrimary(domain)}>Jadikan domain utama</Button>
+                  )}
+                  {/* T-43: switch a root claim to `www` only — keeps the `www` hostname as it is. */}
+                  {domain.kind === "custom" && domain.host === domain.group && domains.some((other) => other.group === domain.group && other.host === `www.${domain.group}`) && (
+                    <Button
+                      variant="outline"
+                      disabled={busy !== null}
+                      onClick={() => void switchToWww(domain)}
+                    >
+                      Pindah ke www saja
+                    </Button>
                   )}
                   {domain.kind === "custom" && (
                     <Button variant="outline" className="text-rose-700" disabled={busy !== null} onClick={() => void remove(domain)}>Hapus</Button>

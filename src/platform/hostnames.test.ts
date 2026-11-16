@@ -441,3 +441,69 @@ test("a partly written claim whose rollback delete fails leaves no pending row h
     assert.equal(row(host).cf, cloudflare.byHost(host)?.id, `${host} keeps its own reference for the reaper`);
   }
 });
+
+test("T-43/PR-28: switching branches reuses the `www` hostname both ways; the cap counts the domain once", async () => {
+  const { db, cloudflare, api, row } = await setup();
+  const posts = () => cloudflare.calls.filter((call) => call.method === "POST").length;
+  const deletes = () => cloudflare.calls.filter((call) => call.method === "DELETE").map((call) => call.path);
+
+  // `www` primary first (the seller's DNS cannot point the root).
+  assert.ok((await claimDomain(db, api, "t-a", "merchant.com", "www")).ok);
+  const wwwId = row("www.merchant.com").cf;
+  assert.ok(wwwId);
+  assert.equal(posts(), 1);
+
+  // Then the root branch: only the root is created; the `www` row stays as it is.
+  db.sqlite.exec("UPDATE plans SET max_custom_domains = 1");
+  const root = await claimDomain(db, api, "t-a", "merchant.com", "root");
+  assert.ok(root.ok, root.ok ? "" : root.error);
+  assert.equal(posts(), 2, "one Cloudflare create, for the root only");
+  assert.equal(row("www.merchant.com").cf, wwwId, "the www hostname is reused, not recreated");
+  assert.equal(row("merchant.com").status, "pending");
+  assert.equal((await claimDomain(db, api, "t-a", "merchant.com", "root")).ok, false, "nothing new to add is a conflict");
+
+  // And back to `www` only: the root alone is removed (and deleted at Cloudflare).
+  const rootId = row("merchant.com").cf;
+  const removed = await removeDomain(db, api, "t-a", "merchant.com", new Date(), "host");
+  assert.ok(removed.ok);
+  assert.deepEqual(removed.ok && removed.value.removed, ["merchant.com"]);
+  assert.equal(row("merchant.com").status, "revoked");
+  assert.equal(row("www.merchant.com").status, "pending", "www is untouched");
+  assert.equal(row("www.merchant.com").cf, wwwId);
+  assert.ok(deletes().some((path) => path.endsWith(`/${rootId}`)));
+  assert.ok(!deletes().some((path) => path.endsWith(`/${wwwId}`)), "the www hostname is not deleted at Cloudflare");
+});
+
+test("T-43 review: host-scope removal is only the root of a group that keeps its www", async () => {
+  const { db, api, row } = await setup();
+  assert.ok((await claimDomain(db, api, "t-a", "contoh.com", "root")).ok);
+  // Removing www alone while the root stays is refused; nothing changes.
+  const refused = await removeDomain(db, api, "t-a", "www.contoh.com", new Date(), "host");
+  assert.equal(refused.ok, false);
+  assert.equal(row("www.contoh.com").status, "pending");
+  // A root without a live www cannot be removed alone either (no Cloudflare delete).
+  db.sqlite.exec("UPDATE tenant_hosts SET status = 'revoked' WHERE host = 'www.contoh.com'");
+  const lone = await removeDomain(db, api, "t-a", "contoh.com", new Date(), "host");
+  assert.equal(lone.ok, false);
+  assert.equal(row("contoh.com").status, "pending", "nothing revoked");
+  assert.ok(row("contoh.com").cf, "its Cloudflare hostname is untouched");
+});
+
+test("T-43 review: the claim batch itself refuses when a reused host is gone (no lone root)", async () => {
+  const { db, api } = await setup();
+  assert.ok((await claimDomain(db, api, "t-a", "lain.com", "www")).ok);
+  // Revoke www inside the window: wrap the batch so the revocation lands just before it.
+  const batch = db.batch.bind(db);
+  let once = true;
+  (db as { batch: typeof db.batch }).batch = async (statements) => {
+    if (once) {
+      once = false;
+      db.sqlite.exec("UPDATE tenant_hosts SET status = 'revoked', quarantine_until = '2999-01-01' WHERE host = 'www.lain.com'");
+    }
+    return batch(statements);
+  };
+  const result = await claimDomain(db, api, "t-a", "lain.com", "root");
+  assert.equal(result.ok, false);
+  assert.match(!result.ok ? result.error : "", /berubah/);
+  assert.equal((db.sqlite.prepare("SELECT COUNT(*) AS n FROM tenant_hosts WHERE host = 'lain.com'").get() as { n: number }).n, 0, "no lone root row");
+});
