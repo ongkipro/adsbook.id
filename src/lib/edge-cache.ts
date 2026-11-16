@@ -206,6 +206,9 @@ export function writeUploadCache(
   // A stand-in is never stored: its URL gets different bytes the moment the
   // real derivative exists, which is exactly what an upload entry assumes cannot happen.
   if (!cache || response.status !== 200 || response.headers.has(STAND_IN_HEADER)) return;
+  // T-28 review: an answer that says it is private, or sets a cookie, is never
+  // re-labelled public and stored for the next visitor.
+  if (response.headers.has("set-cookie") || /no-store|private/i.test(response.headers.get("cache-control") ?? "")) return;
   const copy = new Response(response.clone().body, response);
   copy.headers.set("Cache-Control", `public, max-age=${UPLOAD_EDGE_CACHE_SECONDS}`);
   const task = cache.put(key, copy).catch((error) => console.error("upload-cache-write-failed", error));

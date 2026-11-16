@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
-import { edgeCachePath, edgeCacheRequest, isEdgeStorable, readEdgeCache, writeEdgeCache } from "./edge-cache.ts";
+import { edgeCachePath, edgeCacheRequest, isEdgeStorable, readEdgeCache, writeEdgeCache, writeUploadCache } from "./edge-cache.ts";
 
 const req = (href: string, init?: RequestInit & { cf?: Record<string, unknown> }) => {
   const { cf, ...rest } = init ?? {};
@@ -305,4 +305,20 @@ test("middleware: an upload is fetched from R2 once, then served without D1 or t
   await run(card, async () => new Response("full-bytes", { status: 200, headers: { "content-type": "image/webp", "x-asset-stand-in": "1" } }));
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(cache.map.has(`${card}?__g=2`), false);
+});
+
+test("an upload answer that is private, no-store or sets a cookie is never stored as public (T-28 review)", async () => {
+  const stored: Response[] = [];
+  const cache = { match: async () => undefined, put: async (_key: Request, response: Response) => void stored.push(response) };
+  const key = new Request("https://toko-a.belanja.cc/uploads/a.webp");
+  const image = (headers: Record<string, string>) => new Response("bytes", { status: 200, headers: { "content-type": "image/webp", ...headers } });
+  writeUploadCache(key, image({ "cache-control": "private, max-age=60" }), undefined, cache);
+  writeUploadCache(key, image({ "cache-control": "no-store" }), undefined, cache);
+  writeUploadCache(key, image({ "set-cookie": "a=1; Path=/" }), undefined, cache);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stored.length, 0);
+  writeUploadCache(key, image({ "cache-control": "public, max-age=60" }), undefined, cache);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stored.length, 1, "the control: a public upload is stored");
+  assert.match(stored[0].headers.get("cache-control") ?? "", /^public/);
 });

@@ -2054,6 +2054,8 @@ test("T-44/PR-29: a signup through the real route sends one notice naming the st
       locals: { runtimeEnv: env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } },
     } as never)) as Response;
     assert.equal(response.status, 201, await response.clone().text());
+    // The body carries the one-time handoff token: no cache may keep it (T-28 review).
+    assert.equal(response.headers.get("cache-control"), "no-store");
     await Promise.all(tasks);
   } finally {
     globalThis.fetch = originalFetch;

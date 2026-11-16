@@ -72,6 +72,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         email: result.email,
       },
     },
-    { status: 201 },
+    // The body carries a one-time handoff token: no cache may keep it (T-28 review).
+    { status: 201, headers: { "cache-control": "no-store" } },
   );
 };
