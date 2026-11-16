@@ -1,3 +1,5 @@
+import { openCredential } from "./credential-crypto.ts";
+
 export const DEFAULT_MENGANTAR_BASE_URL = "https://api-public.mengantar.com";
 export const DEFAULT_AUTOLARIS_BASE_URL = "https://api-h2h.autolaris.com";
 
@@ -68,8 +70,11 @@ export async function getProviderConfig(
   `,
     )
     .first<ProviderConfigRow>();
-  const mengantarKey = clean(row?.mengantar_api_key);
-  const autolarisKey = clean(row?.autolaris_api_key);
+  // ADR-040: stored sealed; a value this handle cannot open reads as not set.
+  const [mengantarKey, autolarisKey] = await Promise.all([
+    openCredential(database, "mengantar_api_key", row?.mengantar_api_key).then((value) => clean(value)),
+    openCredential(database, "autolaris_api_key", row?.autolaris_api_key).then((value) => clean(value)),
+  ]);
 
   return {
     mengantar: {

@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -29,7 +30,7 @@ test("city shipping fallback uses the internal ICO expedition contract", () => {
   });
   assert.equal(buildCityAverageFallbackRate([]), undefined);
 });
-function createQuoteDatabase() {
+function createQuoteDatabase__raw() {
   return {
     prepare(sql: string) {
       return {
@@ -142,3 +143,8 @@ test("a failed district estimate falls back to the city average for COD, never f
     }),
   );
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function createQuoteDatabase(...args: Parameters<typeof createQuoteDatabase__raw>): ReturnType<typeof createQuoteDatabase__raw> {
+  return bindTestCredentialsIn(createQuoteDatabase__raw(...args));
+}

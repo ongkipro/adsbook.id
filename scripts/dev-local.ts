@@ -90,6 +90,19 @@ const devConfig = `${root}dist/server/wrangler.dev-local.json`;
 const { routes: _routes, ...withoutRoutes } = JSON.parse(readFileSync(builtConfig, "utf8"));
 writeFileSync(devConfig, JSON.stringify(withoutRoutes));
 
+// ADR-040: stored provider credentials are sealed with a platform key. Locally
+// it is random per state directory and kept inside it, so a restart still
+// opens what was saved and --reset starts a fresh key with a fresh store.
+mkdirSync(stateDir, { recursive: true });
+const credentialKeyFile = `${stateDir}/credential-key`;
+let credentialKey = "";
+try {
+  credentialKey = readFileSync(credentialKeyFile, "utf8").trim();
+} catch {
+  credentialKey = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
+  writeFileSync(credentialKeyFile, credentialKey, { mode: 0o600 });
+}
+
 // The provider stand-ins are a tenant's saved settings, not Worker env (T-45):
 // a seeded tenant stores this base URL and a dummy key in its own store.
 
@@ -112,6 +125,8 @@ const worker = spawn(
     "--var", "TENANT_HOST_SUFFIX:localhost",
     // Platform admin sessions (IAM-3); a fixed local value, never a deployed one.
     "--var", "PLATFORM_AUTH_SECRET:dev-local-platform-auth-secret-0123456789",
+    // ADR-040: this state directory's local credential key (never a deployed one).
+    "--var", `PLATFORM_CREDENTIAL_KEY:${credentialKey}`,
     "--var", "TURNSTILE_SITE_KEY:local-stand-in",
     "--var", "TURNSTILE_SECRET_KEY:local-stand-in-secret",
     "--var", `TURNSTILE_VERIFY_URL:${providerBase}/turnstile/v0/siteverify`,

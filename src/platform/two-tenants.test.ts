@@ -11,6 +11,8 @@ import { applyMigrationFile, readLedger, TenantStoreEngine, type MigrationFile, 
 import type { TenantStoreStub } from "./tenant-db.ts";
 import { createNodeStorage } from "./testing/node-storage.ts";
 import { createSqliteD1 } from "./testing/sqlite-d1.ts";
+import { TEST_CREDENTIAL_ENV } from "./testing/credentials.ts";
+import { bindCredentials, STORE_CREDENTIAL_COLUMNS } from "../lib/credential-crypto.ts";
 
 const tenantDir = new URL("../db/migrations/", import.meta.url);
 const CHAIN: MigrationFile[] = readdirSync(tenantDir)
@@ -74,6 +76,7 @@ const headlessOpenApiRoute = await import("../pages/api/v1/openapi.json.ts");
 const opsOpenApiRoute = await import("../pages/api/ops/v1/openapi.json.ts");
 const { getProviderConfig, autoLarisOrderRailGap } = await import("../lib/provider-config.ts");
 const { getStoreAdsConfig } = await import("../lib/store-ads.ts");
+const { maskSecretValue } = await import("../lib/env.ts");
 const { loadGoogleAdsOfflineConfig } = await import("../lib/google-ads-offline.ts");
 const autolarisWebhookRoute = await import("../pages/api/webhooks/autolaris/[token].ts");
 const { issueWebhookToken } = await import("./webhook-secrets.ts");
@@ -100,6 +103,9 @@ const { legalText, readStoreProviders, storePrivacyMarkdown } = await import("./
 const { recordUsage } = await import("./plans.ts");
 const submitOrderRoute = await import("../pages/api/submit-order.ts");
 const platformSignupRoute = await import("../pages/api/platform/signup.ts");
+const adminSettingsRoute = await import("../pages/api/admin/settings.ts");
+const adminAdsRoute = await import("../pages/api/admin/ads.ts");
+const kelolaAdminRoute = await import("../pages/api/admin/plugins/kelola.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -182,7 +188,9 @@ async function fireAlarm(
     schemaState: () => engine.schemaState(),
     readTenant: (tenantId) => readTenantRow(platformDb, tenantId),
     maintain: (tenantId, time, primaryHost) =>
-      runTenantMaintenance({ PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...env } as never, createTenantDb(stub), tenantId, time,
+      // Bound as TenantStore.alarm binds it (ADR-040).
+      runTenantMaintenance({ PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV, ...env } as never,
+        bindCredentials(createTenantDb(stub), tenantId, { ...TEST_CREDENTIAL_ENV, ...env }), tenantId, time,
         { waitUntil() {}, passThroughOnException() {} } as never, primaryHost),
     setAlarm: async (at) => void stores.alarms.set(id, at),
   });
@@ -225,7 +233,7 @@ test("each tenant host reaches its own store, and the shared OMS_DB binding is n
     for (const [host, name] of [["toko-a.belanja.cc", "Toko A"], ["toko-b.belanja.cc", "Toko B"]]) {
       const href = `https://${host}/produk/x`;
       const locals: Record<string, unknown> = {
-        runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, OMS_DB: sharedOmsDb },
+        runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV, OMS_DB: sharedOmsDb },
       };
       const seen: Record<string, unknown> = {};
       const response = (await onRequest(
@@ -269,7 +277,7 @@ test("T-24: the cron migrates quiet tenants (bookmark first), arms each active t
   let result: Awaited<ReturnType<typeof runPlatformCron>>;
   try {
     result = await runPlatformCron(
-      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } as never,
+      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } as never,
       Date.parse("2026-11-16T05:07:00.000Z"),
       { waitUntil() {}, passThroughOnException() {} } as never,
     );
@@ -306,7 +314,7 @@ test("T-24: a fleet larger than one arming batch is swept over the hours, each r
     for (let hour = 0; hour < 3; hour += 1) {
       const before = stores.asked.length;
       const result = await runPlatformCron(
-        { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } as never,
+        { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } as never,
         Date.parse("2026-11-16T00:07:00.000Z") + hour * 3_600_000,
         { waitUntil() {}, passThroughOnException() {} } as never,
       );
@@ -409,7 +417,7 @@ test("ISO-5: an order's status token answers on its own tenant's host only", asy
   const onRequest = createMiddleware();
   const ask = async (host: string, token: string) => {
     const href = `https://${host}/api/order-status`;
-    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } };
     const request = new Request(href, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ order_id: "INV-10001", status_token: token }) });
     const context = { request, url: new URL(href), locals, routePattern: "/api/order-status", redirect: () => new Response(null, { status: 302 }) };
     const previousLog = console.log;
@@ -451,7 +459,7 @@ test("T-36: an admin session lists its own tenant's orders, and is refused on an
   const onRequest = createMiddleware();
   const list = async (host: string) => {
     const href = `https://${host}/api/admin/orders`;
-    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } };
     const request = new Request(href, { headers: { cookie: `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}` } });
     const context = { request, url: new URL(href), locals, routePattern: "/api/admin/orders", redirect: () => new Response(null, { status: 302 }) };
     const previous = { log: console.log, error: console.error };
@@ -501,7 +509,7 @@ test("T-21: a tenant's admin token never verifies on another tenant, even with i
   const onRequest = createMiddleware();
   const open = async (host: string) => {
     const href = `https://${host}/api/admin/orders`;
-    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, AUTH_SECRET: secretA } };
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV, AUTH_SECRET: secretA } };
     const request = new Request(href, { headers: { cookie: `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}` } });
     const context = { request, url: new URL(href), locals, routePattern: "/api/admin/orders", redirect: () => new Response(null, { status: 302 }) };
     const previous = { log: console.log, error: console.error };
@@ -581,7 +589,7 @@ test("T-45/ISO-9: with every platform env value set, a tenant without settings i
   console.error = console.info = console.warn = console.log = () => undefined;
   try {
     const result = await runPlatformCron(
-      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...EVERY_PLATFORM_PROVIDER_ENV } as never,
+      { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV, ...EVERY_PLATFORM_PROVIDER_ENV } as never,
       Date.parse("2026-11-16T05:07:00.000Z"),
       { waitUntil() {}, passThroughOnException() {} } as never,
     );
@@ -614,7 +622,7 @@ test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never
   const onRequest = createMiddleware();
   const send = async (host: string, init: { method?: string; cookie?: string; headers?: Record<string, string> }) => {
     const href = `https://${host}/api/admin/orders`;
-    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } };
     const headers = new Headers(init.headers);
     if (init.cookie) headers.set("cookie", init.cookie);
     const request = new Request(href, { method: init.method ?? "GET", headers });
@@ -661,7 +669,7 @@ test("T-22/ISO-11: a cookie set from tenant A's host for the parent domain never
   // IAM-5 covers admin pages too, not only /api/admin (T-22 review).
   const pageHref = "https://fix-b.belanja.cc/admin/profile";
   const pageRequest = new Request(pageHref, { method: "POST", headers: { cookie: bCookie, "sec-fetch-site": "same-site", origin: "https://fix-a.belanja.cc" } });
-  const pageContext = { request: pageRequest, url: new URL(pageHref), locals: { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } }, routePattern: "/admin/profile", redirect: () => new Response(null, { status: 302 }) };
+  const pageContext = { request: pageRequest, url: new URL(pageHref), locals: { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } }, routePattern: "/admin/profile", redirect: () => new Response(null, { status: 302 }) };
   const previousLog = console.log;
   console.log = () => undefined;
   try {
@@ -685,7 +693,7 @@ test("T-23/API-7: a webhook writes only on its tenant's subdomain with that tena
   const onRequest = createMiddleware();
   const call = async (host: string, token: string) => {
     const href = `https://${host}/api/webhooks/autolaris/${token}`;
-    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } };
     const request = new Request(href, {
       method: "POST",
       headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
@@ -743,7 +751,7 @@ test("T-25: a custom primary moves indexing off the subdomain; the probe answers
     const href = `https://${host}${path}`;
     let reached = false;
     let siteUrl = "";
-    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } };
     const context = { request: new Request(href), url: new URL(href), locals, routePattern: path, redirect: () => new Response(null, { status: 302 }) };
     const previous = { log: console.log, error: console.error };
     console.log = () => undefined;
@@ -797,7 +805,7 @@ test("API-3 and ISO-4: each OpenAPI document names its own tenant's host, and a 
   const onRequest = createMiddleware();
   const call = async (host: string, path: string, route: { GET: unknown }, key: string) => {
     const href = `https://${host}${path}`;
-    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } };
+    const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } };
     const request = new Request(href, { headers: { "x-app-key": key } });
     const context = { request, url: new URL(href), locals, routePattern: path, redirect: () => new Response(null, { status: 302 }) };
     const previous = { log: console.log, error: console.error };
@@ -828,7 +836,7 @@ test("API-3 and ISO-4: each OpenAPI document names its own tenant's host, and a 
 async function signupHarness() {
   const platformDb = await platform([]);
   const stores = namespace();
-  const env = { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } as Record<string, unknown>;
+  const env = { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } as Record<string, unknown>;
   const input = (slug: string, email = `owner@${slug}.example`) => ({
     storeName: `Toko ${slug}`,
     slug,
@@ -1617,7 +1625,8 @@ async function readinessHarness(slug: string) {
   assert.equal(created.status, 201);
   if (created.status !== 201) throw new Error("signup failed");
   const sql = stores.get(created.tenantId).storage.db;
-  const database = createTenantDb(stores.get(created.tenantId).stub);
+  // Bound like the platform binds it (ADR-040): the same tenant id and env.
+  const database = bindCredentials(createTenantDb(stores.get(created.tenantId).stub), created.tenantId, env);
   const host = `${slug}.belanja.cc`;
   /** One request through the real middleware: the status, and whether the route ran. */
   const open = async (path: string, method = "GET") => {
@@ -1650,7 +1659,7 @@ async function readinessHarness(slug: string) {
                  VALUES (?, 1, ?, ?, ?, 'Jl. Contoh 1', 'Bandung', 'Jawa Barat', ?, 1)`).run(id, `Gudang ${id}`, origin, pickup, primary);
   const mengantar = () => sql.exec("UPDATE stores SET mengantar_api_key = 'mengantar-test-key'");
   const facts = async () => readReadiness(database);
-  return { open, product, warehouse, mengantar, facts, sql, database, env, tenantId: created.tenantId };
+  return { open, product, warehouse, mengantar, facts, sql, database, env, tenantId: created.tenantId, stub: stores.get(created.tenantId).stub };
 }
 
 test("T-38: a new store says 'toko belum siap' (no checkout) until the ready predicate holds, and opens right after", async () => {
@@ -1948,7 +1957,7 @@ test("T-43/HOST-6: www redirects to the root once the root is the active primary
     console.log = console.info = () => undefined;
     try {
       const response = (await onRequest(
-        { request: new Request(href), url: new URL(href), locals: { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } }, routePattern: "/", redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }) } as never,
+        { request: new Request(href), url: new URL(href), locals: { runtimeEnv: { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } }, routePattern: "/", redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }) } as never,
         (async () => ((reached = true), new Response("ok"))) as never,
       )) as Response;
       return { status: response.status, location: response.headers.get("location"), reached };
@@ -2063,4 +2072,213 @@ test("T-44/PR-29: a signup through the real route sends one notice naming the st
   }
   assert.equal(notices.length, 1);
   assert.match(notices[0], /^\[adsbook\.id\] Seller baru mendaftar: Toko Kabar Baru \(kabar-baru\) — https:\/\/app\.adsbook\.id\/platform\/tenants\/t_/);
+});
+
+// ---- T-48 / ADR-040: stored provider credentials are sealed per tenant ----
+
+test("T-48: a key saved through the admin route is stored sealed, opens only on its own store, and fails closed without the platform key", async () => {
+  const storeA = await readinessHarness("kunci-a");
+  const storeB = await readinessHarness("kunci-b");
+  const save = (database: D1Database, env: Record<string, unknown>, key: string) =>
+    adminSettingsRoute.PUT({
+      request: new Request("https://kunci-a.belanja.cc/api/admin/settings", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "save-integrations",
+          integrations: { mengantar_api_key: key, mengantar_base_url: "https://api-public.mengantar.com", autolaris_base_url: "https://api-h2h.autolaris.com" },
+        }),
+      }),
+      locals: { admin: { username: "owner", role: "owner", mustChangePassword: false }, tenantDb: database, runtimeEnv: env },
+    } as never) as Promise<Response>;
+  const stored = (store: typeof storeA) => (store.sql.prepare("SELECT mengantar_api_key AS k FROM stores").get() as { k: string | null }).k;
+
+  const response = await save(storeA.database, storeA.env, "mengantar-rahasia-toko-a");
+  assert.equal(response.status, 200, await response.clone().text());
+  const sealed = stored(storeA)!;
+  assert.match(sealed, /^enc:v1:/);
+  assert.doesNotMatch(sealed, /mengantar-rahasia/);
+  assert.equal((await getProviderConfig(storeA.database)).mengantar.apiKey, "mengantar-rahasia-toko-a");
+
+  // The same sealed value pasted into another tenant's store opens to nothing there.
+  storeB.sql.prepare("UPDATE stores SET mengantar_api_key = ?").run(sealed);
+  const warn = console.warn;
+  console.warn = () => undefined;
+  try {
+    assert.equal((await getProviderConfig(storeB.database)).mengantar.apiKey, "");
+    assert.equal((await readReadiness(storeB.database)).mengantar, false, "an unreadable key does not make a store ready");
+  } finally {
+    console.warn = warn;
+  }
+
+  // Without the platform key: the save is refused and nothing is written; the stored key reads as not set.
+  const keylessEnv = { ...storeA.env, PLATFORM_CREDENTIAL_KEY: undefined };
+  const keyless = bindCredentials(createTenantDb(storeA.stub), storeA.tenantId, keylessEnv);
+  const refused = await save(keyless, keylessEnv, "kunci-baru-tanpa-platform-key");
+  assert.equal(refused.status, 503);
+  assert.equal(stored(storeA), sealed, "no plaintext was written");
+  assert.equal((await getProviderConfig(keyless)).mengantar.apiKey, "");
+  assert.equal((await readReadiness(keyless)).mengantar, false);
+});
+
+test("T-48: the tenant maintenance run seals every legacy plaintext credential, and a second run changes nothing", async () => {
+  const store = await readinessHarness("kunci-lama");
+  store.sql.exec(`UPDATE stores SET mengantar_api_key = 'legacy-mengantar', autolaris_api_key = 'legacy-autolaris',
+    meta_capi_token = 'legacy-meta', google_ads_developer_token = 'legacy-dev', google_ads_client_secret = 'legacy-client',
+    google_ads_refresh_token = 'legacy-refresh'`);
+  assert.equal((await getProviderConfig(store.database)).mengantar.apiKey, "legacy-mengantar", "legacy plaintext still reads while a key is present");
+  const originalFetch = globalThis.fetch;
+  const quiet = { log: console.log, info: console.info, warn: console.warn, error: console.error };
+  globalThis.fetch = (async () => Response.json({ success: true, data: [] })) as typeof fetch;
+  console.log = console.info = console.warn = console.error = () => undefined;
+  try {
+    const run = () =>
+      runTenantMaintenance(store.env as never, store.database, store.tenantId, Date.parse("2026-11-16T10:00:00Z"),
+        { waitUntil() {}, passThroughOnException() {} } as never);
+    await run();
+    const row = store.sql.prepare(`SELECT ${STORE_CREDENTIAL_COLUMNS.join(", ")} FROM stores`).get() as Record<string, string>;
+    for (const column of STORE_CREDENTIAL_COLUMNS) assert.match(row[column], /^enc:v1:/, `${column} sealed`);
+    assert.doesNotMatch(JSON.stringify(row), /legacy-/, "no plaintext credential left in the store");
+    await run();
+    assert.deepEqual(store.sql.prepare(`SELECT ${STORE_CREDENTIAL_COLUMNS.join(", ")} FROM stores`).get(), row, "idempotent");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.assign(console, quiet);
+  }
+  assert.equal((await getProviderConfig(store.database)).autolaris.apiKey, "legacy-autolaris");
+});
+
+test("T-48: every tenant handle the platform creates carries the credential cipher", () => {
+  // A handle made without it would read every credential as not set — or, if
+  // someone 'fixed' that, serve them unsealed. Only bound creation sites exist.
+  const root = new URL("../", import.meta.url).pathname;
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(`${dir}${entry.name}/`) : [`${dir}${entry.name}`]);
+  const unbound = walk(root)
+    .filter((path) => /\.(ts|astro)$/.test(path) && !/\.test\.ts$|\/testing\/|tenant-db\.conformance\.ts$/.test(path))
+    .flatMap((path) =>
+      readFileSync(path, "utf8").split("\n").map((line, index) => ({ path: path.slice(root.length), line: line.trim(), index }))
+        .filter(({ line }) => /createTenantDb\(/.test(line) && !/bindCredentials\(createTenantDb\(/.test(line) && !/export function createTenantDb/.test(line)))
+    .map(({ path, index, line }) => `${path}:${index + 1} ${line}`);
+  assert.deepEqual(unbound, []);
+});
+
+test("T-48: every credential saved through its own admin route is stored sealed, and no response echoes it (T-48 review)", async () => {
+  const store = await readinessHarness("kunci-semua");
+  store.sql.exec(`INSERT INTO plugins (id, enabled, schema_version, settings, updated_at) VALUES ('kelola', 1, 1, '{}', '2026-11-16');
+    CREATE TABLE IF NOT EXISTS plugin_kelola_orders (order_id INTEGER PRIMARY KEY NOT NULL, synced_at TEXT, attempts INTEGER DEFAULT 0 NOT NULL, last_error TEXT, lead_synced_at TEXT);`);
+  const locals = { admin: { username: "owner", role: "owner", mustChangePassword: false }, tenantDb: store.database, runtimeEnv: store.env };
+  const call = async (route: { PUT: unknown; GET?: unknown }, path: string, body?: unknown) => {
+    const handler = (body === undefined ? route.GET : route.PUT) as (context: unknown) => Promise<Response>;
+    const response = await handler({
+      request: new Request(`https://kunci-semua.belanja.cc${path}`, body === undefined ? {} : { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+      locals,
+    });
+    return { status: response.status, text: await response.text() };
+  };
+  const secrets = {
+    mengantar: "mengantar-rahasia-semua-001",
+    autolaris: "autolaris-rahasia-semua-002",
+    meta: "EAAB-meta-rahasia-semua-003",
+    developer: "google-dev-rahasia-semua-004",
+    clientSecret: "google-client-rahasia-semua-005",
+    refresh: "google-refresh-rahasia-semua-006",
+    kelola: "kelola-rahasia-semua-0123456789",
+  };
+  const originalFetch = globalThis.fetch;
+  const quiet = { log: console.log, warn: console.warn, error: console.error, info: console.info };
+  globalThis.fetch = (async () => new Response("{}", { status: 400 })) as typeof fetch;
+  console.log = console.warn = console.error = console.info = () => undefined;
+  const responses: string[] = [];
+  try {
+    const saves = [
+      await call(adminSettingsRoute, "/api/admin/settings", { action: "save-integrations", integrations: {
+        mengantar_api_key: secrets.mengantar, autolaris_api_key: secrets.autolaris,
+        mengantar_base_url: "https://api-public.mengantar.com", autolaris_base_url: "https://api-h2h.autolaris.com",
+        autolaris_order_origin_id: "1", autolaris_order_destination_id: "2" } }),
+      await call(adminAdsRoute, "/api/admin/ads", { action: "save-meta", meta_pixel_id: "100000000000001", meta_capi_token: secrets.meta }),
+      await call(adminAdsRoute, "/api/admin/ads", { action: "save-google-offline", google_offline: {
+        customer_id: "123-456-7890", conversion_action_id: "987654", developer_token: secrets.developer,
+        client_id: "client-id.apps.googleusercontent.com", client_secret: secrets.clientSecret, refresh_token: secrets.refresh } }),
+      await call(kelolaAdminRoute, "/api/admin/plugins/kelola", { action: "save", webhook_url: "https://kelola.test/api/public/toko/order/twh_semua123", webhook_secret: secrets.kelola }),
+    ];
+    for (const save of saves) assert.equal(save.status, 200, save.text);
+    responses.push(...saves.map((save) => save.text));
+    const reads = [
+      await call(adminSettingsRoute, "/api/admin/settings"),
+      await call(adminAdsRoute, "/api/admin/ads"),
+      await call(kelolaAdminRoute, "/api/admin/plugins/kelola"),
+    ];
+    for (const read of reads) assert.equal(read.status, 200, read.text);
+    responses.push(...reads.map((read) => read.text));
+    // Masks are made from the opened value, never from the stored envelope.
+    const ads = JSON.parse(reads[1].text).data;
+    assert.equal(ads.meta_capi_token_masked, maskSecretValue(secrets.meta));
+    assert.equal(ads.google_offline.developer_token_masked, maskSecretValue(secrets.developer));
+    assert.equal(ads.google_offline.configured, true);
+    assert.equal(JSON.parse(reads[2].text).data.kelola.configured, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.assign(console, quiet);
+  }
+  const row = store.sql.prepare(`SELECT ${STORE_CREDENTIAL_COLUMNS.join(", ")} FROM stores`).get() as Record<string, string>;
+  for (const column of STORE_CREDENTIAL_COLUMNS) assert.match(row[column] ?? "", /^enc:v1:/, `${column} stored sealed`);
+  const plugin = (store.sql.prepare("SELECT settings FROM plugins WHERE id = 'kelola'").get() as { settings: string }).settings;
+  assert.match(JSON.parse(plugin).webhook_secret, /^enc:v1:/);
+  assert.equal(responses.some((text) => text.includes("enc:")), false, "no response carries a stored envelope");
+  const everything = JSON.stringify(row) + plugin + responses.join("\n");
+  for (const [name, secret] of Object.entries(secrets)) {
+    assert.equal(everything.includes(secret), false, `${name}: never stored in plaintext, never in a response`);
+  }
+  // And every one of them opens for the code that needs it.
+  assert.equal((await getProviderConfig(store.database)).mengantar.apiKey, secrets.mengantar);
+  assert.equal((await getProviderConfig(store.database)).autolaris.apiKey, secrets.autolaris);
+  assert.equal((await getStoreAdsConfig({ tenantDb: store.database } as never)).metaCapiToken, secrets.meta);
+  assert.equal((await loadGoogleAdsOfflineConfig(store.database))?.refreshToken, secrets.refresh);
+});
+
+test("T-48: the real TenantStore.alarm binds the cipher and seals legacy plaintext, plugin secrets included (T-48 review)", async () => {
+  const { TenantStore } = workerModule as unknown as { TenantStore: new (ctx: unknown, env: unknown) => { alarm(): Promise<void> } };
+  const platformDb = await platform([["t-alarm", "active", "alarm.belanja.cc"]]);
+  const storage = createNodeStorage();
+  for (const file of CHAIN) applyMigrationFile(storage, file, splitMigrationStatements);
+  storage.db.exec(`
+    INSERT INTO stores (id, name, slug, created_at, mengantar_api_key, meta_capi_token) VALUES (1, 'Alarm', 't-alarm', '2026-11-16', 'legacy-mengantar-alarm', 'legacy-meta-alarm');
+    INSERT INTO plugins (id, enabled, schema_version, settings, updated_at)
+      VALUES ('kelola', 1, 1, '{"webhook_url":"https://kelola.test/api/public/toko/order/twh_alarm","webhook_secret":"legacy-kelola-alarm-secret"}', '2026-11-16');
+    CREATE TABLE IF NOT EXISTS plugin_kelola_orders (order_id INTEGER PRIMARY KEY NOT NULL, synced_at TEXT, attempts INTEGER DEFAULT 0 NOT NULL, last_error TEXT, lead_synced_at TEXT);
+  `);
+  const kv = memoryKv();
+  kv.put("tenant_id", "t-alarm");
+  let alarmAt: number | null = null;
+  const ctx = {
+    storage: Object.assign(storage, {
+      kv,
+      getAlarm: async () => alarmAt,
+      setAlarm: async (at: number) => void (alarmAt = at),
+    }),
+    blockConcurrencyWhile: async (run: () => Promise<void>) => run(),
+    waitUntil: () => undefined,
+    id: { name: "t-alarm" },
+  };
+  // The production env: no binding is made by this test; the object makes its own.
+  const store = new TenantStore(ctx, { PLATFORM_DB: platformDb, ...TEST_CREDENTIAL_ENV });
+  const originalFetch = globalThis.fetch;
+  const quiet = { log: console.log, warn: console.warn, error: console.error, info: console.info };
+  globalThis.fetch = (async () => Response.json({ success: true, data: [] })) as typeof fetch;
+  console.log = console.warn = console.error = console.info = () => undefined;
+  try {
+    await store.alarm();
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.assign(console, quiet);
+  }
+  const row = storage.db.prepare("SELECT mengantar_api_key, meta_capi_token FROM stores").get() as Record<string, string>;
+  assert.match(row.mengantar_api_key, /^enc:v1:/);
+  assert.match(row.meta_capi_token, /^enc:v1:/);
+  const settings = JSON.parse((storage.db.prepare("SELECT settings FROM plugins WHERE id = 'kelola'").get() as { settings: string }).settings);
+  assert.match(settings.webhook_secret, /^enc:v1:/, "the maintenance run seals plugin secrets too");
+  assert.doesNotMatch(JSON.stringify(row) + JSON.stringify(settings), /legacy-/);
+  assert.notEqual(alarmAt, null, "the alarm re-armed itself");
 });

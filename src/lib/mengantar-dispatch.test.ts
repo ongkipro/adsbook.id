@@ -1,3 +1,4 @@
+import { withTestCredentials } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import test from "node:test";
@@ -49,6 +50,7 @@ class DispatchDatabase {
   readonly sqlite = new DatabaseSync(":memory:");
 
   constructor() {
+    withTestCredentials(this);
     this.sqlite.exec(`
       CREATE TABLE stores (
         id INTEGER PRIMARY KEY,

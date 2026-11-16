@@ -1,3 +1,4 @@
+import { withTestCredentials } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
@@ -69,6 +70,7 @@ class ShippingSyncDatabase {
   readonly #database = new DatabaseSync(":memory:");
 
   constructor() {
+    withTestCredentials(this);
     this.#database.exec(`
       PRAGMA foreign_keys = ON;
       CREATE TABLE stores (

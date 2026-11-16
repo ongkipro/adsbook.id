@@ -4,6 +4,7 @@ import { DurableObject } from "cloudflare:workers";
 import { BUNDLED_MIGRATIONS } from "../lib/bundled-migrations.ts";
 import { splitMigrationStatements } from "../lib/schema-version.ts";
 import { createTenantDb } from "./tenant-db.ts";
+import { bindCredentials } from "../lib/credential-crypto.ts";
 import { recordUsage } from "./plans.ts";
 import { readTenantRow, recordTenantHealth, runTenantAlarm, TENANT_ALARM_INTERVAL_MS } from "./tenant-alarm.ts";
 import {
@@ -154,7 +155,8 @@ export class TenantStore extends DurableObject {
         const { runTenantMaintenance } = await import("./tenant-maintenance.ts");
         await runTenantMaintenance(
           env,
-          createTenantDb(local),
+          // ADR-040: the alarm's handle carries the same tenant cipher as a request's.
+          bindCredentials(createTenantDb(local), id, env as unknown as Record<string, unknown>),
           id,
           scheduledTime,
           { waitUntil: (task: Promise<unknown>) => this.ctx.waitUntil(task), passThroughOnException() {} } as never,

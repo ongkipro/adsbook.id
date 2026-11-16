@@ -1,3 +1,4 @@
+import { withTestCredentials } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
@@ -93,6 +94,7 @@ class ReconciliationDatabase {
   failOnSql = "";
 
   constructor() {
+    withTestCredentials(this);
     this.sqlite.exec(`
       PRAGMA foreign_keys = ON;
       CREATE TABLE stores (

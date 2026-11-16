@@ -205,7 +205,7 @@ The [Modules](#modules) section is the same book read from the other side.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/api/admin/abandoned-orders` | GET, PATCH, POST | admin session | owner, admin, customer_service | `src/pages/api/admin/abandoned-orders.ts` | `abandoned-lead` `api` `courier-rules` `form-mode` `order-list-filter` `paid-order-purchase` `shipping-quote` `source-slug` `tenant-database` | `capi_event_outbox` `courier_rules` `landing_pages` `order_items` `orders` `payment_transactions` `product_variants` `products` `stores` `warehouses` | `abandoned-lead.test.ts` `api.test.ts` `courier-rules.test.ts` `form-mode.test.ts` `paid-order-purchase.test.ts` `shipping-quote.test.ts` `source-slug.test.ts` |
 | `/api/admin/access` | DELETE, GET, PATCH, POST | admin session | owner | `src/pages/api/admin/access.ts` | `admin-credentials` `admin-session` `api` `auth` `tenant-database` | `admin_credentials` `admin_sessions` `notifications` | `admin-credentials.test.ts` `admin-session.test.ts` `api.test.ts` `auth.test.ts` |
-| `/api/admin/ads` | GET, PUT | admin session | owner, admin, advertiser | `src/pages/api/admin/ads.ts` | `capi-outbox` `env` `google-ads-offline` `meta-capi` `store-ads` `tenant-database` | `capi_event_outbox` `google_ads_conversion_outbox` `order_items` `orders` `stores` | `capi-outbox.test.ts` `env.test.ts` `google-ads-offline.test.ts` `meta-capi.test.ts` `store-ads.test.ts` |
+| `/api/admin/ads` | GET, PUT | admin session | owner, admin, advertiser | `src/pages/api/admin/ads.ts` | `capi-outbox` `credential-crypto` `env` `google-ads-offline` `meta-capi` `store-ads` `tenant-database` | `capi_event_outbox` `google_ads_conversion_outbox` `order_items` `orders` `stores` | `capi-outbox.test.ts` `credential-crypto.test.ts` `env.test.ts` `google-ads-offline.test.ts` `meta-capi.test.ts` `store-ads.test.ts` |
 | `/api/admin/analytics` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/api/admin/analytics.ts` | `api` `dashboard-compare` `order-metrics` `tenant-database` | `orders` | `api.test.ts` `dashboard-compare.test.ts` |
 | `/api/admin/check` | GET | admin session | owner, admin, customer_service | `src/pages/api/admin/check.ts` | `api` `rts-scoring` `tenant-database` | `orders` | `api.test.ts` `rts-scoring.test.ts` |
 | `/api/admin/content` | GET, PUT | admin session | owner, admin, advertiser | `src/pages/api/admin/content.ts` | `ai-content-instructions` `env` `storefront-content` `tenant-database` | `product_variants` `products` `storefront_content` `stores` | `ai-content-instructions.test.ts` `env.test.ts` `storefront-content.test.ts` |
@@ -237,12 +237,12 @@ The [Modules](#modules) section is the same book read from the other side.
 | `/api/admin/orders/retention` | POST | admin session | owner, admin, customer_service | `src/pages/api/admin/orders/retention.ts` | `api` `order-persistence` `tenant-database` | `order_items` `order_number_counters` `orders` `payment_transactions` `product_variants` `products` `seller_bank_accounts` `stores` | `api.test.ts` `order-persistence.test.ts` |
 | `/api/admin/payment-reconciliation` | GET, POST | admin session | owner, admin | `src/pages/api/admin/payment-reconciliation.ts` | `api` `manual-payment-reconciliation` `paid-order-purchase` `tenant-database` | `admin_credentials` `capi_event_outbox` `order_items` `orders` `payment_reconciliation_audits` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `stores` | `api.test.ts` `manual-payment-reconciliation.test.ts` `paid-order-purchase.test.ts` |
 | `/api/admin/plugins` | GET, POST | admin session | owner, admin | `src/pages/api/admin/plugins/index.ts` | `api` `tenant-database` | — | `api.test.ts` |
-| `/api/admin/plugins/kelola` | GET, PUT | admin session | owner, admin | `src/pages/api/admin/plugins/kelola.ts` | `api` `env` `tenant-database` | — | `api.test.ts` `env.test.ts` |
+| `/api/admin/plugins/kelola` | GET, PUT | admin session | owner, admin | `src/pages/api/admin/plugins/kelola.ts` | `api` `credential-crypto` `env` `tenant-database` | `stores` | `api.test.ts` `credential-crypto.test.ts` `env.test.ts` |
 | `/api/admin/products` | DELETE, GET, PATCH, POST, PUT | admin session | owner, admin, advertiser | `src/pages/api/admin/products.ts` | `api` `catalog-data` `product-mutation` `tenant-database` | `order_items` `product_variants` `products` `storefront_content` `stores` | `api.test.ts` `catalog-data.test.ts` `product-mutation.test.ts` |
 | `/api/admin/profile` | GET, PUT | admin session | owner, admin, advertiser, customer_service | `src/pages/api/admin/profile.ts` | `admin-credentials` `admin-session` `api` `auth` `tenant-database` | `admin_credentials` `admin_sessions` | `admin-credentials.test.ts` `admin-session.test.ts` `api.test.ts` `auth.test.ts` |
 | `/api/admin/rules` | GET, PUT | admin session | owner, admin | `src/pages/api/admin/rules.ts` | `api` `tenant-database` | `courier_rules` | `api.test.ts` |
 | `/api/admin/seller-bank-accounts` | DELETE, GET, POST, PUT | admin session | owner, admin | `src/pages/api/admin/seller-bank-accounts.ts` | `api` `seller-bank-account` `tenant-database` | `seller_bank_accounts` `stores` | `api.test.ts` `seller-bank-account.test.ts` |
-| `/api/admin/settings` | GET, POST, PUT | admin session | owner, admin | `src/pages/api/admin/settings.ts` | `api` `autolaris-client` `crm-template` `embed-security` `env` `headless-api` `mengantar-client` `provider-config` `storefront-template` `tenant` `tenant-database` | `developer_api_key_usage` `developer_api_keys` `headless_api_audit_events` `seller_bank_accounts` `storefront_templates` `stores` `warehouses` | `api.test.ts` `autolaris-client.test.ts` `crm-template.test.ts` `embed-security.test.ts` `env.test.ts` `headless-api.test.ts` `mengantar-client.test.ts` `provider-config.test.ts` `storefront-template.test.ts` `tenant.test.ts` |
+| `/api/admin/settings` | GET, POST, PUT | admin session | owner, admin | `src/pages/api/admin/settings.ts` | `api` `autolaris-client` `credential-crypto` `crm-template` `embed-security` `env` `headless-api` `mengantar-client` `provider-config` `storefront-template` `tenant` `tenant-database` | `developer_api_key_usage` `developer_api_keys` `headless_api_audit_events` `seller_bank_accounts` `storefront_templates` `stores` `warehouses` | `api.test.ts` `autolaris-client.test.ts` `credential-crypto.test.ts` `crm-template.test.ts` `embed-security.test.ts` `env.test.ts` `headless-api.test.ts` `mengantar-client.test.ts` `provider-config.test.ts` `storefront-template.test.ts` `tenant.test.ts` |
 | `/api/admin/settings/developer` | DELETE, GET, PATCH, POST | admin session | owner, admin | `src/pages/api/admin/settings/developer.ts` | `api` `developer-api-keys` `tenant-database` | `developer_api_keys` `headless_api_audit_events` | `api.test.ts` `developer-api-keys.test.ts` |
 | `/api/admin/settings/privacy` | GET, PUT | admin session | owner, admin | `src/pages/api/admin/settings/privacy.ts` | `api` `tenant-database` | `stores` | `api.test.ts` |
 | `/api/admin/shipping` | GET, PATCH, POST | admin session | owner, admin, customer_service | `src/pages/api/admin/shipping.ts` | `api` `mengantar-client` `mengantar-order` `order-lifecycle` `order-list-filter` `payment-dispatch-policy` `provider-config` `shipping-queue` `tenant-database` | `order_items` `orders` `payment_reconciliation_audits` `payment_transactions` `pickup_schedules` `stores` `warehouses` | `api.test.ts` `mengantar-client.test.ts` `mengantar-order.test.ts` `order-lifecycle.test.ts` `payment-dispatch-policy.test.ts` `provider-config.test.ts` `shipping-queue.test.ts` |
@@ -253,7 +253,7 @@ The [Modules](#modules) section is the same book read from the other side.
 
 ## Modules
 
-141 modules under `src/lib`; 15 without a sibling test.
+142 modules under `src/lib`; 15 without a sibling test.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
 
@@ -287,6 +287,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `cn` | 1 | — | ✓ | — |
 | `courier-names` | 2 | — | ✓ | — |
 | `courier-rules` | 3 | — | ✓ | `/api/submit-order` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` |
+| `credential-crypto` | 12 | `stores` | ✓ | `/api/admin/ads` `/api/admin/plugins/kelola` `/api/admin/settings` |
 | `crm-template` | 11 | `seller_bank_accounts` `stores` | ✓ | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/settings` |
 | `daily-rotation` | 2 | — | ✓ | `/` |
 | `dashboard-compare` | 6 | — | ✓ | `/api/admin/analytics` |
@@ -302,7 +303,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `form-mode` | 8 | `stores` | ✓ | `/produk/[slug]` `/geoipform` `/hybrid-form` `/api/form-config` `/api/geo-province` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/v1/storefront` `/api/admin/abandoned-orders` |
 | `format-idr` | 1 | — | ✓ | `/payment` `/produk` |
 | `geo` | 4 | — | ✓ | `/produk/[slug]` `/api/submit-middle-order` |
-| `google-ads-offline` | 19 | `google_ads_conversion_outbox` `order_items` `orders` `stores` | ✓ | `/api/admin/ads` |
+| `google-ads-offline` | 22 | `google_ads_conversion_outbox` `order_items` `orders` `stores` | ✓ | `/api/admin/ads` |
 | `google-taxonomy` | 4 | — | ✓ | — |
 | `gtm` | 4 | — | ✓ | — |
 | `headless-api` | 20 | `developer_api_key_usage` `developer_api_keys` `headless_api_audit_events` `stores` | ✓ | `/api/v1/checkout` `/api/v1/geo/districts` `/api/v1/geo/shipping-rates` `/api/v1/openapi.json` `/api/v1/orders/status` `/api/v1/products` `/api/v1/products/[slug]` `/api/v1/storefront` `/api/v1/tracking/events` `/api/admin/settings` |

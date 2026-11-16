@@ -1,10 +1,11 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { enqueuePurchaseForPaidOrder, manualTransferBecamePaid } from "./paid-order-purchase.ts";
 
 type Row = Record<string, unknown>;
 
-function createDatabase(options: {
+function createDatabase__raw(options: {
   paymentStatus: string;
   shippingStatus?: string;
   stockRestoredAt?: string | null;
@@ -194,7 +195,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { splitMigrationStatements } from "./schema-version.ts";
 import { sweepMissedCodPurchases } from "./paid-order-purchase.ts";
 
-function sweepDatabase() {
+function sweepDatabase__raw() {
   const sqlite = new DatabaseSync(":memory:");
   const directory = new URL("../db/migrations/", import.meta.url);
   for (const name of readdirSync(directory).filter((file) => file.endsWith(".sql")).sort()) {
@@ -535,6 +536,7 @@ async function cronStore() {
       }
     },
   } as unknown as D1Database;
+  bindTestCredentialsIn(database);
 
   const sent: Array<{ event_id: string; event_source_url: string; user_data: Record<string, unknown> }> = [];
   const errors: string[] = [];
@@ -603,3 +605,13 @@ test("TEN-5: a tenant whose identity cannot be read skips its run and sends noth
   await assert.rejects(run(), /TENANT_IDENTITY_UNAVAILABLE/);
   assert.equal(sent.length, 0);
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function createDatabase(...args: Parameters<typeof createDatabase__raw>): ReturnType<typeof createDatabase__raw> {
+  return bindTestCredentialsIn(createDatabase__raw(...args));
+}
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function sweepDatabase(...args: Parameters<typeof sweepDatabase__raw>): ReturnType<typeof sweepDatabase__raw> {
+  return bindTestCredentialsIn(sweepDatabase__raw(...args));
+}

@@ -11,6 +11,7 @@ import {
   testKelolaConnection,
 } from "../../../../plugins/kelola/sync.ts";
 import { tenantDatabase } from "../../../../lib/tenant-database.ts";
+import { CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, CredentialKeyUnavailableError } from "../../../../lib/credential-crypto.ts";
 
 export const prerender = false;
 
@@ -87,7 +88,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if (secret.length < 16) return jsonError("Secret webhook Kelola wajib diisi.", 400);
 
   context.settings = { webhook_url: url, webhook_secret: secret };
-  await savePluginSettings(context.database, "kelola", context.settings);
+  try {
+    await savePluginSettings(context.database, "kelola", context.settings);
+  } catch (error) {
+    if (error instanceof CredentialKeyUnavailableError) return jsonError(CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, 503);
+    throw error;
+  }
   const check = await testKelolaConnection({ url, secret });
   return jsonOk({
     message: check.ok ? `Tersimpan. ${check.message}` : `Tersimpan, tetapi tes koneksi gagal: ${check.message}`,

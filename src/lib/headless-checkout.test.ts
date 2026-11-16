@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolveTrustedHeadlessShipping } from './headless-checkout.ts';
@@ -156,7 +157,7 @@ extensionResolver.deregister();
 
 const API_KEY = 'adsbook_live_autolaris_switch_test_key';
 
-async function switchStore() {
+async function switchStore__raw() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys = ON');
   const directory = new URL('../db/migrations/', import.meta.url);
@@ -270,3 +271,8 @@ test('with AutoLaris switched off, /api/v1/checkout refuses QRIS exactly as /api
   assert.equal(enabledBody.error.code, 'SHIPPING_QUOTE_REQUIRED');
   assert.equal(count('orders'), 0);
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function switchStore(...args: Parameters<typeof switchStore__raw>): ReturnType<typeof switchStore__raw> {
+  return bindTestCredentialsIn(switchStore__raw(...args));
+}

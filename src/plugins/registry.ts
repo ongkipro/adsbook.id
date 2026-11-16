@@ -11,6 +11,7 @@
  * compiled in, and a plugin follows the same conventions as the rest of the
  * product: D1, the shared admin shell, Indonesian UI copy, tests beside the code.
  */
+import { credentialsAvailable, openCredential, resealedCredential, sealCredential } from "../lib/credential-crypto.ts";
 import { getRuntimeEnv } from "../lib/env.ts";
 import { kelolaPlugin } from "./kelola/index.ts";
 
@@ -37,6 +38,8 @@ export type Plugin = {
   schema: readonly (readonly string[])[];
   /** Statements that remove the plugin's tables on uninstall. */
   uninstall: readonly string[];
+  /** Settings keys that hold a credential: stored sealed (ADR-040), opened for the plugin. */
+  secretSettings?: readonly string[];
   /** After checkout stores an order. Runs outside the buyer's response. */
   onOrderCreated?(context: PluginContext, orderId: number): Promise<unknown>;
   /** Inside the hourly cron. Returns a count for the cron summary. */
@@ -92,7 +95,7 @@ export async function activePlugins(database: D1Database, env: Env) {
     if (!plugin || !row.enabled) continue;
     try {
       if (row.schema_version < plugin.schema.length) await upgradeSchema(database, plugin, row.schema_version);
-      active.push({ plugin, context: { database, env, settings: parseSettings(row.settings) } });
+      active.push({ plugin, context: { database, env, settings: await openSecretSettings(database, plugin, parseSettings(row.settings)) } });
     } catch (error) {
       console.error("plugin-schema-upgrade-failed", { plugin: plugin.id, error: error instanceof Error ? error.message : String(error) });
     }
@@ -159,10 +162,61 @@ export async function uninstallPlugin(database: D1Database, id: string) {
   return true;
 }
 
+function secretColumn(pluginId: string, key: string) {
+  return `plugins.${pluginId}.${key}`;
+}
+
+/** The settings with their credentials opened; one this handle cannot open is left out (reads as not set). */
+async function openSecretSettings(database: D1Database, plugin: Plugin, settings: Record<string, unknown>) {
+  const opened = { ...settings };
+  for (const key of plugin.secretSettings ?? []) {
+    if (!(key in opened)) continue;
+    const value = await openCredential(database, secretColumn(plugin.id, key), opened[key]);
+    if (value === null) delete opened[key];
+    else opened[key] = value;
+  }
+  return opened;
+}
+
+/**
+ * The ADR-040 sweep for plugin settings: seal each plaintext (or older-key)
+ * credential. Written only if the row still holds what was read.
+ */
+export async function sealPluginSecrets(database: D1Database): Promise<number> {
+  if (!credentialsAvailable(database)) return 0;
+  let sealed = 0;
+  for (const row of await readRows(database)) {
+    const plugin = findPlugin(row.id);
+    if (!plugin?.secretSettings?.length) continue;
+    const settings = parseSettings(row.settings);
+    const next = { ...settings };
+    let changed = false;
+    for (const key of plugin.secretSettings) {
+      const resealed = await resealedCredential(database, secretColumn(plugin.id, key), settings[key]);
+      if (resealed === null) continue;
+      next[key] = resealed;
+      changed = true;
+    }
+    if (!changed) continue;
+    const result = await database
+      .prepare("UPDATE plugins SET settings = ?, updated_at = ? WHERE id = ? AND settings = ?")
+      .bind(JSON.stringify(next), new Date().toISOString(), row.id, row.settings)
+      .run();
+    sealed += Number(result.meta?.changes ?? 0);
+  }
+  return sealed;
+}
+
+/** Store a plugin's settings; its credentials are sealed first (throws rather than store plaintext). */
 export async function savePluginSettings(database: D1Database, id: string, settings: Record<string, unknown>) {
+  const plugin = findPlugin(id);
+  const stored = { ...settings };
+  for (const key of plugin?.secretSettings ?? []) {
+    if (typeof stored[key] === "string" && stored[key]) stored[key] = await sealCredential(database, secretColumn(id, key), stored[key] as string);
+  }
   await database
     .prepare("UPDATE plugins SET settings = ?, updated_at = ? WHERE id = ?")
-    .bind(JSON.stringify(settings), new Date().toISOString(), id)
+    .bind(JSON.stringify(stored), new Date().toISOString(), id)
     .run();
 }
 

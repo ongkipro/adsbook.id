@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -18,7 +19,7 @@ import { sendMetaCapiEvent } from "./meta-capi.ts";
 
 type StoreRow = Record<string, string | null> | null;
 
-function storeDatabase(row: StoreRow, options: { throws?: boolean } = {}) {
+function storeDatabase__raw(row: StoreRow, options: { throws?: boolean } = {}) {
   return {
     prepare() {
       return {
@@ -177,3 +178,8 @@ test("A-226: pixel without a CAPI token keeps the browser pixel and sends no ser
   assert.deepEqual(result, { success: false, reason: "meta-not-configured" });
   assert.deepEqual(calls, [], "no request to Meta without the tenant's own token");
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function storeDatabase(...args: Parameters<typeof storeDatabase__raw>): ReturnType<typeof storeDatabase__raw> {
+  return bindTestCredentialsIn(storeDatabase__raw(...args));
+}

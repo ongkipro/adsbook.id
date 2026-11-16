@@ -25,6 +25,8 @@ export const kelolaPlugin: Plugin = {
     ],
   ],
   uninstall: ["DROP TABLE IF EXISTS plugin_kelola_orders"],
+  // ADR-040: the webhook signing secret is stored sealed.
+  secretSettings: ["webhook_secret"],
   async onOrderCreated({ database, settings }, orderId) {
     const config = getKelolaConfig(settings);
     return config ? pushOrderToKelola(database, config, orderId) : false;

@@ -1,6 +1,7 @@
 // Extension-qualified like every other module here: Vite resolves either form,
 // but `node --experimental-strip-types` does not, and the bare specifier is why
 // this module could not be unit-tested at all (audit 2026-08-23 §2.6).
+import { openCredential } from './credential-crypto.ts';
 import { tenantDatabase } from "./tenant-database.ts";
 
 export const GOOGLE_ADS_CONVERSION_ID_PATTERN = /^AW-\d{5,20}$/;
@@ -67,7 +68,8 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
 
       if (row) {
         dbPixelId = row.meta_pixel_id ?? '';
-        dbCapiToken = row.meta_capi_token ?? '';
+        // ADR-040: the token is stored sealed; unreadable reads as not set.
+        dbCapiToken = (await openCredential(database, 'meta_capi_token', row.meta_capi_token)) ?? '';
         dbGoogleTagManagerId = row.google_tag_manager_id ?? '';
         dbGoogleId = row.google_ads_conversion_id ?? '';
         dbGoogleLabel = row.google_ads_conversion_label ?? '';

@@ -1,3 +1,4 @@
+import { CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, CredentialKeyUnavailableError, sealCredential } from "../../../lib/credential-crypto.ts";
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api.ts";
 import {
@@ -683,6 +684,17 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       );
       if (!orderIdentity.ok) return jsonError(orderIdentity.error, 400);
 
+      // ADR-040: a new key is stored sealed; without the platform key nothing is written.
+      let sealedMengantarKey = "";
+      let sealedAutolarisKey = "";
+      try {
+        sealedMengantarKey = await sealCredential(db, "mengantar_api_key", mengantarApiKey);
+        sealedAutolarisKey = await sealCredential(db, "autolaris_api_key", autolarisApiKey);
+      } catch (error) {
+        if (error instanceof CredentialKeyUnavailableError) return jsonError(CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, 503);
+        throw error;
+      }
+
       await db
         .prepare(
           `
@@ -701,10 +713,10 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         )
         .bind(
           mengantarKey.clear ? 1 : 0,
-          mengantarApiKey,
+          sealedMengantarKey,
           mengantarBaseUrl,
           autolarisKey.clear ? 1 : 0,
-          autolarisApiKey,
+          sealedAutolarisKey,
           autolarisBaseUrl,
           orderIdentity.originId,
           orderIdentity.destinationId,

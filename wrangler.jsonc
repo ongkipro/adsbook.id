@@ -41,7 +41,9 @@
   // Optional platform secrets, set with `wrangler secret put` on the platform
   // account (T-30/T-31), never here: PLATFORM_AUTH_SECRET (platform admin),
   // PLATFORM_ALERT_WEBHOOK_URL (operator notices, T-44), PLATFORM_META_CAPI_TOKEN
-  // (the marketing site's Conversions API, T-40).
+  // (the marketing site's Conversions API, T-40). PLATFORM_CREDENTIAL_KEY is
+  // required before any seller saves a provider key (ADR-040, T-48): without it
+  // credentials are neither stored nor read.
 
   // The workers.dev copy answers `X-Robots-Tag: noindex`; the gate refuses any
   // host that is not a platform host or a tenant row.

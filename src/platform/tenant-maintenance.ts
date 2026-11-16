@@ -1,3 +1,4 @@
+import { encryptStoredCredentials } from "../lib/credential-crypto.ts";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import { tenantKv } from "./keys.ts";
 import { purgeExpiredAbandonedOrders } from "../lib/order-persistence.ts";
@@ -21,7 +22,7 @@ import { enqueuePurchaseForPaidOrder, sweepMissedCodPurchases } from "../lib/pai
 import { readStoreIdentity, resolveTenantConfig } from "../lib/tenant.ts";
 import { drainCapiOutboxBacklog, purgeExpiredCapiOutboxEvents } from "../lib/capi-outbox.ts";
 import { getStoreAdsConfig } from "../lib/store-ads.ts";
-import { runPluginCron } from "../plugins/registry.ts";
+import { runPluginCron, sealPluginSecrets } from "../plugins/registry.ts";
 import {
   drainGoogleAdsConversionOutbox,
   purgeExpiredGoogleAdsConversions,
@@ -61,6 +62,11 @@ export async function runTenantMaintenance(
   // The panel's "Tugas terjadwal" signal: proof this clock still runs at all.
   // A D1 column on the status row, not KV (A-379), stamped before any later
   // step can fail.
+  // ADR-040 (T-48): seal any credential still in plaintext, or under an older
+  // key version, before anything below reads one. Cheap when nothing is left.
+  const sealedCredentials = await housekeeping("scheduled-credential-seal-failed", async () =>
+    (await encryptStoredCredentials(database)).sealed + (await sealPluginSecrets(database)),
+  );
   await housekeeping("scheduled-heartbeat-failed", async () => {
     await recordSchedulerRun(database, new Date(scheduledTime));
     return 0;
@@ -207,6 +213,7 @@ export async function runTenantMaintenance(
     tenant_id: tenantId,
     overall: health.overall,
     schemaState: health.build.schemaState,
+    sealedCredentials,
     purgedAbandonedOrders,
     purgedRateLimitWindows,
     expiredPaymentInstructions,

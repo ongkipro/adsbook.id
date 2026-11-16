@@ -5,6 +5,7 @@ const MAX_DRAIN_BATCH = 10;
 
 /** Longest delay `decideGoogleRetry` can schedule. A pending row overdue by
  *  more than this is not waiting its turn — nothing is draining it. */
+import { openCredential, sealCredential } from "./credential-crypto.ts";
 export const GOOGLE_ADS_MAX_BACKOFF_MS = 60 * 60_000;
 
 export type GoogleAdsOutboxDepth = {
@@ -133,8 +134,35 @@ export async function loadGoogleAdsOfflineRow(database: D1Database): Promise<Goo
     .first<GoogleAdsOfflineRow>();
 }
 
+/** The secret columns of the upload config (ADR-040: stored sealed). */
+export const GOOGLE_ADS_OFFLINE_SECRET_COLUMNS = [
+  "google_ads_developer_token",
+  "google_ads_client_secret",
+  "google_ads_refresh_token",
+] as const;
+
+/** The row with its secrets opened; one this handle cannot open reads as not set. */
+export async function openGoogleAdsOfflineSecrets<T extends GoogleAdsOfflineRow>(database: D1Database, row: T | null): Promise<T | null> {
+  if (!row) return row;
+  const opened = { ...row };
+  for (const column of GOOGLE_ADS_OFFLINE_SECRET_COLUMNS) {
+    opened[column] = (await openCredential(database, column, row[column])) as T[typeof column];
+  }
+  return opened;
+}
+
+/** The row to write, its secrets sealed. Throws `CredentialKeyUnavailableError` rather than storing plaintext. */
+export async function sealGoogleAdsOfflineSecrets<T extends Partial<Record<string, string | null>>>(database: D1Database, row: T): Promise<T> {
+  const sealed = { ...row };
+  for (const column of GOOGLE_ADS_OFFLINE_SECRET_COLUMNS) {
+    const value = row[column];
+    if (typeof value === "string" && value) (sealed as Record<string, string | null>)[column] = await sealCredential(database, column, value);
+  }
+  return sealed;
+}
+
 export async function loadGoogleAdsOfflineConfig(database: D1Database): Promise<GoogleAdsOfflineConfig | null> {
-  return readGoogleAdsOfflineConfig(await loadGoogleAdsOfflineRow(database));
+  return readGoogleAdsOfflineConfig(await openGoogleAdsOfflineSecrets(database, await loadGoogleAdsOfflineRow(database)));
 }
 
 /**

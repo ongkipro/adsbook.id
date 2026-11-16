@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
@@ -17,7 +18,7 @@ import {
   AUTOLARIS_EXPIRED_RECHECK_HOURS,
 } from "./autolaris-payment.ts";
 
-function createAutoLarisOrderDatabase(
+function createAutoLarisOrderDatabase__raw(
   autoLarisApiKey: string | null,
   paymentFeeBearer: "buyer" | "seller" = "seller",
   areaIds: { origin: string | null; destination: string | null } = { origin: "3517100", destination: "3518010" },
@@ -578,7 +579,7 @@ test("a store answering on more than one host is still recognised", () => {
   assert.equal(isSyntheticBuyerEmail(legacy, undefined, null, "not a url"), false);
 });
 
-function createAdviceReconciliationDatabase() {
+function createAdviceReconciliationDatabase__raw() {
   const state = {
     transactionStatus: "pending",
     orderPaymentStatus: "pending",
@@ -835,3 +836,13 @@ test("the hourly Advice run reaches new instructions, not the same old expired o
   const rows = db.prepare(PENDING_AUTOLARIS_INQUIRY_SQL).all(cutoff, 25) as Array<{ transaction_id: number }>;
   assert.deepEqual(rows.map((row) => row.transaction_id), [stillPending, justExpired]);
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function createAutoLarisOrderDatabase(...args: Parameters<typeof createAutoLarisOrderDatabase__raw>): ReturnType<typeof createAutoLarisOrderDatabase__raw> {
+  return bindTestCredentialsIn(createAutoLarisOrderDatabase__raw(...args));
+}
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function createAdviceReconciliationDatabase(...args: Parameters<typeof createAdviceReconciliationDatabase__raw>): ReturnType<typeof createAdviceReconciliationDatabase__raw> {
+  return bindTestCredentialsIn(createAdviceReconciliationDatabase__raw(...args));
+}

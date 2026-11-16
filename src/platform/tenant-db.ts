@@ -7,6 +7,7 @@
  * descriptors locally; `first`/`all`/`run`/`raw` are one RPC each and `batch`
  * is one RPC run in a single store transaction.
  */
+import { bindCredentials } from "../lib/credential-crypto.ts";
 import {
   TENANT_STORE_PROTOCOL,
   type Row,
@@ -401,5 +402,6 @@ export async function openTenantDb(
   // The stub's RPC methods return the structured clone of the store's results.
   const stub = namespace.getByName(tenant.tenantId, { locationHint: "apac-se" }) as TenantStoreStub;
   await ensureTenantSchema(platformDb, stub, tenant, target, options);
-  return createTenantDb(stub);
+  // ADR-040: the handle carries this tenant's credential cipher.
+  return bindCredentials(createTenantDb(stub), tenant.tenantId, env as Record<string, unknown>);
 }

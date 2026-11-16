@@ -1,3 +1,4 @@
+import { withTestCredentials } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
@@ -117,6 +118,7 @@ export function createOneWarehouseStore() {
       }
     },
   } as unknown as D1Database;
+  withTestCredentials(database);
   return { sqlite, database };
 }
 

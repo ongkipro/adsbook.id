@@ -16,6 +16,13 @@ interface SharedEnvVars {
   OPS_ALERT_WEBHOOK_URL?: string;
   /** Operator notices (T-44, PR-29): new seller, store ready, domain active/failing, first order. A Worker secret. */
   PLATFORM_ALERT_WEBHOOK_URL?: string;
+  /**
+   * ADR-040 (T-48): the root of stored provider-credential encryption, 32 random
+   * bytes as base64, optionally `v<N>:`-prefixed. A Worker secret; without it no
+   * credential is read or stored. `_PREVIOUS` holds the prior key during rotation.
+   */
+  PLATFORM_CREDENTIAL_KEY?: string;
+  PLATFORM_CREDENTIAL_KEY_PREVIOUS?: string;
   /** The platform admin origin for links in notices (default https://app.adsbook.id). */
   PLATFORM_ADMIN_URL?: string;
   /** The marketing site (T-40): canonical origin, the platform's own Pixel and CAPI token (secret), support contacts. */

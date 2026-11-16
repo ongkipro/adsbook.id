@@ -17,6 +17,7 @@
  * browse without this predicate and refuses its provider routes and writes
  * instead (`src/platform/demo.ts`).
  */
+import { openCredential } from "../lib/credential-crypto.ts";
 import { autoLarisOrderRailGap } from "../lib/provider-config.ts";
 
 export type ReadinessFacts = {
@@ -65,12 +66,18 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
     .first<Row>();
   if (!row) throw new Error("readiness unreadable");
   const text = (value: string | null) => (value ?? "").trim();
+  // ADR-040: a key counts only if this Worker can open it; one it cannot is a
+  // key the provider calls would not get, so the store is not ready.
+  const [mengantarKey, autolarisKey] = await Promise.all([
+    openCredential(database, "mengantar_api_key", row.mengantar_api_key),
+    openCredential(database, "autolaris_api_key", row.autolaris_key),
+  ]);
   // The same inputs /api/payment-methods offers AutoLaris on, so "enabled"
   // here means exactly what a buyer would be offered.
   const autolaris =
     row.autolaris_on !== 0 &&
     autoLarisOrderRailGap({
-      apiKey: text(row.autolaris_key),
+      apiKey: text(autolarisKey),
       originId: text(row.autolaris_origin),
       destinationId: text(row.autolaris_destination),
       warehouseAddress: row.warehouse_address,
@@ -79,7 +86,7 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
     storeName: Boolean(row.store_name),
     product: Boolean(row.product),
     primaryWarehouse: Boolean(row.primary_warehouse),
-    mengantar: text(row.mengantar_api_key) !== "",
+    mengantar: text(mengantarKey) !== "",
     // A store row with COD left on (the default) offers COD.
     payment: (row.store_name !== null && row.cod !== 0) || autolaris,
     enabledCouriers: Number(row.couriers) || 0,

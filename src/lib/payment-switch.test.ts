@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
@@ -63,6 +64,7 @@ function fixture(settings: Record<string, string> = {}) {
       throw error;
     }
   };
+  bindTestCredentialsIn(db);
   return { sqlite, db, order, view, switchTo };
 }
 

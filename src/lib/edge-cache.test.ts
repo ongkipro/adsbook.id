@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
@@ -172,7 +173,7 @@ async function run(
     url: new URL(href),
     locals: {
       runtimeEnv: {
-        OMS_DB: {
+        OMS_DB: bindTestCredentialsIn({
           // A ready store (T-38): the readiness read answers; every other read fails,
           // so the page renders from its defaults.
           prepare(sql: string) {
@@ -180,7 +181,7 @@ async function run(
             if (sql.includes("AS primary_warehouse")) return { first: async () => READY_ROW };
             throw new Error("d1 unavailable");
           },
-        },
+        }),
       },
     },
     redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
