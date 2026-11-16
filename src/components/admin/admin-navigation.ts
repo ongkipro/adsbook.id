@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 
-/** Stable AdsBookCMS visual identity. Storefront tenant theming must not alter admin UI. */
+/** Stable adsbook.id visual identity. Storefront tenant theming must not alter admin UI. */
 export const ADMIN_ACCENT = "#2563eb";
 
 export type AdminNavItem = {

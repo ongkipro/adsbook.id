@@ -132,7 +132,7 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Login AdsBookCMS - {Astro.locals.tenant.adminName}</title>
+    <title>Masuk - {Astro.locals.tenant.adminName}</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
     <link rel="icon" type="image/svg+xml" href="/images/logo.svg" />
@@ -147,39 +147,11 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
       <div class="admin-login-brand relative isolate hidden overflow-hidden lg:flex flex-col justify-center bg-slate-950 p-10 text-white xl:p-14">
         <!-- Ornament: a dot grid that fades toward the edges. Decorative only. -->
         <div class="login-brand-grid" aria-hidden="true"></div>
-        <!-- A joke more than a tip jar, centred and alone in the panel: the CMS
-             and its hosting are free, the developer's coffee is not. The
-             image is the code itself, rebuilt as vector modules from the
-             merchant's QRIS print (version 9, 53 modules, finder and timing
-             patterns checked, payload identical to the print); the corner frame pulses outside the code so it
-             never gets in a phone's way, and stops under reduced motion.
-             Lazy: the panel is desktop-only, and a phone never fetches it. -->
-        <section class="login-qris" aria-labelledby="loginQrisTitle">
-          <div class="login-qris-frame">
-            <!-- Signal waves leaving the code: the background moves, and it
-                 moves outward from the QR, so the eye lands on it. Behind the
-                 white card, never over the modules. -->
-            <span class="login-qris-waves" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="login-qris-corner" aria-hidden="true"></span>
-            <img
-              src="/images/qris-dukung-adsbookcms.svg"
-              alt="QRIS ONGKI COLLECTION untuk mendukung AdsBookCMS"
-              width="560"
-              height="560"
-              loading="lazy"
-              decoding="async"
-              class="login-qris-image"
-            />
-          </div>
-          <div class="login-qris-copy">
-            <h2 id="loginQrisTitle" class="login-qris-title"><span class="block">CMS <span class="login-gratis">GRATIS</span>.</span> <span class="block">Server <span class="login-gratis login-gratis-2">GRATIS</span>.</span></h2>
-            <p class="login-qris-body">Kopi developernya yang belum. Boleh dong ditraktir? Hehehe.</p>
-            <figure class="login-qris-quote">
-              <blockquote>&ldquo;Satu kopi, satu bug minggat.&rdquo;</blockquote>
-              <figcaption>by ongki.pro</figcaption>
-            </figure>
-            <p class="login-qris-note">QRIS a.n. ONGKI COLLECTION</p>
-          </div>
+        <!-- T-29: the platform's name and one line about the admin; the
+             inherited tip-jar panel is gone (PR-18). -->
+        <section class="relative max-w-md" aria-labelledby="loginBrandTitle">
+          <p class="text-sm font-semibold tracking-wide text-slate-400">adsbook.id</p>
+          <h2 id="loginBrandTitle" class="mt-3 text-3xl font-semibold leading-tight">Pesanan, pengiriman, dan iklan {Astro.locals.tenant.name} di satu admin.</h2>
         </section>
       </div>
 
@@ -189,17 +161,14 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
       <div class="admin-login-form-wrapper">
         <div class="admin-login-card">
           <div class="admin-login-header text-center lg:text-left">
-            <!-- The wordmark: "Ads" in the brand blue, "Book" in ink - the two
-                 halves of the name - and "CMS" as a small tracked tag after a
-                 hairline. One accessible name, "AdsBookCMS". -->
+            <!-- The wordmark: "adsbook.id" as one name, ".id" in the brand blue. -->
             <!-- The wordmark leads back to the store's homepage, on a phone and
                  on a desktop alike: an operator who reached the login by mistake,
                  or who wants to see the shop, has one obvious way out. -->
             <h1 id="loginTitle" class="login-wordmark">
-              <a href="/" class="login-wordmark-link" aria-label={`AdsBookCMS, kembali ke beranda ${Astro.locals.tenant.name}`} title={`Ke beranda ${Astro.locals.tenant.name}`}>
+              <a href="/" class="login-wordmark-link" aria-label={`adsbook.id, kembali ke beranda ${Astro.locals.tenant.name}`} title={`Ke beranda ${Astro.locals.tenant.name}`}>
                 <img src="/images/adsbook-icon.svg" alt="" width="28" height="28" class="size-7 shrink-0" />
-                <span aria-hidden="true" class="login-wordmark-name"><span class="text-[#2563EB]">Ads</span>Book</span>
-                <span aria-hidden="true" class="login-wordmark-tag">CMS</span>
+                <span aria-hidden="true" class="login-wordmark-name">adsbook<span class="text-[#2563EB]">.id</span></span>
               </a>
             </h1>
           </div>
@@ -238,7 +207,7 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
       </div>
         </div>
         <footer class="admin-login-foot">
-          <p class="font-mono text-slate-400">AdsBookCMS v{CMS_VERSION.version}</p>
+          <p class="font-mono text-slate-400">adsbook.id v{CMS_VERSION.version}</p>
         </footer>
       <script>
         const form = document.getElementById('loginForm') as HTMLFormElement | null;

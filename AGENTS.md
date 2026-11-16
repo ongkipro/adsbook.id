@@ -1,10 +1,10 @@
-# AGENTS.md — Working Agreement for AdsBookCMS
+# AGENTS.md — Working Agreement for adsbook.id
 
-> Verified against disk: 2026-11-16 @ `5ff5f3f` (§2 ownership table: `docs/operations/PLATFORM-RUNBOOK.md` added, T-39). Previously: 2026-11-16 @ `96fdd8a` (§4 baseline 1227 re-run on `release/1.10.1`, 1.10.1). Previously: 2026-11-16 @ `18d0a4a` (§2 skill path and spec checker command aligned with `adsbook.id-docs`). Previously: 2026-11-14 @ `2b244be` (§2 ownership table: spec pack `docs/spec/` added, `docs/product/PRD.md` re-scoped to the inherited base). Previously: 2026-11-13 @ `1403298` (§2 ownership table re-pointed to the adsbook.id-docs repository, ADR-038; §4 baseline 1207 re-run). Previously: 2026-11-10 @ `745de51` (1.10.0; §4 baseline 1207 re-run on that tree). Previously: 2026-11-06 @ `700bc21` + fix/image-guard-parser working tree (1.9.2; §4 baseline 1193 re-run on that tree; the lib-module count, the auth test count and the §6 guard names re-checked; other claims not re-audited)
+> Verified against disk: 2026-11-16 @ `81ed0b2` + T-29 tree (product named adsbook.id). Previously: 2026-11-16 @ `5ff5f3f` (§2 ownership table: `docs/operations/PLATFORM-RUNBOOK.md` added, T-39). Previously: 2026-11-16 @ `96fdd8a` (§4 baseline 1227 re-run on `release/1.10.1`, 1.10.1). Previously: 2026-11-16 @ `18d0a4a` (§2 skill path and spec checker command aligned with `adsbook.id-docs`). Previously: 2026-11-14 @ `2b244be` (§2 ownership table: spec pack `docs/spec/` added, `docs/product/PRD.md` re-scoped to the inherited base). Previously: 2026-11-13 @ `1403298` (§2 ownership table re-pointed to the adsbook.id-docs repository, ADR-038; §4 baseline 1207 re-run). Previously: 2026-11-10 @ `745de51` (1.10.0; §4 baseline 1207 re-run on that tree). Previously: 2026-11-06 @ `700bc21` + fix/image-guard-parser working tree (1.9.2; §4 baseline 1193 re-run on that tree; the lib-module count, the auth test count and the §6 guard names re-checked; other claims not re-audited)
 
 This file is the contract for any AI coding agent or contributor working in this repository. Read it before the first edit.
 
-**The product is AdsBookCMS (single):** a direct-response commerce CMS installed onto Cloudflare Workers, where **1 installer = 1 Worker = 1 store**. `permatamall.shop` is the reference instance, not the product name.
+**The product is adsbook.id**, built from the single-tenant AdsBookCMS base, where **1 installer = 1 Worker = 1 store** held until the platform tasks. `permatamall.shop` is the reference instance, not the product name.
 
 ---
 

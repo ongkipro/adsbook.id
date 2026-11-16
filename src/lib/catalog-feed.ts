@@ -47,7 +47,7 @@ export function escapeXml(value: string): string {
  * id; the admin screen showed the operator that same `10001`; and the Pixel
  * sent the raw row id, `1`. Three values for one product.
  *
- * AdsBookCMS uses one catalog item per product. The immutable D1 Product ID is
+ * adsbook.id uses one catalog item per product. The immutable D1 Product ID is
  * generated as a five-digit number, so product_id, content_id and feed <g:id>
  * are the same value. Variants remain checkout choices and do not create
  * separate catalog identities.
@@ -156,7 +156,7 @@ function buildCatalogXml(
   defaultBrand?: string,
 ): string {
   const origin = siteOrigin.replace(/\/$/, "");
-  const siteTitle = title || "AdsBookCMS Merchant Store";
+  const siteTitle = title || "Toko Online";
   const siteDescription = description || "Solusi Produk Berkualitas";
 
   let itemsXml = "";

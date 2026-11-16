@@ -212,7 +212,7 @@ export function AppSidebar({
               <SidebarMenuButton
                 type="button"
                 onClick={onOpenChangelog}
-                tooltip={`What's new · AdsBookCMS v${CMS_VERSION.version}`}
+                tooltip={`What's new · adsbook.id v${CMS_VERSION.version}`}
                 className="h-10 bg-white/55 ring-1 ring-slate-900/5 backdrop-blur-md hover:bg-white/75"
               >
                 <img src="/images/adsbook-icon.svg" alt="" width="18" height="18" className="shrink-0" />
@@ -224,7 +224,7 @@ export function AppSidebar({
         <div className="rounded-xl border border-white/70 bg-white/55 p-1.5 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-md backdrop-saturate-150 group-data-[collapsible=icon]:hidden">
           <div className="flex items-center gap-2.5 px-1 pb-1.5 pt-0.5">
             <img src="/images/adsbook-icon.svg" alt="" width="24" height="24" className="shrink-0" />
-            <span className="min-w-0 flex-1 text-[13px] font-semibold leading-4 text-slate-900">AdsBookCMS</span>
+            <span className="min-w-0 flex-1 text-[13px] font-semibold leading-4 text-slate-900">adsbook.id</span>
             <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-mono text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/15">
               v{CMS_VERSION.version}
             </span>

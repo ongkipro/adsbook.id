@@ -23,7 +23,7 @@ export type CliIo = {
 
 type Credentials = { url: string; key: string };
 
-export const ADSBOOK_CLI_USAGE = `adsbook — AdsBookCMS operations API client
+export const ADSBOOK_CLI_USAGE = `adsbook — adsbook.id operations API client
 
   adsbook login --url <https://toko.example> [--key <key>]
   adsbook logout

@@ -1,5 +1,5 @@
 <!--
-  The default tab icon for admin pages and the login screen: the AdsBookCMS
+  The default tab icon for admin pages and the login screen: the adsbook.id
   product icon (same artwork as images/adsbook-icon.svg). A merchant who wants
   their own mark replaces this file and the favicons (INSTALLATION.md); an
   install update never overwrites a replaced copy (UPDATE-PATH-OWNERSHIP.md).

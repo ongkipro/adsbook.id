@@ -841,7 +841,7 @@ export function parseShortcodes(
  * top-level route this list does not name.
  */
 export const RESERVED_LANDING_SLUGS: ReadonlySet<string> = new Set([
-  "404", "admin", "api", "assets", "contoh-landing", "disclaimer", "embed",
+  "404", "admin", "api", "assets", "disclaimer", "embed",
   "feed", "form-full", "form-hybrid", "form-middle", "full-form", "geoipform",
   "hello", "hybrid-form", "install", "kebijakan-cookie", "kebijakan-privasi",
   "kontak", "landing", "landing-page", "llms", "media", "middle-form", "payment", "platform",

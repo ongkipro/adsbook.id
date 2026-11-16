@@ -150,7 +150,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         new URL(request.url).origin,
         {
           clientIp: request.headers.get('cf-connecting-ip') || '127.0.0.1',
-          userAgent: request.headers.get('user-agent') || 'AdsBookCMS-CAPI-Tester/1.0',
+          userAgent: request.headers.get('user-agent') || 'adsbook.id-CAPI-Tester/1.0',
         },
         {},
         pixelId,
@@ -182,9 +182,9 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         new URL(request.url).origin,
         {
           clientIp: request.headers.get('cf-connecting-ip') || '127.0.0.1',
-          userAgent: request.headers.get('user-agent') || 'AdsBookCMS-CAPI-Tester/1.0',
+          userAgent: request.headers.get('user-agent') || 'adsbook.id-CAPI-Tester/1.0',
         },
-        { contentName: 'AdsBookCMS Meta CAPI connection test' },
+        { contentName: 'adsbook.id Meta CAPI connection test' },
         pixelId,
         storedToken,
         testEventCode,
