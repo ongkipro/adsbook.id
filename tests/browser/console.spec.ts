@@ -95,8 +95,30 @@ test("platform console: every menu at 390 and 1366 px, team add, support refused
 
   await page.goto(`${PLATFORM}/platform/team`);
   const supportEmail = `cs-${Date.now()}@console.local.test`;
+  // The role dropdown inside the dialog opens and picks (it did not, under a Base UI Select).
+  const ownerEmail = `owner-${Date.now()}@console.local.test`;
   await page.getByRole("button", { name: "Tambah anggota" }).click();
   const add = page.getByRole("dialog");
+  await add.getByLabel("Email", { exact: true }).fill(ownerEmail);
+  await page.locator("#memberRole").click();
+  await page.getByRole("menuitemradio", { name: /^Owner/ }).click();
+  await expect(page.locator("#memberRole")).toContainText("Owner");
+  await add.getByLabel(/Password awal/).fill("second-owner-password");
+  await add.getByRole("button", { name: "Tambah", exact: true }).click();
+  await expect(page.locator("#enrolment")).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Selesai" }).click();
+  await page.waitForLoadState("load");
+  await expect(page.locator("#teamTable tbody tr", { hasText: ownerEmail })).toContainText("Owner");
+
+  // Change that owner to Support from the row menu, then add a support member.
+  await page.locator("#teamTable tbody tr", { hasText: ownerEmail }).getByRole("button", { name: /Aksi untuk/ }).click();
+  await page.getByRole("menuitem", { name: "Ubah peran" }).click();
+  await page.locator("#memberRoleEdit").click();
+  await page.getByRole("menuitemradio", { name: /^Support/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Simpan peran" }).click();
+  await expect(page.locator("#teamTable tbody tr", { hasText: ownerEmail })).toContainText("Support");
+
+  await page.getByRole("button", { name: "Tambah anggota" }).click();
   await add.getByLabel("Email", { exact: true }).fill(supportEmail);
   await add.getByLabel(/Password awal/).fill("support-password-123");
   await add.getByRole("button", { name: "Tambah", exact: true }).click();

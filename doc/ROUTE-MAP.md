@@ -447,7 +447,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/admin/metrics` | 36 | — | `platform_users` `subscription_invoices` `tenant_events` `tenant_hosts` `tenant_usage_daily` `tenants` | 1 | — |
 | `platform/admin/recovery` | 2 | `admin_credentials` `admin_sessions` | `tenant_events` `tenants` | 1 | `/api/owner-recovery` |
 | `platform/admin/session` | 12 | — | `platform_sessions` `platform_users` | 2 | `/api/platform/login` `/api/platform/logout` |
-| `platform/admin/team` | 8 | — | `platform_sessions` `platform_users` `tenant_events` | 1 | `/api/platform/team` `/api/platform/team/[id]` |
+| `platform/admin/team` | 10 | — | `platform_sessions` `platform_users` `tenant_events` | 1 | `/api/platform/team` `/api/platform/team/[id]` |
 | `platform/admin/tenants` | 9 | — | `plans` `tenant_events` `tenant_health` `tenant_hosts` `tenants` | 2 | `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` |
 | `platform/admin/totp` | 6 | — | — | 2 | — |
 | `platform/billing` | 30 | — | `subscription_invoices` `tenant_events` `tenants` | 2 | `/api/admin/billing` `/api/admin/billing/[id]/check` `/api/admin/content` `/api/platform/invoices/[id]/check` `/api/platform/webhooks/autolaris/[token]` |

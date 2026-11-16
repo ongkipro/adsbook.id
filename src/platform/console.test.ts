@@ -21,7 +21,7 @@ import {
   wibDay,
   wibMonthStart,
 } from "./admin/metrics.ts";
-import { addTeamMember, listTeam, setTeamMemberDisabled } from "./admin/team.ts";
+import { addTeamMember, listTeam, resetTeamMemberAccess, setTeamMemberDisabled, setTeamMemberRole } from "./admin/team.ts";
 import { listTenants } from "./admin/tenants.ts";
 import type { PlatformUser } from "./admin/session.ts";
 import { verifyTotp, totpCode } from "./admin/totp.ts";
@@ -175,8 +175,9 @@ test("UX-9 domains and activity: stuck hosts, filters, cursor, readable detail",
   assert.deepEqual((await listActivity(db, { slug: "platform" })).rows.map((row) => row.kind), ["platform_user_added"]);
   assert.equal((await listActivity(db, { kind: "x'; DROP" })).rows.length, 100, "a malformed kind is ignored");
 
-  assert.equal(describeEvent(JSON.stringify({ reason: "spam", before: "active", after: "suspended" })), "active → suspended · alasan: spam");
-  assert.equal(describeEvent(JSON.stringify({ email: "cs@ops.test", role: "platform_support", password_hash: "x" })), "cs@ops.test · platform_support", "unknown keys never shown");
+  assert.equal(describeEvent(JSON.stringify({ reason: "spam", before: "active", after: "suspended" })), "aktif → ditangguhkan · alasan: spam");
+  assert.equal(describeEvent(JSON.stringify({ email: "cs@ops.test", role: "platform_support", password_hash: "x" })), "cs@ops.test · Support", "unknown keys never shown");
+  assert.equal(describeEvent(JSON.stringify({ email: "a@ops.test", before: "platform_owner", after: "platform_support" })), "a@ops.test · Owner → Support");
   assert.equal(describeEvent("not json"), "");
 });
 
@@ -238,3 +239,47 @@ test("UX-10 team: owner only, MFA enrolled once, no self-disable, last owner kep
   assert.ok(audit.every((row) => !row.detail_json.includes(added.value!.totpSecret) && !row.detail_json.includes("long-enough-password")));
   assert.deepEqual(JSON.parse(audit[1].detail_json), { user: added.value.id, email: "cs@ops.test", role: "platform_support", before: "active", after: "disabled" });
 });
+
+test("UX-10 team: change role keeps an active owner, never your own; reset replaces password + TOTP and closes sessions", async () => {
+  const { db } = await controlPlane();
+  db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES ('pu_a', 'a@ops.test', 'x', 'AAAA', 'platform_owner', ?), ('pu_b', 'b@ops.test', 'x', 'BBBB', 'platform_support', ?)").run(iso(-DAY), iso(-DAY));
+  const a: PlatformUser = { id: "pu_a", email: "a@ops.test", role: "platform_owner" };
+  const b: PlatformUser = { id: "pu_b", email: "b@ops.test", role: "platform_support" };
+  const roleOf = (id: string) => (db.sqlite.prepare("SELECT role FROM platform_users WHERE id = ?").get(id) as { role: string }).role;
+
+  assert.equal((await setTeamMemberRole(db, b, "pu_a", "platform_support")).ok, false, "support cannot");
+  assert.equal((await setTeamMemberRole(db, a, "pu_a", "platform_support")).ok, false, "never your own role");
+  assert.equal((await setTeamMemberRole(db, a, "pu_b", "root")).ok, false, "unknown role");
+  assert.equal((await setTeamMemberRole(db, a, "pu_b", "platform_support")).ok, false, "unchanged role");
+  assert.ok((await setTeamMemberRole(db, a, "pu_b", "platform_owner", NOW)).ok);
+  assert.equal(roleOf("pu_b"), "platform_owner");
+  // Now b demotes a: allowed while b stays an active owner.
+  const bOwner: PlatformUser = { ...b, role: "platform_owner" };
+  assert.ok((await setTeamMemberRole(db, bOwner, "pu_a", "platform_support", NOW)).ok);
+  // a (now support) cannot demote b; and with b the only active owner, a demotion of b by a stale owner session is refused.
+  db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, role, disabled_at, created_at) VALUES ('pu_c', 'c@ops.test', 'x', 'platform_owner', ?, ?)").run(iso(0), iso(0));
+  const c: PlatformUser = { id: "pu_c", email: "c@ops.test", role: "platform_owner" };
+  const last = await setTeamMemberRole(db, c, "pu_b", "platform_support", NOW);
+  assert.equal(last.ok || last.status, 409, "the last active owner keeps the role");
+  assert.equal(roleOf("pu_b"), "platform_owner");
+
+  db.sqlite.prepare("INSERT INTO platform_sessions (id, user_id, expires_at, created_at) VALUES ('sa', 'pu_a', ?, ?)").run(iso(DAY), iso(0));
+  assert.equal((await resetTeamMemberAccess(db, bOwner, "pu_a", "short")).ok, false, "password length");
+  assert.equal((await resetTeamMemberAccess(db, bOwner, "pu_b", "long-enough-password")).ok, false, "never yourself");
+  // a was demoted above; resolvePlatformUser reads the role from the database on every request.
+  const aNow: PlatformUser = { ...a, role: "platform_support" };
+  assert.equal((await resetTeamMemberAccess(db, aNow, "pu_b", "long-enough-password")).ok, false, "support cannot");
+  const reset = await resetTeamMemberAccess(db, bOwner, "pu_a", "brand-new-password-1", NOW);
+  assert.ok(reset.ok && reset.value);
+  if (!reset.ok || !reset.value) return;
+  const row = db.sqlite.prepare("SELECT password_hash, totp_secret, totp_last_step FROM platform_users WHERE id = 'pu_a'").get() as { password_hash: string; totp_secret: string; totp_last_step: number | null };
+  assert.ok(await verifyPasswordHash("brand-new-password-1", row.password_hash));
+  assert.equal(row.totp_secret, reset.value.totpSecret);
+  assert.notEqual(row.totp_secret, "AAAA");
+  assert.equal(row.totp_last_step, null);
+  assert.equal((db.sqlite.prepare("SELECT revoked_at FROM platform_sessions WHERE id = 'sa'").get() as { revoked_at: string }).revoked_at, NOW.toISOString());
+  const audit = db.sqlite.prepare("SELECT kind, detail_json FROM tenant_events WHERE tenant_id = '_platform' ORDER BY id").all() as { kind: string; detail_json: string }[];
+  assert.deepEqual(audit.map((event) => event.kind), ["platform_user_role_changed", "platform_user_role_changed", "platform_user_reset"]);
+  assert.ok(audit.every((event) => !event.detail_json.includes(reset.value!.totpSecret) && !event.detail_json.includes("brand-new-password-1")));
+});
+

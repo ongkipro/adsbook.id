@@ -61,3 +61,14 @@ test("the console page width is the shell's 1560px box, like the seller admin", 
   const offenders = globSync("src/components/platform/sections/*.astro").filter((file) => /\bmx-auto\b[^"]*\bmax-w-(?:5xl|6xl|7xl)\b|\bmax-w-(?:5xl|6xl|7xl)\b[^"]*\bmx-auto\b/.test(source(file)));
   assert.deepEqual(offenders, []);
 });
+
+test("no Base UI Select inside a console dialog: it cannot open under a Radix modal (use FilterSelect)", () => {
+  // Found in the Tim "Tambah anggota" dialog (2026-11-17): the Radix Dialog
+  // sets pointer-events:none outside its content and Base UI portals the
+  // Select popup to <body>, so the role field never opened.
+  const offenders = globSync("src/components/platform/**/*.tsx").filter((file) => {
+    const text = source(file);
+    return /<DialogContent\b/.test(text) && /from\s+["'][./@a-z/-]*ui\/select["']/.test(text);
+  });
+  assert.deepEqual(offenders, []);
+});

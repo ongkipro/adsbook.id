@@ -33,8 +33,16 @@ export function TenantActions({
   const [open, setOpen] = React.useState<Action | null>(null);
   const [pending, setPending] = React.useState(false);
   const [recoveryToken, setRecoveryToken] = React.useState<string | null>(null);
+  const [typedSlug, setTypedSlug] = React.useState("");
   const { confirm, dialog } = useConfirm();
   const can = (action: Action) => (allowed as string[]).includes(action);
+  // A recovery code is shown once; closing its dialog reloads so the audit row appears in Riwayat.
+  const closeDialog = () => {
+    const issued = recoveryToken !== null;
+    setOpen(null);
+    setRecoveryToken(null);
+    if (issued) window.location.reload();
+  };
 
   const run = async (action: Action, body: Record<string, unknown>) => {
     setPending(true);
@@ -92,7 +100,7 @@ export function TenantActions({
         {visible.length ? (
           <div className="flex flex-wrap gap-2">
             {visible.map((button) => (
-              <Button key={button.action} type="button" variant={button.variant} onClick={() => { setRecoveryToken(null); setOpen(button.action); }}>
+              <Button key={button.action} type="button" variant={button.variant} onClick={() => { setRecoveryToken(null); setTypedSlug(""); setOpen(button.action); }}>
                 <button.icon aria-hidden="true" />
                 {button.label}
               </Button>
@@ -103,7 +111,7 @@ export function TenantActions({
         )}
       </CardContent>
 
-      <Dialog open={open !== null} onOpenChange={(next) => { if (!next && !pending) setOpen(null); }}>
+      <Dialog open={open !== null} onOpenChange={(next) => { if (!next && !pending) closeDialog(); }}>
         <DialogContent className="sm:max-w-md">
           {open === "grant-subscription" && (
             <form onSubmit={submit("grant-subscription")} className="grid gap-4">
@@ -160,7 +168,7 @@ export function TenantActions({
                 </div>
               )}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setOpen(null)} disabled={pending}>{recoveryToken ? "Selesai" : "Batal"}</Button>
+                <Button type="button" variant="outline" onClick={closeDialog} disabled={pending}>{recoveryToken ? "Selesai" : "Batal"}</Button>
                 {!recoveryToken && <Button type="submit" disabled={pending}>{pending ? "Membuat…" : "Buat kode"}</Button>}
               </DialogFooter>
             </form>
@@ -173,11 +181,12 @@ export function TenantActions({
               </DialogHeader>
               <div className="grid gap-1.5">
                 <label htmlFor="purgeSlug" className="text-xs font-medium text-slate-600">Alamat toko</label>
-                <Input id="purgeSlug" name="slug" required autoComplete="off" pattern={slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} />
+                <Input id="purgeSlug" name="slug" required autoComplete="off" spellCheck={false} value={typedSlug} onChange={(event) => setTypedSlug(event.target.value)} aria-describedby="purgeHint" />
+                <p id="purgeHint" className="text-xs text-slate-500">{typedSlug && typedSlug.trim() !== slug ? "Belum sama dengan alamat toko." : "Huruf kecil, persis seperti di atas."}</p>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(null)} disabled={pending}>Batal</Button>
-                <Button type="submit" variant="destructive" disabled={pending}>Jadwalkan penghapusan</Button>
+                <Button type="submit" variant="destructive" disabled={pending || typedSlug.trim() !== slug}>Jadwalkan penghapusan</Button>
               </DialogFooter>
             </form>
           )}

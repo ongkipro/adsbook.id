@@ -126,3 +126,76 @@ export async function setTeamMemberDisabled(
   if (Number(changed.meta?.changes ?? 0) !== 1) return { ok: false, status: 409, error: "Harus tersisa minimal satu owner platform yang aktif." };
   return { ok: true, message: `${target.email} dinonaktifkan; sesinya ditutup.` };
 }
+
+/**
+ * Changes a member's role (owner only). Demoting yourself is refused (another
+ * owner does it), and the last-owner rule sits in the UPDATE so two concurrent
+ * demotions cannot both leave the console without an active owner.
+ */
+export async function setTeamMemberRole(
+  platformDb: D1Database,
+  actor: PlatformUser,
+  userId: string,
+  role: unknown,
+  now = new Date(),
+): Promise<TeamResult> {
+  const refused = ownerOnly(actor);
+  if (refused) return refused;
+  if (!PLATFORM_ROLES.includes(role as PlatformRole)) return { ok: false, status: 422, error: "Peran tidak dikenal." };
+  const next = role as PlatformRole;
+  const target = await platformDb
+    .prepare("SELECT id, email, role FROM platform_users WHERE id = ?")
+    .bind(userId)
+    .first<{ id: string; email: string; role: PlatformRole }>();
+  if (!target) return { ok: false, status: 404, error: "Pengguna tidak ditemukan." };
+  if (target.role === next) return { ok: false, status: 409, error: "Peran tidak berubah." };
+  if (userId === actor.id) return { ok: false, status: 409, error: "Peran akun sendiri diubah oleh owner lain." };
+  const [changed] = await platformDb.batch([
+    platformDb
+      .prepare(
+        `UPDATE platform_users SET role = ?1 WHERE id = ?2 AND role = ?3
+           AND (?1 = 'platform_owner' OR (SELECT COUNT(*) FROM platform_users WHERE role = 'platform_owner' AND disabled_at IS NULL AND id <> ?2) >= 1)`,
+      )
+      .bind(next, userId, target.role),
+    platformDb
+      .prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) SELECT ?, 'platform_user_role_changed', ?, ?, ? WHERE changes() = 1")
+      .bind(PLATFORM_EVENTS_TENANT, `platform:${actor.id}`, now.toISOString(), JSON.stringify({ user: userId, email: target.email, before: target.role, after: next })),
+  ]);
+  if (Number(changed.meta?.changes ?? 0) !== 1) return { ok: false, status: 409, error: "Harus tersisa minimal satu owner platform yang aktif." };
+  return { ok: true, message: `${target.email} sekarang ${next === "platform_owner" ? "Owner" : "Support"}.` };
+}
+
+/**
+ * Resets a member's password and authenticator (owner only, never yourself —
+ * that is the sign-in's job): a new initial password, a new TOTP secret shown
+ * once, every session of theirs closed, and an audit row without either secret.
+ */
+export async function resetTeamMemberAccess(
+  platformDb: D1Database,
+  actor: PlatformUser,
+  userId: string,
+  password: unknown,
+  now = new Date(),
+): Promise<TeamResult<{ email: string; totpSecret: string; otpauthUri: string }>> {
+  const refused = ownerOnly(actor);
+  if (refused) return refused;
+  const value = typeof password === "string" ? password : "";
+  if (value.length < 12 || value.length > 128) return { ok: false, status: 422, error: "Password awal 12–128 karakter." };
+  if (userId === actor.id) return { ok: false, status: 409, error: "Akun sendiri direset oleh owner lain." };
+  const target = await platformDb.prepare("SELECT id, email FROM platform_users WHERE id = ?").bind(userId).first<{ id: string; email: string }>();
+  if (!target) return { ok: false, status: 404, error: "Pengguna tidak ditemukan." };
+  const secret = newTotpSecret();
+  const at = now.toISOString();
+  await platformDb.batch([
+    platformDb
+      .prepare("UPDATE platform_users SET password_hash = ?, totp_secret = ?, totp_last_step = NULL WHERE id = ?")
+      .bind(await hashAdminPassword(value), secret, userId),
+    platformDb.prepare("UPDATE platform_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, userId),
+    audit(platformDb, "platform_user_reset", actor, now, { user: userId, email: target.email, before: "access", after: "reset" }),
+  ]);
+  return {
+    ok: true,
+    message: `Akses ${target.email} direset; sesinya ditutup.`,
+    value: { email: target.email, totpSecret: secret, otpauthUri: otpauthUri(secret, target.email) },
+  };
+}
