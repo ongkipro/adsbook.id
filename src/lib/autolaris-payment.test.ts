@@ -42,6 +42,9 @@ function createAutoLarisOrderDatabase__raw(
     payment_method: "qris",
     payment_fee_bearer: paymentFeeBearer,
     store_name: "QA Store",
+    store_email: null,
+    store_whatsapp: null,
+    store_address: null,
     warehouse_name: "QA Warehouse",
     warehouse_contact_name: "Warehouse PIC",
     warehouse_contact_phone: "08123456789",
@@ -312,30 +315,49 @@ test("payment orchestration records failure without a provider call when AutoLar
   assert.match(payment.failedReason || "", /belum dikonfigurasi/i);
 });
 
-test("Create Order fails before fetch when AutoLaris mirror area ids are missing", async (context) => {
+test("payment-only profile: a store with no saved area pair still sends /submit with the default pair (AUTOLARIS_INTEGRATION_SPEC §3)", async (context) => {
   const originalFetch = globalThis.fetch;
   context.after(() => {
     globalThis.fetch = originalFetch;
   });
   const { database } = createAutoLarisOrderDatabase("qa-key", "seller", { origin: null, destination: null });
-  let providerCalls = 0;
-  globalThis.fetch = async () => {
-    providerCalls += 1;
-    return new Response(null, { status: 500 });
-  };
-  // Env area ids are never read (T-45): only the tenant's saved pair counts.
+  let body: Record<string, unknown> | null = null;
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    body = JSON.parse(String(init?.body));
+    return Response.json({ rc: "00", data: { transaction_id: "874546", total: 118_400, biaya_admin: 0, payment_info: { qr: "00020101021226", expired: "2026-11-18 10:00:00" } } });
+  }) as typeof fetch;
+  // Env area ids are never read (T-45): only the tenant's saved pair or the default pair.
   const locals = {
     ...QA_LOCALS,
-    runtimeEnv: { AUTOLARIS_ORDER_ORIGIN_ID: "3517100", AUTOLARIS_ORDER_DESTINATION_ID: "3518010" },
+    runtimeEnv: { AUTOLARIS_ORDER_ORIGIN_ID: "999", AUTOLARIS_ORDER_DESTINATION_ID: "998" },
   } as App.Locals;
 
-  const payment = await createAutoLarisPaymentForOrder(database, locals, {
-    orderId: 41,
-    channelCode: "QRIS",
+  const payment = await createAutoLarisPaymentForOrder(database, locals, { orderId: 41, channelCode: "QRIS" });
+  assert.equal(payment.status, "pending");
+  assert.ok(body, "the provider was called");
+  assert.equal((body as Record<string, unknown>).courir_id, 1);
+  assert.equal((body as Record<string, unknown>).origin, 3517100);
+  assert.equal((body as Record<string, unknown>).destination, 3518010);
+});
+
+test("payment-only shipper: the store's identity when there is no warehouse; the warehouse where there is", async () => {
+  const { autoLarisShipper } = await import("./autolaris-payment.ts");
+  const bare = {
+    store_name: "Toko Bare", store_email: "cs@toko.test", store_whatsapp: "6281234500001", store_address: "Jl. Toko 1, Bandung",
+    warehouse_name: null, warehouse_contact_name: null, warehouse_contact_phone: null, warehouse_address: null, warehouse_city: null, warehouse_province: null,
+    customer_phone: "081331000000",
+  };
+  assert.deepEqual(autoLarisShipper(bare, "", "buyer@x.test"), {
+    shipperName: "Toko Bare", shipperPhone: "6281234500001", shipperEmail: "cs@toko.test", shipperAddress: "Jl. Toko 1, Bandung",
   });
-  assert.equal(providerCalls, 0);
-  assert.equal(payment.status, "failed");
-  assert.match(payment.failedReason || "", /origin AutoLaris tidak lengkap/i);
+  const nothing = { ...bare, store_email: null, store_whatsapp: null, store_address: null };
+  assert.deepEqual(autoLarisShipper(nothing, "", "buyer@x.test"), {
+    shipperName: "Toko Bare", shipperPhone: "081331000000", shipperEmail: "buyer@x.test", shipperAddress: "Toko Bare",
+  });
+  const withWarehouse = { ...bare, warehouse_contact_name: "PIC", warehouse_contact_phone: "08123456789", warehouse_address: "Jl. Gudang", warehouse_city: "Surabaya", warehouse_province: "Jawa Timur" };
+  assert.deepEqual(autoLarisShipper(withWarehouse, "ops@toko.test", "buyer@x.test"), {
+    shipperName: "PIC", shipperPhone: "08123456789", shipperEmail: "ops@toko.test", shipperAddress: "Jl. Gudang, Surabaya, Jawa Timur",
+  });
 });
 
 test("AutoLaris response parsing preserves provider instructions and billed total", () => {

@@ -148,21 +148,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       // The same readiness /api/payment-methods reports, enforced here so a
       // checkout that still offers QRIS/VA (a cached page, a direct POST) cannot
       // create an order whose payment /submit is bound to refuse.
-      const [provider, store, warehouse] = await Promise.all([
+      const [provider, store] = await Promise.all([
         getProviderConfig(database, locals).then((config) => config.autolaris),
         database
           .prepare("SELECT is_autolaris_enabled FROM stores ORDER BY id LIMIT 1")
           .first<{ is_autolaris_enabled: number | null }>(),
-        database
-          .prepare("SELECT address FROM warehouses ORDER BY id LIMIT 1")
-          .first<{ address: string | null }>(),
       ]);
-      const gap = autoLarisOrderRailGap({
-        apiKey: provider.apiKey,
-        originId: provider.originId,
-        destinationId: provider.destinationId,
-        warehouseAddress: warehouse?.address,
-      });
+      const gap = autoLarisOrderRailGap({ apiKey: provider.apiKey });
       if (gap || store?.is_autolaris_enabled === 0) {
         return json(
           {

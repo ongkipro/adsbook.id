@@ -34,6 +34,9 @@ export const invoiceView = (row: InvoiceRow) => ({
   createdAt: row.created_at,
 });
 
+/** PR-26: the demo store never pays — it is display-only and its subscription is not a thing. */
+export const DEMO_BILLING_MESSAGE = "Ini toko contoh adsbook.id. Tidak perlu berlangganan dan tidak bisa dibayar.";
+
 export async function billingContext(locals: App.Locals) {
   const env = (getRuntimeEnv(locals) ?? {}) as BillingEnv;
   const platformDb = env.PLATFORM_DB as D1Database | undefined;
@@ -63,6 +66,7 @@ export async function billingSummary(platformDb: D1Database, env: BillingEnv, te
 export const GET: APIRoute = async ({ locals }) => {
   const ctx = await billingContext(locals);
   if (!ctx) return jsonError("Langganan belum tersedia.", 503);
+  if (locals.tenantContext?.isDemo) return jsonOk({ data: { ...(await billingSummary(ctx.platformDb, ctx.env, ctx.tenantId)), demo: true, configured: false, channels: [], channelError: null } });
   let channels: { code: string; name: string; fee: number; feeType: string }[] = [];
   let channelError: string | null = null;
   if (billingConfigured(ctx.env)) {
@@ -79,6 +83,7 @@ export const GET: APIRoute = async ({ locals }) => {
 export const POST: APIRoute = async ({ request, locals }) => {
   const ctx = await billingContext(locals);
   if (!ctx) return jsonError("Langganan belum tersedia.", 503);
+  if (locals.tenantContext?.isDemo) return jsonError(DEMO_BILLING_MESSAGE, 403, { code: "DEMO_STORE" });
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const owner = await ctx.platformDb
     .prepare("SELECT owner_email, owner_whatsapp FROM tenants WHERE id = ?")

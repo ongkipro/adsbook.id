@@ -34,6 +34,8 @@ type Billing = {
   invoices: Invoice[];
   channels?: Channel[];
   channelError?: string | null;
+  /** PR-26: the display-only demo store never subscribes. */
+  demo?: boolean;
 };
 
 const idr = (value: number) => `Rp${new Intl.NumberFormat("id-ID").format(value)}`;
@@ -178,6 +180,18 @@ export function BillingManager() {
   }
   if (!billing) {
     return <div className="h-40 animate-pulse rounded-xl border border-slate-200 bg-white" aria-busy="true" aria-label="Memuat langganan" />;
+  }
+
+  if (billing.demo) {
+    return (
+      <section id="demoBilling" aria-labelledby="billingStateTitle" className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 id="billingStateTitle" className="text-base font-semibold text-slate-950">Status langganan</h2>
+          <Badge variant="secondary">Toko contoh</Badge>
+        </div>
+        <p className="mt-2 text-sm leading-6 text-slate-700">Ini toko contoh adsbook.id untuk melihat-lihat. Tidak perlu berlangganan, tidak ada tagihan, dan tidak bisa dibayar.</p>
+      </section>
+    );
   }
 
   const summary = stateSummary(billing);

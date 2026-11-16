@@ -29,6 +29,7 @@ import {
 } from "../../../lib/autolaris-client.ts";
 import { MengantarClient } from "../../../lib/mengantar-client.ts";
 import {
+  DEFAULT_AUTOLARIS_BASE_URL,
   getProviderConfig,
   parseAutoLarisOrderIdentity,
   resolveCredentialUpdate,
@@ -279,8 +280,10 @@ async function credentialStatus(database: D1Database, locals: App.Locals) {
       api_key_configured: Boolean(config.autolaris.apiKey),
       api_key_masked: maskSecretValue(config.autolaris.apiKey),
       base_url: config.autolaris.baseUrl,
-      order_origin_id: config.autolaris.originId,
-      order_destination_id: config.autolaris.destinationId,
+      // The store's own pair only: the default pair is not a choice, and echoing
+      // it into the form would save it as one on the next "Simpan".
+      order_origin_id: config.autolaris.customArea ? config.autolaris.originId : "",
+      order_destination_id: config.autolaris.customArea ? config.autolaris.destinationId : "",
       shipper_email: config.autolaris.shipperEmail,
       webhook_issued_at: await autolarisWebhookIssuedAt(locals),
       source: config.autolaris.source,
@@ -665,8 +668,9 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       const mengantarBaseUrl = normalizeHttpUrl(
         body.integrations?.mengantar_base_url,
       );
+      // Base URL lives under "Lanjutan"; a blank one means the default, never an error.
       const autolarisBaseUrl = normalizeHttpUrl(
-        body.integrations?.autolaris_base_url,
+        body.integrations?.autolaris_base_url || DEFAULT_AUTOLARIS_BASE_URL,
       );
       if (!mengantarBaseUrl || !autolarisBaseUrl) {
         return jsonError(
@@ -680,7 +684,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           destinationId: body.integrations?.autolaris_order_destination_id,
           shipperEmail: body.integrations?.autolaris_shipper_email,
         },
-        (await getProviderConfig(db)).autolaris,
+        // The store's own saved pair, never the default pair: a field left out
+        // keeps what the store chose, and the default must not be saved as a choice.
+        await (async () => {
+          const stored = (await getProviderConfig(db)).autolaris;
+          return { ...stored, originId: stored.customArea ? stored.originId : "", destinationId: stored.customArea ? stored.destinationId : "" };
+        })(),
       );
       if (!orderIdentity.ok) return jsonError(orderIdentity.error, 400);
 

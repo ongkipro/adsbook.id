@@ -24,17 +24,17 @@ test("a submitted credential is trimmed, and a non-string never clears", () => {
   assert.deepEqual(resolveCredentialUpdate({}), { clear: false, value: "" });
 });
 
-test("AutoLaris is ready only with key, a valid area pair and a warehouse address", async () => {
-  const { autoLarisOrderRailGap } = await import("./provider-config.ts");
-  const ready = { apiKey: "k", originId: "3517100", destinationId: "3518010", warehouseAddress: "Jl. Kapitan 1" };
-  assert.equal(autoLarisOrderRailGap(ready), null);
-  assert.match(autoLarisOrderRailGap({ ...ready, apiKey: " " }) ?? "", /belum dikonfigurasi/);
-  for (const bad of ["", "abc", "0", "-5", "35.17"]) {
-    assert.match(autoLarisOrderRailGap({ ...ready, originId: bad }) ?? "", /origin\/destination/, bad);
-    assert.match(autoLarisOrderRailGap({ ...ready, destinationId: bad }) ?? "", /origin\/destination/, bad);
+test("AutoLaris payment-only rail: the API key alone opens it (AUTOLARIS_INTEGRATION_SPEC §2)", async () => {
+  const { autoLarisOrderRailGap, autoLarisAreaPair, AUTOLARIS_DEFAULT_ORIGIN_ID, AUTOLARIS_DEFAULT_DESTINATION_ID } = await import("./provider-config.ts");
+  assert.equal(autoLarisOrderRailGap({ apiKey: "k" }), null);
+  assert.match(autoLarisOrderRailGap({ apiKey: " " }) ?? "", /belum dikonfigurasi/);
+  // The store's own pair wins only when complete and valid; anything else is the default pair.
+  assert.deepEqual(autoLarisAreaPair("111", "222"), { originId: "111", destinationId: "222", customArea: true });
+  for (const [origin, destination] of [["", ""], ["111", ""], ["", "222"], ["abc", "222"], ["0", "222"], ["35.17", "1"]]) {
+    assert.deepEqual(autoLarisAreaPair(origin, destination), { originId: AUTOLARIS_DEFAULT_ORIGIN_ID, destinationId: AUTOLARIS_DEFAULT_DESTINATION_ID, customArea: false }, `${origin}/${destination}`);
   }
-  assert.match(autoLarisOrderRailGap({ ...ready, warehouseAddress: null }) ?? "", /gudang/);
-  assert.match(autoLarisOrderRailGap({ ...ready, warehouseAddress: "  " }) ?? "", /gudang/);
+  assert.equal(AUTOLARIS_DEFAULT_ORIGIN_ID, "3517100");
+  assert.equal(AUTOLARIS_DEFAULT_DESTINATION_ID, "3518010");
 });
 
 const STORED = { originId: "3517100", destinationId: "3518010", shipperEmail: "gudang@toko.test" };

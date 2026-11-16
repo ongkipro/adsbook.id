@@ -50,6 +50,9 @@ type PaymentOrderRow = {
   payment_method: string;
   payment_fee_bearer: string | null;
   store_name: string;
+  store_email: string | null;
+  store_whatsapp: string | null;
+  store_address: string | null;
   warehouse_name: string | null;
   warehouse_contact_name: string | null;
   warehouse_contact_phone: string | null;
@@ -653,6 +656,32 @@ export async function reconcileAutoLarisPaymentStatuses(
   return result;
 }
 
+/**
+ * The shipper block of a payment-only `/submit`: the store's own identity,
+ * the warehouse only where it adds something. Never empty — `/submit` refuses
+ * a blank shipper — and never invented beyond the store's name.
+ */
+export function autoLarisShipper(
+  order: Pick<PaymentOrderRow, "store_name" | "store_email" | "store_whatsapp" | "store_address" | "warehouse_name" | "warehouse_contact_name" | "warehouse_contact_phone" | "warehouse_address" | "warehouse_city" | "warehouse_province" | "customer_phone">,
+  configuredEmail: string,
+  buyerEmailFallback: string,
+) {
+  const text = (value: string | null | undefined) => value?.trim() || "";
+  const warehouseAddress = [order.warehouse_address, order.warehouse_city, order.warehouse_province].map(text).filter(Boolean).join(", ");
+  const phoneOk = (value: string) => value.replace(/\D/g, "").length >= 8;
+  // Warehouse phone first (as before), then the store's CS WhatsApp, then the buyer's.
+  const phone = [order.warehouse_contact_phone, order.store_whatsapp, order.customer_phone].map(text).find(phoneOk) ?? text(order.customer_phone);
+  const emailOk = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const email = [configuredEmail, order.store_email].map(text).find(emailOk) ?? buyerEmailFallback;
+  return {
+    // Unchanged precedence for a store with a warehouse; the store name otherwise.
+    shipperName: (text(order.warehouse_contact_name) || text(order.warehouse_name) || text(order.store_name) || "Toko").slice(0, 100),
+    shipperPhone: phone,
+    shipperEmail: email,
+    shipperAddress: (warehouseAddress || text(order.store_address) || text(order.store_name) || "Toko online").slice(0, 255),
+  };
+}
+
 export async function createAutoLarisPaymentForOrder(
   database: D1Database,
   locals: App.Locals,
@@ -674,6 +703,8 @@ export async function createAutoLarisPaymentForOrder(
         o.customer_phone, o.customer_email, o.address, o.province, o.city,
         o.district, o.postal_code, o.total_amount, o.payment_method,
         s.payment_fee_bearer, s.name AS store_name,
+        s.support_email AS store_email, s.support_whatsapp AS store_whatsapp,
+        s.business_address AS store_address,
         w.name AS warehouse_name, w.contact_name AS warehouse_contact_name,
         w.contact_phone AS warehouse_contact_phone,
         w.address AS warehouse_address, w.city AS warehouse_city,
@@ -840,18 +871,10 @@ export async function createAutoLarisPaymentForOrder(
       length: 1,
       width: 1,
       height: 1,
-      shipperName:
-        order.warehouse_contact_name || order.warehouse_name || order.store_name,
-      shipperPhone: order.warehouse_contact_phone || order.customer_phone,
-      shipperEmail:
-        config.shipperEmail || customerEmail,
-      shipperAddress: [
-        order.warehouse_address,
-        order.warehouse_city,
-        order.warehouse_province,
-      ]
-        .filter(Boolean)
-        .join(", "),
+      // Payment-only profile (AUTOLARIS_INTEGRATION_SPEC §2): the shipper is
+      // the store; nothing ships through AutoLaris, so a store without a
+      // warehouse still sends a complete, valid /submit.
+      ...autoLarisShipper(order, config.shipperEmail, customerEmail),
       receiverName: order.customer_name,
       receiverPhone: order.customer_phone,
       receiverEmail: customerEmail,

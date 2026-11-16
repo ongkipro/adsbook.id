@@ -3,6 +3,17 @@ import { openCredential } from "./credential-crypto.ts";
 export const DEFAULT_MENGANTAR_BASE_URL = "https://api-public.mengantar.com";
 export const DEFAULT_AUTOLARIS_BASE_URL = "https://api-h2h.autolaris.com";
 
+/**
+ * The area pair a payment-only `/submit` (`courir_id: 1`) sends when the store
+ * saved none (docs/contracts/AUTOLARIS_INTEGRATION_SPEC.md §3). AutoLaris
+ * requires origin/destination even for a non-physical order and accepts any
+ * valid area; this is the pair from its own published sample, sent with
+ * `courir_id: 1` by the TokoΦ integration since the live probe of 2026-08-24.
+ * Nothing ships through AutoLaris here, so the pair carries no meaning.
+ */
+export const AUTOLARIS_DEFAULT_ORIGIN_ID = "3517100";
+export const AUTOLARIS_DEFAULT_DESTINATION_ID = "3518010";
+
 type ProviderConfigRow = {
   mengantar_api_key: string | null;
   mengantar_base_url: string | null;
@@ -27,9 +38,11 @@ export type ProviderConfig = {
   autolaris: {
     apiKey: string;
     baseUrl: string;
-    /** The account's `courir_id: 1` area pair for Create Order (`/submit`). */
+    /** The `courir_id: 1` area pair for Create Order (`/submit`): the store's own, else the default pair. */
     originId: string;
     destinationId: string;
+    /** Whether the pair above is the store's own (false: the default pair). */
+    customArea: boolean;
     /** Optional; the buyer's email is the fallback. */
     shipperEmail: string;
     source: "dashboard" | "none";
@@ -85,36 +98,33 @@ export async function getProviderConfig(
     autolaris: {
       apiKey: autolarisKey,
       baseUrl: clean(row?.autolaris_base_url) || DEFAULT_AUTOLARIS_BASE_URL,
-      originId: clean(row?.autolaris_order_origin_id),
-      destinationId: clean(row?.autolaris_order_destination_id),
+      // A store's own pair wins only when complete; otherwise the default pair.
+      ...autoLarisAreaPair(clean(row?.autolaris_order_origin_id), clean(row?.autolaris_order_destination_id)),
       shipperEmail: clean(row?.autolaris_shipper_email),
       source: autolarisKey ? "dashboard" : "none",
     },
   };
 }
 
+/** The store's own area pair when both ids are set and valid, else the default pair. */
+export function autoLarisAreaPair(originId: string, destinationId: string): { originId: string; destinationId: string; customArea: boolean } {
+  const areaId = (value: string) => /^\d{1,20}$/.test(value) && Number(value) > 0;
+  return areaId(originId) && areaId(destinationId)
+    ? { originId, destinationId, customArea: true }
+    : { originId: AUTOLARIS_DEFAULT_ORIGIN_ID, destinationId: AUTOLARIS_DEFAULT_DESTINATION_ID, customArea: false };
+}
+
 /**
  * What AutoLaris Create Order (`/submit`, the QRIS/VA rail) still lacks, or
- * null when it has everything it validates: the API key, the account's
- * `courir_id: 1` origin/destination area pair (positive integers), and a
- * warehouse address for the shipper.
- *
- * Readiness used to be the key alone, so a store with a key but no area pair
- * or warehouse offered QRIS/VA to every buyer and failed each one inside
- * `/submit` after the order already existed.
+ * null when it can be sent. For the payment-only profile that is the API key
+ * alone (docs/contracts/AUTOLARIS_INTEGRATION_SPEC.md §2): the area pair falls
+ * back to the default pair and the shipper to the store's own identity, so a
+ * seller who pasted a key is offered QRIS/VA at once. It used to also require
+ * a typed area pair and a warehouse address, and QRIS/VA stayed hidden behind
+ * two internal AutoLaris ids a seller had no reason to know.
  */
-export function autoLarisOrderRailGap(input: {
-  apiKey: string;
-  originId: string;
-  destinationId: string;
-  warehouseAddress: string | null | undefined;
-}): string | null {
-  const areaId = (value: string) => /^\d{1,20}$/.test(value.trim()) && Number(value) > 0;
+export function autoLarisOrderRailGap(input: { apiKey: string }): string | null {
   if (!input.apiKey.trim()) return "AutoLaris belum dikonfigurasi.";
-  if (!areaId(input.originId) || !areaId(input.destinationId)) {
-    return "Area origin/destination AutoLaris belum diatur.";
-  }
-  if (!input.warehouseAddress?.trim()) return "Alamat gudang belum diatur.";
   return null;
 }
 
