@@ -37,7 +37,7 @@ export const GET: APIRoute = async ({ locals }) => {
     }> = [];
     if (database?.prepare) {
       try {
-        const [providerConfig, store, bankAccounts, warehouse] = await Promise.all([
+        const [providerConfig, store, bankAccounts] = await Promise.all([
           getProviderConfig(database, locals),
           database
             .prepare(
@@ -77,17 +77,8 @@ export const GET: APIRoute = async ({ locals }) => {
               account_number: string;
               is_active: number;
             }>(),
-          database
-            .prepare("SELECT address FROM warehouses ORDER BY id LIMIT 1")
-            .first<{ address: string | null }>()
-            .catch(() => null),
         ]);
-        autoLarisGap = autoLarisOrderRailGap({
-          apiKey: providerConfig.autolaris.apiKey,
-          originId: providerConfig.autolaris.originId,
-          destinationId: providerConfig.autolaris.destinationId,
-          warehouseAddress: warehouse?.address,
-        });
+        autoLarisGap = autoLarisOrderRailGap({ apiKey: providerConfig.autolaris.apiKey });
         isCodEnabled = store?.is_cod_enabled !== 0;
         isAutoLarisMasterEnabled = store?.is_autolaris_enabled !== 0;
         autoLarisConfigured = !autoLarisGap && isAutoLarisMasterEnabled;

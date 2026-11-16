@@ -308,10 +308,9 @@ async function providers() {
       integrations: {
         mengantar_api_key: "dev",
         mengantar_base_url: providerBase,
+        // Payment-only profile: the key is all a seller enters (AUTOLARIS_INTEGRATION_SPEC §4).
         autolaris_api_key: "dev",
         autolaris_base_url: providerBase,
-        autolaris_order_origin_id: "1",
-        autolaris_order_destination_id: "2",
       },
     },
   }));

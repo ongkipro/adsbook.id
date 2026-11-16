@@ -74,8 +74,21 @@ function SelectContent({
   SelectPrimitive.Positioner.Props,
   "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
  >) {
+ // A Radix modal Dialog or Sheet sets `pointer-events: none` on <body> while
+ // open, and this popup is portalled to <body> by default — so a Select inside
+ // a dialog opened onto an unclickable layer and never showed its options
+ // (found 2026-11-17: product Embed mode/variant, lead conversion variant,
+ // platform team role). Portalling into the open dialog keeps it clickable;
+ // outside a dialog nothing changes.
+ const anchor = React.useRef<HTMLSpanElement>(null)
+ const [container, setContainer] = React.useState<HTMLElement | null>(null)
+ React.useLayoutEffect(() => {
+  setContainer(anchor.current?.closest<HTMLElement>('[data-slot="dialog-content"],[data-slot="sheet-content"]') ?? null)
+ }, [])
  return (
-  <SelectPrimitive.Portal>
+  <>
+  <span ref={anchor} hidden />
+  <SelectPrimitive.Portal container={container ?? undefined}>
    <SelectPrimitive.Positioner
     side={side}
     sideOffset={sideOffset}
@@ -96,6 +109,7 @@ function SelectContent({
     </SelectPrimitive.Popup>
    </SelectPrimitive.Positioner>
   </SelectPrimitive.Portal>
+  </>
  )
 }
 

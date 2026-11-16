@@ -177,20 +177,14 @@ async function autoLarisChannelUnavailable(
 ): Promise<string | null> {
   const lock = autoLarisChannelLockReason(channel);
   if (lock) return lock;
-  const [provider, store, warehouse] = await Promise.all([
+  const [provider, store] = await Promise.all([
     getProviderConfig(database, locals).then((config) => config.autolaris),
     database
       .prepare("SELECT is_autolaris_enabled, disabled_autolaris_channels FROM stores ORDER BY id LIMIT 1")
       .first<{ is_autolaris_enabled: number | null; disabled_autolaris_channels: string | null }>(),
-    database.prepare("SELECT address FROM warehouses ORDER BY id LIMIT 1").first<{ address: string | null }>(),
   ]);
   if (store?.is_autolaris_enabled === 0) return "AutoLaris dinonaktifkan oleh toko.";
-  const gap = autoLarisOrderRailGap({
-    apiKey: provider.apiKey,
-    originId: provider.originId,
-    destinationId: provider.destinationId,
-    warehouseAddress: warehouse?.address,
-  });
+  const gap = autoLarisOrderRailGap({ apiKey: provider.apiKey });
   if (gap) return gap;
   return resolveDisabledAutoLarisChannels(store?.disabled_autolaris_channels).includes(channel)
     ? "Channel dinonaktifkan oleh toko."

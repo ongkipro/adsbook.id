@@ -14,6 +14,7 @@
     "dev:providers": "node --experimental-strip-types scripts/dev-providers.ts",
     "dev:seed": "node --experimental-strip-types scripts/dev-seed.ts",
     "seed:demo": "node --experimental-strip-types scripts/seed-demo-tenant.ts",
+    "seed:demo-live": "node --experimental-strip-types scripts/seed-demo-live.ts",
     "test:browser": "playwright test",
     "platform:user": "node --experimental-strip-types scripts/platform-user.ts",
     "build": "astro build",

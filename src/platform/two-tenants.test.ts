@@ -577,11 +577,9 @@ test("T-45/ISO-9: with every platform env value set, a tenant without settings i
     ["", "none", "", "none"],
   );
   assert.equal(providers.mengantar.baseUrl.includes("env."), false);
-  assert.equal(providers.autolaris.originId + providers.autolaris.destinationId + providers.autolaris.shipperEmail, "");
-  assert.equal(
-    autoLarisOrderRailGap({ ...providers.autolaris, warehouseAddress: "Jl. Gudang 1" }),
-    "AutoLaris belum dikonfigurasi.",
-  );
+  // No env area pair is read: an unconfigured store gets the default pair, never a platform value.
+  assert.deepEqual([providers.autolaris.originId, providers.autolaris.destinationId, providers.autolaris.customArea, providers.autolaris.shipperEmail], ["3517100", "3518010", false, ""]);
+  assert.equal(autoLarisOrderRailGap({ apiKey: providers.autolaris.apiKey }), "AutoLaris belum dikonfigurasi.");
   const ads = await getStoreAdsConfig(locals);
   assert.deepEqual([ads.metaPixelId, ads.metaCapiToken, ads.googleTagManagerId, ads.googleAdsConversionId], ["", "", "", ""]);
   assert.equal(await loadGoogleAdsOfflineConfig(database), null);
@@ -1857,7 +1855,8 @@ test("T-41/PR-26: the demo store browses without readiness, refuses every provid
       assert.match(response.body, /DEMO_STORE/, path);
     }
     // Both order submits, abandoned leads, browser events, headless checkout, admin writes.
-    for (const path of ["/api/submit-order", "/api/submit-middle-order", "/api/record-abandoned-order", "/api/meta-event", "/api/v1/checkout", "/api/admin/settings", "/api/admin/domains", "/api/admin/products"]) {
+    // ...and a subscription invoice: the demo store never pays (it has no billing to pay).
+    for (const path of ["/api/submit-order", "/api/submit-middle-order", "/api/record-abandoned-order", "/api/meta-event", "/api/v1/checkout", "/api/admin/settings", "/api/admin/domains", "/api/admin/products", "/api/admin/billing"]) {
       const response = await store.open(path, "POST");
       assert.equal(response.status, 403, path);
       assert.equal(response.reached, false, `${path} reached its route`);

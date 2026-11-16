@@ -159,9 +159,11 @@ function ProductActions({
             <span>Lihat di storefront</span>
           </a>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onEmbed(product)} className="flex items-center gap-2">
+        {/* A draft has no checkout form (/api/form-config answers 404 for it):
+            the item says so instead of opening a dialog that only errors. */}
+        <DropdownMenuItem disabled={!product.is_active} onSelect={() => onEmbed(product)} className="flex items-center gap-2">
           <Code2 className="size-4 text-emerald-600" aria-hidden="true" />
-          <span>Embed checkout form</span>
+          <span>{product.is_active ? "Embed checkout form" : "Embed (aktifkan produk dulu)"}</span>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCopyId(product.id)} className="flex items-center gap-2">
           <Copy className="size-4 text-slate-500" aria-hidden="true" />

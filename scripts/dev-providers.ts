@@ -143,6 +143,7 @@ export function createDevProviderServer(): Server {
   const shipments = new Map<string, Record<string, unknown>>();
   const payments = new Map<string, { paid: boolean; total: number; receiver?: string; channel?: string }>();
   let sequence = 0;
+  let lastSubmit: Record<string, unknown> | null = null;
   const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(sequence += 1)}`;
   const cloudflare = createFakeCloudflare({ zoneId: DEV_CF_ZONE_ID, token: DEV_CF_TOKEN });
   // T-40: the platform's Conversions API calls (PLATFORM_META_GRAPH_BASE), kept for inspection.
@@ -202,6 +203,12 @@ export function createDevProviderServer(): Server {
     }
     if (url.pathname === "/api/h2h/submit" && method === "POST") {
       const body = await readBody(request);
+      lastSubmit = body;
+      // As the live provider (probed 2026-08-24): channel, courir and an area pair are required, even for courir 1.
+      const area = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0;
+      if (!body.channel_code || !area(body.courir_id) || !area(body.origin) || !area(body.destination)) {
+        return send(response, 200, { rc: "01", ket: "Invalid parameter" });
+      }
       // As the live account answers (PAY-2): the bill is exactly grand_total,
       // and the fee from the store's own table is deducted from it, not added.
       const amount = Number(body.grand_total) || 0;
@@ -263,6 +270,9 @@ export function createDevProviderServer(): Server {
     // (or `curl` against /cdn-cgi/handler/scheduled) has something to find.
     // Local-only: list what the stand-in holds, so a script can find the
     // transaction to settle (the store never returns a transaction id).
+    if (url.pathname === "/__dev/autolaris/last-submit" && method === "GET") {
+      return send(response, 200, lastSubmit ?? {});
+    }
     if (url.pathname === "/__dev/autolaris/payments" && method === "GET") {
       return send(response, 200, [...payments].map(([transaction_id, payment]) => ({ transaction_id, ...payment })));
     }

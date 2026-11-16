@@ -38,9 +38,6 @@ type Row = {
   cod: number | null;
   autolaris_on: number | null;
   autolaris_key: string | null;
-  autolaris_origin: string | null;
-  autolaris_destination: string | null;
-  warehouse_address: string | null;
   couriers: number;
   signals: number;
 };
@@ -56,9 +53,7 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
          EXISTS (SELECT 1 FROM warehouses WHERE is_primary = 1 AND is_active = 1
                  AND TRIM(COALESCE(origin_area_id, '')) <> '' AND TRIM(COALESCE(pickup_address_id, '')) <> '') AS primary_warehouse,
          s.mengantar_api_key, s.is_cod_enabled AS cod, s.is_autolaris_enabled AS autolaris_on,
-         s.autolaris_api_key AS autolaris_key, s.autolaris_order_origin_id AS autolaris_origin,
-         s.autolaris_order_destination_id AS autolaris_destination,
-         (SELECT address FROM warehouses ORDER BY id LIMIT 1) AS warehouse_address,
+         s.autolaris_api_key AS autolaris_key,
          (SELECT COUNT(*) FROM courier_rules WHERE is_enabled = 1) AS couriers,
          (TRIM(COALESCE(s.meta_pixel_id, '')) <> '' OR TRIM(COALESCE(s.google_ads_conversion_id, '')) <> '') AS signals
        FROM (SELECT 1) LEFT JOIN (SELECT * FROM stores ORDER BY id LIMIT 1) s`,
@@ -76,12 +71,7 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
   // here means exactly what a buyer would be offered.
   const autolaris =
     row.autolaris_on !== 0 &&
-    autoLarisOrderRailGap({
-      apiKey: text(autolarisKey),
-      originId: text(row.autolaris_origin),
-      destinationId: text(row.autolaris_destination),
-      warehouseAddress: row.warehouse_address,
-    }) === null;
+    autoLarisOrderRailGap({ apiKey: text(autolarisKey) }) === null;
   return {
     storeName: Boolean(row.store_name),
     product: Boolean(row.product),
