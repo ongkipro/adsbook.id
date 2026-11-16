@@ -68,7 +68,7 @@ test("TenantActions offers only what the status and role allow", async () => {
   assert.doesNotMatch(support, /Beri langganan|Jadwalkan penghapusan|Kode pemulihan/);
 });
 
-test("TeamManager lists members and never offers to disable yourself", async () => {
+test("TeamManager lists members and offers no action on your own account", async () => {
   const html = await renderIsland("TeamManager.tsx", "TeamManager", {
     selfId: "pu_me",
     members: [
@@ -78,8 +78,9 @@ test("TeamManager lists members and never offers to disable yourself", async () 
   });
   assert.match(html, /me@ops\.test/);
   assert.match(html, /\(Anda\)/);
-  assert.equal((html.match(/Nonaktifkan/g) ?? []).length, 0, "the only other member is already disabled");
-  assert.match(html, />Aktifkan</);
+  assert.match(html, /Diatur owner lain/, "your own row has no actions");
+  assert.equal((html.match(/aria-label="Aksi untuk /g) ?? []).length, 1, "one row menu, for the other member only");
+  assert.match(html, /aria-label="Aksi untuk cs@ops\.test"/);
 });
 
 test("ConsoleFilters, InvoiceCheckButton and DailyChart render", async () => {
