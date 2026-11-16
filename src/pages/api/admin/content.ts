@@ -7,6 +7,7 @@ import {
 } from "../../../lib/storefront-content";
 import { buildContentSystemInstruction } from "../../../lib/ai-content-instructions";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
+import { checkPlanCap } from "../../../platform/plans.ts";
 
 export const prerender = false;
 
@@ -283,6 +284,10 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     }
 
     if (action === "generate") {
+      // T-37: the plan's hourly AI cap, per tenant, spent before the model runs.
+      const platformDb = (getRuntimeEnv(locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database | undefined;
+      const aiCap = await checkPlanCap(platformDb, locals.tenantContext?.tenantId, "ai", true);
+      if (!aiCap.allowed) return json({ success: false, error: aiCap.error }, 429);
       const store = await database
         .prepare(
           "SELECT ai_content_instructions FROM stores ORDER BY id ASC LIMIT 1",

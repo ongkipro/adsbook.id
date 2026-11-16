@@ -2,14 +2,12 @@ import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
 import { getRuntimeEnv } from "../../../lib/env";
 import { tenantR2 } from "../../../platform/keys.ts";
-import { checkRateLimit, getClientIp } from "../../../lib/rate-limit";
-import { tenantDatabase } from "../../../lib/tenant-database.ts";
+import { checkPlanCap, recordUsage } from "../../../platform/plans.ts";
 
 export const prerender = false;
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 const MAX_REQUEST_SIZE = MAX_FILE_SIZE + 64 * 1024;
-const MAX_UPLOADS_PER_HOUR = 20;
 const EXTENSION_BY_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -64,16 +62,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // image under a second URL and downloads it twice. The derivative still needs a valid parent key, a
     // signed-in admin and the same size and signature checks below.
     const derivativeOf = String(formData.get("derivative_of") || "").trim();
-    // Peek first, spend only once the object is stored: a rejected file is
-    // not an upload and must not eat the operator's twenty.
-    const uploadDatabase = tenantDatabase(locals);
-    const uploadBucketKey = `admin-upload:${getClientIp(request.headers)}`;
-    if (!derivativeOf) {
-      const uploads = await checkRateLimit(uploadDatabase, uploadBucketKey, MAX_UPLOADS_PER_HOUR, 3_600_000, false);
-      if (!uploads.allowed) {
-        return jsonError("Batas 20 upload per jam telah tercapai.", 429);
-      }
-    }
+    // T-37: the tenant's plan sets the hourly cap, counted per tenant; the
+    // card twin (`derivative_of`) has its own allowance of the same size.
+    const platformDb = (getRuntimeEnv(locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database | undefined;
+    const capName = derivativeOf ? "media-derivative" : "media";
     const fileInput = formData.get("file");
     const file = fileInput instanceof File ? fileInput : null;
 
@@ -115,6 +107,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     } else {
       fileName = `uploads/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
     }
+    // Spent atomically here, after every validation and before the object is
+    // stored: a refused file costs nothing, and concurrent uploads cannot all
+    // pass a peek and store past the cap.
+    const spent = await checkPlanCap(platformDb, tenantId, capName, true);
+    if (!spent.allowed) return jsonError(spent.error, 429);
     await bucket.put(fileName, bytes, {
       httpMetadata: {
         contentType: file.type,
@@ -122,7 +119,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
         contentDisposition: "inline",
       },
     });
-    if (!derivativeOf) await checkRateLimit(uploadDatabase, uploadBucketKey, MAX_UPLOADS_PER_HOUR, 3_600_000);
+    if (platformDb && tenantId) {
+      await recordUsage(platformDb, tenantId, { mediaBytes: bytes.byteLength }).catch((error) =>
+        console.error("usage-record-failed", { tenant_id: tenantId, error: String(error) }),
+      );
+    }
     return jsonOk({
       url: `/assets/${fileName}`,
       fileName,

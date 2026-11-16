@@ -4,6 +4,7 @@ import { DurableObject } from "cloudflare:workers";
 import { BUNDLED_MIGRATIONS } from "../lib/bundled-migrations.ts";
 import { splitMigrationStatements } from "../lib/schema-version.ts";
 import { createTenantDb } from "./tenant-db.ts";
+import { recordUsage } from "./plans.ts";
 import { readTenantRow, recordTenantHealth, runTenantAlarm, TENANT_ALARM_INTERVAL_MS } from "./tenant-alarm.ts";
 import {
   TenantStoreEngine,
@@ -170,6 +171,8 @@ export class TenantStore extends DurableObject {
           backlog = null;
         }
         await recordTenantHealth(env.PLATFORM_DB as D1Database, id, { ...outcome, backlog });
+        // T-37: today's usage row exists for every running tenant, even on a quiet day.
+        await recordUsage(env.PLATFORM_DB as D1Database, id, {});
       },
     });
   }
