@@ -1,6 +1,6 @@
 # AGENTS.md — Working Agreement for AdsBookCMS
 
-> Verified against disk: 2026-11-16 @ `96fdd8a` (§4 baseline 1227 re-run on `release/1.10.1`, 1.10.1). Previously: 2026-11-16 @ `18d0a4a` (§2 skill path and spec checker command aligned with `adsbook.id-docs`). Previously: 2026-11-14 @ `2b244be` (§2 ownership table: spec pack `docs/spec/` added, `docs/product/PRD.md` re-scoped to the inherited base). Previously: 2026-11-13 @ `1403298` (§2 ownership table re-pointed to the adsbook.id-docs repository, ADR-038; §4 baseline 1207 re-run). Previously: 2026-11-10 @ `745de51` (1.10.0; §4 baseline 1207 re-run on that tree). Previously: 2026-11-06 @ `700bc21` + fix/image-guard-parser working tree (1.9.2; §4 baseline 1193 re-run on that tree; the lib-module count, the auth test count and the §6 guard names re-checked; other claims not re-audited)
+> Verified against disk: 2026-11-16 @ `5ff5f3f` (§2 ownership table: `docs/operations/PLATFORM-RUNBOOK.md` added, T-39). Previously: 2026-11-16 @ `96fdd8a` (§4 baseline 1227 re-run on `release/1.10.1`, 1.10.1). Previously: 2026-11-16 @ `18d0a4a` (§2 skill path and spec checker command aligned with `adsbook.id-docs`). Previously: 2026-11-14 @ `2b244be` (§2 ownership table: spec pack `docs/spec/` added, `docs/product/PRD.md` re-scoped to the inherited base). Previously: 2026-11-13 @ `1403298` (§2 ownership table re-pointed to the adsbook.id-docs repository, ADR-038; §4 baseline 1207 re-run). Previously: 2026-11-10 @ `745de51` (1.10.0; §4 baseline 1207 re-run on that tree). Previously: 2026-11-06 @ `700bc21` + fix/image-guard-parser working tree (1.9.2; §4 baseline 1193 re-run on that tree; the lib-module count, the auth test count and the §6 guard names re-checked; other claims not re-audited)
 
 This file is the contract for any AI coding agent or contributor working in this repository. Read it before the first edit.
 
@@ -32,6 +32,7 @@ Product documentation lives in a separate repository, **adsbook.id-docs**, clone
 | `docs/architecture/DECISIONS.md` | The one decision index (ADR-001…), status per decision; full text in `adr/`. Append-only |
 | `docs/operations/RELEASE.md` | Single-tenant deploy, migrations, versioning, rollback, approval boundary (scope note: the old fleet; the platform runbook comes with T-30; the platform delivery contract is `docs/spec/15-DEVOPS-CICD-MIGRATIONS.md`) |
 | `docs/architecture/OBSERVABILITY.md` | Logging, failure visibility, what to enable |
+| `docs/operations/PLATFORM-RUNBOOK.md` | Multi-tenant operating procedures: buyer requests (PRIV-5) and incidents/breaches (SEC-7 → PRIV-6) from T-39; deploy, migration, restore and daily operations from T-30 |
 | `docs/operations/INSTALLATION.md` | Standing up a new install |
 | `docs/operations/STATUS.md` | Current state: Now / Next / Blockers, under 12 KB. History up to 2026-11-10 is frozen in `docs/archive/STATUS-2026-11-10.md` |
 | `docs/operations/FLEET.md` | The install fleet: which stores run AdsBookCMS, their version, repository, visibility, infrastructure and per-install merge rules |
