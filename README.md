@@ -1,14 +1,14 @@
 # adsbook.id
 
-> Verified against disk: 2026-11-16 @ `81ed0b2` + T-29 tree (product named adsbook.id). Previously: 2026-11-16 @ `96fdd8a` (test count 1227). Previously: 2026-11-16 @ `18d0a4a` (canonical `docs/spec/02-PRD.md` and `TASKS.md` pointers aligned with `adsbook.id-docs`). Previously: 2026-11-13 @ `1403298` (test command and count, migration count, documentation repository, multi-tenant direction note). Previously: 2026-11-02 @ `f53486c` (test count only; the rest retains its recorded evidence and links to the owning documents)
+> Verified against disk: 2026-11-16 @ `bbf039b` (platform live: billing ADR-041, seller zone `adsbook.my.id`; §3 config and subscription invariants, §4 baseline 1448, §2 direction). Previously: 2026-11-16 @ `81ed0b2` + T-29 tree (product named adsbook.id). Previously: 2026-11-16 @ `96fdd8a` (test count 1227). Previously: 2026-11-16 @ `18d0a4a` (canonical `docs/spec/02-PRD.md` and `TASKS.md` pointers aligned with `adsbook.id-docs`). Previously: 2026-11-13 @ `1403298` (test command and count, migration count, documentation repository, multi-tenant direction note). Previously: 2026-11-02 @ `f53486c` (test count only; the rest retains its recorded evidence and links to the owning documents)
 
 adsbook.id is a direct-response commerce platform for Indonesian sellers on Cloudflare Workers, built from the AdsBookCMS code base. Every store gets the base product: storefront, landing-page builder, checkout with COD and online payment, order management, courier dispatch, ad-signal tracking, and an admin dashboard — in a single Worker with its own database.
 
 > **adsbook.id** — a new **multi-tenant SaaS** built from the AdsBookCMS code base (ADR-038): many merchants on one platform Worker, one SQLite Durable Object per tenant in Asia-Pacific, merchant domains through Cloudflare for SaaS (`docs/spec/02-PRD.md`, ADR-039 Option D accepted; design `docs/architecture/MULTI-TENANT-DESIGN.md`). Branch `feature/platform` carries the multi-tenant platform (control plane, tenant routing, signup, platform admin, marketing site); the sections below describe the inherited single-tenant base where they say so. **Documentation lives in a separate private repository, adsbook.id-docs**, cloned beside this one: `../adsbook.id-docs/docs/`. Every `docs/...` path below is relative to that repository's root. Start at `../adsbook.id-docs/docs/operations/STATUS.md`.
 
-**Install model: 1 installer = 1 Worker = 1 store.** Isolation comes from the deployment boundary, not from tenant routing inside the application (`docs/architecture/DECISIONS.md` ADR-001).
+**Platform model: one Worker for every store.** A tenant is a row in `PLATFORM_DB` and a SQLite Durable Object, created at signup; a seller's address is `<slug>.adsbook.my.id` plus one own domain (ADR-039). Stores pay a subscription after a free Preview Mode (ADR-041, `/admin/billing`). The earlier model, 1 installer = 1 Worker = 1 store (ADR-001), remains the AdsBookCMS fleet's and is not this product.
 
-**This repository is the product. It deploys nothing itself.** An install lives in its own repository, with its own Worker, D1, KV, R2 and domain, and deploys from there. `wrangler.jsonc` here is a deployable template with all-zero resource ids, and there are no Cloudflare credentials in this repository by design (ADR-012, ADR-026).
+**This repository is the product. It deploys nothing itself.** An install lives in its own repository, with its own Worker, D1, KV, R2 and domain, and deploys from there. `wrangler.jsonc` here is the platform Worker's production configuration (real `adsbook-platform*` ids, public vars only); CI never deploys, and there are no Cloudflare credentials in this repository by design (ADR-012). A release is one approved `npm run deploy` from `main` (its preflight refuses a stale tree or a ledger this tree does not carry), recorded in `docs/operations/PLATFORM-RUNBOOK.md`.
 
 ## Install in one click
 
@@ -110,7 +110,7 @@ Every command below exists in `package.json`.
 npm run dev            # astro dev on :4321 — no Worker bindings
 npm run cf:dev         # wrangler dev --local
 
-npm test               # node --test over src/lib and src/plugins tests (1227 tests)
+npm test               # node --test over src/lib and src/plugins tests (1448 tests)
 npm run route-map      # regenerate doc/ROUTE-MAP.md + doc/route-map.xml from src/pages
 npm run check          # astro check && tsc --noEmit
 npm run build          # astro build
