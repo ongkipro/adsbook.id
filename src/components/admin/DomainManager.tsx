@@ -91,7 +91,7 @@ export function DomainManager() {
   const remove = async (domain: Domain) => {
     if (!(await confirm({
       title: `Hapus domain ${domain.host}?`,
-      description: "Toko tidak lagi bisa dibuka lewat domain ini. Bila ini domain utama, subdomain belanja.cc kembali menjadi domain utama.",
+      description: "Toko tidak lagi bisa dibuka lewat domain ini. Bila ini domain utama, subdomain adsbook.cc kembali menjadi domain utama.",
       confirmLabel: "Hapus domain",
     }))) return;
     await run(domain.host, () => call(path(domain), { method: "DELETE" }));

@@ -1,6 +1,6 @@
 /**
  * Per-tenant webhook tokens (SEC-5, API-7, T-23). A provider calls
- * `https://<slug>.belanja.cc/api/webhooks/<provider>/<token>`; the token is
+ * `https://<slug>.adsbook.cc/api/webhooks/<provider>/<token>`; the token is
  * 256 random bits shown to the owner once, and only its SHA-256 is kept in
  * `PLATFORM_DB.webhook_secrets`. The token is a path segment, so request URLs
  * are never logged (OBS-1 logs the route pattern only).

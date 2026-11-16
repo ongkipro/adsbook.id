@@ -210,9 +210,9 @@ test("a tenant with no stored identity never shows a value from the Worker envir
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   try {
     for (const key of keys) process.env[key] = key === "PUBLIC_SITE_URL" ? "https://other-store.example" : key === "PUBLIC_SITE_NOINDEX" ? "true" : `LEAK-${key}`;
-    const tenant = resolveTenantConfig(null, "toko-a.belanja.cc");
+    const tenant = resolveTenantConfig(null, "toko-a.adsbook.cc");
     assert.doesNotMatch(JSON.stringify(tenant), /LEAK-|other-store/);
-    assert.equal(tenant.siteUrl, "https://toko-a.belanja.cc", "the tenant's own primary host, not the environment");
+    assert.equal(tenant.siteUrl, "https://toko-a.adsbook.cc", "the tenant's own primary host, not the environment");
     assert.equal(tenant.noindex, false);
     assert.equal(tenant.brandMark, "");
     assert.equal(tenant.defaultBrand, tenant.name);

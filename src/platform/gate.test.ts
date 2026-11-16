@@ -104,11 +104,11 @@ test("a host is owned once, a tenant has one primary, and hosts are stored norma
   const db = await controlPlane();
   addTenant(db, "t-a", "toko-a");
   addTenant(db, "t-b", "toko-b");
-  addHost(db, "toko-a.belanja.cc", "t-a");
-  assert.throws(() => addHost(db, "toko-a.belanja.cc", "t-b"), /UNIQUE constraint failed: tenant_hosts.host/);
-  assert.throws(() => addHost(db, "toko-a-2.belanja.cc", "t-a", "active", 1), /UNIQUE constraint failed/);
-  assert.throws(() => addHost(db, "Toko-B.belanja.cc", "t-b"), /CHECK constraint failed/);
-  assert.throws(() => addHost(db, "toko-b.belanja.cc.", "t-b"), /CHECK constraint failed/);
+  addHost(db, "toko-a.adsbook.cc", "t-a");
+  assert.throws(() => addHost(db, "toko-a.adsbook.cc", "t-b"), /UNIQUE constraint failed: tenant_hosts.host/);
+  assert.throws(() => addHost(db, "toko-a-2.adsbook.cc", "t-a", "active", 1), /UNIQUE constraint failed/);
+  assert.throws(() => addHost(db, "Toko-B.adsbook.cc", "t-b"), /CHECK constraint failed/);
+  assert.throws(() => addHost(db, "toko-b.adsbook.cc.", "t-b"), /CHECK constraint failed/);
   assert.throws(() => addTenant(db, "t-c", "toko-c", "deleted"), /CHECK constraint failed/);
   const fresh = new Date().toISOString();
   db.sqlite.exec(`INSERT INTO tenant_events (tenant_id, kind, actor, at) VALUES ('t-a', 'signup', 'owner', '${fresh}'), ('t-a', 'old', 'owner', '2024-01-01T00:00:00.000Z')`);
@@ -140,14 +140,14 @@ test("HOST-1: certificate validation passes through for unknown, pending and pla
 test("every host state answers before any tenant work: only an active host of an active tenant resolves", async () => {
   const db = await controlPlane();
   const cases: Array<[string, string, string, number, string | null]> = [
-    ["active.belanja.cc", "active", "active", 200, "t-active"],
-    ["pending.belanja.cc", "active", "pending", 404, null],
-    ["revoked.belanja.cc", "active", "revoked", 404, null],
-    ["provisioning.belanja.cc", "provisioning", "active", 404, null],
-    ["purging.belanja.cc", "purging", "active", 404, null],
-    ["purged.belanja.cc", "purged", "active", 404, null],
-    ["suspended.belanja.cc", "suspended", "active", 403, null],
-    ["recovery.belanja.cc", "recovery", "active", 503, null],
+    ["active.adsbook.cc", "active", "active", 200, "t-active"],
+    ["pending.adsbook.cc", "active", "pending", 404, null],
+    ["revoked.adsbook.cc", "active", "revoked", 404, null],
+    ["provisioning.adsbook.cc", "provisioning", "active", 404, null],
+    ["purging.adsbook.cc", "purging", "active", 404, null],
+    ["purged.adsbook.cc", "purged", "active", 404, null],
+    ["suspended.adsbook.cc", "suspended", "active", 403, null],
+    ["recovery.adsbook.cc", "recovery", "active", 503, null],
   ];
   for (const [host, tenantStatus, hostStatus] of cases) {
     const id = `t-${host.split(".")[0]}`;
@@ -159,19 +159,19 @@ test("every host state answers before any tenant work: only an active host of an
     assert.equal(statusOf(result), status, host);
     assert.equal(tenantOf(result), tenant, host);
   }
-  const unknown = await gate(db, "https://nobody.belanja.cc/");
+  const unknown = await gate(db, "https://nobody.adsbook.cc/");
   assert.equal(statusOf(unknown.result), 404);
 });
 
 test("normalisation: case, port and trailing dot resolve the same tenant; malformed hosts never query", async () => {
   const db = await controlPlane();
   addTenant(db, "t-a", "toko-a");
-  addHost(db, "toko-a.belanja.cc", "t-a");
-  for (const href of ["https://TOKO-A.Belanja.CC/", "https://toko-a.belanja.cc:8443/", "https://toko-a.belanja.cc./"]) {
+  addHost(db, "toko-a.adsbook.cc", "t-a");
+  for (const href of ["https://TOKO-A.Adsbook.CC/", "https://toko-a.adsbook.cc:8443/", "https://toko-a.adsbook.cc./"]) {
     assert.equal(tenantOf((await gate(db, href)).result), "t-a", href);
   }
-  assert.equal(normalizeHost("toko-a.belanja.cc:8443"), "toko-a.belanja.cc");
-  for (const raw of ["127.0.0.1", "[::1]:8080", "a b.example", "toko\u0000.belanja.cc", `${"a".repeat(64)}.example`, `${"abc.".repeat(64)}cc`, "-x.example", "x..example", ""]) {
+  assert.equal(normalizeHost("toko-a.adsbook.cc:8443"), "toko-a.adsbook.cc");
+  for (const raw of ["127.0.0.1", "[::1]:8080", "a b.example", "toko\u0000.adsbook.cc", `${"a".repeat(64)}.example`, `${"abc.".repeat(64)}cc`, "-x.example", "x..example", ""]) {
     assert.equal(normalizeHost(raw), null, JSON.stringify(raw));
   }
   const before = db.queries.length;
@@ -183,14 +183,14 @@ test("ISO-1: forwarded-host headers never select a tenant", async () => {
   const db = await controlPlane();
   addTenant(db, "t-a", "toko-a");
   addTenant(db, "t-b", "toko-b");
-  addHost(db, "toko-a.belanja.cc", "t-a");
-  addHost(db, "toko-b.belanja.cc", "t-b");
-  const { result } = await gate(db, "https://toko-a.belanja.cc/admin", {
+  addHost(db, "toko-a.adsbook.cc", "t-a");
+  addHost(db, "toko-b.adsbook.cc", "t-b");
+  const { result } = await gate(db, "https://toko-a.adsbook.cc/admin", {
     headers: {
-      "x-forwarded-host": "toko-b.belanja.cc",
-      forwarded: "host=toko-b.belanja.cc",
-      "x-original-host": "toko-b.belanja.cc",
-      "x-host": "toko-b.belanja.cc",
+      "x-forwarded-host": "toko-b.adsbook.cc",
+      forwarded: "host=toko-b.adsbook.cc",
+      "x-original-host": "toko-b.adsbook.cc",
+      "x-host": "toko-b.adsbook.cc",
     },
   });
   assert.equal(tenantOf(result), "t-a");
@@ -228,14 +228,14 @@ test("a suspension or revocation takes effect on the very next request in a warm
   const db = await controlPlane();
   const cache = new HostCache();
   addTenant(db, "t-a", "toko-a");
-  addHost(db, "toko-a.belanja.cc", "t-a");
-  assert.equal(tenantOf((await gate(db, "https://toko-a.belanja.cc/", { cache })).result), "t-a");
+  addHost(db, "toko-a.adsbook.cc", "t-a");
+  assert.equal(tenantOf((await gate(db, "https://toko-a.adsbook.cc/", { cache })).result), "t-a");
   db.sqlite.exec("UPDATE tenants SET status = 'suspended' WHERE id = 't-a'");
-  assert.equal(statusOf((await gate(db, "https://toko-a.belanja.cc/", { cache, now: T0 + 1 })).result), 403);
+  assert.equal(statusOf((await gate(db, "https://toko-a.adsbook.cc/", { cache, now: T0 + 1 })).result), 403);
   db.sqlite.exec("UPDATE tenants SET status = 'active' WHERE id = 't-a'");
-  assert.equal(tenantOf((await gate(db, "https://toko-a.belanja.cc/", { cache, now: T0 + 2 })).result), "t-a");
-  db.sqlite.exec("UPDATE tenant_hosts SET status = 'revoked' WHERE host = 'toko-a.belanja.cc'");
-  assert.equal(statusOf((await gate(db, "https://toko-a.belanja.cc/", { cache, now: T0 + 3 })).result), 404);
+  assert.equal(tenantOf((await gate(db, "https://toko-a.adsbook.cc/", { cache, now: T0 + 2 })).result), "t-a");
+  db.sqlite.exec("UPDATE tenant_hosts SET status = 'revoked' WHERE host = 'toko-a.adsbook.cc'");
+  assert.equal(statusOf((await gate(db, "https://toko-a.adsbook.cc/", { cache, now: T0 + 3 })).result), 404);
 });
 
 test("the default pass-through answers 404 on local and IP hosts instead of fetching itself", async () => {
@@ -264,7 +264,7 @@ test("the default pass-through answers 404 on local and IP hosts instead of fetc
 test("platform routes are refused on tenant hosts, and tenant routes on platform hosts", async () => {
   const db = await controlPlane();
   addTenant(db, "t-a", "toko-a");
-  addHost(db, "toko-a.belanja.cc", "t-a");
+  addHost(db, "toko-a.adsbook.cc", "t-a");
   assert.deepEqual([...platformHosts("platform.localhost, BAD HOST")].sort(), ["adsbook.id", "app.adsbook.id", "platform.localhost"]);
   const before = db.queries.length;
   for (const path of ["/admin/orders", "/api/v1/products", "/produk/x"]) {
@@ -278,7 +278,7 @@ test("platform routes are refused on tenant hosts, and tenant routes on platform
   assert.equal(db.queries.length, before, "a platform host never queries tenant hosts");
   assert.equal((await gate(db, "https://app.adsbook.id/platform/admin")).result.kind, "platform");
   assert.equal((await gate(db, "https://platform.localhost:8787/platform/x", { extraPlatform: "platform.localhost" })).result.kind, "platform");
-  assert.equal(statusOf((await gate(db, "https://toko-a.belanja.cc/platform/admin")).result), 404);
+  assert.equal(statusOf((await gate(db, "https://toko-a.adsbook.cc/platform/admin")).result), 404);
 });
 
 test("a random-Host flood writes nothing to KV and the in-isolate cache stays bounded", async () => {
@@ -301,10 +301,10 @@ test("a random-Host flood writes nothing to KV and the in-isolate cache stays bo
 test("a control-plane failure is a 503 for the tenant host, never a default tenant", async () => {
   const db = await controlPlane();
   db.failWhen = /FROM tenant_hosts/;
-  const { result } = await gate(db, "https://toko-a.belanja.cc/");
+  const { result } = await gate(db, "https://toko-a.adsbook.cc/");
   assert.equal(statusOf(result), 503);
   assert.equal(result.kind === "refused" && result.reason, "platform_db_failed");
-  const unbound = (await gate(null, "https://toko-a.belanja.cc/")).result;
+  const unbound = (await gate(null, "https://toko-a.adsbook.cc/")).result;
   assert.equal(statusOf(unbound), 503);
   assert.equal(unbound.kind === "refused" && unbound.reason, "platform_db_unbound");
 });
@@ -369,5 +369,5 @@ test("OBS-1: invocation logs are off in wrangler.jsonc, and PLATFORM_DB has its 
   };
   assert.equal(config.observability.logs?.invocation_logs, false);
   assert.equal(config.d1_databases.find((db) => db.binding === "PLATFORM_DB")?.migrations_dir, "src/platform/migrations");
-  assert.deepEqual(config.routes, [{ pattern: "*/*", zone_name: "belanja.cc" }]);
+  assert.deepEqual(config.routes, [{ pattern: "*/*", zone_name: "adsbook.cc" }]);
 });

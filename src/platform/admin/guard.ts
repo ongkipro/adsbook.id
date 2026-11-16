@@ -7,7 +7,14 @@
 import { BROWSER_UNSUPPORTED_MESSAGE, unsafeRequestVerdict } from "../../lib/auth.ts";
 import { resolvePlatformUser, type PlatformUser } from "./session.ts";
 
-const PUBLIC = new Set(["/platform/signup", "/platform/login", "/platform/syarat", "/platform/privasi", "/api/platform/signup", "/api/platform/slug", "/api/platform/login"]);
+/** Platform paths reachable without a platform session (also read by the route map). */
+export const PLATFORM_PUBLIC_PATHS: ReadonlySet<string> = new Set(["/platform/signup", "/platform/login", "/platform/syarat", "/platform/privasi", "/api/platform/signup", "/api/platform/slug", "/api/platform/login"]);
+
+/** Whether a platform path is public: the signup and sign-in surfaces and the marketing site (T-40). */
+export function isPlatformPublicPath(pathname: string): boolean {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return PLATFORM_PUBLIC_PATHS.has(path) || path === "/platform/site" || path.startsWith("/platform/site/");
+}
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 export type GuardResult = { kind: "pass"; user: PlatformUser | null } | { kind: "deny"; response: Response };
@@ -32,7 +39,7 @@ export async function platformGuard(request: Request, url: URL, env: Record<stri
     }
   }
   // The marketing site (T-40) is public: its pages render under /platform/site.
-  if (PUBLIC.has(path) || path === "/platform/site" || path.startsWith("/platform/site/")) return { kind: "pass", user: null };
+  if (isPlatformPublicPath(path)) return { kind: "pass", user: null };
   const user = await resolvePlatformUser(env, request);
   if (user) return { kind: "pass", user };
   return {

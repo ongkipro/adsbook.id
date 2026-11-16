@@ -43,9 +43,9 @@ platformDb.sqlite.exec(`
     ('t-s', 'toko-s', 's@example.test', 'suspended', '2026-11-16'),
     ('t-r', 'toko-r', 'r@example.test', 'recovery', '2026-11-16');
   INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES
-    ('toko-a.belanja.cc', 't-a', 'subdomain', 'active', 1, '2026-11-16'),
-    ('toko-s.belanja.cc', 't-s', 'subdomain', 'active', 1, '2026-11-16'),
-    ('toko-r.belanja.cc', 't-r', 'subdomain', 'active', 1, '2026-11-16');
+    ('toko-a.adsbook.cc', 't-a', 'subdomain', 'active', 1, '2026-11-16'),
+    ('toko-s.adsbook.cc', 't-s', 'subdomain', 'active', 1, '2026-11-16'),
+    ('toko-r.adsbook.cc', 't-r', 'subdomain', 'active', 1, '2026-11-16');
 `);
 
 const onRequest = createMiddleware(async (env) => (env as { OMS_DB: D1Database }).OMS_DB, (request, url, env) =>
@@ -89,11 +89,11 @@ async function run(href: string, routePattern = "/produk/[slug]", nextImpl?: () 
 
 test("a refused host never reaches a cache, the tenant database or the route", async () => {
   for (const [href, status] of [
-    ["https://nobody.belanja.cc/produk/x", 404],
-    ["https://toko-s.belanja.cc/produk/x", 403],
-    ["https://toko-r.belanja.cc/produk/x", 503],
+    ["https://nobody.adsbook.cc/produk/x", 404],
+    ["https://toko-s.adsbook.cc/produk/x", 403],
+    ["https://toko-r.adsbook.cc/produk/x", 503],
     ["https://adsbook.id/produk/x", 404],
-    ["https://toko-a.belanja.cc/platform/admin", 404],
+    ["https://toko-a.adsbook.cc/platform/admin", 404],
   ] as const) {
     const result = await run(href);
     assert.equal(result.response.status, status, href);
@@ -107,11 +107,11 @@ test("a refused host never reaches a cache, the tenant database or the route", a
 });
 
 test("an active tenant host reaches the route with its tenant on locals and in the log", async () => {
-  const result = await run("https://toko-a.belanja.cc/api/webhooks/autolaris/secret-token-123?phone=6281234567890", "/api/webhooks/autolaris");
+  const result = await run("https://toko-a.adsbook.cc/api/webhooks/autolaris/secret-token-123?phone=6281234567890", "/api/webhooks/autolaris");
   assert.equal(result.nextCalls, 1);
   assert.deepEqual(
     { id: (result.locals.tenantContext as { tenantId: string }).tenantId, primary: (result.locals.tenantContext as { primaryHost: string }).primaryHost },
-    { id: "t-a", primary: "toko-a.belanja.cc" },
+    { id: "t-a", primary: "toko-a.adsbook.cc" },
   );
   assert.equal(result.locals.platform, undefined);
   assert.equal(result.logs.length, 1);
@@ -138,7 +138,7 @@ test("a platform route on a platform host runs with platform context and no tena
 });
 
 test("exactly one log line on every path: a gate refusal with its reason, and a route that throws", async () => {
-  const down = await run("https://toko-a.belanja.cc/produk/x", "/produk/[slug]", undefined, { PLATFORM_DB: undefined });
+  const down = await run("https://toko-a.adsbook.cc/produk/x", "/produk/[slug]", undefined, { PLATFORM_DB: undefined });
   assert.equal(down.response.status, 503);
   assert.equal(down.logs.length, 1);
   assert.equal(down.logs[0].reason, "platform_db_unbound");
@@ -171,7 +171,7 @@ test("T-40: the marketing site's public paths render their /platform pages on a 
   assert.equal((await run("https://adsbook.id/platform/health", "/")).response.status, 302);
   // On a seller host the same paths stay the seller's own: never rewritten to a platform page.
   for (const path of ["/", "/fitur", "/harga", "/faq", "/kontak", "/daftar", "/sitemap.xml", "/robots.txt"]) {
-    const result = await run(`https://toko-a.belanja.cc${path}`, "/");
+    const result = await run(`https://toko-a.adsbook.cc${path}`, "/");
     assert.equal(result.logs[0].host_kind, "tenant", path);
     assert.ok(!result.nextArgs.some((arg) => typeof arg === "string" && arg.startsWith("/platform")), `${path} on a seller host reached a platform page`);
   }

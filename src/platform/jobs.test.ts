@@ -42,7 +42,7 @@ test("PRIV-4: events past a year, usage past 13 months and handoff tokens 7 days
   db.sqlite.prepare("INSERT INTO tenant_usage_daily (tenant_id, day) VALUES ('t-1', ?), ('t-1', ?)").run(dayShift(cutoff, -1), dayShift(cutoff, 1));
   for (const [hash, days] of [["expired-8d", 8], ["expired-6d", 6]] as const) {
     db.sqlite
-      .prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at) VALUES (?, 't-1', 'signup', 'x.belanja.cc', ?)")
+      .prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at) VALUES (?, 't-1', 'signup', 'x.adsbook.cc', ?)")
       .run(hash, at(days));
   }
 

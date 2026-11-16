@@ -150,7 +150,7 @@ let schemaCalls = 0;
 // The request gate (T-17) is tested in src/platform/; these tests start past it, on an active tenant.
 const tenantGate = async () => ({
   kind: 'tenant' as const,
-  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.belanja.cc', hostKind: 'subdomain' as const, primaryHost: 'test.belanja.cc' },
+  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.adsbook.cc', hostKind: 'subdomain' as const, primaryHost: 'test.adsbook.cc' },
 });
 const onRequest = createMiddleware(async (env) => { schemaCalls += 1; return (env as { OMS_DB: D1Database }).OMS_DB; }, tenantGate);
 
@@ -311,7 +311,7 @@ test("middleware: an upload is fetched from R2 once, then served without D1 or t
 test("an upload answer that is private, no-store or sets a cookie is never stored as public (T-28 review)", async () => {
   const stored: Response[] = [];
   const cache = { match: async () => undefined, put: async (_key: Request, response: Response) => void stored.push(response) };
-  const key = new Request("https://toko-a.belanja.cc/uploads/a.webp");
+  const key = new Request("https://toko-a.adsbook.cc/uploads/a.webp");
   const image = (headers: Record<string, string>) => new Response("bytes", { status: 200, headers: { "content-type": "image/webp", ...headers } });
   writeUploadCache(key, image({ "cache-control": "private, max-age=60" }), undefined, cache);
   writeUploadCache(key, image({ "cache-control": "no-store" }), undefined, cache);

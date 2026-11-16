@@ -169,7 +169,7 @@ test("A-226: pixel without a CAPI token keeps the browser pixel and sends no ser
   const result = await sendMetaCapiEvent(
     "Purchase",
     "INV-10001",
-    "https://toko-a.belanja.cc/thanks",
+    "https://toko-a.adsbook.cc/thanks",
     { clientIp: "203.0.113.1", userAgent: "test" },
     { orderNumber: "INV-10001", value: 100000, currency: "IDR" },
     config.metaPixelId,

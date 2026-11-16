@@ -34,7 +34,7 @@ export const STEPS: Step[] = [
     label: "Iklan",
     title: "Klik iklan mendarat di halaman toko Anda",
     text: [
-      "Arahkan iklan ke halaman produk atau landing page toko. Toko langsung aktif di alamat nama-toko.belanja.cc, atau di domain Anda sendiri.",
+      "Arahkan iklan ke halaman produk atau landing page toko. Toko langsung aktif di alamat nama-toko.adsbook.cc, atau di domain Anda sendiri.",
       // middleware.ts: click-id cookie, Max-Age 90 days.
       "ID klik iklan (fbclid, gclid) dan UTM disimpan 90 hari, jadi pesanan yang datang belakangan tetap tersambung ke iklannya.",
     ],
@@ -99,7 +99,7 @@ export const PILOT = {
   meaning: "Pilot adalah paket awal adsbook.id: gratis, sebelum paket berbayar hadir.",
   price: "Rp0",
   points: [
-    "Satu toko di nama-toko.belanja.cc",
+    "Satu toko di nama-toko.adsbook.cc",
     "Sampai 2 domain sendiri (domain utama dan www dihitung satu)",
     "60 unggahan foto per jam",
     "20 draf konten AI per jam",
@@ -134,7 +134,7 @@ export const FEATURES: Array<{ title: string; items: string[]; shot: Shot }> = [
   { title: "Pengiriman", items: ["Ongkir dihitung lewat Mengantar dari gudang Anda", "Rilis ke kurir satu per satu atau sekaligus", "Resi, pickup dan status kiriman di satu halaman", "Sampai 10 gudang: gudang di provinsi pembeli dipakai lebih dulu, lalu gudang satu pulau, lalu gudang utama"], shot: SHOTS.shipping },
   { title: "Pembayaran", items: ["COD", "QRIS dan virtual account lewat akun AutoLaris Anda", "Transfer ke rekening toko dengan konfirmasi manual", "Rekonsiliasi pembayaran otomatis untuk QRIS dan VA"], shot: SHOTS.payments },
   { title: "Iklan dan sinyal konversi", items: ["Meta Pixel dan Conversions API dengan event_id yang sama", "Purchase dari server untuk setiap pesanan COD", "Konversi offline Google Ads dan Google Tag Manager", "ID klik dan UTM disimpan 90 hari"], shot: SHOTS.meta },
-  { title: "Toko Anda, akun Anda", items: ["Alamat nama-toko.belanja.cc, plus sampai 2 domain sendiri", "Akun tim dengan peran owner, admin, advertiser dan CS", "API untuk menghubungkan toko dengan aplikasi Anda sendiri", "Kebijakan privasi toko yang menyebut hanya penyedia yang Anda pakai"], shot: SHOTS.access },
+  { title: "Toko Anda, akun Anda", items: ["Alamat nama-toko.adsbook.cc, plus sampai 2 domain sendiri", "Akun tim dengan peran owner, admin, advertiser dan CS", "API untuk menghubungkan toko dengan aplikasi Anda sendiri", "Kebijakan privasi toko yang menyebut hanya penyedia yang Anda pakai"], shot: SHOTS.access },
 ];
 
 /** The setup steps a new store sees (the readiness predicate, T-38), for the closing band. */

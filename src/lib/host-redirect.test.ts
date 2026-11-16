@@ -5,13 +5,13 @@ import { resolveHostRedirect } from './host-redirect.ts';
 const go = (href: string) => resolveHostRedirect(new URL(href));
 
 test('http goes to https on the same host with path and query; https stays', () => {
-  assert.equal(go('http://toko.belanja.cc/produk?utm_source=fb&fbclid=x'), 'https://toko.belanja.cc/produk?utm_source=fb&fbclid=x');
+  assert.equal(go('http://toko.adsbook.cc/produk?utm_source=fb&fbclid=x'), 'https://toko.adsbook.cc/produk?utm_source=fb&fbclid=x');
   assert.equal(go('http://www.merchant.com/'), 'https://www.merchant.com/');
-  assert.equal(go('https://toko.belanja.cc/produk'), null);
+  assert.equal(go('https://toko.adsbook.cc/produk'), null);
 });
 
 test('api paths and local hosts are never moved', () => {
-  assert.equal(go('http://toko.belanja.cc/api/webhooks/autolaris'), null);
+  assert.equal(go('http://toko.adsbook.cc/api/webhooks/autolaris'), null);
   assert.equal(go('http://merchant.com/api/submit-order'), null);
   assert.equal(go('http://localhost:4321/'), null);
   assert.equal(go('http://toko.localhost:8787/'), null);

@@ -67,7 +67,7 @@ async function twoTenants() {
   await ensureControlPlane(platformDb, PLATFORM_CHAIN);
   const stores = new Map<string, TenantStoreStub>();
   const engines = new Map<string, ReturnType<typeof createNodeStorage>>();
-  for (const [id, host, orderId, invoice] of [["iso-a", "iso-a.belanja.cc", 41, "INV-ISO-A"], ["iso-b", "iso-b.belanja.cc", 7, "INV-ISO-B"]] as const) {
+  for (const [id, host, orderId, invoice] of [["iso-a", "iso-a.adsbook.cc", 41, "INV-ISO-A"], ["iso-b", "iso-b.adsbook.cc", 7, "INV-ISO-B"]] as const) {
     platformDb.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES (?, ?, ?, 'active', '2026-11-16')").run(id, id, `${id}@example.test`);
     platformDb.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'active', 1, '2026-11-16')").run(host, id);
     const storage = createNodeStorage();
@@ -124,26 +124,26 @@ test("ISO-3/AUTHZ-1: tenant A's owner session and A's order ids open nothing on 
   const ownerB = await session("iso-b", "owner", "owner");
 
   // The control: A's session works on A.
-  const home = await send("iso-a.belanja.cc", "/api/admin/orders", ownerA, adminOrdersRoute.GET as never);
+  const home = await send("iso-a.adsbook.cc", "/api/admin/orders", ownerA, adminOrdersRoute.GET as never);
   assert.equal(home.status, 200);
   assert.match(home.text, /INV-ISO-A/);
 
   // A's session on B: the API refuses, the admin page sends it to B's login.
-  const list = await send("iso-b.belanja.cc", "/api/admin/orders", ownerA, adminOrdersRoute.GET as never);
+  const list = await send("iso-b.adsbook.cc", "/api/admin/orders", ownerA, adminOrdersRoute.GET as never);
   assert.equal(list.status, 401);
   assert.doesNotMatch(list.text, /INV-ISO/);
-  const detail = await send("iso-b.belanja.cc", "/api/admin/orders/41", ownerA, adminOrderRoute.GET as never, { id: "41" });
+  const detail = await send("iso-b.adsbook.cc", "/api/admin/orders/41", ownerA, adminOrderRoute.GET as never, { id: "41" });
   assert.equal(detail.status, 401);
   assert.doesNotMatch(detail.text, /INV-ISO-A|Pembeli iso-a/);
-  const page = await send("iso-b.belanja.cc", "/admin/orders", ownerA);
+  const page = await send("iso-b.adsbook.cc", "/admin/orders", ownerA);
   assert.equal(page.status, 302);
   assert.equal(page.location, "/hello");
 
   // B's own owner asking B's host for A's order id finds nothing of A.
-  const foreign = await send("iso-b.belanja.cc", "/api/admin/orders/41", ownerB, adminOrderRoute.GET as never, { id: "41" });
+  const foreign = await send("iso-b.adsbook.cc", "/api/admin/orders/41", ownerB, adminOrderRoute.GET as never, { id: "41" });
   assert.equal(foreign.status, 404);
   assert.doesNotMatch(foreign.text, /INV-ISO-A|Pembeli iso-a/);
-  const own = await send("iso-b.belanja.cc", "/api/admin/orders/7", ownerB, adminOrderRoute.GET as never, { id: "7" });
+  const own = await send("iso-b.adsbook.cc", "/api/admin/orders/7", ownerB, adminOrderRoute.GET as never, { id: "7" });
   assert.equal(own.status, 200);
   assert.match(own.text, /INV-ISO-B/);
 });
@@ -151,14 +151,14 @@ test("ISO-3/AUTHZ-1: tenant A's owner session and A's order ids open nothing on 
 test("AUTHZ-2: customer service on its own store cannot open settings, by page or by API", async () => {
   const { session, send } = await twoTenants();
   const cs = await session("iso-a", "cs", "customer_service");
-  const page = await send("iso-a.belanja.cc", "/admin/settings", cs);
+  const page = await send("iso-a.adsbook.cc", "/admin/settings", cs);
   assert.equal(page.status, 302);
   assert.notEqual(page.location, "/admin/settings");
-  const api = await send("iso-a.belanja.cc", "/api/admin/settings", cs, (() => new Response("settings")) as never);
+  const api = await send("iso-a.adsbook.cc", "/api/admin/settings", cs, (() => new Response("settings")) as never);
   assert.equal(api.status, 403);
   assert.equal(JSON.parse(api.text).code, "PERMISSION_DENIED");
   // The control: the same session still reaches what its role allows.
-  assert.equal((await send("iso-a.belanja.cc", "/api/admin/orders", cs, adminOrdersRoute.GET as never)).status, 200);
+  assert.equal((await send("iso-a.adsbook.cc", "/api/admin/orders", cs, adminOrdersRoute.GET as never)).status, 200);
 });
 
 test("every isolation and authorization test ID names a test that exists (ISO-1…ISO-12, AUTHZ-1…AUTHZ-4)", () => {

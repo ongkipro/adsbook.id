@@ -85,6 +85,6 @@ test("wrangler.jsonc binds no store D1: tenant data is one TenantStore per tenan
 test("wrangler.jsonc names the platform's own Worker and bucket, never an AdsBookCMS install's (ADR-038)", () => {
   const config = readFileSync(join(ROOT, "wrangler.jsonc"), "utf8");
   assert.match(config, /"name":\s*"adsbook-platform"/);
-  assert.match(config, /"bucket_name":\s*"adsbook-media"/);
+  assert.match(config, /"bucket_name":\s*"adsbook-platform-media"/);
   assert.doesNotMatch(config, /"[^"\n]*adsbookcms[^"\n]*"/i, "no quoted value may name the old product");
 });

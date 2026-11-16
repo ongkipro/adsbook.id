@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   authFor,
+  buildModuleMap,
   buildRouteMap,
   classify,
   exportsOf,
@@ -43,15 +44,65 @@ test("the API families are told apart, longest prefix first", () => {
   assert.equal(classify("/produk/[slug]"), "Storefront");
 });
 
-test("auth is reported from the family, and the wizard is not public", () => {
+test("auth is reported from the family, and every token-guarded route says which token", () => {
   assert.equal(authFor("/produk", "Storefront"), "public");
   assert.equal(authFor("/admin/orders", "Admin page"), "admin session");
   assert.equal(authFor("/api/v1/checkout", "Headless API"), "api key");
-  // `/install` and `/api/install` are reachable without a session by design;
-  // what stands in front of them is INSTALL_TOKEN, and the map must say so
-  // rather than filing an unclaimed install as an open page.
-  assert.equal(authFor("/install", "Install & auth"), "install token");
-  assert.equal(authFor("/api/install", "Public API"), "install token");
+  assert.equal(classify("/api/ops/v1/orders"), "Operations API");
+  assert.equal(authFor("/api/ops/v1/orders", "Operations API"), "api key", "the ops API is never public");
+  assert.equal(authFor("/api/webhooks/autolaris/[token]", "Webhook"), "webhook token");
+  assert.equal(authFor("/api/handoff", classify("/api/handoff")), "handoff token");
+  assert.equal(authFor("/api/owner-recovery", classify("/api/owner-recovery")), "recovery token");
+  // The single-store install path is gone (T-21): no route may claim it.
+  assert.equal(buildRouteMap().some((route) => /install/.test(route.path)), false);
+});
+
+test("platform routes are their own families, and their auth is asked of the platform guard", () => {
+  assert.equal(classify("/platform/site"), "Platform site");
+  assert.equal(classify("/platform/site/harga"), "Platform site");
+  assert.equal(classify("/platform/signup"), "Platform site");
+  assert.equal(classify("/platform/tenants/[id]"), "Platform admin");
+  assert.equal(classify("/platform/login"), "Platform admin");
+  assert.equal(classify("/api/platform/tenants/[id]/[action]"), "Platform API");
+  const routes = new Map(buildRouteMap().map((route) => [route.path, route]));
+  // Guarded by a platform session, reachable by both platform roles (per-operation limits are ACTION_ROLES').
+  for (const path of ["/platform", "/platform/tenants/[id]", "/platform/health", "/api/platform/tenants", "/api/platform/tenants/[id]/[action]", "/api/platform/logout"]) {
+    assert.equal(routes.get(path)?.auth, "platform session", path);
+    assert.deepEqual(routes.get(path)?.roles, ["platform_owner", "platform_support"], path);
+  }
+  // The signup, sign-in and marketing surfaces are public, exactly as the guard lets them through.
+  for (const path of ["/platform/site", "/platform/signup", "/platform/login", "/api/platform/signup", "/api/platform/slug", "/api/platform/login"]) {
+    assert.equal(routes.get(path)?.auth, "public", path);
+    assert.deepEqual(routes.get(path)?.roles, [], path);
+  }
+  // A marketing page names the public URL it answers on.
+  assert.equal(routes.get("/platform/site")?.servedAt, "/");
+  assert.equal(routes.get("/platform/signup")?.servedAt, "/daftar");
+  // Nothing under /platform is filed as a storefront or public API page any more.
+  for (const route of routes.values()) {
+    if (route.path.startsWith("/platform") || route.path.startsWith("/api/platform")) {
+      assert.match(route.family, /^Platform /, route.path);
+    }
+  }
+});
+
+test("platform modules and control-plane tables are in the dictionary", () => {
+  const routes = new Map(buildRouteMap().map((route) => [route.path, route]));
+  const action = routes.get("/api/platform/tenants/[id]/[action]")!;
+  assert.ok(action.libs.includes("platform/admin/tenants"), "a platform route lists its platform modules");
+  assert.ok(action.platformTables.includes("tenants"), "and the PLATFORM_DB tables those modules name");
+  // platform/admin/tenants has no sibling test: it is proven by the integration suites importing it.
+  assert.ok(action.tests.includes("src/platform/two-tenants.test.ts"), "and the tests that import them");
+  const platformTables = knownTables("src/platform/migrations");
+  for (const table of ["tenants", "tenant_hosts", "platform_users", "tenant_events", "operator_notices"]) {
+    assert.ok(platformTables.has(table), table);
+  }
+  // Every non-test platform module is indexed; test scaffolding is not.
+  const modules = buildModuleMap([...routes.values()]).map((m) => m.name);
+  for (const name of ["platform/gate", "platform/admin/guard", "platform/site/site", "platform/notify", "lib/route-map".replace("lib/", "")]) {
+    assert.ok(modules.includes(name), name);
+  }
+  assert.equal(modules.some((name) => name.startsWith("platform/testing/")), false);
 });
 
 test("an endpoint reports the verbs it exports, a page reports GET", () => {

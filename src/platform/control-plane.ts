@@ -37,7 +37,7 @@ export type TenantContext = {
   status: TenantStatus;
   cacheVersion: number;
   host: string;
-  /** `subdomain` is the tenant's immutable `<slug>.belanja.cc`; webhooks answer only there (SEC-5). */
+  /** `subdomain` is the tenant's immutable `<slug>.adsbook.cc`; webhooks answer only there (SEC-5). */
   hostKind: "subdomain" | "custom";
   primaryHost: string | null;
   /** PR-26: the one display-only demo store (`src/platform/demo.ts`). */

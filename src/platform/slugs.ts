@@ -1,10 +1,10 @@
 /**
  * The tenant slug rule and reserved list (`docs/spec/05-DATA-MODEL.md` §4.1).
- * A slug is one DNS label under `belanja.cc`, never renamed in v1. Checked at
+ * A slug is one DNS label under `adsbook.cc`, never renamed in v1. Checked at
  * signup before any write.
  */
 
-/** Every record the `belanja.cc` zone holds (08-DOMAIN-ROUTING.md §3, zone table). */
+/** Every record the `adsbook.cc` zone holds (08-DOMAIN-ROUTING.md §3, zone table). */
 export const SELLER_ZONE_RECORDS = ["@", "*", "fallback", "cname"] as const;
 
 /**

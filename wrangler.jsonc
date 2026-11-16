@@ -51,7 +51,7 @@
   // One Worker for every seller host on the SaaS zone (ADR-039). The zone does
   // not exist yet (PRD Q-1); nothing in this repository deploys (ADR-012).
   "routes": [
-    { "pattern": "*/*", "zone_name": "belanja.cc" }
+    { "pattern": "*/*", "zone_name": "adsbook.cc" }
   ],
   // Hourly evaluation catches a stalled conversion outbox even when no operator
   // opens the dashboard. Alert transitions are deduplicated in the install's KV.
@@ -90,7 +90,7 @@
   "r2_buckets": [
     {
       "binding": "ASSET_BUCKET",
-      "bucket_name": "adsbook-media"
+      "bucket_name": "adsbook-platform-media"
     }
   ],
   "ai": {

@@ -44,7 +44,7 @@ interface SharedEnvVars {
   TURNSTILE_VERIFY_URL?: string;
   /** Platform admin sessions (IAM-3), 32+ characters. */
   PLATFORM_AUTH_SECRET?: string;
-  /** Local development only: seller hosts under `localhost` instead of `belanja.cc`. */
+  /** Local development only: seller hosts under `localhost` instead of `adsbook.cc`. */
   TENANT_HOST_SUFFIX?: string;
 }
 

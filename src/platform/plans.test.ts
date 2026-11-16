@@ -50,7 +50,7 @@ for (const cap of ["media", "ai"] as const) {
 
 test("the hostname cap follows the plan; a third domain creates no Cloudflare hostname; root + www counts once", async () => {
   const { db, setPlan } = await setup();
-  db.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES ('t-a.belanja.cc', 't-a', 'subdomain', 'active', 1, '2026-11-16')").run();
+  db.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES ('t-a.adsbook.cc', 't-a', 'subdomain', 'active', 1, '2026-11-16')").run();
   const cloudflare = createFakeCloudflare();
   const api = cloudflareHostnameApi({ zoneId: cloudflare.zoneId, token: cloudflare.token, base: "https://cf.test/client/v4", fetcher: cloudflare.fetch });
   assert.ok((await claimDomain(db, api, "t-a", "satu.com", "root")).ok, "apex + www: one domain");

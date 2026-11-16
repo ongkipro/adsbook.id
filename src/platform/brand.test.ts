@@ -56,9 +56,13 @@ test("UI-3: platform tags and copy are reachable only from platform pages", () =
   // the /platform pages; a seller host never routes there (middleware gate).
   const allowed = (path: string) =>
     path.startsWith("src/platform/") || path.startsWith("src/pages/platform/") || path.startsWith("src/components/platform/") ||
-    path === "src/pages/api/platform/signup.ts" || path === "src/env.d.ts";
+    path === "src/pages/api/platform/signup.ts" || path === "src/env.d.ts" ||
+    // Tooling that classifies /platform routes for doc/ROUTE-MAP.md; never in the Worker (checked below).
+    path === "src/lib/route-map.ts";
   const reaching = SOURCES.filter(({ path, text }) => !allowed(path) && /platform\/site\/|PlatformPixel|PLATFORM_META_/.test(text)).map(({ path }) => path);
   assert.deepEqual(reaching, []);
+  const importsRouteMap = SOURCES.filter(({ path, text }) => path !== "src/lib/route-map.ts" && /from\s+["'][^"']*route-map(\.ts)?["']/.test(text)).map(({ path }) => path);
+  assert.deepEqual(importsRouteMap, [], "route-map is tooling: no product source may import it");
   for (const layout of ["src/layouts/BaseLayout.astro", "src/components/storefront/shared/SiteFooter.astro"]) {
     assert.doesNotMatch(readFileSync(join(ROOT, layout), "utf8"), /PLATFORM_|platformPixel|fbq\('init', *['"]\d/, layout);
   }

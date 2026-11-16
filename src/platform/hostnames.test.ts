@@ -35,7 +35,7 @@ async function setup() {
     db.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES (?, ?, ?, 'active', '2026-11-16')").run(id, id, `${id}@example.test`);
     db.sqlite
       .prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'active', 1, '2026-11-16')")
-      .run(`${id}.belanja.cc`, id);
+      .run(`${id}.adsbook.cc`, id);
   }
   const cloudflare = createFakeCloudflare();
   const api = cloudflareHostnameApi({ zoneId: cloudflare.zoneId, token: cloudflare.token, base: "https://cf.test/client/v4", fetcher: cloudflare.fetch });
@@ -49,7 +49,7 @@ async function setup() {
 
 test("HOST-4: the zone, the platform domain, their subdomains and hosts over 64 characters are refused with no API call", async () => {
   const { db, cloudflare, api } = await setup();
-  for (const host of ["belanja.cc", "toko.belanja.cc", "adsbook.id", "app.adsbook.id", `${"a".repeat(61)}.com`, "not a host", "localhost"]) {
+  for (const host of ["adsbook.cc", "toko.adsbook.cc", "adsbook.id", "app.adsbook.id", `${"a".repeat(61)}.com`, "not a host", "localhost"]) {
     const result = await claimDomain(db, api, "t-a", host, "subdomain");
     assert.equal(result.ok, false, host);
     if (!result.ok) assert.equal(result.status, 422, host);
@@ -75,7 +75,7 @@ test("create → pending with the merchant's message → active only when both s
   const pending = await refreshDomain(db, api, "t-a", "tokosaya.com");
   assert.ok(pending.ok);
   assert.equal(pending.value.status, "pending");
-  assert.match(pending.value.errors[0], /DNS belum mengarah ke cname\.belanja\.cc/);
+  assert.match(pending.value.errors[0], /DNS belum mengarah ke cname\.adsbook\.cc/);
 
   // Hostname active but certificate still issuing: no routing yet.
   cloudflare.activate("tokosaya.com", "pending_validation");
@@ -136,7 +136,7 @@ test("DOM-5: removal revokes, quarantines, moves the primary back and deletes at
   await refreshDomain(db, api, "t-a", "hapus.com");
   assert.ok((await setPrimaryDomain(db, "t-a", "hapus.com", async () => true)).ok);
   assert.equal(row("hapus.com").is_primary, 1);
-  assert.equal(row("t-a.belanja.cc").is_primary, 0);
+  assert.equal(row("t-a.adsbook.cc").is_primary, 0);
 
   const before = cacheVersion("t-a");
   const now = new Date("2026-11-16T05:00:00.000Z");
@@ -147,7 +147,7 @@ test("DOM-5: removal revokes, quarantines, moves the primary back and deletes at
   assert.equal(row("hapus.com").cf, null, "deleted at Cloudflare, id cleared");
   assert.equal(cloudflare.byHost("hapus.com"), undefined);
   assert.equal(cloudflare.byHost("www.hapus.com"), undefined);
-  assert.equal(row("t-a.belanja.cc").is_primary, 1, "the platform subdomain is primary again");
+  assert.equal(row("t-a.adsbook.cc").is_primary, 1, "the platform subdomain is primary again");
   assert.ok(cacheVersion("t-a") > before);
 
   // Quarantined: no one claims it for a minute; then it can be claimed again.
@@ -164,7 +164,7 @@ test("a custom host becomes primary only after its HTTPS probe answers this tena
   await refreshDomain(db, api, "t-a", "probe.com");
   const failed = await setPrimaryDomain(db, "t-a", "probe.com", async () => false);
   assert.equal(failed.ok, false);
-  assert.equal(row("t-a.belanja.cc").is_primary, 1, "a failed probe keeps the old primary");
+  assert.equal(row("t-a.adsbook.cc").is_primary, 1, "a failed probe keeps the old primary");
   assert.ok((await setPrimaryDomain(db, "t-a", "probe.com", async () => true)).ok);
   assert.equal(row("probe.com").is_primary, 1);
 });
@@ -247,7 +247,7 @@ test("a host removed while its probe runs never leaves the tenant without a prim
     return true;
   });
   assert.equal(result.ok, false);
-  assert.equal(row("t-a.belanja.cc").is_primary, 1);
+  assert.equal(row("t-a.adsbook.cc").is_primary, 1);
 });
 
 test("internal errors never reach the merchant verbatim (T-25 review)", async () => {
@@ -336,7 +336,7 @@ test("a promotion landing between a removal's read and its write still leaves a 
     return batch(statements);
   }) as typeof db.batch;
   assert.ok((await removeDomain(db, api, "t-a", "susul.com")).ok);
-  assert.equal(row("t-a.belanja.cc").is_primary, 1, "the tenant was left without a primary");
+  assert.equal(row("t-a.adsbook.cc").is_primary, 1, "the tenant was left without a primary");
 });
 
 test("an internal failure while reserving is a logged 500, not a false conflict (T-25 review 2)", async () => {
@@ -384,7 +384,7 @@ test("a root claim's first hostname cannot be activated while the second is stil
   assert.ok(midClaim && !(midClaim as { ok: boolean }).ok, "a mid-claim refresh found nothing to activate");
   assert.equal(db.sqlite.prepare("SELECT 1 FROM tenant_hosts WHERE host = 'balap.com' AND status = 'active'").get(), undefined);
   assert.equal(cloudflare.byHost("balap.com"), undefined, "rolled back at Cloudflare");
-  assert.equal(row("t-a.belanja.cc").is_primary, 1);
+  assert.equal(row("t-a.adsbook.cc").is_primary, 1);
 });
 
 test("a removal landing while Cloudflare creates the claim's hostnames still deletes them (T-25 review 4)", async () => {

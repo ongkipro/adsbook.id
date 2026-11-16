@@ -82,7 +82,7 @@ mkdirSync(`${root}.wrangler`, { recursive: true });
 writeFileSync(envFile, "");
 
 // The built config without `routes`: with a route, wrangler dev rewrites every
-// request URL's host to the route's zone (`belanja.cc`), and the gate — which
+// request URL's host to the route's zone (`adsbook.cc`), and the gate — which
 // reads the request's own host — would see one host for every tenant. The copy
 // sits beside the built config so its relative paths still resolve.
 const builtConfig = `${root}dist/server/wrangler.json`;
