@@ -54,15 +54,17 @@ const MENUS = [
 ];
 
 test("platform console: every menu at 390 and 1366 px, team add, support refused", async ({ browser }) => {
+  test.setTimeout(120_000);
   const secret = await createOwner();
-  const used = new Set<number>();
+  // One owner sign-in: a TOTP step signs in once, so a second sign-in would wait up to 30 s.
+  const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+  const page = await context.newPage();
+  const errors: string[] = [];
+  page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
+  page.on("pageerror", (error) => errors.push(error.message));
+  await signIn(page, OWNER.email, OWNER.password, await freshCode(secret, new Set()));
   for (const width of [1366, 390]) {
-    const context = await browser.newContext({ viewport: { width, height: 900 } });
-    const page = await context.newPage();
-    const errors: string[] = [];
-    page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
-    page.on("pageerror", (error) => errors.push(error.message));
-    await signIn(page, OWNER.email, OWNER.password, await freshCode(secret, used));
+    await page.setViewportSize({ width, height: 900 });
     for (const menu of MENUS) {
       await page.goto(`${PLATFORM}${menu.path}`);
       await expect(page.getByRole("heading", { level: 1, name: menu.heading })).toBeVisible();
@@ -78,23 +80,20 @@ test("platform console: every menu at 390 and 1366 px, team add, support refused
     await page.getByRole("link", { name: "toko-alfa" }).first().click();
     await expect(page.getByRole("heading", { level: 1, name: "toko-alfa" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Tagihan langganan" })).toBeVisible();
-    expect(errors, `console errors at ${width}px`).toEqual([]);
-    await context.close();
   }
+  expect(errors, "console errors").toEqual([]);
 
   // Add a support member, sign in as them, and see the team screen refused.
-  const ownerContext = await browser.newContext({ viewport: { width: 1366, height: 900 } });
-  const ownerPage = await ownerContext.newPage();
-  await signIn(ownerPage, OWNER.email, OWNER.password, await freshCode(secret, used));
-  await ownerPage.goto(`${PLATFORM}/platform/team`);
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto(`${PLATFORM}/platform/team`);
   const supportEmail = `cs-${Date.now()}@console.local.test`;
-  await ownerPage.getByLabel("Email", { exact: true }).fill(supportEmail);
-  await ownerPage.getByLabel("Peran").selectOption("platform_support");
-  await ownerPage.getByLabel(/Password awal/).fill("support-password-123");
-  await ownerPage.getByRole("button", { name: "Tambah" }).click();
-  await expect(ownerPage.locator("#enrolment")).toBeVisible();
-  const supportSecret = (await ownerPage.locator("#enrolSecret").textContent())!.trim();
-  await ownerContext.close();
+  await page.getByLabel("Email", { exact: true }).fill(supportEmail);
+  await page.getByLabel("Peran").selectOption("platform_support");
+  await page.getByLabel(/Password awal/).fill("support-password-123");
+  await page.getByRole("button", { name: "Tambah" }).click();
+  await expect(page.locator("#enrolment")).toBeVisible();
+  const supportSecret = (await page.locator("#enrolSecret").textContent())!.trim();
+  await context.close();
 
   const supportContext = await browser.newContext({ viewport: { width: 1366, height: 900 } });
   const supportPage = await supportContext.newPage();
