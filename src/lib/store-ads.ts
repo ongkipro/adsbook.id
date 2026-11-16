@@ -1,15 +1,16 @@
 // Extension-qualified like every other module here: Vite resolves either form,
 // but `node --experimental-strip-types` does not, and the bare specifier is why
 // this module could not be unit-tested at all (audit 2026-08-23 §2.6).
-import { getRuntimeEnv, getEnvValue } from './env.ts';
+import { openCredential } from './credential-crypto.ts';
+import { tenantDatabase } from "./tenant-database.ts";
 
 export const GOOGLE_ADS_CONVERSION_ID_PATTERN = /^AW-\d{5,20}$/;
 export const GOOGLE_ADS_CONVERSION_LABEL_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 
 /**
  * The conversion destination is an atomic public configuration. A half-filled
- * or malformed environment fallback must disable the direct Google Ads tag,
- * not emit a broken `send_to` value into the storefront.
+ * or malformed pair must disable the direct Google Ads tag, not emit a broken
+ * `send_to` value into the storefront.
  */
 export function hasValidGoogleAdsConversion(
   conversionId: string,
@@ -31,7 +32,12 @@ export type StoreAdsConfig = {
   googleAdsConversionSource: AdsConfigSource;
 };
 
-export type AdsConfigSource = 'database' | 'environment' | 'none';
+/**
+ * Where a value came from: the tenant's own store, or nowhere (T-45). There is
+ * no Worker env fallback — a platform pixel id or CAPI token would put every
+ * tenant's buyers into one ad account.
+ */
+export type AdsConfigSource = 'database' | 'none';
 
 export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsConfig> {
   let dbPixelId = '';
@@ -40,7 +46,7 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
   let dbGoogleTagManagerId = '';
   let dbGoogleLabel = '';
 
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (database && typeof database === 'object' && 'prepare' in database) {
     try {
       const row = (await database
@@ -62,66 +68,29 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
 
       if (row) {
         dbPixelId = row.meta_pixel_id ?? '';
-        dbCapiToken = row.meta_capi_token ?? '';
+        // ADR-040: the token is stored sealed; unreadable reads as not set.
+        dbCapiToken = (await openCredential(database, 'meta_capi_token', row.meta_capi_token)) ?? '';
         dbGoogleTagManagerId = row.google_tag_manager_id ?? '';
         dbGoogleId = row.google_ads_conversion_id ?? '';
         dbGoogleLabel = row.google_ads_conversion_label ?? '';
       }
     } catch {
-      // Fallback to env on table read error
+      // An unreadable row is an unconfigured store: nothing is sent.
     }
   }
 
-  const envSource = getRuntimeEnv(locals);
-  const envPixelId =
-    getEnvValue('NEXT_PUBLIC_FB_PIXEL_ID', envSource) ||
-    getEnvValue('PUBLIC_FB_PIXEL_ID', envSource) ||
-    getEnvValue('FB_PIXEL_ID', envSource) ||
-    getEnvValue('META_PIXEL_ID', envSource);
-  const metaPixelId = dbPixelId || envPixelId;
-
-  const envCapiToken =
-    getEnvValue('META_CAPI_ACCESS_TOKEN', envSource) ||
-    getEnvValue('META_CAPI_TOKEN', envSource);
-  const metaCapiToken = dbCapiToken || envCapiToken;
-
-  const envGoogleTagManagerId =
-    getEnvValue('PUBLIC_GTM_ID', envSource) ||
-    getEnvValue('GTM_ID', envSource);
-  const googleTagManagerId = dbGoogleTagManagerId || envGoogleTagManagerId;
-
-  const envGoogleId = getEnvValue('GOOGLE_ADS_CONVERSION_ID', envSource);
-  const envGoogleLabel = getEnvValue('GOOGLE_ADS_CONVERSION_LABEL', envSource);
-  const hasDatabaseGoogleAdsConversion = hasValidGoogleAdsConversion(dbGoogleId, dbGoogleLabel);
-  const hasEnvironmentGoogleAdsConversion = hasValidGoogleAdsConversion(envGoogleId, envGoogleLabel);
-  const googleAdsConversionId = hasDatabaseGoogleAdsConversion
-    ? dbGoogleId
-    : hasEnvironmentGoogleAdsConversion
-      ? envGoogleId
-      : '';
-  const googleAdsConversionLabel = hasDatabaseGoogleAdsConversion
-    ? dbGoogleLabel
-    : hasEnvironmentGoogleAdsConversion
-      ? envGoogleLabel
-      : '';
+  const hasGoogleAdsConversion = hasValidGoogleAdsConversion(dbGoogleId, dbGoogleLabel);
+  const source = (value: string): AdsConfigSource => (value ? 'database' : 'none');
 
   return {
-    metaPixelId,
-    metaCapiToken,
-    googleTagManagerId,
-    googleAdsConversionId,
-    googleAdsConversionLabel,
-    metaPixelSource: dbPixelId ? 'database' : envPixelId ? 'environment' : 'none',
-    metaCapiSource: dbCapiToken ? 'database' : envCapiToken ? 'environment' : 'none',
-    googleTagManagerSource: dbGoogleTagManagerId
-      ? 'database'
-      : envGoogleTagManagerId
-        ? 'environment'
-        : 'none',
-    googleAdsConversionSource: hasDatabaseGoogleAdsConversion
-      ? 'database'
-      : hasEnvironmentGoogleAdsConversion
-        ? 'environment'
-        : 'none',
+    metaPixelId: dbPixelId,
+    metaCapiToken: dbCapiToken,
+    googleTagManagerId: dbGoogleTagManagerId,
+    googleAdsConversionId: hasGoogleAdsConversion ? dbGoogleId : '',
+    googleAdsConversionLabel: hasGoogleAdsConversion ? dbGoogleLabel : '',
+    metaPixelSource: source(dbPixelId),
+    metaCapiSource: source(dbCapiToken),
+    googleTagManagerSource: source(dbGoogleTagManagerId),
+    googleAdsConversionSource: hasGoogleAdsConversion ? 'database' : 'none',
   };
 }

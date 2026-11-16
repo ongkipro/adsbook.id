@@ -10,69 +10,55 @@ type R2Bucket = import("@cloudflare/workers-types/index.ts").R2Bucket;
 type Ai = import("@cloudflare/workers-types/index.ts").Ai;
 
 interface SharedEnvVars {
-  PUBLIC_COD_DISABLED_PROVINCES?: string;
-  PUBLIC_SITE_NAME?: string;
-  PUBLIC_SITE_URL?: string;
-  /** Older domains of this store, comma separated; each 301s to PUBLIC_SITE_URL (lib/host-redirect.ts). */
-  PUBLIC_ALIAS_HOSTS?: string;
-  PUBLIC_SITE_DESCRIPTION?: string;
-  PUBLIC_SITE_LOGO?: string;
-  PUBLIC_SITE_BRAND_MARK?: string;
-  PUBLIC_SITE_NOINDEX?: string;
-  PUBLIC_SITE_TAGLINE?: string;
-  PUBLIC_DEFAULT_BRAND?: string;
-  PUBLIC_SITE_THEME_COLOR?: string;
-  PUBLIC_SITE_LOCALE?: string;
-  PUBLIC_STOREFRONT_TEMPLATE?: string;
-  PUBLIC_ADMIN_NAME?: string;
-  PUBLIC_EMBED_ALLOWED_ORIGINS?: string;
-  PUBLIC_HEADLESS_ALLOWED_ORIGINS?: string;
-  MENGANTAR_API_KEY?: string;
-  AUTH_SECRET?: string;
-  INSTALL_TOKEN?: string;
-  /** Optional per-install HTTPS endpoint for redacted operational alerts. */
+  // No store identity, AUTH_SECRET, INSTALL_TOKEN (T-21) or provider credential
+  // (T-45) here: each is a row in the tenant's own store.
+  /** The platform's HTTPS endpoint for redacted operational alerts (a Worker secret). */
   OPS_ALERT_WEBHOOK_URL?: string;
-  /** Kelola plugin fallback webhook pair; used only while the plugin is active (ADR-028). */
-  KELOLA_ORDER_WEBHOOK_URL?: string;
-  KELOLA_ORDER_WEBHOOK_SECRET?: string;
-  BOOTSTRAP_ADMIN_PASSWORD?: string;
-  MENGANTAR_ORIGIN_AREA_ID?: string;
-  MENGANTAR_PICKUP_ADDRESS_ID?: string;
-  AUTOLARIS_API_KEY?: string;
-  /** Numeric AutoLaris area ids used only by the `/submit` dashboard-order mirror. */
-  AUTOLARIS_ORDER_ORIGIN_ID?: string;
-  AUTOLARIS_ORDER_DESTINATION_ID?: string;
-  /** Optional provider-required shipper email; buyer email is the fallback. */
-  AUTOLARIS_SHIPPER_EMAIL?: string;
-  AUTOLARIS_BASE_URL?: string;
-  META_PIXEL_ID?: string;
-  META_CAPI_ACCESS_TOKEN?: string;
-  META_CAPI_TOKEN?: string;
-  NEXT_PUBLIC_FB_PIXEL_ID?: string;
-  PUBLIC_FB_PIXEL_ID?: string;
-  FB_PIXEL_ID?: string;
-  GOOGLE_ADS_CONVERSION_ID?: string;
-  GOOGLE_ADS_CONVERSION_LABEL?: string;
-  NEXT_PUBLIC_GTM_ID?: string;
-  PUBLIC_GTM_ID?: string;
-  GTM_ID?: string;
-  GOOGLE_ADS_CUSTOMER_ID?: string;
-  GOOGLE_ADS_OFFLINE_CONVERSION_ACTION_ID?: string;
-  GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
-  GOOGLE_ADS_DEVELOPER_TOKEN?: string;
-  GOOGLE_ADS_CLIENT_ID?: string;
-  GOOGLE_ADS_CLIENT_SECRET?: string;
-  GOOGLE_ADS_REFRESH_TOKEN?: string;
-  /** ISO timestamp; prevents accidental historical conversion backfill. */
-  GOOGLE_ADS_OFFLINE_START_AT?: string;
+  /** Operator notices (T-44, PR-29): new seller, store ready, domain active/failing, first order. A Worker secret. */
+  PLATFORM_ALERT_WEBHOOK_URL?: string;
+  /**
+   * ADR-040 (T-48): the root of stored provider-credential encryption, 32 random
+   * bytes as base64, optionally `v<N>:`-prefixed. A Worker secret; without it no
+   * credential is read or stored. `_PREVIOUS` holds the prior key during rotation.
+   */
+  PLATFORM_CREDENTIAL_KEY?: string;
+  PLATFORM_CREDENTIAL_KEY_PREVIOUS?: string;
+  /** The platform admin origin for links in notices (default https://app.adsbook.id). */
+  PLATFORM_ADMIN_URL?: string;
+  /** The marketing site (T-40): canonical origin, the platform's own Pixel and CAPI token (secret), support contacts. */
+  PLATFORM_SITE_URL?: string;
+  PLATFORM_META_PIXEL_ID?: string;
+  PLATFORM_META_CAPI_TOKEN?: string;
+  PLATFORM_META_TEST_EVENT_CODE?: string;
+  PLATFORM_SUPPORT_EMAIL?: string;
+  PLATFORM_SUPPORT_WHATSAPP?: string;
+  /** Cloudflare for SaaS (T-25): the SaaS zone id and a zone-scoped "SSL and Certificates Write" token. */
+  CF_SAAS_ZONE_ID?: string;
+  CF_SAAS_TOKEN?: string;
+  /** Local development only: a stand-in for api.cloudflare.com. */
+  CF_API_BASE?: string;
+  /** Signup's Turnstile (T-26): the public site key and the Worker secret. */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  /** Local development only: a stand-in for Turnstile's siteverify. */
+  TURNSTILE_VERIFY_URL?: string;
+  /** Platform admin sessions (IAM-3), 32+ characters. */
+  PLATFORM_AUTH_SECRET?: string;
+  /** Local development only: seller hosts under `localhost` instead of `adsbook.cc`. */
+  TENANT_HOST_SUFFIX?: string;
 }
 
 interface CloudflareRuntimeEnv extends SharedEnvVars {
   SESSION: KVNamespace;
-  OMS_DB: D1Database;
   ASSET_BUCKET: R2Bucket;
   AI: Ai;
   ASSETS: unknown;
+  /** The control plane (TD-2): tenants, hosts, plans, audit. */
+  PLATFORM_DB?: D1Database;
+  /** One SQLite Durable Object per tenant (TD-3); only `src/platform/` reaches it. */
+  TENANT_STORE?: unknown;
+  /** Extra exact platform hosts for local development, comma separated. */
+  PLATFORM_HOSTS?: string;
 }
 declare namespace Cloudflare {
   interface Env extends CloudflareRuntimeEnv {}
@@ -97,5 +83,20 @@ declare namespace App {
       role: import("./lib/auth").AdminRole;
       mustChangePassword: boolean;
     };
+    /**
+     * Set by the request gate (TD-1) on a tenant host only: the tenant this
+     * request belongs to, resolved from `Host` against `PLATFORM_DB`.
+     */
+    tenantContext?: import("./platform/control-plane").TenantContext;
+    /**
+     * This tenant's database (TEN-2): opened by the middleware from
+     * `tenantContext.tenantId` through `src/platform/tenant-db.ts`. Read it
+     * through `tenantDatabase(locals)` (`src/lib/tenant-database.ts`).
+     */
+    tenantDb?: D1Database;
+    /** Set by the request gate on a platform host only; never with `tenantContext`. */
+    platform?: { host: string };
+    /** The signed-in platform user on a platform host (T-27); never on a seller host. */
+    platformUser?: import("./platform/admin/session").PlatformUser;
   }
 }

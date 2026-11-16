@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { getRuntimeEnv } from '../../lib/env.ts';
 import { json, jsonError, jsonOk } from '../../lib/api.ts';
 import { recordAbandonedOrder } from '../../lib/order-persistence.ts';
 import { captureMetaOrderContext, serializeMetaOrderContext } from '../../lib/meta-order-context.ts';
@@ -11,9 +10,9 @@ import {
 } from '../../lib/rate-limit.ts';
 import { sourcePathFromReferer } from '../../lib/source-slug.ts';
 import { isValidWa62, normalizePhone } from '../../lib/validation.ts';
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const runtime = getRuntimeEnv(locals);
 
   const body = await request.json().catch(() => null) as {
     customer_name?: string;
@@ -50,7 +49,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const clientIp = getClientIp(request.headers);
   const rateLimit = await checkRateLimit(
-    runtime?.OMS_DB as D1Database | undefined,
+    tenantDatabase(locals),
     `record-abandoned-order:${clientIp}`,
     10,
     60_000,
@@ -67,7 +66,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  const database = runtime?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database order belum tersedia.', 503);
   }

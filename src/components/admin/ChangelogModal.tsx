@@ -120,7 +120,7 @@ const CHANGELOG_RELEASES: ChangelogRelease[] = [
       },
       {
         title: "Docs: panduan admin, API, dan CLI",
-        description: "Buku panduan teks dari tombol Docs di kartu AdsBookCMS bawah sidebar (owner dan admin). Bagian Panduan admin menjelaskan pesanan, pengiriman, pembayaran dan biaya admin, katalog dan landing page, iklan dan analitik, serta pengaturan. Bagian Integrasi menjelaskan API key, Headless API, Operations API, CLI adsbook, dan kode error; daftar endpoint dan scope-nya dibaca langsung dari sistem.",
+        description: "Buku panduan teks dari tombol Docs di kartu adsbook.id bawah sidebar (owner dan admin). Bagian Panduan admin menjelaskan pesanan, pengiriman, pembayaran dan biaya admin, katalog dan landing page, iklan dan analitik, serta pengaturan. Bagian Integrasi menjelaskan API key, Headless API, Operations API, CLI adsbook, dan kode error; daftar endpoint dan scope-nya dibaca langsung dari sistem.",
       },
       {
         title: "Tagihan QRIS/VA sama dengan total di checkout",
@@ -318,7 +318,7 @@ const CHANGELOG_RELEASES: ChangelogRelease[] = [
       },
       {
         title: "Logo login ke beranda",
-        description: "Logo AdsBookCMS di halaman login kini bisa diklik untuk kembali ke beranda toko, di HP maupun desktop.",
+        description: "Logo adsbook.id di halaman login kini bisa diklik untuk kembali ke beranda toko, di HP maupun desktop.",
       },
       {
         title: "Upload foto tarik-lepas",
@@ -396,7 +396,7 @@ const CHANGELOG_RELEASES: ChangelogRelease[] = [
       },
       {
         title: "Ikon, halaman masuk, dan menu akun baru",
-        description: "Ikon AdsBookCMS baru untuk tab browser dan layar utama iOS (toko yang sudah memasang ikonnya sendiri tetap memakainya). Halaman masuk admin dirapikan: muat satu layar di HP dan desktop, dengan QRIS bercanda di sisi kiri (CMS gratis, server gratis). Tombol akun di kanan atas kini membuka menu: profil, pengaturan toko, storefront, catatan rilis, dan Keluar.",
+        description: "Ikon adsbook.id baru untuk tab browser dan layar utama iOS (toko yang sudah memasang ikonnya sendiri tetap memakainya). Halaman masuk admin dirapikan: muat satu layar di HP dan desktop, dengan QRIS bercanda di sisi kiri (CMS gratis, server gratis). Tombol akun di kanan atas kini membuka menu: profil, pengaturan toko, storefront, catatan rilis, dan Keluar.",
       },
     ],
   },
@@ -1125,7 +1125,7 @@ export function ChangelogModal({ open, onOpenChange }: ChangelogModalProps) {
             </span>
           </div>
           <DialogDescription className="text-xs text-slate-500">
-            Apa yang berubah di setiap versi AdsBookCMS.
+            Apa yang berubah di setiap versi adsbook.id.
           </DialogDescription>
         </DialogHeader>
 

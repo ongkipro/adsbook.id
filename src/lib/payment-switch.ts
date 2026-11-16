@@ -36,7 +36,6 @@ import {
   type AutoLarisCheckoutChannel,
 } from "./autolaris-client.ts";
 import { createAutoLarisPaymentForOrder, recordFailedPaymentAttempt } from "./autolaris-payment.ts";
-import { getEnvValue, getRuntimeEnv } from "./env.ts";
 import { paymentBrandLabel } from "./payment-brand.ts";
 import { autoLarisOrderRailGap, getProviderConfig } from "./provider-config.ts";
 
@@ -186,11 +185,10 @@ async function autoLarisChannelUnavailable(
     database.prepare("SELECT address FROM warehouses ORDER BY id LIMIT 1").first<{ address: string | null }>(),
   ]);
   if (store?.is_autolaris_enabled === 0) return "AutoLaris dinonaktifkan oleh toko.";
-  const env = getRuntimeEnv(locals);
   const gap = autoLarisOrderRailGap({
     apiKey: provider.apiKey,
-    originId: getEnvValue("AUTOLARIS_ORDER_ORIGIN_ID", env),
-    destinationId: getEnvValue("AUTOLARIS_ORDER_DESTINATION_ID", env),
+    originId: provider.originId,
+    destinationId: provider.destinationId,
     warehouseAddress: warehouse?.address,
   });
   if (gap) return gap;

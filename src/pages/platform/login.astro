@@ -1,0 +1,49 @@
+---
+import PlatformLayout from '../../components/platform/PlatformLayout.astro';
+export const prerender = false;
+---
+<PlatformLayout title="Masuk">
+  <div class="mx-auto max-w-sm">
+    <h1 class="text-xl font-semibold text-slate-950">Masuk ke platform</h1>
+    <form id="loginForm" class="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm" novalidate>
+      <div>
+        <label for="email" class="block text-sm font-semibold">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="username" class="admin-input-flat mt-2" />
+      </div>
+      <div>
+        <label for="password" class="block text-sm font-semibold">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password" class="admin-input-flat mt-2" />
+      </div>
+      <div>
+        <label for="totp" class="block text-sm font-semibold">Kode autentikator</label>
+        <input id="totp" name="totp" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" class="admin-input-flat mt-2 font-mono tracking-widest" />
+      </div>
+      <p id="loginError" class="min-h-5 text-sm font-semibold text-rose-700" role="alert"></p>
+      <button id="loginSubmit" type="submit" class="btn-primary w-full">Masuk</button>
+    </form>
+  </div>
+  <script>
+    const form = document.getElementById('loginForm') as HTMLFormElement;
+    const error = document.getElementById('loginError') as HTMLElement;
+    const button = document.getElementById('loginSubmit') as HTMLButtonElement;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity() || button.disabled) return;
+      button.disabled = true;
+      error.textContent = '';
+      const values = new FormData(form);
+      try {
+        const response = await fetch('/api/platform/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: values.get('email'), password: values.get('password'), totp: values.get('totp') }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) { error.textContent = payload.error || 'Gagal masuk.'; return; }
+        window.location.assign('/platform');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</PlatformLayout>

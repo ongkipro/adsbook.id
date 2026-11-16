@@ -1,0 +1,40 @@
+---
+import '../../styles/admin.css';
+interface Props { title: string; active?: 'tenants' | 'health' }
+const { title, active } = Astro.props;
+const user = Astro.locals.platformUser;
+const link = (on: boolean) => `rounded-lg px-3 py-2 text-sm font-semibold ${on ? 'bg-blue-50 text-blue-800' : 'text-slate-600 hover:bg-slate-100'}`;
+---
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} - adsbook.id platform</title>
+  </head>
+  <body class="min-h-dvh bg-[#f6f7f9] text-slate-900 antialiased">
+    <header class="border-b border-slate-200 bg-white">
+      <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <a href="/platform" class="text-sm font-semibold text-slate-950">adsbook.id <span class="font-normal text-slate-500">platform</span></a>
+        {user && (
+          <nav class="flex flex-wrap items-center gap-1" aria-label="Platform">
+            <a href="/platform" class={link(active === 'tenants')} aria-current={active === 'tenants' ? 'page' : undefined}>Tenant</a>
+            <a href="/platform/health" class={link(active === 'health')} aria-current={active === 'health' ? 'page' : undefined}>Kesehatan</a>
+            <span class="hidden px-2 text-xs text-slate-500 sm:inline">{user.email} · {user.role === 'platform_owner' ? 'owner' : 'support'}</span>
+            <button id="platformLogout" type="button" class="btn-secondary">Keluar</button>
+          </nav>
+        )}
+      </div>
+    </header>
+    <main class="mx-auto w-full max-w-6xl px-4 py-6">
+      <slot />
+    </main>
+    <script>
+      document.getElementById('platformLogout')?.addEventListener('click', async () => {
+        await fetch('/api/platform/logout', { method: 'POST' }).catch(() => undefined);
+        window.location.assign('/platform/login');
+      });
+    </script>
+  </body>
+</html>

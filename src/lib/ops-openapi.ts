@@ -27,12 +27,12 @@ const filterValue = { type: "string", pattern: "^[a-z_]{1,32}$" };
 export const opsOpenApiDocument = {
   openapi: "3.1.0",
   info: {
-    title: "AdsBookCMS Operations API",
+    title: "adsbook.id Operations API",
     version: "1.0.0",
     description:
-      "Server-to-server operations API for one AdsBookCMS store. No CORS: call it from a server, a script or the adsbook CLI, never from a browser. Every response is no-store.",
+      "Server-to-server operations API for one adsbook.id store. No CORS: call it from a server, a script or the adsbook CLI, never from a browser. Every response is no-store.",
   },
-  servers: [{ url: "/api/ops/v1", description: "Current AdsBookCMS install" }],
+  servers: [{ url: "/api/ops/v1", description: "This store" }],
   security: [{ bearerAuth: [] }, { appKeyAuth: [] }],
   tags: [{ name: "Orders" }, { name: "Contract" }],
   paths: {

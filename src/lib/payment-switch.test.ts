@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
@@ -17,7 +18,8 @@ import { loadPublicOrderStatus } from './order-status.ts';
 // the COD total carries the buyer-borne 3% fee + 11% VAT on top.
 const COD_TOTAL = 110_000 + 3_300 + 363;
 
-function fixture(env: Record<string, string> = {}) {
+/** `settings`: `stores` columns the tenant saved (T-45: provider settings are never env). */
+function fixture(settings: Record<string, string> = {}) {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
   const dir = new URL('../db/migrations/', import.meta.url);
@@ -36,6 +38,7 @@ function fixture(env: Record<string, string> = {}) {
     VALUES (1,1,'INV-1','tok-1','Budi','081200000000','Jl. A','DI Yogyakarta','Sleman','Depok',${COD_TOTAL},20000,10000,3300,363,'buyer',
       'cod','unpaid','pending','jne','REG','123','fp-1','2026-01-01');
     INSERT INTO order_items (order_id,variant_id,quantity,unit_price) VALUES (1,1,2,50000);`);
+  for (const [column, value] of Object.entries(settings)) sqlite.prepare(`UPDATE stores SET ${column} = ? WHERE id = 1`).run(value);
   const db = { prepare(sql: string) {
     let values: any[] = [];
     const q = {
@@ -46,7 +49,7 @@ function fixture(env: Record<string, string> = {}) {
     };
     return q;
   } } as unknown as D1Database;
-  const locals = { runtimeEnv: { OMS_DB: db, ...env } } as unknown as App.Locals;
+  const locals = { tenantDb: db, runtimeEnv: {} } as unknown as App.Locals;
   const order = () => sqlite.prepare('SELECT * FROM orders WHERE id = 1').get() as Record<string, any>;
   const view = () => adminPaymentSwitchView(order() as never, 100_000);
   // The operator's switch; a refusal comes back as its HTTP status.
@@ -61,6 +64,7 @@ function fixture(env: Record<string, string> = {}) {
       throw error;
     }
   };
+  bindTestCredentialsIn(db);
   return { sqlite, db, order, view, switchTo };
 }
 
@@ -104,7 +108,7 @@ test('the switch refuses an inactive account, an unconfigured AutoLaris channel 
 
 test('a VA switch whose provider call fails leaves a prepaid order with a failed instruction the buyer can regenerate', async t => {
   const { sqlite, db, order, view, switchTo } = fixture({
-    AUTOLARIS_API_KEY: 'test-key', AUTOLARIS_ORDER_ORIGIN_ID: '1', AUTOLARIS_ORDER_DESTINATION_ID: '2',
+    autolaris_api_key: 'test-key', autolaris_order_origin_id: '1', autolaris_order_destination_id: '2',
   });
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async () => { throw new Error('provider down'); }) as typeof fetch;

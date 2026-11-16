@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
 import { jsonError } from '../../../../lib/api.ts';
-import { getRuntimeEnv } from '../../../../lib/env.ts';
 import {
   buildOrderCsv,
   isOrderExportKind,
@@ -10,6 +9,7 @@ import {
   orderExportSql,
   type OrderExportRow,
 } from '../../../../lib/order-export.ts';
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -19,7 +19,7 @@ export const prerender = false;
  * `/api/admin/orders`, so only the roles that may read the order list reach it.
  */
 export const GET: APIRoute = async ({ url, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database) return jsonError('Database order belum tersedia.', 503);
 
   const kind = url.searchParams.get('kind') || 'orders';

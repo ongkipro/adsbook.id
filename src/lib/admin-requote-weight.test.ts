@@ -3,6 +3,7 @@
 // weight, and OrderDetail's preview quotes the same figure. Runs the real admin
 // order route, the public rate route and dispatch against the migration chain
 // in SQLite; Mengantar is a stub that records the weight it is asked for.
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
@@ -30,7 +31,7 @@ extensionResolver.deregister();
 
 type Value = null | number | string;
 
-function openDatabase() {
+function openDatabase__raw() {
   const sqlite = new DatabaseSync(":memory:");
   const directory = new URL("../db/migrations/", import.meta.url);
   for (const name of readdirSync(directory).filter((file) => file.endsWith(".sql")).sort()) {
@@ -122,7 +123,7 @@ function stubMengantar(context: { after: (fn: () => void) => void }) {
   return { quoted, dispatched };
 }
 
-const admin = (d1: D1Database) => ({ admin: { id: "admin-1", role: "owner" }, runtimeEnv: { OMS_DB: d1 } });
+const admin = (d1: D1Database) => ({ admin: { id: "admin-1", role: "owner" }, tenantDb: d1, runtimeEnv: { OMS_DB: d1} });
 
 test("a courier re-quote after the variant is edited charges and ships the recorded weight (A-397)", async (context) => {
   const { sqlite, d1 } = openDatabase();
@@ -166,7 +167,7 @@ test("a courier re-quote after the variant is edited charges and ships the recor
     warehouse_id: "1",
   }).toString();
   const preview = (await (
-    await shippingRatesRoute({ request: new Request(previewUrl), url: previewUrl, locals: { runtimeEnv: { OMS_DB: d1 } } } as never)
+    await shippingRatesRoute({ request: new Request(previewUrl), url: previewUrl, locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} } } as never)
   ).json()) as { items: Array<{ courier_service_id: number; courier_code: string; shipping_cost: number }> };
   const picked = preview.items.find((rate) => rate.courier_code === "SiCepat");
   assert.ok(picked, `the preview offers SiCepat: ${JSON.stringify(preview)}`);
@@ -207,3 +208,8 @@ test("the order detail preview quotes the recorded weight, falling back to the v
   assert.match(source, /if \(unitWeightKg === null\) params\.set\("variant_id"[^\n]*\n\s*else params\.set\("weight", String\(unitWeightKg\)\);/);
   assert.equal(source.match(/params\.set\("variant_id"/g)?.length, 1, "variant_id is set only in the no-weight fallback");
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function openDatabase(...args: Parameters<typeof openDatabase__raw>): ReturnType<typeof openDatabase__raw> {
+  return bindTestCredentialsIn(openDatabase__raw(...args));
+}

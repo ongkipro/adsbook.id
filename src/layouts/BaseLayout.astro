@@ -256,6 +256,10 @@ const preloadImageUrls =
          no green painted a solid emerald block across it. Square, like everything
          else on these routes. -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-[#111111] focus:text-white focus:px-4 focus:py-2 focus:font-bold">Lewati ke konten utama</a>
+    {/* PR-26 (T-41): the demo store says so on every page; ordering is off there. */}
+    {Astro.locals.tenantContext?.isDemo && (
+      <p role="note" class="bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">Toko contoh adsbook.id: lihat-lihat saja, pemesanan tidak aktif.</p>
+    )}
     {/* The storefront is a phone-width column on every screen (compact
         template, DESIGN-SYSTEM §3). On a wide screen the grey canvas says
         the column is deliberate rather than a page that failed to stretch. */}

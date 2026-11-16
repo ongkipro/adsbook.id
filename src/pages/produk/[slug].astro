@@ -1,4 +1,5 @@
 ---
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 import { geoHeadersFromCf } from '../../lib/geo';
 import Breadcrumb from '../../components/storefront/shared/Breadcrumb.astro';
 import MetaLandingTracker from '../../components/storefront/tracking/MetaLandingTracker.astro';
@@ -11,7 +12,6 @@ import GeoIpResolvedForm from '../../components/storefront/forms/GeoIpResolvedFo
 import ProductImageGallery from '../../components/storefront/ProductImageGallery.astro';
 import SocialProofToast from '../../components/storefront/shared/SocialProofToast.astro';
 import { recentOrderCount } from '../../lib/social-proof';
-import { getRuntimeEnv } from '../../lib/env';
 import { resolveFormModeContext } from '../../lib/form-mode';
 import '../../styles/form-hybrid.css';
 import { defaultCatalogContentId } from '../../lib/catalog-feed';
@@ -39,7 +39,7 @@ void geoHeadersFromCf;
 const [productPageLanding, socialProofOrders] = await Promise.all([
   getProductPageLanding(Astro.locals, String(product.productId)),
   // The store's real orders (A-300); under the threshold the toast renders nothing.
-  recentOrderCount(getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined),
+  recentOrderCount(tenantDatabase(Astro.locals)),
 ]);
 if (productPageLanding) {
   // The rewritten route does NOT see this route's `Astro.url` — it sees the

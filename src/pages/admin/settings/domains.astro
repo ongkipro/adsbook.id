@@ -1,0 +1,32 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import { DomainManager } from '../../../components/admin/DomainManager';
+import { CNAME_TARGET } from '../../../platform/hostnames';
+export const prerender = false;
+
+// UX-3 / API-5 (T-25): the platform subdomain, always on, and the store's own
+// domains through Cloudflare for SaaS. State comes from /api/admin/domains.
+---
+
+<AdminLayout title="Domain" activeMenu="settings">
+  <div class="space-y-6">
+    <AdminPageHeader
+      title="Domain"
+      description="Alamat toko: subdomain adsbook.cc yang selalu aktif, dan domain milik Anda sendiri."
+    />
+
+    <DomainManager client:load />
+
+    <section class="rounded-xl border border-slate-200 bg-white p-5 text-xs leading-5 text-slate-600 shadow-sm md:p-6" aria-labelledby="dnsHelpTitle">
+      <h2 id="dnsHelpTitle" class="text-sm font-semibold text-slate-950">Mengarahkan DNS</h2>
+      <ul class="mt-2 list-disc space-y-1 pl-4">
+        <li>Domain utama: record <code>CNAME</code> (atau <code>ALIAS</code>/<code>ANAME</code>) <code>@</code> ke <code>{CNAME_TARGET}</code>, dan <code>CNAME www</code> ke alamat yang sama.</li>
+        <li>Registrar yang tidak mendukung CNAME di domain utama (umum di registrar lokal): pindahkan nameserver ke DNS Cloudflare gratis, atau pilih "Hanya www".</li>
+        <li>Jika domain Anda di Cloudflare, set SSL/TLS ke <strong>Full</strong> atau <strong>Full (strict)</strong>. Jangan ubah record <code>MX</code> (email tetap jalan).</li>
+        <li>"Hanya www": pengalihan domain utama ke www di registrar sering tanpa HTTPS; pengunjung yang mengetik tanpa www bisa melihat peringatan.</li>
+      </ul>
+    </section>
+  </div>
+
+</AdminLayout>

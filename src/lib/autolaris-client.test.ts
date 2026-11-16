@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -258,6 +259,7 @@ test("test-autolaris verifies the stored key against the provider without leakin
       };
     },
   };
+  bindTestCredentialsIn(database);
 
   const response = await updateSettings({
     request: new Request("https://store.example.test/api/admin/settings", {
@@ -265,7 +267,7 @@ test("test-autolaris verifies the stored key against the provider without leakin
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "test-autolaris" }),
     }),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
 
   assert.equal(response.status, 200);
@@ -292,13 +294,12 @@ test("only the owner may replace provider endpoints or credentials", async () =>
     }),
     locals: {
       admin: { username: "admin-test", role: "admin", mustChangePassword: false },
-      runtimeEnv: {
-        OMS_DB: {
+      tenantDb: {
           prepare() {
             databaseReads += 1;
             throw new Error("database must not be reached");
           },
-        },
+        }, runtimeEnv: {
       },
     },
   } as never);
@@ -340,6 +341,7 @@ test("AutoLaris channel checks report verified provider state", async (context) 
       };
     },
   };
+  bindTestCredentialsIn(database);
 
   const response = await updateSettings({
     request: new Request("https://store.example.test/api/admin/settings", {
@@ -347,7 +349,7 @@ test("AutoLaris channel checks report verified provider state", async (context) 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "test-autolaris-channels" }),
     }),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
 
   assert.equal(response.status, 200);
@@ -439,6 +441,7 @@ test("save-autolaris-channels keeps provider-locked channels disabled", async ()
       };
     },
   };
+  bindTestCredentialsIn(database);
 
   const response = await updateSettings({
     request: new Request("https://store.example.test/api/admin/settings", {
@@ -449,7 +452,7 @@ test("save-autolaris-channels keeps provider-locked channels disabled", async ()
         disabled_autolaris_channels: [],
       }),
     }),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
 
   assert.equal(response.status, 200);
@@ -481,6 +484,7 @@ test("payment master settings reject missing boolean values", async () => {
       return { async run() { return { success: true }; } };
     },
   };
+  bindTestCredentialsIn(database);
 
   const response = await updateSettings({
     request: new Request("https://store.example.test/api/admin/settings", {
@@ -491,7 +495,7 @@ test("payment master settings reject missing boolean values", async () => {
         is_cod_enabled: false,
       }),
     }),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
 
   assert.equal(response.status, 400);

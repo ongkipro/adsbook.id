@@ -62,7 +62,7 @@ async function saveWarehouse(database: unknown) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "save-warehouse", warehouse: WAREHOUSE }),
     }),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
 }
 

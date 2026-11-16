@@ -293,7 +293,7 @@ test("the heartbeat is no longer a KV key", () => {
 
 const locals = (database: D1Database, extra: Record<string, unknown> = {}) =>
   ({
-    runtimeEnv: { OMS_DB: database, ...extra },
+    tenantDb: database, runtimeEnv: { OMS_DB: database, ...extra },
     tenant: { siteUrl: "https://toko.test" },
     admin: { username: "owner", role: "owner" },
   }) as unknown as App.Locals;
@@ -472,6 +472,8 @@ const MIGRATIONS_STUB = "stub:bundled-migrations";
 const workerHooks = registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "@astrojs/cloudflare/handler") return { url: HANDLER_STUB, shortCircuit: true };
+    // worker.ts re-exports TenantStore (T-18); only its base class is needed here, and no `env`.
+    if (specifier === "cloudflare:workers") return { url: "stub:cloudflare-workers", shortCircuit: true };
     if (/bundled-migrations(\.ts)?$/.test(specifier)) return { url: MIGRATIONS_STUB, shortCircuit: true };
     try {
       return nextResolve(specifier, context);
@@ -481,6 +483,9 @@ const workerHooks = registerHooks({
     }
   },
   load(url, context, nextLoad) {
+    if (url === "stub:cloudflare-workers") {
+      return { format: "module", source: "export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }", shortCircuit: true };
+    }
     if (url === HANDLER_STUB) {
       return { format: "module", source: "export const handle = () => new Response('');", shortCircuit: true };
     }
@@ -498,8 +503,20 @@ const workerHooks = registerHooks({
     return nextLoad(url, context);
   },
 });
-const worker = (await import("../worker.ts")).default as unknown as {
-  scheduled(controller: { scheduledTime: number }, env: Record<string, unknown>, ctx: unknown): Promise<void>;
+const workerModule = (await import("../platform/tenant-maintenance.ts")) as unknown as {
+  runTenantMaintenance(env: Record<string, unknown>, database: D1Database, tenantId: string, scheduledTime: number, ctx: unknown): Promise<void>;
+};
+const { ensureSchemaUpgraded: applyTenantChain } = await import("./schema-version.ts");
+// One tenant's maintenance (T-34). `openTenantDb` brings a store to the
+// release before maintenance runs; here the test applies the chain itself.
+const worker = {
+  async scheduled(controller: { scheduledTime: number }, env: Record<string, unknown>, ctx: unknown) {
+    const database = env.OMS_DB as D1Database;
+    await applyTenantChain(database);
+    // A tenant's run needs its identity row (TEN-5); signup writes it.
+    await database.prepare("INSERT OR IGNORE INTO stores (id, name, slug, created_at) VALUES (1, 'Toko Uji', 'toko-uji', '2026-10-29')").run();
+    await workerModule.runTenantMaintenance(env, database, "t-test", controller.scheduledTime, ctx);
+  },
 };
 // Not deregistered: `schema-version.ts` imports the migration chain lazily, on
 // the first run, so the stub must still resolve then. node --test gives this
@@ -631,8 +648,8 @@ test("the cron still fires an alert on a stalled outbox, and its only KV writes 
   assert.ok(kv.puts.every((key) => /alert/i.test(key)), `non-alert KV write: ${kv.puts.join(", ")}`);
 });
 
-test("worker.ts: the snapshot is the last step, inside housekeeping, after the alert evaluation", () => {
-  const source = readFileSync(new URL("../worker.ts", import.meta.url), "utf8");
+test("tenant maintenance: the snapshot is the last step, inside housekeeping, after the alert evaluation", () => {
+  const source = readFileSync(new URL("../platform/tenant-maintenance.ts", import.meta.url), "utf8");
   const order = [
     'housekeeping("scheduled-heartbeat-failed"',
     "reconcileAutoLarisPaymentStatuses(",
@@ -651,5 +668,6 @@ test("worker.ts: the snapshot is the last step, inside housekeeping, after the a
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   assert.doesNotMatch(source, /recordSchedulerRun\(env\.SESSION/);
   const tail = source.slice(source.indexOf('housekeeping("scheduled-health-snapshot-failed"'));
-  assert.ok(tail.indexOf("\n}\n") < tail.indexOf("export default"), "nothing runs after the snapshot");
+  // The snapshot's own call closes the function: nothing runs after it.
+  assert.match(tail, /^housekeeping\("scheduled-health-snapshot-failed"[\s\S]*?\n {2}\}\);\n\}\n/, "nothing runs after the snapshot");
 });

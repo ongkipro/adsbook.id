@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../lib/api.ts';
-import { getRuntimeEnv } from '../../../lib/env.ts';
 import { collectOperationalHealth } from '../../../lib/operational-health.ts';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -21,7 +21,7 @@ export const prerender = false;
  * Counts, ages and states only. No order or customer payloads leave here.
  */
 export const GET: APIRoute = async ({ locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) {
     return jsonError('Database belum tersedia.', 503);
   }

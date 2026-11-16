@@ -8,7 +8,10 @@ import {
   getDefaultAdminRoute,
   getSessionCookie,
   isAdminRole,
-  shouldSecureSessionCookie,
+  SESSION_COOKIE_NAME,
+  SESSION_COOKIE_OPTIONS,
+  lacksFetchMetadata,
+  unsafeRequestVerdict,
   signJwt,
   verifyJwt,
 } from './auth.ts';
@@ -17,9 +20,31 @@ import type { AdminRole, AdminSession } from './auth.ts';
 const AUTH_SECRET = 'unit-test-auth-secret-0123456789abcdef';
 const OTHER_SECRET = 'unit-test-auth-secret-fedcba9876543210';
 
-test('session cookie security follows the request transport, not build mode', () => {
-  assert.equal(shouldSecureSessionCookie(new URL('https://store.example/hello')), true);
-  assert.equal(shouldSecureSessionCookie(new URL('http://100.127.67.86:8790/hello')), false);
+test('IAM-2: the session cookie is __Host-: every set and delete is Secure, Path=/, host-only', () => {
+  assert.equal(SESSION_COOKIE_NAME, '__Host-adsbook_session');
+  assert.equal(SESSION_COOKIE_OPTIONS.secure, true, 'a __Host- cookie without Secure is refused, and so is its delete');
+  assert.equal(SESSION_COOKIE_OPTIONS.path, '/');
+  assert.equal(SESSION_COOKIE_OPTIONS.httpOnly, true);
+  assert.equal(SESSION_COOKIE_OPTIONS.sameSite, 'lax');
+  assert.equal('domain' in SESSION_COOKIE_OPTIONS, false, 'a Domain attribute voids the __Host- prefix');
+});
+
+test('IAM-5: an unsafe request needs its own Origin and Sec-Fetch-Site: same-origin', () => {
+  const url = new URL('https://toko-a.adsbook.cc/api/admin/orders');
+  const verdict = (headers: Record<string, string>) =>
+    unsafeRequestVerdict(new Request(url, { method: 'POST', headers }), url);
+  assert.equal(verdict({ origin: 'https://toko-a.adsbook.cc', 'sec-fetch-site': 'same-origin' }), 'allowed');
+  // Another seller's host is same-site: SameSite=Lax would send the cookie.
+  assert.equal(verdict({ origin: 'https://toko-b.adsbook.cc', 'sec-fetch-site': 'same-site' }), 'forbidden');
+  assert.equal(verdict({ origin: 'https://toko-a.adsbook.cc', 'sec-fetch-site': 'same-site' }), 'forbidden');
+  assert.equal(verdict({ origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }), 'forbidden');
+  assert.equal(verdict({ 'sec-fetch-site': 'same-origin' }), 'forbidden', 'a missing Origin is refused');
+  assert.equal(verdict({ origin: 'null', 'sec-fetch-site': 'same-origin' }), 'forbidden');
+  assert.equal(verdict({ origin: 'http://toko-a.adsbook.cc', 'sec-fetch-site': 'same-origin' }), 'forbidden');
+  // Safari before 16.4: the right Origin, no Fetch Metadata.
+  assert.equal(verdict({ origin: 'https://toko-a.adsbook.cc' }), 'browser_unsupported');
+  assert.equal(lacksFetchMetadata(new Headers()), true);
+  assert.equal(lacksFetchMetadata(new Headers({ 'sec-fetch-site': 'none' })), false);
 });
 
 // The admin gate that consumes these tokens lives in `src/middleware.ts`, which
@@ -54,7 +79,12 @@ const middlewareHooks = registerHooks({
 });
 const { createMiddleware } = await import('../middleware.ts');
 middlewareHooks.deregister();
-const onRequest = createMiddleware(async () => undefined);
+// The request gate (T-17) is tested in src/platform/; these tests start past it, on an active tenant.
+const tenantGate = async () => ({
+  kind: 'tenant' as const,
+  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.adsbook.cc', hostKind: 'subdomain' as const, primaryHost: 'test.adsbook.cc' },
+});
+const onRequest = createMiddleware(async (env) => (env as { OMS_DB: D1Database }).OMS_DB, tenantGate);
 
 function encodeSegment(value: unknown) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
@@ -280,14 +310,17 @@ test('the session cookie is read only under its exact name', async () => {
   const read = (cookie?: string) =>
     getSessionCookie(new Request('https://admin.test/admin', cookie ? { headers: { cookie } } : undefined));
 
-  assert.equal(read(`adsbook_session=${token}`), token);
-  assert.equal(read(`theme=dark; adsbook_session=${token}; other=1`), token);
-  assert.equal(read(`adsbook_session=${encodeURIComponent(token)}`), token);
+  assert.equal(read(`__Host-adsbook_session=${token}`), token);
+  assert.equal(read(`theme=dark; __Host-adsbook_session=${token}; other=1`), token);
+  assert.equal(read(`__Host-adsbook_session=${encodeURIComponent(token)}`), token);
   assert.equal(read(), null);
   assert.equal(read('theme=dark'), null);
   // A cookie whose name merely ends with the session name must not be accepted.
-  assert.equal(read('xadsbook_session=forged'), null);
-  assert.equal(read('evil_adsbook_session=forged'), null);
+  assert.equal(read('x__Host-adsbook_session=forged'), null);
+  // Names a parent-domain cookie can carry (ISO-11): never read as the session.
+  assert.equal(read('adsbook_session=forged'), null);
+  assert.equal(read('__host-adsbook_session=forged'), null);
+  assert.equal(read(`__host-adsbook_session=forged; __Host-adsbook_session=${token}`), token);
 });
 
 test('a session is closed once the credential behind it rotates', async () => {
@@ -486,8 +519,9 @@ test('the privileged allowlists cover every admin route that exists on disk', ()
   ];
   assert.ok(routes.length > 30, `expected the admin route table, found ${routes.length} routes`);
 
-  // Operator management is the one surface reserved to the owner.
-  const ownerOnly = ['/admin/settings/access', '/api/admin/access'];
+  // Operator management is reserved to the owner.
+  // Store removal (PRIV-4, T-26) is the owner's alone too.
+  const ownerOnly = ['/admin/settings/access', '/api/admin/access', '/api/admin/store-removal'];
   for (const route of ownerOnly) {
     assert.ok(routes.includes(route), `${route} must exist for the exception to mean anything`);
   }
@@ -525,7 +559,9 @@ type CredentialRow = { updated_at: string; role: string } | null;
 function createCredentialDatabase(row: CredentialRow, stored: string | null = null) {
   return {
     prepare: (query: string) => ({
-      first: async () => ({ name: 'Test Store', slug: 'test-store' }),
+      // The tenant's own stored session key (T-21: never the Worker environment).
+      first: async () =>
+        query.includes('install_secrets') ? { value: AUTH_SECRET } : { name: 'Test Store', slug: 'test-store' },
       bind: () => ({
         first: async () => {
           if (!query.includes('FROM admin_sessions s')) return row;
@@ -579,7 +615,7 @@ async function runAdminRequest(options: {
   credential: CredentialRow;
 }) {
   const headers = new Headers();
-  if (options.token) headers.set('cookie', `adsbook_session=${encodeURIComponent(options.token)}`);
+  if (options.token) headers.set('cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(options.token)}`);
   const request = new Request(`https://admin.test${options.pathname}`, { headers });
   const context = {
     request,

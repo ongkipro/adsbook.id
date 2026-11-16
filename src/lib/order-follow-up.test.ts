@@ -23,7 +23,7 @@ function fixture() {
     return q;
   } };
   const call = (method: 'GET' | 'PUT', role = 'owner', body?: unknown, id = '1', username = 'operator-a') => (method === 'GET' ? GET : PUT)({
-    params: { id }, locals: { admin: role === 'anonymous' ? undefined : { role, username }, runtimeEnv: { OMS_DB: db } },
+    params: { id }, locals: { admin: role === 'anonymous' ? undefined : { role, username }, tenantDb: db, runtimeEnv: { OMS_DB: db} },
     request: new Request(`https://store.test/api/admin/orders/${id}/follow-up`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
   } as never);
   return { sqlite, db, call };
@@ -73,14 +73,14 @@ test('an order that becomes a lead mid-save answers 404, not a stale-revision 40
     if (sql.startsWith('SELECT id FROM orders') && ++reads === 1) queueMicrotask(() => sqlite.exec("UPDATE orders SET shipping_status='abandoned' WHERE id=1"));
     return db.prepare(sql);
   } };
-  const result = await PUT({ params: { id: '1' }, locals: { admin: { role: 'owner', username: 'test' }, runtimeEnv: { OMS_DB: racing } },
+  const result = await PUT({ params: { id: '1' }, locals: { admin: { role: 'owner', username: 'test' }, tenantDb: racing, runtimeEnv: { OMS_DB: racing} },
     request: new Request('https://store.test/', { method: 'PUT', body: JSON.stringify(input) }) } as never);
   assert.equal(result.status, 404);
 });
 
 test('follow-up read/write failures return errors rather than false completion', async () => {
   for (const method of ['GET','PUT'] as const) {
-    const result = await (method === 'GET' ? GET : PUT)({ params:{id:'1'},locals:{admin:{role:'owner',username:'test'},runtimeEnv:{OMS_DB:{prepare(){throw new Error('db down');}}}},request:new Request('https://store.test/',{method,...(method==='PUT'?{body:JSON.stringify(input)}:{})}) } as never);
+    const result = await (method === 'GET' ? GET : PUT)({ params:{id:'1'},locals:{admin:{role:'owner',username:'test'},tenantDb: {prepare(){throw new Error('db down');}}, runtimeEnv: {}},request:new Request('https://store.test/',{method,...(method==='PUT'?{body:JSON.stringify(input)}:{})}) } as never);
     assert.equal(result.status,500);
   }
 });

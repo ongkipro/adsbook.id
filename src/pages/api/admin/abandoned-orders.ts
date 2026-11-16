@@ -9,7 +9,6 @@ import {
 import { jsonError, jsonOk } from "../../../lib/api.ts";
 import { abandonedListFilter } from "../../../lib/order-list-filter.ts";
 import { selectQuotedRate } from "../../../lib/courier-rules.ts";
-import { getRuntimeEnv } from "../../../lib/env.ts";
 import { scheduleCodPurchase } from "../../../lib/paid-order-purchase.ts";
 import {
   sourceFacetStatement,
@@ -25,6 +24,7 @@ import {
   resolveEligibleShippingRates,
   ShippingQuoteError,
 } from "../../../lib/shipping-quote.ts";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -61,7 +61,7 @@ type ProductOptionRow = {
 };
 
 function databaseFrom(locals: App.Locals) {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database && typeof database === "object"
     ? (database as D1Database)
     : null;

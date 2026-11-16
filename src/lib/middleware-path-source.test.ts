@@ -63,19 +63,9 @@ test("an admin prefix match cannot swallow a storefront slug", () => {
   assert.match(SOURCE, /url\.pathname\.startsWith\('\/admin\/'\)/);
 });
 
-test("an installed store does not redirect asset paths to the login screen", () => {
-  // `isInstallerPath` covers `/images/`, `/_astro/` and the favicons so the
-  // wizard can render before a store exists. Reusing it for the *installed*
-  // case meant a missing image answered 302 to /hello instead of 404 — an
-  // <img> receiving an HTML login page. The installed branch matches only the
-  // installer's own routes.
-  assert.match(
-    SOURCE,
-    /identity\.state === 'installed' && isInstallerRoute\(url\.pathname\)/,
-    "the installed-state redirect must use isInstallerRoute, not isInstallerPath",
-  );
-  assert.doesNotMatch(SOURCE, /identity\.state === 'installed' && isInstallerPath\(/);
-  // The uninstalled branch still needs the wider set, or the wizard renders
-  // without its own stylesheet.
-  assert.match(SOURCE, /!isInstallerPath\(url\.pathname\)/);
+
+test("there is no installer: a store without its row is a neutral 503, never a redirect (T-21)", () => {
+  assert.doesNotMatch(SOURCE, /redirect\('\/install'\)/);
+  assert.doesNotMatch(SOURCE, /isInstallerRoute|isInstallerPath/);
+  assert.match(SOURCE, /identity\.state === 'uninstalled' \|\| identity\.state === 'unmigrated'/);
 });

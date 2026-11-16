@@ -3,16 +3,15 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 import {
-  envTenantConfig,
+  defaultTenantConfig,
   loadStoreIdentity,
   resolveTenantConfig,
-  siteNoindex,
   type StoreIdentityRow,
   LOCALE_PATTERN,
   THEME_COLOR_PATTERN,
 } from "./tenant.ts";
 
-test("a database row wins over the environment for every identity field", () => {
+test("a store row sets every identity field", () => {
   const row: StoreIdentityRow = {
     name: "Toko Bunga",
     slug: "toko-bunga",
@@ -43,21 +42,20 @@ test("a database row wins over the environment for every identity field", () => 
 });
 
 test("a null or empty column falls back rather than blanking the field", () => {
-  // This is what lets an install that predates migration 0036 keep rendering:
-  // its columns are all NULL, so every field resolves from the environment.
+  // A NULL column falls back to the product default, never to the environment.
   const fromNothing = resolveTenantConfig(null);
-  assert.equal(fromNothing.name, envTenantConfig.name);
-  assert.equal(fromNothing.siteUrl, envTenantConfig.siteUrl);
+  assert.equal(fromNothing.name, defaultTenantConfig.name);
+  assert.equal(fromNothing.siteUrl, defaultTenantConfig.siteUrl);
 
   // A column present but blank must behave as unset, not as an empty name.
   const blank = resolveTenantConfig({ name: "   ", logo: "" });
-  assert.equal(blank.name, envTenantConfig.name);
-  assert.equal(blank.logo, envTenantConfig.logo);
+  assert.equal(blank.name, defaultTenantConfig.name);
+  assert.equal(blank.logo, defaultTenantConfig.logo);
 
   // A partially configured row takes only what it actually declares.
   const partial = resolveTenantConfig({ name: "Setengah Jadi" });
   assert.equal(partial.name, "Setengah Jadi");
-  assert.equal(partial.siteUrl, envTenantConfig.siteUrl);
+  assert.equal(partial.siteUrl, defaultTenantConfig.siteUrl);
 });
 
 test("an invalid stored value degrades instead of taking the storefront down", () => {
@@ -110,7 +108,7 @@ test("identity reads survive a missing table and a failing database", async () =
 
   // A null read must still produce a usable identity, because that is exactly
   // the state of a database on its very first request.
-  assert.equal(resolveTenantConfig(null).name, envTenantConfig.name);
+  assert.equal(resolveTenantConfig(null).name, defaultTenantConfig.name);
 });
 
 test("the resolved config is frozen so a page cannot mutate shared identity", () => {
@@ -184,48 +182,6 @@ test("saving the store profile persists all three previously uneditable fields",
   assert.match(statement, /clean\(body\.admin_name, 120\) \|\| null/);
 });
 
-test("the header brand mark is opt-in and accepts only a site or https image path", () => {
-  const previous = process.env.PUBLIC_SITE_BRAND_MARK;
-  try {
-    delete process.env.PUBLIC_SITE_BRAND_MARK;
-    assert.equal(resolveTenantConfig(null).brandMark, "");
-
-    for (const accepted of ["/images/mark.svg", "https://cdn.example/mark.svg"]) {
-      process.env.PUBLIC_SITE_BRAND_MARK = accepted;
-      assert.equal(resolveTenantConfig(null).brandMark, accepted);
-    }
-    for (const refused of ["//evil.example/mark.svg", "javascript:alert(1)", "http://cdn.example/m.svg", "mark.svg"]) {
-      process.env.PUBLIC_SITE_BRAND_MARK = refused;
-      assert.equal(resolveTenantConfig(null).brandMark, "", refused);
-    }
-  } finally {
-    if (previous === undefined) delete process.env.PUBLIC_SITE_BRAND_MARK;
-    else process.env.PUBLIC_SITE_BRAND_MARK = previous;
-  }
-});
-
-test("the store-wide noindex is opt-in and only `true` or `1` turns it on", () => {
-  const previous = process.env.PUBLIC_SITE_NOINDEX;
-  try {
-    delete process.env.PUBLIC_SITE_NOINDEX;
-    assert.equal(resolveTenantConfig(null).noindex, false);
-    for (const on of ["true", "TRUE", "1"]) {
-      process.env.PUBLIC_SITE_NOINDEX = on;
-      assert.equal(resolveTenantConfig(null).noindex, true, on);
-    }
-    for (const off of ["false", "0", "yes", "ture"]) {
-      process.env.PUBLIC_SITE_NOINDEX = off;
-      assert.equal(resolveTenantConfig(null).noindex, false, off);
-    }
-    // The middleware reads the Worker's runtime vars, not only the build env.
-    delete process.env.PUBLIC_SITE_NOINDEX;
-    assert.equal(siteNoindex({ PUBLIC_SITE_NOINDEX: "true" }), true);
-  } finally {
-    if (previous === undefined) delete process.env.PUBLIC_SITE_NOINDEX;
-    else process.env.PUBLIC_SITE_NOINDEX = previous;
-  }
-});
-
 test("a page title names the store once, never twice", async () => {
   const { withStoreName } = await import("./tenant.ts");
   assert.equal(withStoreName("Kebijakan Privasi Petani Sejahtera", "Petani Sejahtera"), "Kebijakan Privasi Petani Sejahtera");
@@ -245,4 +201,25 @@ test("a store with no logo, or the deleted placeholder wordmark, resolves to no 
   assert.equal(resolveTenantConfig({ name: "Toko", logo: "/images/adsbook-mark.webp" }).logo, "");
   assert.equal(resolveTenantConfig({ name: "Toko", logo: null }).logo, "");
   assert.equal(resolveTenantConfig({ name: "Toko", logo: "/images/logo-toko.png" }).logo, "/images/logo-toko.png");
+});
+
+test("a tenant with no stored identity never shows a value from the Worker environment (T-21)", () => {
+  const keys = ["PUBLIC_SITE_NAME", "PUBLIC_SITE_URL", "PUBLIC_SITE_DESCRIPTION", "PUBLIC_SITE_TAGLINE", "PUBLIC_SITE_LOGO",
+    "PUBLIC_SITE_BRAND_MARK", "PUBLIC_DEFAULT_BRAND", "PUBLIC_SITE_THEME_COLOR", "PUBLIC_SITE_LOCALE", "PUBLIC_ADMIN_NAME",
+    "PUBLIC_STOREFRONT_TEMPLATE", "PUBLIC_SITE_NOINDEX"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  try {
+    for (const key of keys) process.env[key] = key === "PUBLIC_SITE_URL" ? "https://other-store.example" : key === "PUBLIC_SITE_NOINDEX" ? "true" : `LEAK-${key}`;
+    const tenant = resolveTenantConfig(null, "toko-a.adsbook.cc");
+    assert.doesNotMatch(JSON.stringify(tenant), /LEAK-|other-store/);
+    assert.equal(tenant.siteUrl, "https://toko-a.adsbook.cc", "the tenant's own primary host, not the environment");
+    assert.equal(tenant.noindex, false);
+    assert.equal(tenant.brandMark, "");
+    assert.equal(tenant.defaultBrand, tenant.name);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
 });

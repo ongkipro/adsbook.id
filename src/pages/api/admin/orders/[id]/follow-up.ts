@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../../../lib/api.ts';
-import { getRuntimeEnv } from '../../../../../lib/env.ts';
 import { parseOrderFollowUp, readOrderFollowUps, saveOrderFollowUp } from '../../../../../lib/order-follow-up.ts';
 import { orderRowSql } from '../../../../../lib/order-metrics.ts';
+import { tenantDatabase } from '../../../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -13,7 +13,7 @@ const handle: APIRoute = async ({ params, request, locals }) => {
   if (!admin.username) return jsonError('Identitas operator tidak tersedia.', 403);
   const id = Number(params.id);
   if (!Number.isSafeInteger(id) || id <= 0) return jsonError('ID order tidak valid.', 400);
-  const db = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const db = tenantDatabase(locals);
   if (!db) return jsonError('Database belum tersedia.', 503);
   const orderExists = async () => !!(await db.prepare(`SELECT id FROM orders WHERE id = ? AND ${orderRowSql()}`).bind(id).first());
   try {

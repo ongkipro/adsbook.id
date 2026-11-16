@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -15,7 +16,7 @@ import {
  * on.
  */
 
-function storeDatabase(row: Record<string, string | null> | null) {
+function storeDatabase__raw(row: Record<string, string | null> | null) {
   return {
     prepare() {
       return {
@@ -71,7 +72,7 @@ test("formatting is stripped before the length guard, so a punctuated number is 
   // not on validity.
   await assert.rejects(
     getReceiverPerformance(UNCONFIGURED_STORE, "0813-3100 0000", {
-      runtimeEnv: { OMS_DB: UNCONFIGURED_STORE },
+      tenantDb: UNCONFIGURED_STORE, runtimeEnv: { OMS_DB: UNCONFIGURED_STORE},
     } as never),
     /belum dikonfigurasi/i,
   );
@@ -82,7 +83,7 @@ test("an unconfigured Mengantar account fails loudly instead of scoring blind", 
 
   await assert.rejects(
     getReceiverPerformance(UNCONFIGURED_STORE, "081331000000", {
-      runtimeEnv: { OMS_DB: UNCONFIGURED_STORE },
+      tenantDb: UNCONFIGURED_STORE, runtimeEnv: { OMS_DB: UNCONFIGURED_STORE},
     } as never),
     /Mengantar API belum dikonfigurasi/i,
   );
@@ -101,7 +102,7 @@ test("a failed background refresh is handed to waitUntil and never reaches the r
 
   const scheduled: Promise<unknown>[] = [];
   const locals = {
-    runtimeEnv: { OMS_DB: UNCONFIGURED_STORE },
+    tenantDb: UNCONFIGURED_STORE, runtimeEnv: { OMS_DB: UNCONFIGURED_STORE},
     cfContext: {
       waitUntil(task: Promise<unknown>) {
         scheduled.push(task);
@@ -138,7 +139,7 @@ test("without a Cloudflare context the refresh still swallows its own failure", 
 
   assert.equal(
     scheduleReceiverPerformanceRefresh(UNCONFIGURED_STORE, "INV-10002", "081331000000", {
-      runtimeEnv: { OMS_DB: UNCONFIGURED_STORE },
+      tenantDb: UNCONFIGURED_STORE, runtimeEnv: { OMS_DB: UNCONFIGURED_STORE},
     } as never),
     undefined,
   );
@@ -148,7 +149,7 @@ test("without a Cloudflare context the refresh still swallows its own failure", 
 });
 
 /** A store with a Mengantar key, three unscored orders, and a log of writes. */
-function backfillDatabase() {
+function backfillDatabase__raw() {
   const writes: unknown[][] = [];
   const database = {
     prepare(sql: string) {
@@ -296,6 +297,7 @@ test("a refused order older than 30 days is still retried, so a granted whitelis
       return statement;
     },
   } as unknown as D1Database;
+  bindTestCredentialsIn(database);
   const calls = mockMengantar(context, () =>
     Response.json({ success: true, data: { JNE: { total: 4, delivered: 4, rts: 0, undelivered: 0, rate: 10 }, summary: { average_number: 10, average_score: "≈A" } } }),
   );
@@ -318,3 +320,13 @@ test("a refusal names the feature and which key Mengantar refused", async (conte
       && /getReceiverScoreByNumberUser/.test(error.message),
   );
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function storeDatabase(...args: Parameters<typeof storeDatabase__raw>): ReturnType<typeof storeDatabase__raw> {
+  return bindTestCredentialsIn(storeDatabase__raw(...args));
+}
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function backfillDatabase(...args: Parameters<typeof backfillDatabase__raw>): ReturnType<typeof backfillDatabase__raw> {
+  return bindTestCredentialsIn(backfillDatabase__raw(...args));
+}

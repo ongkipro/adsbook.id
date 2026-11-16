@@ -1,13 +1,13 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
-import { getRuntimeEnv } from "../../../lib/env";
 import { MengantarClient } from "../../../lib/mengantar-client";
 import { getProviderConfig } from "../../../lib/provider-config";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ url, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database) {
     return jsonError("Database belum tersedia", 503);
   }

@@ -68,7 +68,7 @@ async function callStatusRoute(database: D1Database, secret: string, body: Recor
       headers: { "content-type": "application/json", "x-app-key": secret },
       body: JSON.stringify(body),
     }),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
 }
 

@@ -108,3 +108,25 @@ test("the receiver-history stand-in parses into every risk band the checker show
     server.close();
   }
 });
+
+test("the dev providers satisfy signup's Turnstile check and the real custom-hostname client (T-26)", async (context) => {
+  const server = await startDevProviders(0);
+  context.after(() => server.close());
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const { verifyTurnstile } = await import("../platform/signup.ts");
+  const env = { TURNSTILE_SECRET_KEY: "local-stand-in-secret", TURNSTILE_VERIFY_URL: `${base}/turnstile/v0/siteverify` };
+  assert.equal(await verifyTurnstile(env, "local-stand-in", "127.0.0.1"), true);
+  assert.equal(await verifyTurnstile(env, "a-forged-token", "127.0.0.1"), false);
+
+  const { hostnameApiFromEnv } = await import("../platform/hostnames.ts");
+  const api = hostnameApiFromEnv({ CF_SAAS_ZONE_ID: "dev-zone", CF_SAAS_TOKEN: "dev-token", CF_API_BASE: `${base}/client/v4` });
+  assert.ok(api);
+  const created = await api.create("toko.example");
+  assert.equal(created.status, "pending");
+  await fetch(`${base}/__dev/cloudflare/activate?hostname=toko.example`, { method: "POST" });
+  const active = await api.get(created.id);
+  assert.deepEqual([active.status, active.ssl?.status], ["active", "active"]);
+  assert.equal((await api.findByHostname("toko.example"))?.id, created.id);
+  await api.remove(created.id);
+  assert.equal(await api.findByHostname("toko.example"), null);
+});

@@ -1,10 +1,10 @@
-# AGENTS.md — Working Agreement for AdsBookCMS
+# AGENTS.md — Working Agreement for adsbook.id
 
-> Verified against disk: 2026-11-16 @ `96fdd8a` (§4 baseline 1227 re-run on `release/1.10.1`, 1.10.1). Previously: 2026-11-16 @ `18d0a4a` (§2 skill path and spec checker command aligned with `adsbook.id-docs`). Previously: 2026-11-14 @ `2b244be` (§2 ownership table: spec pack `docs/spec/` added, `docs/product/PRD.md` re-scoped to the inherited base). Previously: 2026-11-13 @ `1403298` (§2 ownership table re-pointed to the adsbook.id-docs repository, ADR-038; §4 baseline 1207 re-run). Previously: 2026-11-10 @ `745de51` (1.10.0; §4 baseline 1207 re-run on that tree). Previously: 2026-11-06 @ `700bc21` + fix/image-guard-parser working tree (1.9.2; §4 baseline 1193 re-run on that tree; the lib-module count, the auth test count and the §6 guard names re-checked; other claims not re-audited)
+> Verified against disk: 2026-11-16 @ `81ed0b2` + T-29 tree (product named adsbook.id). Previously: 2026-11-16 @ `5ff5f3f` (§2 ownership table: `docs/operations/PLATFORM-RUNBOOK.md` added, T-39). Previously: 2026-11-16 @ `96fdd8a` (§4 baseline 1227 re-run on `release/1.10.1`, 1.10.1). Previously: 2026-11-16 @ `18d0a4a` (§2 skill path and spec checker command aligned with `adsbook.id-docs`). Previously: 2026-11-14 @ `2b244be` (§2 ownership table: spec pack `docs/spec/` added, `docs/product/PRD.md` re-scoped to the inherited base). Previously: 2026-11-13 @ `1403298` (§2 ownership table re-pointed to the adsbook.id-docs repository, ADR-038; §4 baseline 1207 re-run). Previously: 2026-11-10 @ `745de51` (1.10.0; §4 baseline 1207 re-run on that tree). Previously: 2026-11-06 @ `700bc21` + fix/image-guard-parser working tree (1.9.2; §4 baseline 1193 re-run on that tree; the lib-module count, the auth test count and the §6 guard names re-checked; other claims not re-audited)
 
 This file is the contract for any AI coding agent or contributor working in this repository. Read it before the first edit.
 
-**The product is AdsBookCMS (single):** a direct-response commerce CMS installed onto Cloudflare Workers, where **1 installer = 1 Worker = 1 store**. `permatamall.shop` is the reference instance, not the product name.
+**The product is adsbook.id**, built from the single-tenant AdsBookCMS base, where **1 installer = 1 Worker = 1 store** held until the platform tasks. `permatamall.shop` is the reference instance, not the product name.
 
 ---
 
@@ -32,6 +32,7 @@ Product documentation lives in a separate repository, **adsbook.id-docs**, clone
 | `docs/architecture/DECISIONS.md` | The one decision index (ADR-001…), status per decision; full text in `adr/`. Append-only |
 | `docs/operations/RELEASE.md` | Single-tenant deploy, migrations, versioning, rollback, approval boundary (scope note: the old fleet; the platform runbook comes with T-30; the platform delivery contract is `docs/spec/15-DEVOPS-CICD-MIGRATIONS.md`) |
 | `docs/architecture/OBSERVABILITY.md` | Logging, failure visibility, what to enable |
+| `docs/operations/PLATFORM-RUNBOOK.md` | Multi-tenant operating procedures: buyer requests (PRIV-5) and incidents/breaches (SEC-7 → PRIV-6) from T-39; deploy, migration, restore and daily operations from T-30 |
 | `docs/operations/INSTALLATION.md` | Standing up a new install |
 | `docs/operations/STATUS.md` | Current state: Now / Next / Blockers, under 12 KB. History up to 2026-11-10 is frozen in `docs/archive/STATUS-2026-11-10.md` |
 | `docs/operations/FLEET.md` | The install fleet: which stores run AdsBookCMS, their version, repository, visibility, infrastructure and per-install merge rules |
@@ -182,7 +183,7 @@ Do not "fix" these silently or treat them as bugs to be surprised by — they ar
 
 - Missing published home content is composed from the store's **own** name, catalogue and public landing pages (ADR-025 amending ADR-007). Never restore compiled copy or anything written for another merchant.
 - Storefront template definitions live in `storefront_templates`. Built-in `compact-market` is seeded only as an editable D1 definition (`wide-catalog` was removed by `0044`); adding a definition must not require a rebuild.
-- The admin session cookie is `adsbook_session`, declared once as `SESSION_COOKIE_NAME` in `src/lib/auth.ts`. Never write the literal string; a writer and reader that disagree is a silent lockout.
+- The admin session cookie is `__Host-adsbook_session` (IAM-2, T-22), declared once as `SESSION_COOKIE_NAME` in `src/lib/auth.ts`, and every set **and delete** spreads `SESSION_COOKIE_OPTIONS` (`Secure; Path=/`, no `Domain`): a `__Host-` delete without `Secure` is ignored by the browser. Never write the literal string; a writer and reader that disagree is a silent lockout.
 - The `SESSION` KV binding holds **caches only** (ADR-021). Admin sessions live in `admin_sessions` and rate-limit windows in `rate_limits`, both D1. A KV write on any request path must be wrapped so that its failure is logged and nothing else — the account-wide Free-plan write allowance ran out once and took every install's login and checkout search down with it.
 - The click cookie is `adsbook_click_ids`. The former `zanoby_click_ids` is still **read** as a fallback so an upgrading install does not lose 90 days of in-flight attribution. Never write the legacy name; it ages out on its own.
 - Newly issued developer API keys carry `adsbook_live_`. Keys issued as `cmsads_live_` still validate — the stored value is a SHA-256 digest, so the prefix never took part in matching, and rewriting it would have broken them. The legacy prefix survives only in `maskApiKeySecret` so an old key still renders a coherent preview.

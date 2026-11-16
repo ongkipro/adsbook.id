@@ -1,3 +1,4 @@
+import { CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, CredentialKeyUnavailableError, sealCredential } from "../../../lib/credential-crypto.ts";
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api.ts";
 import {
@@ -9,8 +10,9 @@ import {
   resolveEmbedAllowedOrigins,
 } from "../../../lib/embed-security.ts";
 import { parseHeadlessAllowedOrigins } from "../../../lib/headless-api.ts";
-import { isAcceptedSiteProtocol, LOCALE_PATTERN, SUPPORT_EMAIL_PATTERN, THEME_COLOR_PATTERN } from "../../../lib/tenant.ts";
-import { getEnvValue, getRuntimeEnv, maskSecretValue } from "../../../lib/env.ts";
+import { LOCALE_PATTERN, SUPPORT_EMAIL_PATTERN, THEME_COLOR_PATTERN } from "../../../lib/tenant.ts";
+import { getRuntimeEnv, maskSecretValue } from "../../../lib/env.ts";
+import { issueWebhookToken, webhookTokenIssuedAt, webhookUrl } from "../../../platform/webhook-secrets.ts";
 import {
   addStorefrontTemplate,
   listStorefrontTemplates,
@@ -28,8 +30,10 @@ import {
 import { MengantarClient } from "../../../lib/mengantar-client.ts";
 import {
   getProviderConfig,
+  parseAutoLarisOrderIdentity,
   resolveCredentialUpdate,
 } from "../../../lib/provider-config.ts";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -46,6 +50,7 @@ type SettingsPayload = {
     | "save-warehouse"
     | "save-crm"
     | "save-integrations"
+    | "issue-webhook-token"
     | "save-payment-fee-policy"
     | "save-payment-toggles"
     | "save-autolaris-channels"
@@ -78,6 +83,9 @@ type SettingsPayload = {
     mengantar_base_url?: string;
     autolaris_api_key?: string | null;
     autolaris_base_url?: string;
+    autolaris_order_origin_id?: string;
+    autolaris_order_destination_id?: string;
+    autolaris_shipper_email?: string;
   };
   warehouse?: {
     name?: string;
@@ -248,6 +256,14 @@ async function getSettingsRow(database: D1Database) {
   }
 }
 
+/** The tenant's webhook token is kept hashed in PLATFORM_DB; only when it was issued is shown. */
+async function autolarisWebhookIssuedAt(locals: App.Locals): Promise<string | null> {
+  const platformDb = getRuntimeEnv(locals)?.PLATFORM_DB as D1Database | undefined;
+  const tenantId = locals.tenantContext?.tenantId;
+  if (!platformDb || !tenantId) return null;
+  return webhookTokenIssuedAt(platformDb, tenantId, "autolaris").catch(() => null);
+}
+
 async function credentialStatus(database: D1Database, locals: App.Locals) {
   const config = await getProviderConfig(database, locals);
 
@@ -263,14 +279,17 @@ async function credentialStatus(database: D1Database, locals: App.Locals) {
       api_key_configured: Boolean(config.autolaris.apiKey),
       api_key_masked: maskSecretValue(config.autolaris.apiKey),
       base_url: config.autolaris.baseUrl,
+      order_origin_id: config.autolaris.originId,
+      order_destination_id: config.autolaris.destinationId,
+      shipper_email: config.autolaris.shipperEmail,
+      webhook_issued_at: await autolarisWebhookIssuedAt(locals),
       source: config.autolaris.source,
     },
   };
 }
 
 export const GET: APIRoute = async ({ locals }) => {
-  const runtime = getRuntimeEnv(locals);
-  const database = runtime?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database pengaturan belum tersedia.", 503);
   }
@@ -278,10 +297,7 @@ export const GET: APIRoute = async ({ locals }) => {
   try {
     const row = await getSettingsRow(database as D1Database);
     if (!row) return jsonError("Store belum tersedia.", 404);
-    const embedOriginPolicy = resolveEmbedAllowedOrigins(
-      row.embed_allowed_origins,
-      getEnvValue("PUBLIC_EMBED_ALLOWED_ORIGINS", runtime),
-    );
+    const embedOriginPolicy = resolveEmbedAllowedOrigins(row.embed_allowed_origins, "");
 
     const templateList = await listStorefrontTemplates(
       database as D1Database,
@@ -347,7 +363,7 @@ export const GET: APIRoute = async ({ locals }) => {
 };
 
 export const PUT: APIRoute = async ({ request, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database pengaturan belum tersedia.", 503);
   }
@@ -359,8 +375,24 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
   try {
     const db = database as D1Database;
-    if (body.action === "save-integrations" && locals.admin?.role !== "owner") {
+    if ((body.action === "save-integrations" || body.action === "issue-webhook-token") && locals.admin?.role !== "owner") {
       return jsonError("Hanya owner yang dapat mengubah endpoint dan kredensial provider.", 403);
+    }
+    if (body.action === "issue-webhook-token") {
+      // SEC-5: a new token replaces the old one at once; the URL is shown this
+      // one time only (the store keeps a hash), so the owner pastes it into
+      // AutoLaris now.
+      const platformDb = getRuntimeEnv(locals)?.PLATFORM_DB as D1Database | undefined;
+      const tenantId = locals.tenantContext?.tenantId;
+      if (!platformDb || !tenantId) return jsonError("Webhook belum tersedia.", 503);
+      // Checked before rotating, so a tenant without a subdomain keeps its old token.
+      const base = await webhookUrl(platformDb, tenantId, "autolaris", "");
+      if (!base) return jsonError("Subdomain toko belum aktif.", 409);
+      const url = base + (await issueWebhookToken(platformDb, tenantId, "autolaris"));
+      return jsonOk({
+        message: "URL webhook AutoLaris baru dibuat. Salin sekarang; URL ini tidak ditampilkan lagi.",
+        data: { webhook_url: url, credentials: await credentialStatus(db, locals) },
+      });
     }
     const providerConfig = await getProviderConfig(db, locals);
     if (body.action === "test-mengantar") {
@@ -642,6 +674,26 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           400,
         );
       }
+      const orderIdentity = parseAutoLarisOrderIdentity(
+        {
+          originId: body.integrations?.autolaris_order_origin_id,
+          destinationId: body.integrations?.autolaris_order_destination_id,
+          shipperEmail: body.integrations?.autolaris_shipper_email,
+        },
+        (await getProviderConfig(db)).autolaris,
+      );
+      if (!orderIdentity.ok) return jsonError(orderIdentity.error, 400);
+
+      // ADR-040: a new key is stored sealed; without the platform key nothing is written.
+      let sealedMengantarKey = "";
+      let sealedAutolarisKey = "";
+      try {
+        sealedMengantarKey = await sealCredential(db, "mengantar_api_key", mengantarApiKey);
+        sealedAutolarisKey = await sealCredential(db, "autolaris_api_key", autolarisApiKey);
+      } catch (error) {
+        if (error instanceof CredentialKeyUnavailableError) return jsonError(CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, 503);
+        throw error;
+      }
 
       await db
         .prepare(
@@ -652,17 +704,23 @@ export const PUT: APIRoute = async ({ request, locals }) => {
             mengantar_base_url = ?,
             autolaris_api_key = CASE WHEN ? = 1 THEN NULL
               ELSE COALESCE(NULLIF(?, ''), autolaris_api_key) END,
-            autolaris_base_url = ?
+            autolaris_base_url = ?,
+            autolaris_order_origin_id = ?,
+            autolaris_order_destination_id = ?,
+            autolaris_shipper_email = ?
         WHERE id = ?
       `,
         )
         .bind(
           mengantarKey.clear ? 1 : 0,
-          mengantarApiKey,
+          sealedMengantarKey,
           mengantarBaseUrl,
           autolarisKey.clear ? 1 : 0,
-          autolarisApiKey,
+          sealedAutolarisKey,
           autolarisBaseUrl,
+          orderIdentity.originId,
+          orderIdentity.destinationId,
+          orderIdentity.shipperEmail,
           current.store_id,
         )
         .run();
@@ -719,23 +777,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       // Identity beyond the name became editable when it moved into D1
       // (ADR-003). Before that these were baked into the bundle, so the only
       // way to change a store's address or tagline was a rebuild.
-      const siteUrlRaw = clean(body.site_url, 200);
-      let siteUrl = "";
-      if (siteUrlRaw) {
-        try {
-          const parsed = new URL(siteUrlRaw);
-          if (!isAcceptedSiteProtocol(parsed)) {
-            return jsonError("Alamat toko harus memakai https.", 400);
-          }
-          siteUrl = parsed.origin;
-        } catch {
-          return jsonError(
-            "Alamat toko tidak valid. Contoh: https://tokosaya.com",
-            400,
-          );
-        }
-      }
-
+      // The site address is the tenant's primary host (T-25), chosen at
+      // /admin/settings/domains; a free-text `site_url` is no longer saved.
       const storefrontTemplate =
         clean(body.storefront_template, 40) || "compact-market";
       const templateResolution = await resolveStorefrontTemplate(
@@ -784,7 +827,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       await db
         .prepare(
           `UPDATE stores
-              SET name = ?, site_url = ?, description = ?,
+              SET name = ?, description = ?,
                   tagline = ?, logo = ?, storefront_template = ?,
                   theme_color = ?, locale = ?, admin_name = ?,
                   thanks_whatsapp_redirect = ?, support_email = ?, business_address = ?
@@ -792,7 +835,6 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         )
         .bind(
           storeName,
-          siteUrl || null,
           clean(body.store_description, 300) || null,
           clean(body.store_tagline, 120) || null,
           clean(body.store_logo, 300) || null,

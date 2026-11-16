@@ -1,0 +1,230 @@
+/**
+ * Signup and provisioning (T-26, PR-11), in the order of
+ * MULTI-TENANT-DESIGN §3.1:
+ *
+ * 1. validate (slug rule and reserved list, email, password, terms,
+ *    Turnstile, per-address rate limit) — nothing is written before this;
+ *    one batch inserts the tenant (`provisioning`, never routable) and its
+ *    subdomain host (`pending`); the UNIQUE slug and the host key pick one
+ *    winner of a race;
+ * 2. create the tenant's store and apply the chain (bookmark first);
+ * 3. the inherited install write in the store — the `stores` row, default
+ *    courier rules and the **claim of the seeded credential** (zero rows
+ *    claimed is a failure, IAM-10) — then the tenant's session key and its
+ *    webhook token;
+ * 4. one batch: tenant `active`, host `active` and primary, the `signup`
+ *    event with the accepted terms version;
+ * 5. a handoff token (IAM-8) for the owner's first session.
+ *
+ * A failure after step 1 leaves the tenant `purging` with a
+ * `provision_failed` event naming the step; the purge job removes whatever
+ * exists (src/platform/purge.ts). Nothing half-made is ever active.
+ */
+import { resolveAuthSecret } from "../lib/auth-secret.ts";
+import { EMAIL_USERNAME_PATTERN } from "../lib/admin-credentials.ts";
+import { runInstall } from "../lib/install.ts";
+import { checkRateLimit } from "../lib/rate-limit.ts";
+import { CMS_VERSION } from "../lib/version.ts";
+import { ensureControlPlane } from "./control-plane.ts";
+import { issueHandoff } from "./handoff.ts";
+import { tenantHostSuffix } from "./hostnames.ts";
+import { checkSlug } from "./slugs.ts";
+import { openTenantDb } from "./tenant-db.ts";
+import { issueWebhookToken } from "./webhook-secrets.ts";
+import { CURRENT_LEGAL_VERSION } from "./legal-texts.ts";
+
+/**
+ * The seller terms and platform privacy notice a signup accepts (T-39,
+ * PR-24): the versions served at /platform/syarat and /platform/privasi,
+ * recorded on the `signup` event. An accepted version's text never changes.
+ */
+export const TERMS_VERSION = CURRENT_LEGAL_VERSION["seller-terms"];
+export const PRIVACY_VERSION = CURRENT_LEGAL_VERSION["platform-privacy"];
+export const SIGNUP_LIMIT_PER_HOUR = 5;
+
+export type SignupInput = {
+  storeName?: unknown;
+  slug?: unknown;
+  email?: unknown;
+  password?: unknown;
+  terms?: unknown;
+  turnstileToken?: unknown;
+};
+
+export type SignupFieldErrors = Partial<Record<"storeName" | "slug" | "email" | "password" | "terms" | "turnstile", string>>;
+
+export type SignupPlan = { storeName: string; slug: string; email: string; password: string };
+
+/** UX-1 field rules, decided before any write. */
+export function planSignup(input: SignupInput): { ok: true; plan: SignupPlan } | { ok: false; errors: SignupFieldErrors; reserved?: boolean } {
+  const errors: SignupFieldErrors = {};
+  const storeName = typeof input.storeName === "string" ? input.storeName.trim().replace(/\s+/g, " ") : "";
+  if (storeName.length < 2 || storeName.length > 80) errors.storeName = "Nama toko 2–80 karakter.";
+  const slug = checkSlug(input.slug);
+  if (!slug.ok) errors.slug = slug.error;
+  const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+  if (email.length > 254 || !EMAIL_USERNAME_PATTERN.test(email)) errors.email = "Email tidak valid.";
+  const password = typeof input.password === "string" ? input.password : "";
+  if (password.length < 10 || password.length > 128) errors.password = "Password 10–128 karakter.";
+  else if (password.toLowerCase() === email) errors.password = "Password tidak boleh sama dengan email.";
+  if (input.terms !== true && input.terms !== "on") errors.terms = "Setujui syarat & ketentuan untuk melanjutkan.";
+  if (Object.keys(errors).length || !slug.ok) {
+    return { ok: false, errors, reserved: !slug.ok && slug.reserved };
+  }
+  return { ok: true, plan: { storeName, slug: slug.slug, email, password } };
+}
+
+/** Cloudflare Turnstile siteverify. No secret configured: signup is closed (fail closed). */
+export async function verifyTurnstile(
+  env: Record<string, unknown>,
+  token: unknown,
+  ip: string,
+  fetcher: typeof fetch = fetch,
+): Promise<boolean> {
+  const secret = typeof env.TURNSTILE_SECRET_KEY === "string" ? env.TURNSTILE_SECRET_KEY : "";
+  if (!secret || typeof token !== "string" || !token || token.length > 2048) return false;
+  const url = typeof env.TURNSTILE_VERIFY_URL === "string" && env.TURNSTILE_VERIFY_URL
+    ? env.TURNSTILE_VERIFY_URL
+    : "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+  try {
+    const body = new URLSearchParams({ secret, response: token, remoteip: ip });
+    const response = await fetcher(url, { method: "POST", body, signal: AbortSignal.timeout(10_000) });
+    const result = (await response.json().catch(() => null)) as { success?: boolean } | null;
+    return result?.success === true;
+  } catch {
+    return false;
+  }
+}
+
+export type ProvisionStep = "reserve" | "store" | "install" | "secrets" | "handoff" | "activate";
+
+export type SignupDeps = {
+  now?: () => Date;
+  verifyTurnstile?: (token: unknown, ip: string) => Promise<boolean>;
+  /** Tests inject a failure after a step to prove nothing half-made goes live. */
+  checkpoint?: (step: ProvisionStep, tenantId: string) => void | Promise<void>;
+};
+
+export type SignupResult =
+  | { status: 201; tenantId: string; host: string; email: string; handoffToken: string }
+  | { status: 400 | 409 | 429 | 500 | 503; error: string; errors?: SignupFieldErrors };
+
+export { tenantHostSuffix };
+
+function newTenantId(): string {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  return `t_${Array.from(crypto.getRandomValues(new Uint8Array(20)), (byte) => alphabet[byte % alphabet.length]).join("")}`;
+}
+
+export async function signup(
+  env: Record<string, unknown>,
+  input: SignupInput,
+  ip: string,
+  deps: SignupDeps = {},
+): Promise<SignupResult> {
+  const platformDb = env.PLATFORM_DB as D1Database | undefined;
+  if (!platformDb || !env.TENANT_STORE) return { status: 503, error: "Pendaftaran belum tersedia." };
+  const now = deps.now ?? (() => new Date());
+
+  const planned = planSignup(input);
+  if (!planned.ok) {
+    return planned.reserved && Object.keys(planned.errors).length === 1
+      ? { status: 409, error: "Alamat toko ini tidak tersedia.", errors: planned.errors }
+      : { status: 400, error: "Periksa kembali isian formulir.", errors: planned.errors };
+  }
+  const { plan } = planned;
+
+  await ensureControlPlane(platformDb);
+  const limit = await checkRateLimit(platformDb, `signup:${ip}`, SIGNUP_LIMIT_PER_HOUR, 60 * 60 * 1000);
+  if (!limit.allowed) return { status: 429, error: "Terlalu banyak pendaftaran dari jaringan ini. Coba lagi nanti." };
+  const human = await (deps.verifyTurnstile ?? ((token, address) => verifyTurnstile(env, token, address)))(input.turnstileToken, ip);
+  if (!human) return { status: 400, error: "Verifikasi keamanan gagal. Muat ulang halaman lalu coba lagi.", errors: { turnstile: "Verifikasi gagal." } };
+
+  const tenantId = newTenantId();
+  const host = `${plan.slug}.${tenantHostSuffix(env)}`;
+  const at = now().toISOString();
+  try {
+    await platformDb.batch([
+      platformDb
+        .prepare("INSERT INTO tenants (id, slug, owner_email, status, plan_id, created_at) VALUES (?, ?, ?, 'provisioning', 'pilot', ?)")
+        .bind(tenantId, plan.slug, plan.email, at),
+      platformDb
+        .prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'pending', 0, ?)")
+        .bind(host, tenantId, at),
+    ]);
+  } catch (error) {
+    if (/UNIQUE|PRIMARY KEY|constraint/i.test(String(error))) {
+      return { status: 409, error: "Alamat toko ini sudah dipakai.", errors: { slug: "Alamat toko ini sudah dipakai." } };
+    }
+    console.error("signup-reserve-failed", { error: String(error) });
+    return { status: 500, error: "Pendaftaran gagal. Coba lagi beberapa saat lagi." };
+  }
+
+  let step: ProvisionStep = "reserve";
+  try {
+    await deps.checkpoint?.("reserve", tenantId);
+    step = "store";
+    const database = await openTenantDb(env, { tenantId, cacheVersion: 1 }, CMS_VERSION.schemaVersion);
+    await deps.checkpoint?.("store", tenantId);
+
+    step = "install";
+    const installed = await runInstall(database, {
+      ownerEmail: plan.email,
+      storeName: plan.storeName,
+      siteUrl: `https://${host}`,
+      slug: plan.slug,
+      adminUsername: plan.email,
+      adminPassword: plan.password,
+      tagline: "",
+      supportWhatsapp: "",
+      locale: "id-ID",
+      storefrontTemplate: "compact-market",
+    });
+    if (!installed.ok) throw new Error(`install: ${installed.error}`);
+    await deps.checkpoint?.("install", tenantId);
+
+    step = "secrets";
+    if ((await resolveAuthSecret(database, tenantId)).length < 32) throw new Error("no session key");
+    await issueWebhookToken(platformDb, tenantId, "autolaris", now());
+    await deps.checkpoint?.("secrets", tenantId);
+
+    // Issued while still provisioning, so activation is the last step: a
+    // failure here goes through cleanup like any other. The route only
+    // redeems a token of an active tenant.
+    step = "handoff";
+    const handoffToken = await issueHandoff(platformDb, tenantId, host, "signup", now());
+    await deps.checkpoint?.("handoff", tenantId);
+
+    // The host and the `signup` event follow the tenant's own transition in
+    // the same transaction: if the stale-provisioning job won the row first,
+    // nothing here changes, and the tenant stays a never-active one.
+    step = "activate";
+    const active = "EXISTS (SELECT 1 FROM tenants WHERE id = ? AND status = 'active')";
+    const [activated] = await platformDb.batch([
+      platformDb.prepare("UPDATE tenants SET status = 'active' WHERE id = ? AND status = 'provisioning'").bind(tenantId),
+      platformDb
+        .prepare(`UPDATE tenant_hosts SET status = 'active', is_primary = 1 WHERE host = ? AND tenant_id = ? AND status = 'pending' AND ${active}`)
+        .bind(host, tenantId, tenantId),
+      platformDb
+        .prepare(
+          `INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json)
+           SELECT ?, 'signup', ?, ?, json_object('terms_version', ?, 'privacy_version', ?) WHERE ${active}`,
+        )
+        .bind(tenantId, plan.email, now().toISOString(), TERMS_VERSION, PRIVACY_VERSION, tenantId),
+    ]);
+    if (Number(activated.meta?.changes ?? 0) !== 1) throw new Error("tenant left provisioning");
+    await deps.checkpoint?.("activate", tenantId);
+    return { status: 201, tenantId, host, email: plan.email, handoffToken };
+  } catch (error) {
+    console.error("signup-provision-failed", { tenant_id: tenantId, step, error: String(error) });
+    await platformDb
+      .batch([
+        platformDb.prepare("UPDATE tenants SET status = 'purging' WHERE id = ? AND status IN ('provisioning', 'active')").bind(tenantId),
+        platformDb
+          .prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES (?, 'provision_failed', 'platform', ?, json_object('step', ?))")
+          .bind(tenantId, now().toISOString(), step),
+      ])
+      .catch((cleanup) => console.error("signup-mark-purging-failed", { tenant_id: tenantId, error: String(cleanup) }));
+    return { status: 500, error: "Pendaftaran gagal. Coba lagi beberapa saat lagi." };
+  }
+}

@@ -3,9 +3,10 @@
  * (Penjualan) of one toko.
  *
  * Runs only while the plugin is active (src/plugins/registry.ts) and a URL +
- * secret pair is configured. Kelola's toko settings issue the pair. The pair
- * saved at /admin/settings/plugins/kelola (`plugins.settings`) wins over the
- * `KELOLA_ORDER_WEBHOOK_URL` / `_SECRET` env fallback. Push state lives in the
+ * secret pair is configured. Kelola's toko settings issue the pair, saved at
+ * /admin/settings/plugins/kelola (`plugins.settings`). There is no env
+ * fallback (T-45): one Worker-wide pair would push every tenant's buyers into
+ * one toko. Push state lives in the
  * plugin's own table, `plugin_kelola_orders`. The request is signed like
  * Kelola's Mengantar webhook: HMAC-SHA256 hex over `{x-timestamp}.{raw body}`.
  *
@@ -19,8 +20,6 @@
  * past a grace period the cron sends it to Kelola's lead webhook instead, for
  * CS to follow up (`drainKelolaLeads`).
  */
-import { getEnvValue } from "../../lib/env.ts";
-
 /** Orders older than this are left alone — also stops a first enable from
  *  replaying the store's whole history into Kelola. */
 export const KELOLA_RETRY_WINDOW_HOURS = 24;
@@ -45,22 +44,13 @@ type OrderRow = {
 };
 type ItemRow = { sku: string; name: string; quantity: number; unit_price: number; weight_grams: number };
 
-type KelolaConfig = { url: string; secret: string; source?: "dashboard" | "server" };
+type KelolaConfig = { url: string; secret: string; source?: "dashboard" };
 
-export function readKelolaConfig(env: Parameters<typeof getEnvValue>[1]): KelolaConfig | null {
-  const url = getEnvValue("KELOLA_ORDER_WEBHOOK_URL", env);
-  const secret = getEnvValue("KELOLA_ORDER_WEBHOOK_SECRET", env);
-  return url && secret ? { url, secret, source: "server" } : null;
-}
-
-/** Dashboard pair first, env pair as the fallback; null = the push is off. */
-export function getKelolaConfig(
-  settings: Record<string, unknown>,
-  env: Parameters<typeof getEnvValue>[1],
-): KelolaConfig | null {
+/** The tenant's saved pair; null = the push is off. */
+export function getKelolaConfig(settings: Record<string, unknown>): KelolaConfig | null {
   const url = typeof settings.webhook_url === "string" ? settings.webhook_url.trim() : "";
   const secret = typeof settings.webhook_secret === "string" ? settings.webhook_secret.trim() : "";
-  return url && secret ? { url, secret, source: "dashboard" } : readKelolaConfig(env);
+  return url && secret ? { url, secret, source: "dashboard" } : null;
 }
 
 /**

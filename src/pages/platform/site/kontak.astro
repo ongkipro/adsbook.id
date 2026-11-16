@@ -1,0 +1,54 @@
+---
+import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import { getRuntimeEnv } from '../../../lib/env';
+import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from '../../../platform/site/site.ts';
+
+export const prerender = false;
+// The contact addresses are set by the operator (PLATFORM_SUPPORT_EMAIL,
+// PLATFORM_SUPPORT_WHATSAPP); until then the page says so, never a made-up one.
+const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
+const email = typeof env.PLATFORM_SUPPORT_EMAIL === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(env.PLATFORM_SUPPORT_EMAIL) ? env.PLATFORM_SUPPORT_EMAIL : '';
+const whatsapp = typeof env.PLATFORM_SUPPORT_WHATSAPP === 'string' && /^62\d{8,13}$/.test(env.PLATFORM_SUPPORT_WHATSAPP) ? env.PLATFORM_SUPPORT_WHATSAPP : '';
+---
+
+<SiteLayout page={SITE_PAGES.kontak}>
+  <section class="page-head">
+    <div class="wrap"><div class="head">
+      <h1>Kontak</h1>
+      <p class="lead">Untuk pertanyaan akun, toko, atau privasi.</p>
+    </div></div>
+  </section>
+  <section class="section section-white">
+    <div class="wrap contact">
+      <div>
+        <h2>Tim adsbook.id</h2>
+        {email || whatsapp ? (
+          <ul class="channels">
+            {email && <li>Email: <a href={`mailto:${email}`}>{email}</a></li>}
+            {whatsapp && <li>WhatsApp: <a href={`https://wa.me/${whatsapp}`} rel="noopener">+{whatsapp}</a></li>}
+          </ul>
+        ) : (
+          <p class="muted">Alamat kontak resmi sedang disiapkan dan diumumkan di halaman ini sebelum peluncuran.</p>
+        )}
+      </div>
+      <div>
+        <h2>Anda pembeli di salah satu toko?</h2>
+        <p class="muted">Toko tempat Anda berbelanja adalah pengelola data pesanan Anda. Hubungi toko itu lewat kontak di halaman Kebijakan Privasi toko tersebut. Permintaan yang sampai ke kami, kami teruskan ke toko tersebut dalam 3 hari kerja.</p>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <div class="wrap end">
+      <h2>Mau membuka toko?</h2>
+      <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
+    </div>
+  </section>
+</SiteLayout>
+
+<style>
+  .contact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; }
+  .contact > div { display: grid; gap: 0.9rem; align-content: start; }
+  .channels { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; }
+  .end { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; }
+  @media (max-width: 760px) { .contact { grid-template-columns: 1fr; gap: 2rem; } }
+</style>

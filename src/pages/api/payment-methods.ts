@@ -4,7 +4,6 @@ import {
   autoLarisChannelLockReason,
   resolveDisabledAutoLarisChannels,
 } from "../../lib/autolaris-client";
-import { getEnvValue, getRuntimeEnv } from "../../lib/env";
 import { autoLarisOrderRailGap, getProviderConfig } from "../../lib/provider-config";
 import {
   calculatePaymentAdminFee,
@@ -15,12 +14,13 @@ import {
   paymentFeeDescription,
 } from "../../lib/payment-fee-policy";
 import { paymentBrandAsset } from "../../lib/payment-brand";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ locals }) => {
   try {
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     let isCodEnabled = true;
     let isAutoLarisMasterEnabled = true;
     let autoLarisConfigured = false;
@@ -82,11 +82,10 @@ export const GET: APIRoute = async ({ locals }) => {
             .first<{ address: string | null }>()
             .catch(() => null),
         ]);
-        const env = getRuntimeEnv(locals);
         autoLarisGap = autoLarisOrderRailGap({
           apiKey: providerConfig.autolaris.apiKey,
-          originId: getEnvValue("AUTOLARIS_ORDER_ORIGIN_ID", env),
-          destinationId: getEnvValue("AUTOLARIS_ORDER_DESTINATION_ID", env),
+          originId: providerConfig.autolaris.originId,
+          destinationId: providerConfig.autolaris.destinationId,
           warehouseAddress: warehouse?.address,
         });
         isCodEnabled = store?.is_cod_enabled !== 0;

@@ -1,15 +1,8 @@
-import { isAdminRole, secureEqual, verifyPasswordHash } from './auth.ts';
+import { isAdminRole, verifyPasswordHash } from './auth.ts';
 import type { AdminRole } from './auth.ts';
 
 export const DEFAULT_ADMIN_USERNAME = 'admin';
 export const DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2-sha256$100000$-EwKzifD04qz0rRDZxAlpQ$Hq_4WkRnBcUgAASqRR0kukVbbGOZyN3IIxpvVfm6_l4';
-/**
- * The password a fresh install accepts for the seeded `admin` credential when
- * no BOOTSTRAP_ADMIN_PASSWORD is configured. Deliberately guessable: it is a
- * first-run key, not a credential, and it opens nothing but the screen that
- * replaces it.
- */
-export const BOOTSTRAP_FALLBACK_PASSWORD = 'admin';
 const PASSWORD_ITERATIONS = 100_000;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,64}$/;
 
@@ -41,12 +34,20 @@ function encodeBase64Url(bytes: Uint8Array) {
   return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
+/** IAM-10: the owner signs in with the signup email (≤254 characters). */
+export const EMAIL_USERNAME_PATTERN = /^[^\s@]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,63}$/;
+
 export function normalizeAdminUsername(value: unknown) {
-  return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 64) : '';
+  return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 254) : '';
 }
 
+/**
+ * IAM-10: a username is the inherited staff form (`[a-z0-9._-]{3,64}`) or an
+ * email address of at most 254 characters (the owner's signup email).
+ */
 export function validateAdminUsername(username: string) {
-  return USERNAME_PATTERN.test(username);
+  if (USERNAME_PATTERN.test(username)) return true;
+  return username.length <= 254 && EMAIL_USERNAME_PATTERN.test(username);
 }
 
 export function validateNewAdminPassword(password: string, username: string) {
@@ -61,35 +62,19 @@ export function isDefaultAdminCredential(credential: Pick<AdminCredential, 'user
   return credential.username === DEFAULT_ADMIN_USERNAME && credential.passwordHash === DEFAULT_ADMIN_PASSWORD_HASH;
 }
 
+/**
+ * The seeded credential (`admin` + DEFAULT_ADMIN_PASSWORD_HASH) opens nothing
+ * (T-21). A single-tenant install once accepted `admin` or a Worker-wide
+ * BOOTSTRAP_ADMIN_PASSWORD for it until the operator rotated; on a platform
+ * that is a known password on every tenant whose owner has not signed in yet,
+ * and the forced password change it opened is an account takeover. A tenant's
+ * owner credential is written at signup (T-26), never seeded.
+ */
 export async function verifyAdminLoginPassword(
   password: string,
   credential: Pick<AdminCredential, 'username' | 'passwordHash'>,
-  bootstrapPassword: string
 ) {
-  if (isDefaultAdminCredential(credential)) {
-    const configuredBootstrap = bootstrapPassword.trim();
-
-    // An operator who sets BOOTSTRAP_ADMIN_PASSWORD gets the stronger path, and
-    // a short value is rejected outright rather than silently weakening it.
-    if (configuredBootstrap) {
-      if (configuredBootstrap.length < 16) return false;
-      return secureEqual(password, configuredBootstrap);
-    }
-
-    // Nothing configured — a fresh install. Accept the documented default so an
-    // install is reachable at all: before this, a new Worker had a seeded
-    // credential that no password could open, because the only accepted one
-    // came from an environment variable nobody had set yet.
-    //
-    // The exposure is bounded by middleware, not by hope: while
-    // must_change_password is set, this session can reach only /admin/profile,
-    // /api/admin/profile and /api/admin/logout. It cannot read an order, a
-    // customer, a payment or a provider key. Rotating the password is the only
-    // thing it can do, and validateNewAdminPassword refuses to let the new one
-    // be 'admin' or the username.
-    return secureEqual(password, BOOTSTRAP_FALLBACK_PASSWORD);
-  }
-
+  if (isDefaultAdminCredential(credential)) return false;
   return verifyPasswordHash(password, credential.passwordHash);
 }
 
@@ -149,7 +134,7 @@ export async function updateAdminCredential(
 
   const normalizedUsername = normalizeAdminUsername(username);
   if (!validateAdminUsername(normalizedUsername)) {
-    return { ok: false as const, error: 'Username harus 3–64 karakter: huruf kecil, angka, titik, garis bawah, atau tanda hubung.' };
+    return { ok: false as const, error: 'Pakai email, atau username 3–64 karakter: huruf kecil, angka, titik, garis bawah, atau tanda hubung.' };
   }
   const passwordError = validateNewAdminPassword(newPassword, normalizedUsername);
   if (passwordError) return { ok: false as const, error: passwordError };

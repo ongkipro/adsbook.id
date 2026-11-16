@@ -228,7 +228,7 @@ test("dedicated GET returns only abandoned rows with bounded server product opti
   } as unknown as D1Database;
   const response = await getAbandoned({
     url: new URL("https://example.test/api/admin/abandoned-orders"),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
   const payload = await response.json() as Record<string, any>;
 
@@ -270,7 +270,7 @@ test("convert rejects a missing lead before resolving a provider quote", async (
         courier_code: "jne",
       }),
     }),
-    locals: { runtimeEnv: { OMS_DB: database }, admin: { username: "cs" } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database}, admin: { username: "cs" } },
   } as never);
 
   assert.equal(response.status, 404);
@@ -306,7 +306,7 @@ test("convert rejects oversized provider inputs before any database or provider 
           ...overrides,
         }),
       }),
-      locals: { runtimeEnv: { OMS_DB: database }, admin: { username: "cs" } },
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database}, admin: { username: "cs" } },
     } as never);
     assert.equal(response.status, 422);
   }
@@ -360,7 +360,7 @@ test("normal orders GET excludes abandoned leads from rows, summary, and status 
 
   const response = await getOrders({
     url: new URL("https://example.test/api/admin/orders"),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
   const payload = await response.json() as Record<string, any>;
 
@@ -402,7 +402,7 @@ test("the order summary follows every filter, and the chips follow all but statu
     url: new URL(
       "https://example.test/api/admin/orders?date_filter=custom&date_start=2026-08-18&date_end=2026-08-18&shipping_status=pending",
     ),
-    locals: { runtimeEnv: { OMS_DB: database } },
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
   assert.equal(response.status, 200);
 

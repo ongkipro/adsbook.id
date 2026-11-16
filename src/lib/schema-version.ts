@@ -1,5 +1,5 @@
-import { getRuntimeEnv } from "./env.ts";
 import { CMS_VERSION } from "./version.ts";
+import { tenantDatabase } from "./tenant-database.ts";
 
 export const D1_MIGRATIONS_TABLE = "d1_migrations";
 export const SCHEMA_UPGRADE_ERROR_LABEL = "schema-upgrade-failed";
@@ -411,7 +411,7 @@ export function statusFromSchemaError(error: unknown): SchemaVersionStatus {
 export async function getSchemaVersionStatus(
   locals?: App.Locals,
 ): Promise<SchemaVersionStatus> {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database || typeof database.prepare !== "function") {
     return statusFromSchemaError(
       new SchemaUpgradeError(

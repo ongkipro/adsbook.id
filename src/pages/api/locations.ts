@@ -1,17 +1,16 @@
 import type { APIRoute } from 'astro';
-import { getRuntimeEnv } from '../../lib/env';
 import { searchDistrictCatalog } from '../../lib/district-catalog';
 import { createDistrictDiscoveryLocation, fetchProviderLocations } from '../../lib/location-search';
 import { resolveMengantarArea } from '../../lib/mengantar-areas';
 import { MengantarClient } from '../../lib/mengantar-client';
 import { getProviderConfig } from '../../lib/provider-config';
 import { checkRateLimit, getClientIp, rateLimitHeaders } from '../../lib/rate-limit';
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ request, url, locals }) => {
   try {
-    const runtimeEnv = getRuntimeEnv(locals);
     const search = url.searchParams.get('search') || '';
     const level = url.searchParams.get('level');
     if (!search || search.trim().length < 2) {
@@ -39,7 +38,7 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
     }
 
     const rateLimit = await checkRateLimit(
-      runtimeEnv?.OMS_DB as D1Database | undefined,
+      tenantDatabase(locals),
       `public-location:${getClientIp(request.headers)}`,
       120,
       60_000,
@@ -61,7 +60,7 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     };
-    const database = runtimeEnv?.OMS_DB;
+    const database = tenantDatabase(locals);
     if (!database || typeof database !== "object") return catalogueOnly();
     const db = database as D1Database;
     const provider = async () => {

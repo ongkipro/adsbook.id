@@ -1,4 +1,5 @@
 ---
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 import {
   ProductCatalog,
   type Product,
@@ -6,13 +7,8 @@ import {
 } from '../../components/admin/ProductCatalog';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
-import { getRuntimeEnv } from '../../lib/env';
 
 export const prerender = false;
-
-type AdminLocalsWithDatabase = App.Locals & {
-  OMS_DB?: D1Database;
-};
 
 type ProductDatabaseRow = Omit<Product, 'is_active' | 'variants'> & {
   is_active: number | boolean | null;
@@ -22,10 +18,7 @@ type VariantDatabaseRow = ProductVariant & {
   product_id: number | string;
 };
 
-const localDatabase = (Astro.locals as AdminLocalsWithDatabase).OMS_DB;
-const database =
-  localDatabase ??
-  (getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined);
+const database = tenantDatabase(Astro.locals);
 let initialProducts: Product[] | undefined;
 
 if (database?.prepare) {

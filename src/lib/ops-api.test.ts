@@ -82,7 +82,7 @@ function store() {
       }
     },
   } as unknown as D1Database;
-  const locals = { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals;
+  const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
   let orderSeq = 0;
   const addOrder = (fields: Record<string, unknown> = {}) => {
     orderSeq += 1;

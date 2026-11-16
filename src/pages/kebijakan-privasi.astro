@@ -1,28 +1,57 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import LegalPage from '../components/storefront/shared/LegalPage.astro';
-import { getTenantLegalPage } from '../data/legal';
+import PageIntro from '../components/storefront/shared/PageIntro.astro';
 import { withStoreName } from '../lib/tenant';
 import { getStorePublicContact } from '../lib/public-store';
+import { tenantDatabase } from '../lib/tenant-database.ts';
+import { legalText, readStoreProviders, renderLegalMarkdown, storePrivacyMarkdown } from '../platform/legal.ts';
+import { statePage } from '../platform/state-pages';
 
-const contact = await getStorePublicContact(Astro.locals);
-const data = getTenantLegalPage('privacy', Astro.locals.tenant.name, {
-  supportWhatsapp: contact.whatsapp,
-  supportEmail: contact.email,
-  businessAddress: contact.address,
-  siteUrl: Astro.locals.tenant.siteUrl,
-});
+// T-39 (PR-24, PRIV-2): the store's notice from the versioned template, naming
+// only the providers this store enabled, plus the seller's own section.
+const storeName = Astro.locals.tenant.name;
+const database = tenantDatabase(Astro.locals);
+const template = legalText('store-privacy')!;
+const [contact, providers, extra] = await Promise.all([
+  getStorePublicContact(Astro.locals),
+  database
+    ? readStoreProviders(database).catch(() => null)
+    : null,
+  database
+    ? database.prepare('SELECT privacy_notice_extra FROM stores ORDER BY id LIMIT 1').first<{ privacy_notice_extra: string | null }>().catch(() => null)
+    : null,
+]);
+// Unreadable providers: no notice at all, never one that omits a provider
+// the store really uses (a neutral no-store 503).
+if (!providers) return statePage('unavailable', Astro.url.pathname);
+const markdown = storePrivacyMarkdown(template.text, providers, extra?.privacy_notice_extra ?? '');
+const [, firstHeading = '', rest = markdown] = markdown.match(/^# (.+)\n([\s\S]*)$/) ?? [];
+const values = {
+  nama_toko: storeName,
+  whatsapp_toko: contact.whatsapp || 'WhatsApp toko',
+  email_toko: contact.email || 'email toko',
+};
+const html = renderLegalMarkdown(rest, values);
+const title = firstHeading.replace('{nama_toko}', storeName) || 'Kebijakan Privasi';
 ---
 
-<BaseLayout title={withStoreName(data.title, Astro.locals.tenant.name)} description={data.description}>
-  <LegalPage
-    badge={data.badge}
-    title={data.title}
-    description={data.description}
-    sections={data.sections}
-    breadcrumbs={[
-      { label: 'Beranda', href: '/' },
-      { label: data.badge, href: '/kebijakan-privasi' },
-    ]}
-  />
+<BaseLayout title={withStoreName('Kebijakan Privasi', storeName)} description={`Cara ${storeName} memproses data Anda.`}>
+  <main id="konten-utama" class="min-h-screen bg-white text-[#111111]">
+    <PageIntro
+      title={title}
+      description={`Versi ${template.version} · ${template.date}`}
+      breadcrumbs={[{ label: 'Beranda', href: '/' }, { label: 'Kebijakan Privasi', href: '/kebijakan-privasi' }]}
+    />
+    <article class="legal px-4 pb-12 pt-2 text-[15px] leading-7 text-[#444444]" set:html={html} />
+  </main>
 </BaseLayout>
+
+<style>
+  .legal :global(h2) { margin-top: 1.75rem; font-size: 1rem; font-weight: 700; color: #111111; }
+  .legal :global(h3) { margin-top: 1.25rem; font-weight: 600; color: #111111; }
+  .legal :global(p), .legal :global(ul), .legal :global(ol), .legal :global(blockquote) { margin-top: 0.5rem; }
+  .legal :global(ul) { list-style: disc; padding-left: 1.25rem; }
+  .legal :global(ol) { list-style: decimal; padding-left: 1.25rem; }
+  .legal :global(blockquote) { border-left: 3px solid #e5e5e5; padding-left: 0.75rem; color: #666666; }
+  .legal :global(mark) { background: #fff3c4; color: inherit; }
+</style>

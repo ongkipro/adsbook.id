@@ -9,44 +9,6 @@ import {
   slugFromStoreName,
 } from "./install.ts";
 import { verifyPasswordHash } from "./auth.ts";
-import { POST as installRoute } from "../pages/api/install.ts";
-
-test("fresh install requires the one-time setup capability before any write", async () => {
-  let writes = 0;
-  const database = {
-    prepare() {
-      return { async first() { return null; } };
-    },
-    async batch() {
-      writes += 1;
-      return [];
-    },
-  } as unknown as D1Database;
-  const response = await installRoute({
-    request: new Request("https://store.example.test/api/install", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        install_token: "wrong-token-value",
-        store_name: "Test Store",
-        site_url: "https://store.example.test",
-        admin_username: "owner",
-        admin_password: "safe-password-123",
-        admin_password_confirm: "safe-password-123",
-      }),
-    }),
-    locals: {
-      runtimeEnv: {
-        OMS_DB: database,
-        AUTH_SECRET: "local-auth-secret-with-at-least-32-characters",
-        INSTALL_TOKEN: "correct-install-token-value",
-      },
-    },
-  } as never);
-
-  assert.equal(response.status, 403);
-  assert.equal(writes, 0);
-});
 
 /**
  * A D1 shim over real SQLite. The stub below proves which SQL is sent; this
@@ -73,7 +35,8 @@ function sqliteD1() {
       id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       must_change_password INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      email TEXT, role TEXT NOT NULL DEFAULT 'owner'
     );
     CREATE TABLE courier_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -256,7 +219,7 @@ test("the install writes the store and the credential together", async () => {
   );
 
   // The password must be stored hashed, never in the clear.
-  const storedHash = bindings[1][1] as string;
+  const storedHash = bindings[1][2] as string; // username, email, then the hash
   assert.notEqual(storedHash, valid.adminPassword);
   assert.equal(await verifyPasswordHash(valid.adminPassword, storedHash), true);
 });

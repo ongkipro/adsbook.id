@@ -1,6 +1,7 @@
 // A-397: an order line keeps the weight it was quoted with. Runs persistOrder
 // and dispatchOrderToMengantar against the real migration chain in SQLite, and
 // captures the body that would have gone to Mengantar (no network).
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -13,7 +14,7 @@ import { resolveEligibleShippingRates } from "./shipping-quote.ts";
 
 type Value = null | number | string;
 
-function openDatabase() {
+function openDatabase__raw() {
   const sqlite = new DatabaseSync(":memory:");
   const directory = new URL("../db/migrations/", import.meta.url);
   for (const name of readdirSync(directory).filter((file) => file.endsWith(".sql")).sort()) {
@@ -208,3 +209,8 @@ test("CS conversion of a lead records the variant's weight at conversion", async
   // 400 g × 2, as converted — not 1000 g × 2.
   assert.equal(await dispatchedWeight(d1, order.id), 0.8);
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function openDatabase(...args: Parameters<typeof openDatabase__raw>): ReturnType<typeof openDatabase__raw> {
+  return bindTestCredentialsIn(openDatabase__raw(...args));
+}

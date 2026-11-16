@@ -1,6 +1,5 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
-import { getRuntimeEnv } from "../../../lib/env";
 import { getPublicProductValidationError } from "../../../lib/catalog-data";
 import {
   createCatalogProductId,
@@ -10,6 +9,7 @@ import {
   updateProductActiveStatus,
   type ProductMutationPayload,
 } from "../../../lib/product-mutation";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -134,7 +134,7 @@ async function generateProductId(database: D1Database) {
 }
 
 export const GET: APIRoute = async ({ locals, url }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database produk belum tersedia.", 503);
   }
@@ -167,7 +167,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database produk belum tersedia.", 503);
   }
@@ -270,7 +270,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 };
 
 export const PATCH: APIRoute = async ({ request, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database produk belum tersedia.", 503);
   }
@@ -498,7 +498,7 @@ export const PUT = PATCH;
 
 
 export const DELETE: APIRoute = async ({ locals, url }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
     return jsonError("Database produk belum tersedia.", 503);
   }

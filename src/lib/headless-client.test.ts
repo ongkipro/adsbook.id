@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn, TEST_CREDENTIAL_ENV } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { createServer as createHttpServer } from "node:http";
 import path from "node:path";
@@ -19,7 +20,7 @@ type FixtureStatement = {
   run: () => Promise<{ success: boolean; meta: { changes: number } }>;
 };
 
-function createJourneyDatabase(keyHash: string, providerBaseUrl: string) {
+function createJourneyDatabase__raw(keyHash: string, providerBaseUrl: string) {
   let savedOrder: {
     orderNumber: string;
     statusToken: string;
@@ -317,7 +318,10 @@ test("documented client adapter executes catalog to quote to checkout to status 
     ]);
     const secret = "adsbook_live_adapter_fixture_secret";
     const database = createJourneyDatabase(await hashApiKeySecret(secret), provider.baseUrl);
-    const locals = { runtimeEnv: { OMS_DB: database } } as unknown as App.Locals;
+    // The routes run in Vite's module graph, which has its own credential module (ADR-040).
+    const viteCredentials = await vite.ssrLoadModule("/src/lib/credential-crypto.ts");
+    viteCredentials.bindCredentials(database, "test-tenant", TEST_CREDENTIAL_ENV);
+    const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
     const transport = async (request: Request) => {
       const path = new URL(request.url).pathname;
       const context = { request, url: new URL(request.url), locals } as never;
@@ -355,3 +359,8 @@ test("documented client adapter executes catalog to quote to checkout to status 
     await Promise.all([provider.close(), vite.close()]);
   }
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function createJourneyDatabase(...args: Parameters<typeof createJourneyDatabase__raw>): ReturnType<typeof createJourneyDatabase__raw> {
+  return bindTestCredentialsIn(createJourneyDatabase__raw(...args));
+}

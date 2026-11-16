@@ -1,0 +1,20 @@
+---
+import type { Shot } from './content.ts';
+
+interface Props { shot: Shot; eager?: boolean; caption?: boolean }
+// One caption where it is needed (the hero); sections say it once in their lead.
+const { shot, eager = false, caption = false } = Astro.props;
+---
+
+<figure class="shot">
+  <div class="frame frame-phone">
+    <img src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} loading={eager ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : undefined} />
+  </div>
+  {caption && <figcaption class="caption">Tangkapan layar produk, data dari toko contoh.</figcaption>}
+</figure>
+
+<style>
+  .shot { margin: 0; }
+  .shot :global(.frame-phone) { margin-inline: auto; }
+  .shot figcaption { text-align: center; }
+</style>

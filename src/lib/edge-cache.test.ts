@@ -1,7 +1,8 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
-import { edgeCachePath, edgeCacheRequest, isEdgeStorable, readEdgeCache, writeEdgeCache } from "./edge-cache.ts";
+import { edgeCachePath, edgeCacheRequest, isEdgeStorable, readEdgeCache, writeEdgeCache, writeUploadCache } from "./edge-cache.ts";
 
 const req = (href: string, init?: RequestInit & { cf?: Record<string, unknown> }) => {
   const { cf, ...rest } = init ?? {};
@@ -9,8 +10,21 @@ const req = (href: string, init?: RequestInit & { cf?: Record<string, unknown> }
   if (cf) Object.defineProperty(request, "cf", { value: cf });
   return request;
 };
+const TENANT = { tenantId: "t-1", cacheVersion: 3 };
+// The cases below are about path and query; the tenant prefix is asserted on its own.
 const key = (href: string, init?: RequestInit & { cf?: Record<string, unknown> }) =>
-  edgeCacheRequest(req(href, init), new URL(href))?.url ?? null;
+  edgeCacheRequest(req(href, init), new URL(href), TENANT)?.url.replace("https://cache.adsbook.id/t/t-1/v3/", "https://") ?? null;
+
+test("TEN-3/ISO-8: the key carries the tenant and its cache version; no tenant, no cache", () => {
+  const href = "https://shop.example/produk/serum";
+  const forTenant = (tenantId: string, cacheVersion: number) =>
+    edgeCacheRequest(req(href), new URL(href), { tenantId, cacheVersion })?.url;
+  assert.equal(forTenant("t-1", 3), "https://cache.adsbook.id/t/t-1/v3/shop.example/produk/serum");
+  // A host moved to another tenant, or a version bump (suspend, hostname change), is a cold key.
+  assert.notEqual(forTenant("t-2", 3), forTenant("t-1", 3));
+  assert.notEqual(forTenant("t-1", 4), forTenant("t-1", 3));
+  assert.equal(edgeCacheRequest(req(href), new URL(href), undefined), null);
+});
 
 test("only shared pages are eligible; per-visitor and geo test pages never are", () => {
   for (const path of [
@@ -51,8 +65,8 @@ test("ad tracking parameters share one entry; real parameters, provinces and byp
   assert.equal(key("https://store.example/", { cf: { regionCode: "JB" } }), "https://store.example/");
   assert.equal(key("https://store.example/produk", { cf: { regionCode: "JB" } }), "https://store.example/produk");
   // An admin session, an Authorization header, a preview and a non-GET never use the cache.
-  assert.equal(key(base, { headers: { cookie: "adsbook_session=abc" } }), null);
-  assert.equal(key(base, { headers: { cookie: "_fbp=x; adsbook_session=abc" } }), null);
+  assert.equal(key(base, { headers: { cookie: "__Host-adsbook_session=abc" } }), null);
+  assert.equal(key(base, { headers: { cookie: "_fbp=x; __Host-adsbook_session=abc" } }), null);
   assert.equal(key(base, { headers: { authorization: "Bearer x" } }), null);
   assert.equal(key(`${base}?preview=1`), null);
   // The rewrite of a product page onto a native landing page's path.
@@ -133,7 +147,17 @@ const hooks = registerHooks({
 const { createMiddleware } = await import("../middleware.ts");
 hooks.deregister();
 let schemaCalls = 0;
-const onRequest = createMiddleware(async () => { schemaCalls += 1; });
+// The request gate (T-17) is tested in src/platform/; these tests start past it, on an active tenant.
+const tenantGate = async () => ({
+  kind: 'tenant' as const,
+  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.adsbook.cc', hostKind: 'subdomain' as const, primaryHost: 'test.adsbook.cc' },
+});
+const onRequest = createMiddleware(async (env) => { schemaCalls += 1; return (env as { OMS_DB: D1Database }).OMS_DB; }, tenantGate);
+
+const READY_ROW = {
+  store_name: 1, product: 1, primary_warehouse: 1, mengantar_api_key: "k", cod: 1, autolaris_on: 0, autolaris_key: null,
+  autolaris_origin: null, autolaris_destination: null, warehouse_address: "Jl. 1", couriers: 1, signals: 0,
+};
 
 async function run(
   href: string,
@@ -147,7 +171,19 @@ async function run(
   const context = {
     request,
     url: new URL(href),
-    locals: { runtimeEnv: { OMS_DB: { prepare() { d1Calls += 1; throw new Error("d1 unavailable"); } } } },
+    locals: {
+      runtimeEnv: {
+        OMS_DB: bindTestCredentialsIn({
+          // A ready store (T-38): the readiness read answers; every other read fails,
+          // so the page renders from its defaults.
+          prepare(sql: string) {
+            d1Calls += 1;
+            if (sql.includes("AS primary_warehouse")) return { first: async () => READY_ROW };
+            throw new Error("d1 unavailable");
+          },
+        }),
+      },
+    },
     redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
   };
   const response = await onRequest(context as never, next as never);
@@ -176,7 +212,7 @@ test("middleware: a hit skips D1 and the render, keeps security headers and writ
   assert.equal(first.schemaCalls(), 1);
   assert.match(first.response.headers.get("set-cookie") ?? "", /adsbook_click_ids=/);
   await new Promise((resolve) => setTimeout(resolve, 10));
-  const entry = cache.map.get("https://store.example/aussie-formulabaru")!;
+  const entry = cache.map.get("https://cache.adsbook.id/t/t-test/v1/store.example/aussie-formulabaru")!;
   assert.ok(entry, "stored under the key without ad parameters");
   assert.equal(entry.headers.has("set-cookie"), false);
   assert.equal(entry.headers.has("x-frame-options"), false);
@@ -225,7 +261,7 @@ test("middleware: a hit skips D1 and the render, keeps security headers and writ
   assert.equal(await paFirst.response.text(), "<p>full:Papua</p>");
 
   // An admin session never reads the cache.
-  const admin = await run("https://store.example/aussie-formulabaru", async () => new Response("<p>preview</p>", { status: 200, headers: { "content-type": "text/html" } }), { cookie: "adsbook_session=abc" });
+  const admin = await run("https://store.example/aussie-formulabaru", async () => new Response("<p>preview</p>", { status: 200, headers: { "content-type": "text/html" } }), { cookie: "__Host-adsbook_session=abc" });
   assert.equal(await admin.response.text(), "<p>preview</p>");
   assert.notEqual(admin.response.headers.get("x-edge-cache"), "HIT");
 });
@@ -245,7 +281,7 @@ test("middleware: an upload is fetched from R2 once, then served without D1 or t
   const first = await run(`${href}?v=1`, image);
   assert.equal(first.response.headers.get("x-edge-cache"), "MISS");
   await new Promise((resolve) => setTimeout(resolve, 10));
-  const entry = cache.map.get(`${href}?__g=2`)!;
+  const entry = cache.map.get(`${href.replace("https://", "https://cache.adsbook.id/t/t-test/v1/")}?__g=2`)!;
   assert.ok(entry, "stored without the visitor's query string, under the current generation");
   assert.equal(entry.headers.get("cache-control"), "public, max-age=86400", "the edge keeps it a day");
 
@@ -270,4 +306,47 @@ test("middleware: an upload is fetched from R2 once, then served without D1 or t
   await run(card, async () => new Response("full-bytes", { status: 200, headers: { "content-type": "image/webp", "x-asset-stand-in": "1" } }));
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(cache.map.has(`${card}?__g=2`), false);
+});
+
+test("an upload answer that is private, no-store or sets a cookie is never stored as public (T-28 review)", async () => {
+  const stored: Response[] = [];
+  const cache = { match: async () => undefined, put: async (_key: Request, response: Response) => void stored.push(response) };
+  const key = new Request("https://toko-a.adsbook.cc/uploads/a.webp");
+  const image = (headers: Record<string, string>) => new Response("bytes", { status: 200, headers: { "content-type": "image/webp", ...headers } });
+  writeUploadCache(key, image({ "cache-control": "private, max-age=60" }), undefined, cache);
+  writeUploadCache(key, image({ "cache-control": "no-store" }), undefined, cache);
+  writeUploadCache(key, image({ "set-cookie": "a=1; Path=/" }), undefined, cache);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stored.length, 0);
+  writeUploadCache(key, image({ "cache-control": "public, max-age=60" }), undefined, cache);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stored.length, 1, "the control: a public upload is stored");
+  assert.match(stored[0].headers.get("cache-control") ?? "", /^public/);
+});
+
+test("a cached copy survives garbage collection: the stored body is never a dropped clone's stream (CI run 43827214642)", async () => {
+  // Node 22's undici cancels the body of a Response object once it is
+  // collected. Forcing collections between the write and the read proves the
+  // stored copy does not depend on an object nobody holds.
+  const { setFlagsFromString } = await import("node:v8");
+  const { runInNewContext } = await import("node:vm");
+  setFlagsFromString("--expose-gc");
+  const gc = runInNewContext("gc") as () => void;
+  const collect = async () => {
+    for (let round = 0; round < 5; round += 1) {
+      gc();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  };
+  const page = fakeCache();
+  const pageKey = new Request("https://cache.adsbook.id/t/t-gc/v1/store.example/produk/x", { method: "GET" });
+  writeEdgeCache(pageKey, new Response("<p>page</p>", { status: 200, headers: { "content-type": "text/html" } }), undefined, page);
+  const upload = fakeCache();
+  const uploadKey = new Request("https://cache.adsbook.id/t/t-gc/v1/uploads/a.webp", { method: "GET" });
+  writeUploadCache(uploadKey, new Response("bytes", { status: 200, headers: { "content-type": "image/webp" } }), undefined, upload);
+  await collect();
+  const hit = await readEdgeCache(pageKey, page);
+  assert.equal(hit?.headers.get("x-edge-cache"), "HIT");
+  assert.equal(await hit?.text(), "<p>page</p>");
+  assert.equal(await (await upload.match(uploadKey))?.text(), "bytes");
 });

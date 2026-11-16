@@ -140,7 +140,7 @@ class SqliteD1Database {
 function createLocals() {
   const database = new SqliteD1Database();
   const locals = {
-    OMS_DB: database as unknown as D1Database,
+    tenantDb: database as unknown as D1Database,
   } as unknown as App.Locals;
   return { database, locals };
 }
@@ -528,7 +528,7 @@ test("the public listing finds each product by primary key, not by scanning land
       return database.prepare(sql);
     },
   } as unknown as D1Database;
-  await listPublicLandingPages({ OMS_DB: recording } as unknown as App.Locals);
+  await listPublicLandingPages({ tenantDb: recording } as unknown as App.Locals);
   const listing = seen.find((sql) => sql.includes("AS product_image"));
   assert.ok(listing, "the listing query ran");
   const plan = await database.prepare(`EXPLAIN QUERY PLAN ${listing}`).all<{ detail: string }>();

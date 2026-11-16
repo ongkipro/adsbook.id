@@ -1,5 +1,6 @@
 // Audit 2026-10-31 H-1: a buyer who paid an AutoLaris instruction after it was
 // replaced must still reach `paid`. Real functions on the full migration chain.
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -7,11 +8,11 @@ import test from "node:test";
 import { createAutoLarisPaymentForOrder, reconcileAutoLarisPaymentStatuses } from "./autolaris-payment.ts";
 import { confirmManualAutoLarisPayment } from "./manual-payment-reconciliation.ts";
 import { splitMigrationStatements } from "./schema-version.ts";
-import { envTenantConfig } from "./tenant.ts";
+import { defaultTenantConfig } from "./tenant.ts";
 
 type Value = null | number | string;
 
-function store() {
+function store__raw() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
   const dir = new URL("../db/migrations/", import.meta.url);
@@ -20,8 +21,9 @@ function store() {
   }
   const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   sqlite.exec(`
-    INSERT INTO stores (id, name, slug, created_at, autolaris_api_key, autolaris_base_url)
-      VALUES (1, 'Toko', 'toko', '2026-01-01', 'qa-key', 'https://autolaris.example.test');
+    INSERT INTO stores (id, name, slug, created_at, autolaris_api_key, autolaris_base_url,
+        autolaris_order_origin_id, autolaris_order_destination_id)
+      VALUES (1, 'Toko', 'toko', '2026-01-01', 'qa-key', 'https://autolaris.example.test', '3517100', '3518010');
     INSERT INTO admin_credentials (id, username, password_hash, role, updated_at)
       VALUES (10, 'owner.one', 'x', 'owner', '2026-01-01');
     INSERT INTO warehouses (id, store_id, name, origin_area_id, pickup_address_id, address, city, province, contact_name, contact_phone)
@@ -74,8 +76,7 @@ function store() {
 }
 
 const locals = {
-  tenant: { ...envTenantConfig, siteUrl: "https://store.example.test" },
-  runtimeEnv: { AUTOLARIS_ORDER_ORIGIN_ID: "3517100", AUTOLARIS_ORDER_DESTINATION_ID: "3518010" },
+  tenant: { ...defaultTenantConfig, siteUrl: "https://store.example.test" },
   cfContext: { waitUntil() {} } as App.Locals["cfContext"],
 } as App.Locals;
 
@@ -197,3 +198,8 @@ test("H-1: of two simultaneous regenerations, the second does not overwrite the 
     "the live instruction is left alone",
   );
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function store(...args: Parameters<typeof store__raw>): ReturnType<typeof store__raw> {
+  return bindTestCredentialsIn(store__raw(...args));
+}

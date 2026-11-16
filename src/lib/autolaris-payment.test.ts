@@ -1,3 +1,4 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
@@ -5,7 +6,7 @@ import {
   AUTOLARIS_CHANNEL_OPTIONS,
   parseAutoLarisPaymentResponse,
 } from "./autolaris-client.ts";
-import { envTenantConfig } from "./tenant.ts";
+import { defaultTenantConfig } from "./tenant.ts";
 import {
   buyerEmail,
   createAutoLarisPaymentForOrder,
@@ -17,7 +18,11 @@ import {
   AUTOLARIS_EXPIRED_RECHECK_HOURS,
 } from "./autolaris-payment.ts";
 
-function createAutoLarisOrderDatabase(autoLarisApiKey: string | null, paymentFeeBearer: "buyer" | "seller" = "seller") {
+function createAutoLarisOrderDatabase__raw(
+  autoLarisApiKey: string | null,
+  paymentFeeBearer: "buyer" | "seller" = "seller",
+  areaIds: { origin: string | null; destination: string | null } = { origin: "3517100", destination: "3518010" },
+) {
   const state = {
     transaction: null as null | Record<string, unknown>,
   };
@@ -71,6 +76,9 @@ function createAutoLarisOrderDatabase(autoLarisApiKey: string | null, paymentFee
               mengantar_base_url: null,
               autolaris_api_key: autoLarisApiKey,
               autolaris_base_url: "https://autolaris.example.test",
+              autolaris_order_origin_id: areaIds.origin,
+              autolaris_order_destination_id: areaIds.destination,
+              autolaris_shipper_email: null,
             };
           }
           throw new Error(`Unexpected first query: ${sql}`);
@@ -157,11 +165,7 @@ function createAutoLarisOrderDatabase(autoLarisApiKey: string | null, paymentFee
 }
 
 const QA_LOCALS = {
-  tenant: { ...envTenantConfig, siteUrl: "https://store.example.test" },
-  runtimeEnv: {
-    AUTOLARIS_ORDER_ORIGIN_ID: "3517100",
-    AUTOLARIS_ORDER_DESTINATION_ID: "3518010",
-  },
+  tenant: { ...defaultTenantConfig, siteUrl: "https://store.example.test" },
   cfContext: { waitUntil() {} } as App.Locals["cfContext"],
 } as App.Locals;
 
@@ -313,15 +317,16 @@ test("Create Order fails before fetch when AutoLaris mirror area ids are missing
   context.after(() => {
     globalThis.fetch = originalFetch;
   });
-  const { database } = createAutoLarisOrderDatabase("qa-key");
+  const { database } = createAutoLarisOrderDatabase("qa-key", "seller", { origin: null, destination: null });
   let providerCalls = 0;
   globalThis.fetch = async () => {
     providerCalls += 1;
     return new Response(null, { status: 500 });
   };
+  // Env area ids are never read (T-45): only the tenant's saved pair counts.
   const locals = {
     ...QA_LOCALS,
-    runtimeEnv: {},
+    runtimeEnv: { AUTOLARIS_ORDER_ORIGIN_ID: "3517100", AUTOLARIS_ORDER_DESTINATION_ID: "3518010" },
   } as App.Locals;
 
   const payment = await createAutoLarisPaymentForOrder(database, locals, {
@@ -574,7 +579,7 @@ test("a store answering on more than one host is still recognised", () => {
   assert.equal(isSyntheticBuyerEmail(legacy, undefined, null, "not a url"), false);
 });
 
-function createAdviceReconciliationDatabase() {
+function createAdviceReconciliationDatabase__raw() {
   const state = {
     transactionStatus: "pending",
     orderPaymentStatus: "pending",
@@ -831,3 +836,13 @@ test("the hourly Advice run reaches new instructions, not the same old expired o
   const rows = db.prepare(PENDING_AUTOLARIS_INQUIRY_SQL).all(cutoff, 25) as Array<{ transaction_id: number }>;
   assert.deepEqual(rows.map((row) => row.transaction_id), [stillPending, justExpired]);
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function createAutoLarisOrderDatabase(...args: Parameters<typeof createAutoLarisOrderDatabase__raw>): ReturnType<typeof createAutoLarisOrderDatabase__raw> {
+  return bindTestCredentialsIn(createAutoLarisOrderDatabase__raw(...args));
+}
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function createAdviceReconciliationDatabase(...args: Parameters<typeof createAdviceReconciliationDatabase__raw>): ReturnType<typeof createAdviceReconciliationDatabase__raw> {
+  return bindTestCredentialsIn(createAdviceReconciliationDatabase__raw(...args));
+}

@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { captureMetaOrderContext, serializeMetaOrderContext } from '../../../lib/meta-order-context';
 import { handleOptions, headlessError, headlessOk, validateHeadlessRequest } from '../../../lib/headless-api';
-import { orderSubmitSchema } from '../../../lib/order-schema';
-import { getRuntimeEnv } from '../../../lib/env';
+import { z } from 'zod';
+import { parseOrderSubmit } from '../../../lib/order-schema';
 import { checkRateLimit, getClientIp } from '../../../lib/rate-limit';
 import { loadStoreCodDisabledProvinceCodes } from '../../../lib/form-mode';
 import { isProvinceExcluded, normalizeProvinceCode } from '../../../lib/province';
@@ -14,6 +14,7 @@ import { createAutoLarisPaymentForOrder, recordFailedPaymentAttempt, type AutoLa
 import { getProviderConfig } from '../../../lib/provider-config';
 import { scheduleOrderCreated } from '../../../plugins/registry';
 import { scheduleCodPurchase } from '../../../lib/paid-order-purchase';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -27,7 +28,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   try {
     const clientIp = getClientIp(request.headers);
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     const rateLimit = await checkRateLimit(database, `headless-checkout:${clientIp}`, 15, 60_000);
     if (!rateLimit.allowed) {
       return validation.finalize(headlessError('Terlalu banyak percobaan order. Silakan tunggu 1 menit.', 429, {
@@ -48,11 +49,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }, validation.corsHeaders));
     }
 
-    const parsed = orderSubmitSchema.safeParse(body);
+    const parsed = parseOrderSubmit(body);
     if (!parsed.success) {
-      return validation.finalize(headlessError(parsed.error.errors[0]?.message || 'Data order tidak valid.', 422, {
+      return validation.finalize(headlessError(parsed.error.issues[0]?.message || 'Data order tidak valid.', 422, {
         code: 'VALIDATION_ERROR',
-        errors: parsed.error.format(),
+        errors: z.formatError(parsed.error),
       }, validation.corsHeaders));
     }
 

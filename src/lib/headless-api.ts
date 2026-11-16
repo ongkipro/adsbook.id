@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { getRuntimeEnv } from './env.ts';
 import {
   DEFAULT_API_KEY_DAILY_QUOTA,
   DEFAULT_API_KEY_RATE_LIMIT,
@@ -8,6 +7,7 @@ import {
   type ApiKeyScope,
   type HeadlessApiScope,
 } from './developer-api-keys.ts';
+import { tenantDatabase } from "./tenant-database.ts";
 
 export const HEADLESS_OPERATIONS = {
   storefrontRead: { scope: 'storefront:read', method: 'GET', path: '/api/v1/storefront' },
@@ -154,7 +154,7 @@ export async function validateHeadlessApiKey(
     };
   }
 
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) {
     return {
       allowed: false,
@@ -535,15 +535,9 @@ export function resolveAllowedOrigins(
 
   addPatterns(extraAllowed);
 
-  try {
-    const env = getRuntimeEnv(locals);
-    if (env) {
-      addPatterns(env.PUBLIC_HEADLESS_ALLOWED_ORIGINS);
-      addPatterns(env.PUBLIC_SITE_URL);
-    }
-  } catch {
-    // Fallback if env is unavailable
-  }
+  // The tenant's own origin, from its store (T-21). A Worker-wide env value
+  // would be one allowlist for every tenant.
+  addPatterns(locals?.tenant?.siteUrl);
 
   // Default local development origins
   patterns.push('localhost', '127.0.0.1');
@@ -552,7 +546,7 @@ export function resolveAllowedOrigins(
 }
 async function loadStoredHeadlessAllowedOrigins(locals?: App.Locals) {
   try {
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     if (!database?.prepare) return null;
     const row = await database
       .prepare('SELECT headless_allowed_origins FROM stores ORDER BY id LIMIT 1')

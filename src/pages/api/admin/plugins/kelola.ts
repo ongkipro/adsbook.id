@@ -10,12 +10,14 @@ import {
   normalizeKelolaWebhookUrl,
   testKelolaConnection,
 } from "../../../../plugins/kelola/sync.ts";
+import { tenantDatabase } from "../../../../lib/tenant-database.ts";
+import { CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, CredentialKeyUnavailableError } from "../../../../lib/credential-crypto.ts";
 
 export const prerender = false;
 
 type Payload = {
   action?: "save" | "test" | "backfill";
-  /** null clears the stored pair and falls back to the env pair. */
+  /** null clears the stored pair, which turns the push off. */
   webhook_url?: string | null;
   /** Empty keeps the stored secret. */
   webhook_secret?: string;
@@ -23,7 +25,7 @@ type Payload = {
 
 /** The secret never leaves the server; the URL token is masked. */
 async function status(context: PluginContext) {
-  const config = getKelolaConfig(context.settings, context.env);
+  const config = getKelolaConfig(context.settings);
   return {
     configured: Boolean(config),
     source: config?.source ?? "none",
@@ -33,7 +35,7 @@ async function status(context: PluginContext) {
 }
 
 async function activeContext(locals: App.Locals) {
-  const db = getRuntimeEnv(locals)?.OMS_DB;
+  const db = tenantDatabase(locals);
   if (!db || typeof db !== "object") return null;
   return pluginContext(db as D1Database, getRuntimeEnv(locals), "kelola");
 }
@@ -51,7 +53,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if (!body) return jsonError("Payload tidak valid.", 400);
 
   if (body.action === "test") {
-    const config = getKelolaConfig(context.settings, context.env);
+    const config = getKelolaConfig(context.settings);
     if (!config) return jsonError("Kelola CRM belum dihubungkan.", 400);
     const result = await testKelolaConnection(config);
     return result.ok
@@ -59,7 +61,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       : jsonError(result.message, 502, { verified: false });
   }
   if (body.action === "backfill") {
-    const config = getKelolaConfig(context.settings, context.env);
+    const config = getKelolaConfig(context.settings);
     if (!config) return jsonError("Kelola CRM belum dihubungkan.", 400);
     const synced = await drainKelolaOrders(context.database, config, null);
     const kelola = await status(context);
@@ -86,7 +88,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if (secret.length < 16) return jsonError("Secret webhook Kelola wajib diisi.", 400);
 
   context.settings = { webhook_url: url, webhook_secret: secret };
-  await savePluginSettings(context.database, "kelola", context.settings);
+  try {
+    await savePluginSettings(context.database, "kelola", context.settings);
+  } catch (error) {
+    if (error instanceof CredentialKeyUnavailableError) return jsonError(CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, 503);
+    throw error;
+  }
   const check = await testKelolaConnection({ url, secret });
   return jsonOk({
     message: check.ok ? `Tersimpan. ${check.message}` : `Tersimpan, tetapi tes koneksi gagal: ${check.message}`,

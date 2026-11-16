@@ -61,6 +61,7 @@ type EvaluateOptions = {
   logger?: AlertLogger;
 };
 
+/** Tenant-relative: the store is `tenantKv`, which adds `t:<tenantId>:` (TEN-3). */
 const ALERT_STATE_PREFIX = "adsbookcms:operational-alert:v1:";
 
 function alertKey(id: OperationalAlertId) {

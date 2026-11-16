@@ -11,12 +11,15 @@
  * live on the page at once and stale here for five minutes — two surfaces
  * disagreeing about the same setting.
  */
+import type { ScopedKv } from "../platform/keys.ts";
+
+/** Tenant-relative: `tenantKv` adds `t:<tenantId>:` (TEN-3). */
 export const STORE_CONFIG_CACHE_KEY = "store-config:cod-disabled-province-codes:v1";
 export const STORE_CONFIG_CACHE_TTL_SECONDS = 300;
 
 /** Best-effort: a failed delete only means the old TTL applies. */
 export async function invalidateStoreConfigCache(
-  sessions: KVNamespace | undefined,
+  sessions: ScopedKv | undefined,
 ): Promise<void> {
   if (!sessions) return;
   try {

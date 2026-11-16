@@ -1,3 +1,4 @@
+import { withTestCredentials } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
@@ -11,7 +12,7 @@ import {
   GET,
   POST,
 } from "../pages/api/admin/payment-reconciliation.ts";
-import { POST as LEGACY_WEBHOOK } from "../pages/api/webhooks/autolaris.ts";
+import { POST as LEGACY_WEBHOOK } from "../pages/api/webhooks/autolaris/[token].ts";
 
 // By suffix, never by number (RELEASE.md): an install with its own migrations
 // renumbers the product's above them, and a fixed number would miss the file.
@@ -93,12 +94,13 @@ class ReconciliationDatabase {
   failOnSql = "";
 
   constructor() {
+    withTestCredentials(this);
     this.sqlite.exec(`
       PRAGMA foreign_keys = ON;
       CREATE TABLE stores (
         id INTEGER PRIMARY KEY,
         mengantar_api_key TEXT, mengantar_base_url TEXT,
-        autolaris_api_key TEXT, autolaris_base_url TEXT
+        autolaris_api_key TEXT, autolaris_base_url TEXT, autolaris_order_origin_id TEXT, autolaris_order_destination_id TEXT, autolaris_shipper_email TEXT
       );
       CREATE TABLE admin_credentials (
         id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, role TEXT NOT NULL
@@ -117,7 +119,7 @@ class ReconciliationDatabase {
         total_amount INTEGER NOT NULL, expires_at TEXT, paid_at TEXT,
         failed_reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
       );
-      INSERT INTO stores VALUES (1, NULL, NULL, 'qa-key', 'https://autolaris.example.test');
+      INSERT INTO stores VALUES (1, NULL, NULL, 'qa-key', 'https://autolaris.example.test', NULL, NULL, NULL);
       INSERT INTO admin_credentials VALUES (10, 'owner.one', 'owner');
       INSERT INTO admin_credentials VALUES (11, 'admin.one', 'admin');
       INSERT INTO admin_credentials VALUES (12, 'cs.one', 'customer_service');
@@ -407,7 +409,7 @@ test("GET returns only scoped online AutoLaris rows with eligibility and bounded
   seedPayment(database, { id: 104, provider: "other" });
   const response = await GET({
     request: new Request("https://cms.test/api/admin/payment-reconciliation?page=1&page_size=20"),
-    locals: { admin: owner, runtimeEnv: { OMS_DB: asD1(database) } },
+    locals: { admin: owner, tenantDb: asD1(database), runtimeEnv: {} },
   } as never);
   assert.equal(response.status, 200);
   const payload = await response.json() as {
@@ -440,14 +442,14 @@ test("endpoint rejects scoped roles and missing or short notes without database 
     request: request("Verified in provider dashboard."),
     locals: {
       admin: { username: "cs.one", role: "customer_service" },
-      runtimeEnv: { OMS_DB: asD1(database) },
+      tenantDb: asD1(database), runtimeEnv: {},
     },
   } as never);
   assert.equal(forbidden.status, 403);
   for (const note of [undefined, "    ", "1234"]) {
     const invalid = await POST({
       request: request(note),
-      locals: { admin: owner, runtimeEnv: { OMS_DB: asD1(database) } },
+      locals: { admin: owner, tenantDb: asD1(database), runtimeEnv: {} },
     } as never);
     assert.equal(invalid.status, 422);
   }
@@ -471,7 +473,7 @@ test("admin role can confirm through the protected route contract", async () => 
     }),
     locals: {
       admin: { username: "admin.one", role: "admin" },
-      runtimeEnv: { OMS_DB: asD1(database) },
+      tenantDb: asD1(database), runtimeEnv: {},
     },
   } as never);
   assert.equal(response.status, 200);
@@ -512,13 +514,25 @@ test("an AutoLaris callback is recorded verbatim and moves no payment state", as
   console.error = () => {};
   let response: Response;
   try {
+    // T-23: the tenant's own token on its platform subdomain (webhook-secrets.test.ts covers refusals).
+    const token = "a".repeat(64);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    const secretHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const platformDb = {
+      prepare: () => ({ bind: () => ({ first: async () => ({ secret_hash: secretHash }) }) }),
+    };
     response = await LEGACY_WEBHOOK({
-      request: new Request("https://cms.test/api/webhooks/autolaris", {
+      request: new Request(`https://toko.adsbook.cc/api/webhooks/autolaris/${token}`, {
         method: "POST",
         headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.9" },
         body: JSON.stringify({ rc: "00", data: { trx_id: "TRX-77", reff_id: "10041", status: "PAID" } }),
       }),
-      locals: { runtimeEnv: { OMS_DB: database } },
+      params: { token },
+      locals: {
+        tenantDb: database,
+        runtimeEnv: { PLATFORM_DB: platformDb },
+        tenantContext: { tenantId: "t-1", hostKind: "subdomain" },
+      },
     } as never);
   } finally {
     console.error = original;

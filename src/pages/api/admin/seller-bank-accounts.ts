@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
-import { getRuntimeEnv } from "../../../lib/env";
 import { parseSellerBankAccountInput } from "../../../lib/seller-bank-account";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -13,7 +13,7 @@ const SELECT_ACCOUNTS = `
 `;
 
 async function databaseAndStore(locals: App.Locals) {
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) throw new Error("Database pengaturan belum tersedia.");
   const store = await database
     .prepare("SELECT id FROM stores ORDER BY id LIMIT 1")

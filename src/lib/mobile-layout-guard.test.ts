@@ -161,10 +161,10 @@ test("dashboard overview leads with truthful role-safe analytics", () => {
     "utf8",
   );
 
-  // Operational diagnostics moved to /admin/status (A39); the dashboard keeps
-  // only a one-line setup reminder that links there.
+  // Operational diagnostics live on /admin/status (A39); the dashboard keeps
+  // only the setup card (UX-2, T-38), which links to /admin/setup.
   assert.doesNotMatch(dashboard, /OperationalHealth|OperationalStatus/);
-  assert.match(dashboard, /href="\/admin\/status"/);
+  assert.match(dashboard, /<SetupChecklist steps=\{setupSteps\} storeUrl=\{setupStoreUrl\} compact \/>/);
   assert.match(dashboard, /showPaymentsLink=\{mayManagePayments\}/);
   // Renamed from "Pembayaran berhasil": that card divided prepaid success by
   // every order including COD, which is paid on delivery and can never

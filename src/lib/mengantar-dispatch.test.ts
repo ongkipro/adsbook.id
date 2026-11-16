@@ -1,3 +1,4 @@
+import { withTestCredentials } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import test from "node:test";
@@ -49,13 +50,14 @@ class DispatchDatabase {
   readonly sqlite = new DatabaseSync(":memory:");
 
   constructor() {
+    withTestCredentials(this);
     this.sqlite.exec(`
       CREATE TABLE stores (
         id INTEGER PRIMARY KEY,
         mengantar_api_key TEXT,
         mengantar_base_url TEXT,
         autolaris_api_key TEXT,
-        autolaris_base_url TEXT
+        autolaris_base_url TEXT, autolaris_order_origin_id TEXT, autolaris_order_destination_id TEXT, autolaris_shipper_email TEXT
       );
       CREATE TABLE warehouses (
         id INTEGER PRIMARY KEY,
@@ -116,7 +118,7 @@ class DispatchDatabase {
       );
 
       INSERT INTO stores VALUES (
-        1, 'test-mengantar-key', 'https://provider.test', NULL, NULL
+        1, 'test-mengantar-key', 'https://provider.test', NULL, NULL, NULL, NULL, NULL
       );
       INSERT INTO warehouses VALUES (1, 'pickup-1');
       INSERT INTO products VALUES (1, 'Produk Uji');

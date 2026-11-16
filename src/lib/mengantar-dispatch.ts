@@ -1,4 +1,3 @@
-import { getRuntimeEnv } from "./env.ts";
 import {
   MengantarClient,
   MengantarOutcomeUnknownError,
@@ -377,11 +376,7 @@ export async function dispatchOrderToMengantar(
     return { status: "failed", error };
   }
 
-  const pickupAddressId = String(
-    order.pickup_address_id ||
-      getRuntimeEnv(locals)?.MENGANTAR_PICKUP_ADDRESS_ID ||
-      "",
-  ).trim();
+  const pickupAddressId = String(order.pickup_address_id || "").trim();
   const destinationAreaId = order.destination_area_id?.trim() || "";
   const courierCode = order.courier_code?.trim() || "";
   const config = (await getProviderConfig(database, locals)).mengantar;

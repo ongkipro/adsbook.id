@@ -1,3 +1,4 @@
+import { withTestCredentials } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
@@ -69,6 +70,7 @@ class ShippingSyncDatabase {
   readonly #database = new DatabaseSync(":memory:");
 
   constructor() {
+    withTestCredentials(this);
     this.#database.exec(`
       PRAGMA foreign_keys = ON;
       CREATE TABLE stores (
@@ -76,7 +78,7 @@ class ShippingSyncDatabase {
         mengantar_api_key TEXT,
         mengantar_base_url TEXT,
         autolaris_api_key TEXT,
-        autolaris_base_url TEXT
+        autolaris_base_url TEXT, autolaris_order_origin_id TEXT, autolaris_order_destination_id TEXT, autolaris_shipper_email TEXT
       );
       CREATE TABLE product_variants (id INTEGER PRIMARY KEY, stock INTEGER);
       CREATE TABLE orders (
@@ -181,7 +183,7 @@ function invokeSync(database: ShippingSyncDatabase, orderIds: number[]) {
     }),
     locals: {
       admin: { id: "admin-1", role: "owner" },
-      runtimeEnv: { OMS_DB: database as unknown as D1Database },
+      tenantDb: database as unknown as D1Database, runtimeEnv: { OMS_DB: database as unknown as D1Database},
     },
   } as never);
 }

@@ -7,9 +7,9 @@
  * KV write again each day. It is now one row per district|city|province,
  * read before Mengantar is asked. A row older than
  * `MENGANTAR_AREA_MAX_AGE_DAYS` is treated as a miss and resolved again, so a
- * renamed or retired area heals within that bound; dropping a row the moment
- * Mengantar refuses it (`dropMengantarArea`, REQ-244) waits on A-415's
- * approval because it touches the quote and dispatch.
+ * renamed or retired area heals within that bound; a row Mengantar refuses as
+ * a destination in a quote is dropped at once (`dropRefusedDestination`,
+ * REQ-244, A-415 in T-47).
  *
  * Only an exact district match is stored. When Mengantar does not know the
  * catalogue's district and the answer is a fallback (a migrated kelurahan or
@@ -38,6 +38,7 @@ import {
   type ProviderAddressRow,
   type ProviderLocationsPayload,
 } from "./location-search.ts";
+import { MengantarNotWhitelistedError, MengantarOutcomeUnknownError, MengantarPosCodIneligibleError } from "./mengantar-client.ts";
 
 // Trimmed and lower-cased per part. The seed in the migration mirrors it as
 // lower(trim(...)), which agrees for every ASCII name.
@@ -138,19 +139,75 @@ export async function storeMengantarArea(
 
 /**
  * Forgets every district stored with this area id, so the next resolve asks
- * Mengantar again. For a rate or dispatch that answers "area not found"
- * (REQ-244); the quote and dispatch only know the id, not the district.
- * No caller yet: wiring it into `shipping-quote.ts` and `mengantar-dispatch.ts`
- * is A-415, a protected-surface proposal awaiting approval.
+ * Mengantar again (REQ-244); the quote only knows the id, not the district.
+ * Called through `dropRefusedDestination`, never on a guess.
  */
-export async function dropMengantarArea(database: D1Database, areaId: string): Promise<number> {
+export async function dropMengantarArea(database: D1Database, areaId: string, resolvedBefore?: Date): Promise<number> {
   const id = areaId.trim();
   if (!id) return 0;
-  const result = await database
-    .prepare("DELETE FROM mengantar_areas WHERE area_id = ?")
-    .bind(id)
-    .run();
+  const result = await (resolvedBefore
+    ? database.prepare("DELETE FROM mengantar_areas WHERE area_id = ? AND resolved_at <= ?").bind(id, resolvedBefore.toISOString())
+    : database.prepare("DELETE FROM mengantar_areas WHERE area_id = ?").bind(id)
+  ).run();
   return Number(result.meta?.changes ?? 0);
+}
+
+/** A provider refusal: Mengantar answered and said no (4xx or `success: false`). */
+function isProviderRefusal(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    !(error instanceof MengantarOutcomeUnknownError) &&
+    !(error instanceof MengantarNotWhitelistedError) &&
+    !(error instanceof MengantarPosCodIneligibleError)
+  );
+}
+
+/** Destinations probed recently, per isolate: a persistent refusal costs one probe pair per window. */
+const recentProbes = new Map<string, number>();
+export const AREA_PROBE_COOLDOWN_MS = 10 * 60 * 1000;
+
+/**
+ * A-415 (T-47): after Mengantar refused an estimate, drop the cached
+ * destination area only on positive evidence that the destination itself is
+ * what Mengantar no longer accepts. Its refusal text is not documented, so the
+ * evidence comes from two probes at the lightest weight, in parallel: the
+ * origin to itself must succeed (the origin is good) and the destination to
+ * itself must be refused (the destination is bad). A route-specific refusal
+ * (a courier, a weight limit) leaves both probes successful and drops nothing;
+ * a refused origin drops nothing; an outage, timeout or whitelist error is not
+ * a refusal and is not probed. Only rows resolved before the failed quote
+ * started are deleted, so an area resolved afresh meanwhile survives.
+ */
+export async function dropRefusedDestination(
+  database: D1Database,
+  client: { estimateRates(input: { originId: string; destinationId: string; weight: number }): Promise<unknown> },
+  input: { originId: string; destinationId: string },
+  error: unknown,
+  startedAt: Date = new Date(),
+): Promise<"dropped" | "kept" | "origin_refused" | "not_a_refusal" | "cooldown"> {
+  const originId = input.originId.trim();
+  const destinationId = input.destinationId.trim();
+  if (!isProviderRefusal(error) || !originId || !destinationId) return "not_a_refusal";
+  const last = recentProbes.get(destinationId);
+  if (last !== undefined && startedAt.getTime() - last < AREA_PROBE_COOLDOWN_MS) return "cooldown";
+  recentProbes.set(destinationId, startedAt.getTime());
+  if (recentProbes.size > 500) recentProbes.delete(recentProbes.keys().next().value!);
+  const probe = (id: string) =>
+    client.estimateRates({ originId: id, destinationId: id, weight: 1 }).then(
+      () => "accepted" as const,
+      (probeError: unknown) => (isProviderRefusal(probeError) ? ("refused" as const) : ("unknown" as const)),
+    );
+  const [origin, destination] = await Promise.all([probe(originId), probe(destinationId)]);
+  if (origin === "refused") return "origin_refused";
+  if (origin !== "accepted" || destination !== "refused") return "kept";
+  const dropped = await dropMengantarArea(database, destinationId, startedAt);
+  console.warn("mengantar-area-dropped", { area_id: destinationId, rows: dropped });
+  return "dropped";
+}
+
+/** Forget the probe window (tests). */
+export function resetAreaProbeCooldown(): void {
+  recentProbes.clear();
 }
 
 // Forgets a district whose fresh resolve was not exact, so a stale row — a

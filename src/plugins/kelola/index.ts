@@ -25,12 +25,14 @@ export const kelolaPlugin: Plugin = {
     ],
   ],
   uninstall: ["DROP TABLE IF EXISTS plugin_kelola_orders"],
-  async onOrderCreated({ database, env, settings }, orderId) {
-    const config = getKelolaConfig(settings, env);
+  // ADR-040: the webhook signing secret is stored sealed.
+  secretSettings: ["webhook_secret"],
+  async onOrderCreated({ database, settings }, orderId) {
+    const config = getKelolaConfig(settings);
     return config ? pushOrderToKelola(database, config, orderId) : false;
   },
-  async onCron({ database, env, settings }, now) {
-    const config = getKelolaConfig(settings, env);
+  async onCron({ database, settings }, now) {
+    const config = getKelolaConfig(settings);
     if (!config) return 0;
     // Retry leg for orders checkout already tried once, then abandoned orders,
     // which reach Kelola only here, as leads for CS follow-up.

@@ -1,3 +1,6 @@
+import { bindTestCredentialsIn, TEST_CREDENTIAL_ENV } from "../../platform/testing/credentials.ts";
+import { bindCredentials, openCredential } from "../../lib/credential-crypto.ts";
+import { pluginContext, savePluginSettings, sealPluginSecrets } from "../registry.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
@@ -15,7 +18,6 @@ import {
   maskKelolaWebhookUrl,
   normalizeKelolaWebhookUrl,
   pushOrderToKelola,
-  readKelolaConfig,
   signKelolaBody,
   testKelolaConnection,
 } from "./sync.ts";
@@ -32,20 +34,12 @@ test("signature matches Kelola's verifier (its Mengantar test vector)", async ()
   );
 });
 
-test("config needs both URL and secret", () => {
-  assert.equal(readKelolaConfig({ KELOLA_ORDER_WEBHOOK_URL: config.url }), null);
+test("the push runs on the tenant's saved pair only; env never supplies one (T-45)", () => {
+  assert.equal(getKelolaConfig({}), null);
+  assert.equal(getKelolaConfig({ webhook_url: config.url }), null, "a URL without its secret is off");
+  assert.equal(getKelolaConfig({ webhook_secret: "s" }), null);
   assert.deepEqual(
-    readKelolaConfig({ KELOLA_ORDER_WEBHOOK_URL: config.url, KELOLA_ORDER_WEBHOOK_SECRET: "s" }),
-    { url: config.url, secret: "s", source: "server" },
-  );
-});
-
-test("the dashboard pair wins over the env pair; env stays the fallback", async () => {
-  const env = { KELOLA_ORDER_WEBHOOK_URL: "https://env.test/api/public/toko/order/twh_env", KELOLA_ORDER_WEBHOOK_SECRET: "envsecret" };
-  assert.deepEqual(getKelolaConfig({}, env), { url: env.KELOLA_ORDER_WEBHOOK_URL, secret: "envsecret", source: "server" });
-  assert.equal(getKelolaConfig({}, {}), null);
-  assert.deepEqual(
-    getKelolaConfig({ webhook_url: config.url, webhook_secret: "dbsecret" }, env),
+    getKelolaConfig({ webhook_url: config.url, webhook_secret: "dbsecret" }),
     { url: config.url, secret: "dbsecret", source: "dashboard" },
   );
 });
@@ -84,7 +78,7 @@ test("settings: the owner saves the pair, the secret never comes back, an admin 
   globalThis.fetch = (async () => new Response("{}", { status: 400 })) as typeof fetch;
   const call = (role: string, body: unknown) => updateKelola({
     request: new Request("https://store.test/api/admin/plugins/kelola", { method: "PUT", body: JSON.stringify(body) }),
-    locals: { admin: { username: "u", role, mustChangePassword: false }, runtimeEnv: { OMS_DB: database } },
+    locals: { admin: { username: "u", role, mustChangePassword: false }, tenantDb: database, runtimeEnv: { OMS_DB: database} },
   } as never);
   const secret = "kelola-secret-must-not-leak-0123456789";
 
@@ -101,12 +95,14 @@ test("settings: the owner saves the pair, the secret never comes back, an admin 
 
   // A new URL with the secret left empty keeps the stored secret.
   assert.equal((await call("owner", { action: "save", webhook_url: "https://kelola.test/api/public/toko/order/twh_rotated99", webhook_secret: "" })).status, 200);
-  assert.deepEqual(
-    JSON.parse(String((sqlite.prepare("SELECT settings FROM plugins WHERE id = 'kelola'").get() as { settings: string }).settings)),
-    { webhook_url: "https://kelola.test/api/public/toko/order/twh_rotated99", webhook_secret: secret },
-  );
+  // ADR-040: the stored secret is sealed — never the plaintext — and opens to the same secret.
+  const stored = JSON.parse(String((sqlite.prepare("SELECT settings FROM plugins WHERE id = 'kelola'").get() as { settings: string }).settings));
+  assert.equal(stored.webhook_url, "https://kelola.test/api/public/toko/order/twh_rotated99");
+  assert.match(stored.webhook_secret, /^enc:v1:/);
+  assert.equal(JSON.stringify(stored).includes(secret), false, "the secret is not stored in plaintext");
+  assert.equal(await openCredential(database, "plugins.kelola.webhook_secret", stored.webhook_secret), secret);
 
-  const read = await readKelola({ locals: { runtimeEnv: { OMS_DB: database } } } as never);
+  const read = await readKelola({ locals: { tenantDb: database, runtimeEnv: { OMS_DB: database} } } as never);
   const readText = await read.text();
   assert.equal(readText.includes(secret), false);
   assert.equal(readText.includes("twh_rotated99"), false, "the token is masked");
@@ -309,7 +305,7 @@ test("abandoned orders go to Kelola's lead webhook once, only after the grace pe
 });
 
 /** The full checked-in migration chain, so the test breaks if the columns drift. */
-function migratedStore() {
+function migratedStore__raw() {
   const sqlite = new DatabaseSync(":memory:");
   const dir = new URL("../../db/migrations/", import.meta.url);
   for (const name of readdirSync(dir).filter((file) => file.endsWith(".sql")).sort()) {
@@ -350,3 +346,67 @@ function insertOrder(sqlite: DatabaseSync, orderNumber: string, createdAt: strin
   sqlite.prepare("INSERT INTO order_items (order_id, variant_id, quantity, unit_price) VALUES (?, 1, 2, 52500)").run(lastInsertRowid);
   return Number(lastInsertRowid);
 }
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function migratedStore(...args: Parameters<typeof migratedStore__raw>): ReturnType<typeof migratedStore__raw> {
+  return bindTestCredentialsIn(migratedStore__raw(...args));
+}
+
+test("T-48: a plaintext plugin secret is sealed by the sweep, once, and still opens for the plugin", async () => {
+  const { sqlite, database } = migratedStore();
+  const secret = "kelola-legacy-plaintext-secret-0123";
+  sqlite.prepare("UPDATE plugins SET settings = ? WHERE id = 'kelola'").run(JSON.stringify({ webhook_url: config.url, webhook_secret: secret }));
+  assert.equal(await sealPluginSecrets(database), 1);
+  const stored = JSON.parse(String((sqlite.prepare("SELECT settings FROM plugins WHERE id = 'kelola'").get() as { settings: string }).settings));
+  assert.match(stored.webhook_secret, /^enc:v1:/);
+  assert.equal(stored.webhook_url, config.url, "only the secret is sealed");
+  assert.equal(await sealPluginSecrets(database), 0, "idempotent");
+  const context = await pluginContext(database, {} as never, "kelola");
+  assert.equal(context?.settings.webhook_secret, secret, "the plugin still gets its secret");
+});
+
+test("T-48: the plugin sweep never overwrites settings saved between its read and its write", async () => {
+  const { sqlite, database } = migratedStore();
+  sqlite.prepare("UPDATE plugins SET settings = ? WHERE id = 'kelola'").run(JSON.stringify({ webhook_url: config.url, webhook_secret: "legacy-plain-secret-0123456789" }));
+  const newer = JSON.stringify({ webhook_url: "https://kelola.test/api/public/toko/order/twh_newer", webhook_secret: "enc:v1:1:saved-by-owner" });
+  let raced = false;
+  const racing = {
+    prepare(sql: string) {
+      const statement = database.prepare(sql);
+      if (!/^UPDATE plugins SET settings/.test(sql)) return statement;
+      return {
+        bind: (...values: unknown[]) => {
+          const bound = statement.bind(...values);
+          return {
+            run: async () => {
+              if (!raced) {
+                raced = true;
+                sqlite.prepare("UPDATE plugins SET settings = ? WHERE id = 'kelola'").run(newer);
+              }
+              return bound.run();
+            },
+          };
+        },
+      };
+    },
+  } as unknown as D1Database;
+  bindTestCredentialsIn(racing);
+  assert.equal(await sealPluginSecrets(racing), 0);
+  assert.equal(raced, true);
+  assert.equal((sqlite.prepare("SELECT settings FROM plugins WHERE id = 'kelola'").get() as { settings: string }).settings, newer, "the owner's save is kept exactly");
+});
+
+test("T-48: without the platform key a plugin secret is neither saved nor read, and the sweep re-seals an old key version", async () => {
+  const { sqlite, database } = migratedStore();
+  const keyless = bindCredentials({ prepare: database.prepare.bind(database), batch: (database as unknown as { batch: unknown }).batch } as unknown as D1Database, "test-tenant", {});
+  await assert.rejects(savePluginSettings(keyless, "kelola", { webhook_url: config.url, webhook_secret: "never-stored-in-plaintext-01" }));
+  assert.equal(String((sqlite.prepare("SELECT settings FROM plugins WHERE id = 'kelola'").get() as { settings: string }).settings).includes("never-stored"), false);
+
+  await savePluginSettings(database, "kelola", { webhook_url: config.url, webhook_secret: "rotating-secret-0123456789" });
+  assert.equal((await pluginContext(keyless, {} as never, "kelola"))?.settings.webhook_secret, undefined, "no key: the secret reads as not set");
+  // Rotate: new key current, the test key previous.
+  bindCredentials(database, "test-tenant", { PLATFORM_CREDENTIAL_KEY: `v2:${Buffer.alloc(32, 5).toString("base64")}`, PLATFORM_CREDENTIAL_KEY_PREVIOUS: TEST_CREDENTIAL_ENV.PLATFORM_CREDENTIAL_KEY });
+  assert.equal(await sealPluginSecrets(database), 1);
+  assert.match(JSON.parse((sqlite.prepare("SELECT settings FROM plugins WHERE id = 'kelola'").get() as { settings: string }).settings).webhook_secret, /^enc:v1:2:/);
+  assert.equal((await pluginContext(database, {} as never, "kelola"))?.settings.webhook_secret, "rotating-secret-0123456789");
+});

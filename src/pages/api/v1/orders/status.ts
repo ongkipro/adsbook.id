@@ -1,5 +1,4 @@
 import type { APIRoute } from "astro";
-import { getRuntimeEnv } from "../../../../lib/env.ts";
 import {
   handleOptions,
   headlessError,
@@ -7,6 +6,7 @@ import {
   validateHeadlessRequest,
 } from "../../../../lib/headless-api.ts";
 import { loadPublicOrderStatus } from "../../../../lib/order-status.ts";
+import { tenantDatabase } from "../../../../lib/tenant-database.ts";
 
 export const prerender = false;
 export const OPTIONS = handleOptions;
@@ -32,7 +32,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     ));
   }
 
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) {
     return validation.finalize(headlessError(
       "Database order belum tersedia.",

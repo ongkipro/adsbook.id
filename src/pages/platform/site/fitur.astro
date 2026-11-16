@@ -1,0 +1,45 @@
+---
+import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import ShotFrame from '../../../platform/site/ShotFrame.astro';
+import ClosingCta from '../../../platform/site/ClosingCta.astro';
+import { FEATURES } from '../../../platform/site/content.ts';
+import { SITE_PAGES } from '../../../platform/site/site.ts';
+
+export const prerender = false;
+---
+
+<SiteLayout page={SITE_PAGES.fitur}>
+  <section class="page-head">
+    <div class="wrap"><div class="head">
+      <h1>Semua yang dipakai seller iklan, dalam satu toko</h1>
+      <p class="lead">Dari form order sampai sinyal konversi. Tiap baris di bawah adalah fitur yang sudah berjalan, dengan layar produknya.</p>
+    </div></div>
+  </section>
+  <section class="section section-white">
+    <div class="wrap groups">
+      {FEATURES.map((group, index) => (
+        <section class={`group ${index % 2 ? 'group-flip' : ''}`} aria-labelledby={`fitur-${index}`}>
+          <div class="group-text">
+            <h2 class="group-title" id={`fitur-${index}`}>{group.title}</h2>
+            <ul>{group.items.map((item) => <li>{item}</li>)}</ul>
+          </div>
+          <ShotFrame shot={group.shot} />
+        </section>
+      ))}
+    </div>
+  </section>
+  <ClosingCta />
+</SiteLayout>
+
+<style>
+  .groups { display: grid; gap: 4.5rem; }
+  .group { display: grid; grid-template-columns: 5fr 7fr; gap: 3.5rem; align-items: center; }
+  .group-flip .group-text { order: 2; }
+  .group-title { font-size: 1.35rem; letter-spacing: -0.01em; }
+  .group ul { margin: 0.9rem 0 0; padding-left: 1.2rem; display: grid; gap: 0.5rem; color: var(--ink-muted); }
+  @media (max-width: 760px) {
+    .groups { gap: 3rem; }
+    .group { grid-template-columns: 1fr; gap: 1.5rem; }
+    .group-flip .group-text { order: 0; }
+  }
+</style>

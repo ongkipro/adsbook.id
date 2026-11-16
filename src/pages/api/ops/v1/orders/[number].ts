@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
-import { getRuntimeEnv } from "../../../../../lib/env";
 import { opsError, opsJson, validateOpsRequest } from "../../../../../lib/ops-api";
 import { readOpsOrder } from "../../../../../lib/ops-order";
+import { tenantDatabase } from "../../../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -9,7 +9,8 @@ export const prerender = false;
 export const GET: APIRoute = async ({ request, params, locals }) => {
   const access = await validateOpsRequest(request, locals, "orderDetail");
   if (!access.allowed) return access.response;
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database;
+  const database = tenantDatabase(locals);
+  if (!database) return access.finalize(opsError("Database order belum tersedia.", 503, "DATABASE_UNAVAILABLE", access.headers));
   try {
     const order = await readOpsOrder(database, String(params.number || ""), {
       pii: access.key.scopes.includes("ops:orders:read_pii"),

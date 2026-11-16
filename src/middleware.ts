@@ -1,3 +1,4 @@
+import type { APIContext, MiddlewareNext } from 'astro';
 import { defineMiddleware } from 'astro:middleware';
 import {
   CLICK_ID_COOKIE,
@@ -7,28 +8,32 @@ import {
   readClickIdCookie,
   serializeClickIds,
 } from './lib/click-ids';
-import { canAccessAdminRoute, getDefaultAdminRoute } from './lib/auth';
+import { BROWSER_UNSUPPORTED_MESSAGE, canAccessAdminRoute, getDefaultAdminRoute, unsafeRequestVerdict } from './lib/auth';
 import { resolveAdminSession } from './lib/admin-session';
 import { resolveAuthSecret } from './lib/auth-secret';
-import { getEnvValue, getRuntimeEnv } from './lib/env';
+import { getRuntimeEnv } from './lib/env';
 import { isRegisteredNativeSlug, productPageRedirect } from './lib/native-landing-pages';
-import { readStoreIdentity, resolveTenantConfig, siteNoindex } from './lib/tenant';
+import { readStoreIdentity, resolveTenantConfig } from './lib/tenant';
 import {
   buildEmbedFrameAncestors,
   resolveEmbedAllowedOrigins,
 } from './lib/embed-security';
-import {
-  ensureSchemaUpgraded,
-  SCHEMA_UPGRADE_ERROR_LABEL,
-  SchemaUpgradeError,
-} from './lib/schema-version';
-import {
-  evaluateOperationalAlerts,
-  schemaAlertFromError,
-} from './lib/operational-alerts';
+import { SCHEMA_UPGRADE_ERROR_LABEL } from './lib/schema-version';
 import { CMS_VERSION } from './lib/version';
 import { resolveHostRedirect } from './lib/host-redirect';
+import { gateRequest, type GateEnv } from './platform/gate';
+import type { TenantContext } from './platform/control-plane';
+import { isStoreReady, readReadiness, servedBeforeReady } from './platform/readiness.ts';
+import { demoRefusal } from './platform/demo.ts';
+import { notifyOperator, type Notice } from './platform/notify.ts';
+import { statePage } from './platform/state-pages';
+import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
+import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
+import { scopeFromLocals } from './platform/keys.ts';
+import { PROBE_NONCE, PROBE_PATH, probeAnswer, tenantHostSuffix } from './platform/hostnames.ts';
+import { platformSitePath } from './platform/host.ts';
+import { platformGuard } from './platform/admin/guard.ts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -40,10 +45,14 @@ function applySecurityHeaders(
 ) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   if (frameAncestors) {
+    // The embed form: the storefront policy, framed only by its allowed origins.
     response.headers.delete('X-Frame-Options');
-    response.headers.set('Content-Security-Policy', frameAncestors);
+    response.headers.set('Content-Security-Policy', `${STOREFRONT_CSP}; ${frameAncestors}`);
   } else {
     response.headers.set('X-Frame-Options', 'DENY');
+    // A-214 (T-47): every public storefront response carries the storefront
+    // policy; private responses get ADMIN_CSP below.
+    if (!isPrivate) response.headers.set('Content-Security-Policy', `${STOREFRONT_CSP}; frame-ancestors 'none'`);
   }
   // Sent unconditionally on purpose. RFC 6797 section 8.1 requires a user agent
   // to ignore an STS header received over insecure transport, so this is inert
@@ -56,8 +65,63 @@ function applySecurityHeaders(
   response.headers.set('Strict-Transport-Security', 'max-age=31536000');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  if (isPrivate) response.headers.set('Cache-Control', 'no-store');
+  if (isPrivate) {
+    // O2O: a seller's own Cloudflare cache rules run first; `private` keeps them off it (T-25).
+    response.headers.set('Cache-Control', 'private, no-store');
+    // SEC-3: admin pages carry their own policy, never a seller tag host. No
+    // script-src yet (Astro's hydration scripts are inline); what it does fix
+    // is framing, <base> hijacking, plugins and where a form may post.
+    if (!frameAncestors) response.headers.set('Content-Security-Policy', ADMIN_CSP);
+  }
   return response;
+}
+
+/**
+ * The storefront's Content-Security-Policy (A-214, T-47, SEC-3): exactly the
+ * hosts the storefront loads — the Meta Pixel, Google Tag Manager and Google
+ * Ads/Analytics per Google's tag-platform CSP guide, the GTM noscript frame —
+ * and any https image (landing pages take image URLs). Scripts stay
+ * 'unsafe-inline': the page bootstraps are inline and anonymous HTML is
+ * edge-cached (ADR-029), so a per-response nonce cannot be used. No
+ * 'unsafe-eval': GTM Custom JavaScript variables evaluate to undefined, and
+ * a seller's GTM that loads another vendor's script is blocked (T-47
+ * escalation: a per-tenant allowance would be a new requirement).
+ */
+/** T-44: per-isolate memory of notices already claimed, so a ready store or a busy checkout costs no write per request. */
+const readyNoticed = new Set<string>();
+const firstOrderNoticed = new Set<string>();
+const FIRST_ORDER_ROUTES = new Set(['/api/submit-order', '/api/submit-middle-order', '/api/v1/checkout']);
+
+/** Fire one operator notice after the response (never awaited by the request). */
+function operatorNotice(context: APIContext, notice: Notice) {
+  const env = (getRuntimeEnv(context.locals) ?? {}) as Record<string, unknown>;
+  const platformDb = env.PLATFORM_DB as D1Database | undefined;
+  if (!platformDb) return;
+  const task = notifyOperator(env, platformDb, notice);
+  context.locals.cfContext?.waitUntil(task);
+}
+
+export const STOREFRONT_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://connect.facebook.net",
+  "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.google.com https://www.google.co.id https://*.g.doubleclick.net https://ad.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://www.facebook.com https://connect.facebook.net",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob: https:",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "frame-src https://www.googletagmanager.com https://td.doubleclick.net https://www.facebook.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+export const ADMIN_CSP = "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+
+/** Platform pages: the admin policy, except a form may also post to a seller subdomain (IAM-8). */
+function platformCsp(env: ReturnType<typeof getRuntimeEnv>): string {
+  const suffix = tenantHostSuffix((env ?? {}) as Record<string, unknown>);
+  const sellers = suffix === 'localhost' ? 'http://*.localhost:*' : `https://*.${suffix}`;
+  return `frame-ancestors 'none'; base-uri 'self'; form-action 'self' ${sellers}; object-src 'none'`;
 }
 
 async function loadStoredEmbedAllowedOrigins(
@@ -117,37 +181,87 @@ async function readNativeProductPageSlug(
   }
 }
 
-function isInstallerRoute(pathname: string): boolean {
-  return (
-    pathname === '/install' ||
-    pathname === '/install/' ||
-    pathname === '/api/install'
-  );
-}
+/** Opens the request's tenant store; the default is the platform capability. */
+export type OpenTenantData = (
+  env: ReturnType<typeof getRuntimeEnv>,
+  tenant: TenantContext,
+) => Promise<D1Database>;
 
-/**
- * The installer's own routes plus the assets its page needs to render. Used
- * only while the store is *not* installed, to let the wizard through.
- *
- * Deliberately not reused for the installed case: an installed store that
- * redirected `/images/…` would answer a missing image with a 302 to the login
- * screen instead of a 404 — which is what it did.
- */
-function isInstallerPath(pathname: string): boolean {
-  return (
-    isInstallerRoute(pathname) ||
-    pathname.startsWith('/_astro/') ||
-    pathname.startsWith('/images/') ||
-    pathname === '/favicon.ico' ||
-    pathname === '/favicon.png'
-  );
-}
+const openTenantStore: OpenTenantData = (env, tenant) =>
+  openTenantDb(env as TenantDbEnv, tenant, CMS_VERSION.schemaVersion);
 
 export function createMiddleware(
-  ensureSchemaReady: (database: D1Database) => Promise<unknown> =
-    ensureSchemaUpgraded,
+  openTenantData: OpenTenantData = openTenantStore,
+  gate: typeof gateRequest = gateRequest,
 ) {
+  /**
+   * The request gate runs first (TD-1): certificate-validation paths, host
+   * classification and the authoritative tenant read happen before any cache,
+   * schema check or store lookup. One structured log line per request (OBS-1).
+   */
   return defineMiddleware(async (context, next) => {
+    const started = Date.now();
+    let status = 500;
+    let hostKind: HostKind = 'unknown';
+    let tenantId: string | null = null;
+    let reason: string | undefined;
+    try {
+      const result = await gate(context.request, context.url, getRuntimeEnv(context.locals) as GateEnv);
+      let response: Response;
+      if (result.kind === 'validation') {
+        hostKind = 'validation';
+        response = result.response;
+      } else if (result.kind === 'refused') {
+        hostKind = result.hostKind;
+        reason = result.reason;
+        response = result.response;
+      } else if (result.kind === 'platform') {
+        hostKind = 'platform';
+        context.locals.platform = { host: result.host };
+        // T-40: a public marketing path renders its page under /platform/
+        // in place (no second middleware pass); the guard still runs on that
+        // page's path, so a mapped admin path could never skip it.
+        const sitePath = platformSitePath(context.url.pathname);
+        const guardUrl = sitePath ? new URL(sitePath, context.url) : context.url;
+        // T-27: platform admin needs a platform session (IAM-3); signup and sign-in are public.
+        const guard = await platformGuard(context.request, guardUrl, (getRuntimeEnv(context.locals) ?? {}) as Record<string, unknown>);
+        if (guard.kind === 'deny') {
+          response = applySecurityHeaders(guard.response, true);
+        } else {
+          if (guard.user) context.locals.platformUser = guard.user;
+          // Marketing pages are public and identical for every visitor, so
+          // they are not marked private the way the admin is.
+          response = applySecurityHeaders(sitePath ? await next(sitePath) : await next(), !sitePath);
+        }
+        // The signup page posts the IAM-8 handoff to the new seller host.
+        response.headers.set('Content-Security-Policy', platformCsp(getRuntimeEnv(context.locals)));
+      } else {
+        hostKind = 'tenant';
+        tenantId = result.tenant.tenantId;
+        context.locals.tenantContext = result.tenant;
+        response = await handleTenantRequest(context, next);
+      }
+      status = response.status;
+      return response;
+    } catch (error) {
+      reason = 'unhandled_exception';
+      throw error;
+    } finally {
+      // Exactly one line per request, on every path (OBS-1).
+      writeRequestLog(buildRequestLog({
+        tenant_id: tenantId,
+        host_kind: hostKind,
+        route: routeLabel(context.routePattern, hostKind === 'tenant' || hostKind === 'platform' ? 'unmatched' : 'gate'),
+        method: context.request.method,
+        status,
+        duration_ms: Date.now() - started,
+        request_id: requestId(context.request),
+        ...(reason ? { reason } : {}),
+      }));
+    }
+  });
+
+  async function handleTenantRequest(context: APIContext, next: MiddlewareNext): Promise<Response> {
   // `context.url`, never a URL built from the raw request. Astro routes on a
   // normalized pathname — it decodes percent-escapes in a loop and collapses
   // duplicate slashes — and exposes the result here, while leaving
@@ -159,6 +273,12 @@ export function createMiddleware(
   // readable, and writable cross-site, with no session at all.
   const url = context.url;
   const runtime = getRuntimeEnv(context.locals);
+  // T-25: once a custom primary is active the platform subdomain stays
+  // reachable (webhooks, sign-in) but never competes with it in search.
+  const indexedElsewhere = (() => {
+    const tenant = context.locals.tenantContext;
+    return Boolean(tenant && tenant.hostKind === 'subdomain' && tenant.primaryHost && tenant.primaryHost !== tenant.host);
+  })();
 
   // Persist ad attribution click ids (Google, Meta, UTMs) from landing/embed URL.
   // A function, because a page served from the edge cache needs it too: the
@@ -192,106 +312,62 @@ export function createMiddleware(
   };
   // An uploaded image another visitor fetched is answered before the schema
   // check, the store lookup and the R2 read: it is the same bytes for everyone.
-  const uploadKey = uploadCacheRequest(context.request, url);
+  const uploadKey = uploadCacheRequest(context.request, url, scopeFromLocals(context.locals));
   if (uploadKey) {
     const hit = await readUploadCache(uploadKey);
     if (hit) return applySecurityHeaders(hit, false);
   }
 
-  // Canonical host first. This used to sit below the installer redirects, which
-  // are relative - so `www` reached `/install` and the wizard was served on the
-  // non-canonical host, and an installed store took two hops to get home. It is
-  // also a host-level decision that needs no store row, so answering it here
-  // spares a D1 read on every `www` request.
-  const siteUrl = getEnvValue('PUBLIC_SITE_URL', runtime);
-  const hostRedirect = resolveHostRedirect(url, siteUrl, getEnvValue('PUBLIC_ALIAS_HOSTS', runtime));
+  // http → https on the same host. Alias-domain redirects (`PUBLIC_ALIAS_HOSTS`
+  // → `PUBLIC_SITE_URL`) were one store per Worker; a host is now a row of
+  // `tenant_hosts` (PR-9), and the primary host belongs to the tenant (T-25).
+  const hostRedirect = resolveHostRedirect(url);
   if (hostRedirect) {
     return applySecurityHeaders(context.redirect(hostRedirect, 301), false);
   }
-  if (siteUrl && url.hostname.startsWith('www.')) {
-    try {
-      const canonical = new URL(siteUrl);
-      if (url.hostname.slice(4) === canonical.hostname) {
-        const targetUrl = new URL(url);
-        targetUrl.hostname = canonical.hostname;
-        targetUrl.protocol = canonical.protocol;
-        targetUrl.port = canonical.port;
-        return applySecurityHeaders(
-          context.redirect(targetUrl.toString(), 301),
-          false,
-        );
-      }
-    } catch {}
+
+  // T-43 (PR-28, root primary): `www.<root>` answers with a permanent redirect
+  // to the root once the root is the active primary. Both hosts are active by
+  // then: an inactive `www` never resolves here, and a root becomes primary
+  // only after its HTTPS probe. Webhooks and APIs are never moved.
+  const wwwToRoot = (() => {
+    const tenant = context.locals.tenantContext;
+    if (!tenant || tenant.hostKind !== 'custom' || !tenant.primaryHost || url.pathname.startsWith('/api/')) return null;
+    return url.hostname === `www.${tenant.primaryHost}` ? `${url.protocol}//${tenant.primaryHost}${url.port ? `:${url.port}` : ''}${url.pathname}${url.search}` : null;
+  })();
+  if (wwwToRoot) {
+    return applySecurityHeaders(context.redirect(wwwToRoot, 301), false);
   }
 
   // The edge cache (ADR-029): an anonymous page another visitor rendered in
   // the last two minutes skips the schema check, the store lookup, the page's
-  // D1 reads and the render. It sits after the host redirects, so an alias or
-  // http host never reads an entry made for the canonical one.
-  const edgeKey = edgeCacheRequest(context.request, url);
+  // D1 reads and the render. It sits after the gate, so no cache is read for a
+  // host that has not resolved to an active tenant.
+  const edgeKey = edgeCacheRequest(context.request, url, scopeFromLocals(context.locals));
   if (edgeKey) {
     const hit = await readEdgeCache(edgeKey);
     if (hit) {
       const cached = applySecurityHeaders(hit, false);
-      if (url.hostname.endsWith('.workers.dev') || siteNoindex(runtime)) cached.headers.set('X-Robots-Tag', 'noindex, nofollow');
+      if (url.hostname.endsWith('.workers.dev') || indexedElsewhere) cached.headers.set('X-Robots-Tag', 'noindex, nofollow');
       persistClickIds(cached);
       return cached;
     }
   }
 
-  const identityDb = runtime?.OMS_DB as D1Database | undefined;
+  // The tenant's own store (TEN-2), opened from the gate's tenant id with its
+  // schema brought to this release (MIG-1). A tenant that cannot be served
+  // right now is a 503 for that tenant alone (MULTI-TENANT-DESIGN.md §4.5).
+  const tenantContext = context.locals.tenantContext;
+  let identityDb: D1Database;
   try {
-    if (!identityDb?.prepare) {
-      throw new SchemaUpgradeError(
-        'SCHEMA_UPGRADE_NO_DATABASE',
-        CMS_VERSION.schemaVersion,
-        null,
-      );
-    }
-    await ensureSchemaReady(identityDb);
+    if (!tenantContext) throw new TenantUnavailableError('protocol', 'no tenant context');
+    identityDb = await openTenantData(runtime, tenantContext);
   } catch (error) {
-    const schemaError =
-      error instanceof SchemaUpgradeError
-        ? error
-        : new SchemaUpgradeError(
-            'SCHEMA_UPGRADE_READ_FAILED',
-            CMS_VERSION.schemaVersion,
-            null,
-          );
-    console.error(SCHEMA_UPGRADE_ERROR_LABEL, {
-      code: schemaError.code,
-      expected: schemaError.expected,
-      applied: schemaError.applied,
-      migration: schemaError.migration,
-    });
-    await evaluateOperationalAlerts([schemaAlertFromError(schemaError)], {
-      store: runtime?.SESSION as KVNamespace | undefined,
-      webhookUrl: getEnvValue('OPS_ALERT_WEBHOOK_URL', runtime),
-      source: url.origin,
-    });
-
-    const apiRequest = url.pathname === '/api' || url.pathname.startsWith('/api/');
-    const response = apiRequest
-      ? new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Database belum siap menerima permintaan.',
-            code: 'SCHEMA_UPGRADE_FAILED',
-          }),
-          { status: 503, headers: JSON_HEADERS },
-        )
-      : new Response(
-          'Database toko belum siap. Periksa status migrasi di Workers Logs.',
-          {
-            status: 503,
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-              'Cache-Control': 'no-store',
-            },
-          },
-        );
-    return applySecurityHeaders(response, true);
+    const reason = error instanceof TenantUnavailableError ? error.reason : 'open_failed';
+    console.error(SCHEMA_UPGRADE_ERROR_LABEL, { tenant_id: tenantContext?.tenantId ?? null, reason });
+    return statePage(reason === 'recovery' || reason === 'migration' ? 'recovery' : 'unavailable', url.pathname);
   }
+  context.locals.tenantDb = identityDb;
 
   // Store identity is resolved once per request and handed to every consumer
   // through locals. Doing it here rather than per page keeps consumers
@@ -303,23 +379,55 @@ export function createMiddleware(
       : ({ state: 'unknown' } as const);
   context.locals.tenant = resolveTenantConfig(
     identity.state === 'installed' ? identity.row : null,
+    tenantContext.primaryHost ?? tenantContext.host,
   );
 
-  // A migrated database with no store row has never been set up: no migration
-  // inserts one. Send the operator to the wizard rather than to twenty call
-  // sites that each silently read null. Only `uninstalled` redirects —
-  // `unknown` means the query failed, and a transient database fault must never
-  // route a live store to its own installer.
-  if (
-    (identity.state === 'uninstalled' || identity.state === 'unmigrated') &&
-    !isInstallerPath(url.pathname)
-  ) {
-    return applySecurityHeaders(context.redirect('/install'), true);
+  // Provisioning writes the one `stores` row before a tenant becomes active
+  // (MULTI-TENANT-DESIGN.md §3.1), so an active tenant without it is a broken
+  // store: a neutral 503 for that tenant, never an installer (`/install` and
+  // INSTALL_TOKEN are gone, T-21). `unknown` is a failed read, and the page
+  // still renders from the product defaults rather than failing the store.
+  if (identity.state === 'uninstalled' || identity.state === 'unmigrated') {
+    console.error('tenant-store-row-missing', { tenant_id: tenantContext.tenantId, state: identity.state });
+    return statePage('unavailable', url.pathname);
   }
-  // Once installed the wizard is gone for good; it is unauthenticated, so it
-  // must not linger as a re-runnable surface.
-  if (identity.state === 'installed' && isInstallerRoute(url.pathname)) {
-    return applySecurityHeaders(context.redirect('/hello'), true);
+
+  // §4 "Probe and promote" (T-25): before a custom host may become primary,
+  // the platform asks it, over HTTPS, for a proof only this tenant's store can
+  // compute, bound to the host reached and the caller's nonce.
+  if (url.pathname === PROBE_PATH) {
+    const nonce = url.searchParams.get('n') ?? '';
+    const secret = await resolveAuthSecret(identityDb, tenantContext.tenantId);
+    if (!PROBE_NONCE.test(nonce) || secret.length < 32) {
+      return applySecurityHeaders(new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } }), false);
+    }
+    return applySecurityHeaders(new Response(await probeAnswer(secret, url.hostname, nonce), {
+      headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+    }), false);
+  }
+
+  // PR-23 (T-38): until the store meets the ready predicate, buyers get the
+  // neutral "toko belum siap" page and no checkout; the owner's admin, sign-in,
+  // recovery and provider callbacks still answer. Computed from data on every
+  // request, so the store opens the moment the last step is saved. A failed
+  // read fails closed. The page is no-store, so nothing unready is edge-cached.
+  // PR-26 (T-41): the demo store skips readiness for browsing only; instead,
+  // every provider entry point and every write is refused before any route runs.
+  if (tenantContext.isDemo) {
+    const refusal = demoRefusal(url.pathname, context.request.method);
+    if (refusal) return applySecurityHeaders(refusal, false);
+  } else if (!servedBeforeReady(url.pathname, context.request.method)) {
+    const ready = await readReadiness(identityDb).then(isStoreReady, (error) => {
+      console.error('store-readiness-unreadable', { tenant_id: tenantContext.tenantId, error: String(error) });
+      return null;
+    });
+    if (ready !== true) return statePage(ready === false ? 'not-ready' : 'unavailable', url.pathname);
+    // T-44: the operator hears once that this store is ready (claimed in
+    // PLATFORM_DB; this isolate stops asking after the first time).
+    if (!readyNoticed.has(tenantContext.tenantId)) {
+      readyNoticed.add(tenantContext.tenantId);
+      operatorNotice(context, { tenantId: tenantContext.tenantId, slug: tenantContext.slug, kind: 'ready', storeName: context.locals.tenant?.name });
+    }
   }
 
   // A native landing page that has taken over a product page must answer on
@@ -354,10 +462,8 @@ export function createMiddleware(
   const embedFrameAncestors = isEmbedForm
     ? buildEmbedFrameAncestors(
         resolveEmbedAllowedOrigins(
-          await loadStoredEmbedAllowedOrigins(
-            runtime?.OMS_DB as D1Database | undefined,
-          ),
-          getEnvValue('PUBLIC_EMBED_ALLOWED_ORIGINS', runtime),
+          await loadStoredEmbedAllowedOrigins(identityDb),
+          '',
         ).origins,
       )
     : undefined;
@@ -371,11 +477,16 @@ export function createMiddleware(
     url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/');
   const isPrivate = isAdminPage || isAdminApi;
 
-  if (isAdminApi && UNSAFE_METHODS.has(context.request.method)) {
-    const origin = context.request.headers.get('origin');
-    const fetchSite = context.request.headers.get('sec-fetch-site');
-    if ((origin && origin !== url.origin) || fetchSite === 'cross-site') {
-      return applySecurityHeaders(new Response(JSON.stringify({ success: false, error: 'Forbidden request origin' }), {
+  // IAM-5 strict CSRF: a sibling seller host is same-site, so the only safe
+  // unsafe request is one whose Origin is this origin and whose browser says
+  // `Sec-Fetch-Site: same-origin`.
+  if (isPrivate && UNSAFE_METHODS.has(context.request.method)) {
+    const verdict = unsafeRequestVerdict(context.request, url);
+    if (verdict !== 'allowed') {
+      const body = verdict === 'browser_unsupported'
+        ? { success: false, error: BROWSER_UNSUPPORTED_MESSAGE, code: 'browser_unsupported' }
+        : { success: false, error: 'Forbidden request origin', code: 'forbidden_origin' };
+      return applySecurityHeaders(new Response(JSON.stringify(body), {
         status: 403,
         headers: JSON_HEADERS,
       }), true);
@@ -387,7 +498,7 @@ export function createMiddleware(
     const session = await resolveAdminSession(
       identityDb,
       context.request,
-      await resolveAuthSecret(runtime, identityDb),
+      await resolveAuthSecret(identityDb, tenantContext.tenantId),
     );
     if (!session) {
       if (isAdminApi) {
@@ -463,19 +574,27 @@ export function createMiddleware(
     embedFrameAncestors,
   );
 
-  // The Worker's own *.workers.dev address stays on so a one-click install has
-  // somewhere to open /install (ADR-026). It must never compete with the
-  // store's domain in search, whatever site_url says. PUBLIC_SITE_NOINDEX does
-  // the same for a whole store, and as a header it also covers the pages that
-  // render outside BaseLayout.
-  if (url.hostname.endsWith('.workers.dev') || siteNoindex(runtime)) {
+  // A *.workers.dev address, or the platform subdomain once a custom primary
+  // is active, must never compete with the store's domain in search.
+  if (url.hostname.endsWith('.workers.dev') || indexedElsewhere) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
 
   if (!isPrivate) persistClickIds(response);
 
+  // T-44: a store's first order (any checkout route that answered success).
+  if (
+    context.request.method === 'POST' &&
+    response.status >= 200 && response.status < 300 &&
+    FIRST_ORDER_ROUTES.has(url.pathname) &&
+    !firstOrderNoticed.has(tenantContext.tenantId)
+  ) {
+    firstOrderNoticed.add(tenantContext.tenantId);
+    operatorNotice(context, { tenantId: tenantContext.tenantId, slug: tenantContext.slug, kind: 'first_order', storeName: context.locals.tenant?.name });
+  }
+
   return response;
-  });
+  }
 }
 
 export const onRequest = createMiddleware();

@@ -1,0 +1,29 @@
+---
+import { PILOT } from './content.ts';
+import { SIGNUP_LABEL, SIGNUP_PATH } from './site.ts';
+---
+
+<div class="pricing">
+  <div class="plan">
+    <p class="plan-name">Paket {PILOT.name}</p>
+    <p class="plan-price"><span>{PILOT.price}</span> / bulan</p>
+    <p class="muted">{PILOT.meaning}</p>
+    <ul>{PILOT.points.map((point) => <li>{point}</li>)}</ul>
+    <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
+  </div>
+  <div class="plan-notes">
+    <p>{PILOT.note}</p>
+    <p class="muted">{PILOT.later}</p>
+  </div>
+</div>
+
+<style>
+  .pricing { display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 400px); gap: 3rem; align-items: start; }
+  .plan { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 2rem; display: grid; gap: 1.1rem; justify-items: start; }
+  .plan-name { font-weight: 700; color: var(--accent); }
+  .plan-price { font-size: 1.05rem; color: var(--ink-muted); }
+  .plan-price span { font-family: var(--display); font-weight: 800; font-size: 2.6rem; color: var(--ink); letter-spacing: -0.02em; }
+  .plan ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; }
+  .plan-notes { display: grid; gap: 1rem; padding-top: 0.5rem; }
+  @media (max-width: 760px) { .pricing { grid-template-columns: 1fr; gap: 1.5rem; } .plan { padding: 1.5rem; } }
+</style>

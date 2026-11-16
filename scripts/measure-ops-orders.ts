@@ -28,12 +28,12 @@ const dir = mkdtempSync(join(tmpdir(), 'adsbook-ops-'));
 const configPath = join(dir, 'wrangler.json');
 writeFileSync(configPath, JSON.stringify({
   name: 'adsbook-ops-measurement', compatibility_date: '2026-10-01',
-  d1_databases: [{ binding: 'OMS_DB', database_name: 'synthetic-ops', database_id: '00000000-0000-0000-0000-000000000000' }],
+  d1_databases: [{ binding: 'SYNTHETIC_DB', database_name: 'synthetic-ops', database_id: '00000000-0000-0000-0000-000000000000' }],
 }));
-const platform = await getPlatformProxy<{ OMS_DB: D1Database }>({
+const platform = await getPlatformProxy<{ SYNTHETIC_DB: D1Database }>({
   configPath, envFiles: [], persist: false, remoteBindings: false,
 });
-const db = platform.env.OMS_DB;
+const db = platform.env.SYNTHETIC_DB;
 
 // The route's own statements, run against real D1; only the order read is a list.
 type Read = { sql: string; rowsRead: number };
@@ -55,7 +55,7 @@ const recorder = {
   },
   batch: (statements: D1PreparedStatement[]) => db.batch(statements),
 } as unknown as D1Database;
-const locals = { runtimeEnv: { OMS_DB: recorder } } as unknown as App.Locals;
+const locals = { tenantDb: recorder } as unknown as App.Locals;
 const SECRET = 'synthetic-ops-key';
 
 async function seed() {

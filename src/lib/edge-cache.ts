@@ -33,6 +33,7 @@
  * edge lifetime is internal. An admin edit shows within `EDGE_CACHE_SECONDS`.
  * Prices are never read from here: checkout validates them again server-side.
  */
+import { tenantCacheKey, type TenantScope } from "../platform/keys.ts";
 import { SESSION_COOKIE_NAME } from "./auth.ts";
 import { CLICK_ID_KEYS } from "./click-ids.ts";
 import { resolveProvinceCode } from "./geo.ts";
@@ -66,8 +67,13 @@ export function edgeCachePath(pathname: string): string | null {
   return match && !NOT_SHARED.has(match[1].toLowerCase()) ? path : null;
 }
 
-/** The cache key for this request, or null when it must not touch the cache. */
-export function edgeCacheRequest(request: Request, url: URL): Request | null {
+/**
+ * The cache key for this request, or null when it must not touch the cache.
+ * The key carries the tenant and its cache version (TEN-3, `tenantCacheKey`):
+ * a request with no resolved tenant never touches the cache.
+ */
+export function edgeCacheRequest(request: Request, url: URL, tenant: TenantScope | undefined): Request | null {
+  if (!tenant) return null;
   if (request.method !== "GET") return null;
   if (request.headers.get("authorization")) return null;
   if ((request.headers.get("cookie") ?? "").includes(`${SESSION_COOKIE_NAME}=`)) return null;
@@ -82,7 +88,7 @@ export function edgeCacheRequest(request: Request, url: URL): Request | null {
   if (url.search.length > 200) return null;
   const path = edgeCachePath(url.pathname);
   if (!path) return null;
-  const key = new URL(path, url.origin);
+  const key = new URL(tenantCacheKey(tenant, url.host, path));
   const kept = [...url.searchParams]
     .filter(([name]) => !TRACKING_PARAMS.has(name.toLowerCase()))
     .sort(([a], [b]) => a.localeCompare(b));
@@ -128,6 +134,26 @@ export async function readEdgeCache(
   }
 }
 
+/**
+ * The copy that goes into the cache: the clone itself, with its headers set.
+ * Never `new Response(response.clone().body, …)`: that keeps the clone's
+ * stream but drops the clone, and a runtime that cancels the stream of a
+ * collected Response (undici in Node 22) then leaves a cancelled body in the
+ * cache, which every later read rejects as consumed — a cache that misses at
+ * random (CI run 43827214642, reproduced on Node 22.23.5 with a forced GC).
+ * Null when the headers cannot be changed (an immutable response): not cached.
+ */
+function storedCopy(response: Response, headers: Record<string, string>): Response | null {
+  try {
+    const copy = response.clone();
+    for (const [name, value] of Object.entries(headers)) copy.headers.set(name, value);
+    return copy;
+  } catch (error) {
+    console.error("edge-cache-copy-failed", error instanceof Error ? error.name : "unknown");
+    return null;
+  }
+}
+
 /** Store a copy of a rendered page. Never throws and never delays the answer. */
 export function writeEdgeCache(
   key: Request,
@@ -136,9 +162,11 @@ export function writeEdgeCache(
   cache: EdgeCacheStore | null = defaultCache(),
 ) {
   if (!cache || !isEdgeStorable(response)) return;
-  const copy = new Response(response.clone().body, response);
-  copy.headers.set("Cache-Control", `public, max-age=${EDGE_CACHE_SECONDS}`);
-  copy.headers.set("X-Edge-Cached-At", String(Date.now()));
+  const copy = storedCopy(response, {
+    "Cache-Control": `public, max-age=${EDGE_CACHE_SECONDS}`,
+    "X-Edge-Cached-At": String(Date.now()),
+  });
+  if (!copy) return;
   const task = cache.put(key, copy).catch((error) => console.error("edge-cache-write-failed", error));
   if (locals?.cfContext) locals.cfContext.waitUntil(task);
   else void task;
@@ -165,9 +193,10 @@ export const STAND_IN_HEADER = "X-Asset-Stand-In";
 const UPLOAD_CACHE_GENERATION = "2";
 
 /** The cache key for an upload; the query string never selects different bytes. */
-export function uploadCacheRequest(request: Request, url: URL): Request | null {
+export function uploadCacheRequest(request: Request, url: URL, tenant: TenantScope | undefined): Request | null {
+  if (!tenant) return null;
   if (request.method !== "GET" || !url.pathname.startsWith("/assets/uploads/")) return null;
-  const key = new URL(url.pathname, url.origin);
+  const key = new URL(tenantCacheKey(tenant, url.host, url.pathname));
   key.searchParams.set("__g", UPLOAD_CACHE_GENERATION);
   return new Request(key);
 }
@@ -199,8 +228,11 @@ export function writeUploadCache(
   // A stand-in is never stored: its URL gets different bytes the moment the
   // real derivative exists, which is exactly what an upload entry assumes cannot happen.
   if (!cache || response.status !== 200 || response.headers.has(STAND_IN_HEADER)) return;
-  const copy = new Response(response.clone().body, response);
-  copy.headers.set("Cache-Control", `public, max-age=${UPLOAD_EDGE_CACHE_SECONDS}`);
+  // T-28 review: an answer that says it is private, or sets a cookie, is never
+  // re-labelled public and stored for the next visitor.
+  if (response.headers.has("set-cookie") || /no-store|private/i.test(response.headers.get("cache-control") ?? "")) return;
+  const copy = storedCopy(response, { "Cache-Control": `public, max-age=${UPLOAD_EDGE_CACHE_SECONDS}` });
+  if (!copy) return;
   const task = cache.put(key, copy).catch((error) => console.error("upload-cache-write-failed", error));
   if (locals?.cfContext) locals.cfContext.waitUntil(task);
   else void task;

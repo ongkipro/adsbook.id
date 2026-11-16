@@ -1,12 +1,12 @@
 ---
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
 import RateCheckTools from '../../components/admin/RateCheckTools';
-import { getRuntimeEnv } from '../../lib/env';
 
 export const prerender = false;
 
-const database = getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined;
+const database = tenantDatabase(Astro.locals);
 let warehouse: { name: string | null; origin_area_id: string | null; origin_label: string | null } | null = null;
 try {
   warehouse = (await database

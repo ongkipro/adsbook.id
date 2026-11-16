@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { jsonError, jsonOk } from '../../../lib/api';
-import { getRuntimeEnv } from '../../../lib/env';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -35,7 +35,7 @@ function normalizeStringList(values: unknown, maxItems: number, maxLength: numbe
 }
 
 export const GET: APIRoute = async ({ locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database aturan kurir belum tersedia.', 503);
   }
@@ -69,7 +69,7 @@ export const GET: APIRoute = async ({ locals }) => {
 };
 
 export const PUT: APIRoute = async ({ request, locals }) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   if (!database || typeof database !== 'object') {
     return jsonError('Database aturan kurir belum tersedia.', 503);
   }

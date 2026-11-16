@@ -5,13 +5,11 @@ import { test } from "node:test";
 const route = readFileSync(new URL("../pages/api/admin/upload-r2.ts", import.meta.url), "utf8");
 const form = readFileSync(new URL("../components/admin/ProductForm.tsx", import.meta.url), "utf8");
 
-test("a card derivative neither checks nor spends the hourly upload budget", () => {
-  const peeks = route.match(/checkRateLimit\(/g) ?? [];
-  assert.equal(peeks.length, 2, "one peek and one spend");
-  for (const match of route.matchAll(/checkRateLimit\(/g)) {
-    const before = route.slice(Math.max(0, match.index! - 120), match.index);
-    assert.match(before, /!derivativeOf/, "every budget call is skipped for a derivative");
-  }
+test("an upload spends the plan cap once, before storing; a card twin spends its own allowance (T-37)", () => {
+  const spends = route.match(/checkPlanCap\(/g) ?? [];
+  assert.equal(spends.length, 1, "one atomic spend, no separate peek");
+  assert.ok(route.indexOf("checkPlanCap(") < route.indexOf("bucket.put("), "spent before the object is stored");
+  assert.match(route, /derivativeOf \? "media-derivative" : "media"/);
 });
 
 test("the product form reports a derivative that failed instead of swallowing it", () => {

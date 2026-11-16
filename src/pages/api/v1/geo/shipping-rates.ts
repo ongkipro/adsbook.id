@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { handleOptions, headlessError, headlessOk, validateHeadlessRequest } from '../../../../lib/headless-api';
-import { getRuntimeEnv } from '../../../../lib/env';
 import { resolveEligibleShippingRates, ShippingQuoteError } from '../../../../lib/shipping-quote';
 import { provinceCodeForCity } from '../../../../lib/warehouse-choice';
+import { tenantDatabase } from '../../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -58,8 +58,7 @@ async function calculateRates({ request, url, locals }: Parameters<APIRoute>[0])
     // from that warehouse, and from the primary when the client sends none.
     const city = String(body.city || url.searchParams.get('city') || '').trim();
 
-    const env = getRuntimeEnv(locals);
-    const database = env?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     if (!database) {
       return validation.finalize(headlessError('Database belum dikonfigurasi.', 503, {
         code: 'DATABASE_UNAVAILABLE',

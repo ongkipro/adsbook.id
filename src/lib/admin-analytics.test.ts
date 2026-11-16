@@ -81,7 +81,7 @@ test("admin analytics separates manual transfer from AutoLaris VA and excludes a
   ].forEach((row) => insert.run(...row));
 
   const response = await GET({
-    locals: { runtimeEnv: { OMS_DB: d1 } },
+    locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} },
     url: new URL("https://cms.test/api/admin/analytics?startDate=2026-08-18&endDate=2026-08-18&interval=hour"),
   } as never);
   const payload = await response.json() as any;
@@ -110,7 +110,7 @@ test("admin analytics reports unknown methods and prevents truncated multi-day h
   `);
 
   const response = await GET({
-    locals: { runtimeEnv: { OMS_DB: d1 } },
+    locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} },
     url: new URL("https://cms.test/api/admin/analytics?startDate=2026-08-18&endDate=2026-08-19&interval=hour"),
   } as never);
   const payload = await response.json() as any;
@@ -134,7 +134,7 @@ test("omset excludes cancelled and failed orders, and collected revenue counts p
   ].forEach((row) => insert.run(...row));
 
   const response = await GET({
-    locals: { runtimeEnv: { OMS_DB: d1 } },
+    locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} },
     url: new URL("https://cms.test/api/admin/analytics?startDate=2026-08-18&endDate=2026-08-18&interval=hour"),
   } as never);
   const data = ((await response.json()) as any).data;
@@ -162,7 +162,7 @@ test("payment success is measured over online orders only — COD cannot prepay"
   ].forEach((row) => insert.run(...row));
 
   const response = await GET({
-    locals: { runtimeEnv: { OMS_DB: d1 } },
+    locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} },
     url: new URL("https://cms.test/api/admin/analytics?startDate=2026-08-18&endDate=2026-08-18&interval=hour"),
   } as never);
   const data = ((await response.json()) as any).data;
@@ -187,7 +187,7 @@ test("RTS is measured against shipments that reached an outcome, not every order
   ].forEach((row) => insert.run(...row));
 
   const response = await GET({
-    locals: { runtimeEnv: { OMS_DB: d1 } },
+    locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} },
     url: new URL("https://cms.test/api/admin/analytics?startDate=2026-08-18&endDate=2026-08-18&interval=hour"),
   } as never);
   const data = ((await response.json()) as any).data;
@@ -213,7 +213,7 @@ test("the trend bars sum to exactly the omset card — one released-order rule f
   ].forEach((row) => insert.run(...row));
 
   const response = await GET({
-    locals: { runtimeEnv: { OMS_DB: d1 } },
+    locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} },
     url: new URL("https://cms.test/api/admin/analytics?startDate=2026-08-18&endDate=2026-08-18&interval=hour"),
   } as never);
   const data = ((await response.json()) as any).data;
@@ -260,7 +260,7 @@ test("the dashboard's six reads are in flight together, not one after another (A
   } as unknown as D1Database;
 
   const response = await GET({
-    locals: { runtimeEnv: { OMS_DB: slow } },
+    locals: { tenantDb: slow, runtimeEnv: { OMS_DB: slow} },
     url: new URL("https://cms.test/api/admin/analytics?preset=this_month&startDate=2026-08-01&endDate=2026-08-18&interval=day"),
   } as never);
   assert.equal(response.status, 200);

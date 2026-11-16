@@ -7,11 +7,14 @@ import {
   MENGANTAR_AREA_MAX_AGE_DAYS,
   buildMengantarAreaKey,
   dropMengantarArea,
+  dropRefusedDestination,
   readMengantarArea,
+  resetAreaProbeCooldown,
   resolveMengantarArea,
   storeMengantarArea,
 } from "./mengantar-areas.ts";
 import { splitMigrationStatements } from "./schema-version.ts";
+import { MengantarNotWhitelistedError, MengantarOutcomeUnknownError } from "./mengantar-client.ts";
 
 // Found by suffix, never by number: parallel streams renumber on merge.
 const MIGRATIONS = new URL("../db/migrations/", import.meta.url);
@@ -349,4 +352,80 @@ test("the /api/locations route writes no KV on any path", () => {
   const route = readFileSync(new URL("../pages/api/locations.ts", import.meta.url), "utf8");
   assert.doesNotMatch(route, /SESSION|KVNamespace|\.put\(|location-cache/);
   assert.match(route, /resolveMengantarArea/);
+});
+
+test("A-415 (T-47): a cached destination is dropped only on positive evidence that Mengantar refuses the destination itself", async () => {
+  const district = { district: "Jakabaring", city: "Palembang", province: "Sumatera Selatan" };
+  const refusal = new Error("Mengantar menolak permintaan");
+  /** A fake Mengantar: `refuses` lists the area ids it refuses as origin or destination. */
+  const fake = (refuses: string[], other?: (input: { originId: string; destinationId: string }) => unknown) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      estimateRates: async (input: { originId: string; destinationId: string; weight: number }) => {
+        calls.push(`${input.originId}->${input.destinationId}@${input.weight}`);
+        const custom = other?.(input);
+        if (custom instanceof Error) throw custom;
+        if (refuses.includes(input.originId) || refuses.includes(input.destinationId)) throw new Error("Area tidak ditemukan");
+        return [];
+      },
+    };
+  };
+  const setup = async () => {
+    resetAreaProbeCooldown();
+    const db = createDatabase();
+    await storeMengantarArea(db.database, district, GOLDEN[1].body);
+    return { ...db, areaId: rows(db.sqlite)[0].area_id as string };
+  };
+  const warned = console.warn;
+  console.warn = () => undefined;
+  try {
+    // The destination itself is refused and the origin is good: dropped, once.
+    let db = await setup();
+    let mengantar = fake([db.areaId]);
+    assert.equal(await dropRefusedDestination(db.database, mengantar, { originId: "ORIG-1", destinationId: db.areaId }, refusal), "dropped");
+    assert.deepEqual(mengantar.calls.sort(), [`${db.areaId}->${db.areaId}@1`, "ORIG-1->ORIG-1@1"].sort(), "two probes, lightest weight");
+    assert.equal(rows(db.sqlite).length, 0);
+    assert.equal(await readMengantarArea(db.database, district), null, "the next form resolves the district afresh");
+
+    // The origin is refused: nothing is dropped.
+    db = await setup();
+    assert.equal(await dropRefusedDestination(db.database, fake(["ORIG-1"]), { originId: "ORIG-1", destinationId: db.areaId }, refusal), "origin_refused");
+    assert.equal(rows(db.sqlite).length, 1);
+
+    // A route-specific refusal (a courier, a weight limit): both probes pass, kept.
+    db = await setup();
+    assert.equal(await dropRefusedDestination(db.database, fake([]), { originId: "ORIG-1", destinationId: db.areaId }, refusal), "kept");
+    assert.equal(rows(db.sqlite).length, 1);
+
+    // A transient 429 on the quote, then the probes succeed: kept.
+    db = await setup();
+    assert.equal(await dropRefusedDestination(db.database, fake([]), { originId: "ORIG-1", destinationId: db.areaId }, new Error("Mengantar API gagal (429).")), "kept");
+    assert.equal(rows(db.sqlite).length, 1);
+
+    // An outage, a timeout or a whitelist error is not a refusal: no probe at all.
+    db = await setup();
+    mengantar = fake([db.areaId]);
+    for (const error of [new MengantarOutcomeUnknownError("Mengantar API gagal (502)."), new MengantarNotWhitelistedError()]) {
+      assert.equal(await dropRefusedDestination(db.database, mengantar, { originId: "ORIG-1", destinationId: db.areaId }, error), "not_a_refusal");
+    }
+    assert.deepEqual(mengantar.calls, []);
+    assert.equal(rows(db.sqlite).length, 1);
+
+    // Bounded: a second failure for the same destination inside the window does not probe again.
+    db = await setup();
+    mengantar = fake([]);
+    await dropRefusedDestination(db.database, mengantar, { originId: "ORIG-1", destinationId: db.areaId }, refusal);
+    assert.equal(await dropRefusedDestination(db.database, mengantar, { originId: "ORIG-1", destinationId: db.areaId }, refusal), "cooldown");
+    assert.equal(mengantar.calls.length, 2, "one probe pair per window");
+
+    // A row resolved after the failed quote started survives the drop.
+    db = await setup();
+    const startedAt = new Date(Date.now() - 60_000);
+    db.sqlite.prepare("UPDATE mengantar_areas SET resolved_at = ?").run(new Date().toISOString());
+    assert.equal(await dropRefusedDestination(db.database, fake([db.areaId]), { originId: "ORIG-1", destinationId: db.areaId }, refusal, startedAt), "dropped");
+    assert.equal(rows(db.sqlite).length, 1, "a fresher resolution is not deleted");
+  } finally {
+    console.warn = warned;
+  }
 });

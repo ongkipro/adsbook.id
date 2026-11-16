@@ -1,7 +1,6 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
 import { jsonError, jsonOk } from "../../../lib/api.ts";
-import { getRuntimeEnv } from "../../../lib/env.ts";
 import {
   canReceiveCommerceNotifications,
   countUnreadNotifications,
@@ -9,11 +8,12 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "../../../lib/notifications.ts";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
 function databaseFrom(locals: App.Locals) {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database &&
     typeof database === "object" &&
     typeof (database as D1Database).prepare === "function"

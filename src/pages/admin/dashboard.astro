@@ -1,9 +1,10 @@
 ---
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { AnalyticsDashboard } from '../../components/admin/AnalyticsDashboard';
 import { canAccessAdminRoute } from '../../lib/auth';
-import { getRuntimeEnv } from '../../lib/env';
 import { buildSetupChecklist, readSetupFacts } from '../../lib/setup-checklist';
+import SetupChecklist from '../../components/admin/SetupChecklist.astro';
 
 export const prerender = false;
 
@@ -11,17 +12,16 @@ const adminRole = Astro.locals.admin?.role ?? 'customer_service';
 const mayManageOrders = canAccessAdminRoute(adminRole, '/admin/orders');
 const mayManagePayments = canAccessAdminRoute(adminRole, '/admin/payments');
 const mayReadInsights = canAccessAdminRoute(adminRole, '/api/admin/insights');
-// First steps after /install. Owner/admin only — they are the roles that can
-// complete them. The checklist itself lives on /admin/status (A39); the
-// dashboard keeps one line while a required step is left.
+// UX-2 (T-38): the setup card, owner/admin only — they are the roles that can
+// complete the steps. It shows the open required steps, shrinks to one line
+// once the store is ready, and hides when every step is done (/admin/setup).
 const maySetUp = adminRole === 'owner' || adminRole === 'admin';
 const setupFacts = maySetUp
-  ? await readSetupFacts(getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined, Astro.locals)
+  ? await readSetupFacts(tenantDatabase(Astro.locals), Astro.locals)
   : null;
 const setupSteps = setupFacts ? buildSetupChecklist(setupFacts) : [];
-const setupRequiredLeft = setupSteps.filter((step) => step.required && !step.done).length;
-// Named, so the line says what is missing rather than only how much.
-const setupMissing = setupSteps.filter((step) => step.required && !step.done).map((step) => step.label).join(', ');
+const setupHost = Astro.locals.tenantContext?.primaryHost ?? Astro.locals.tenantContext?.host ?? null;
+const setupStoreUrl = setupHost ? `${Astro.url.protocol}//${setupHost}${Astro.url.port && !setupHost.includes(':') ? `:${Astro.url.port}` : ''}` : null;
 const primaryActions = mayManageOrders
   ? [
       { href: '/admin/orders', label: 'Kelola order', primary: false },
@@ -45,15 +45,7 @@ const primaryActions = mayManageOrders
         ))}
       </div>
     </header>
-    {setupRequiredLeft > 0 && (
-      <a
-        href="/admin/status"
-        class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
-      >
-        <span class="min-w-0"><span class="font-medium">Siapkan toko:</span> {setupRequiredLeft} langkah wajib lagi sebelum toko bisa menerima pesanan — {setupMissing}.</span>
-        <span class="shrink-0 font-medium" aria-hidden="true">Lihat status →</span>
-      </a>
-    )}
+    {setupSteps.length > 0 && <SetupChecklist steps={setupSteps} storeUrl={setupStoreUrl} compact />}
     <AnalyticsDashboard client:only="react" showPaymentsLink={mayManagePayments} showAttention={mayManageOrders} showInsights={mayReadInsights} />
   </div>
 </AdminLayout>

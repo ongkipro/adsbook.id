@@ -1,0 +1,28 @@
+---
+import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import Pricing from '../../../platform/site/Pricing.astro';
+import FaqList from '../../../platform/site/FaqList.astro';
+import { FAQ_SHORT } from '../../../platform/site/content.ts';
+import { SITE_PAGES } from '../../../platform/site/site.ts';
+
+export const prerender = false;
+const pricingFaq = FAQ_SHORT.filter((item) => /gratis|Uang pembeli|domain/i.test(item.q));
+---
+
+<SiteLayout page={SITE_PAGES.harga}>
+  <section class="page-head">
+    <div class="wrap"><div class="head">
+      <h1>Paket Pilot: gratis untuk mulai jualan</h1>
+      <p class="lead">Saat ini ada satu paket untuk semua toko, dengan batas pemakaian yang jelas. Tanpa kartu kredit, tanpa persetujuan.</p>
+    </div></div>
+  </section>
+  <section class="section section-white">
+    <div class="wrap"><Pricing /></div>
+  </section>
+  <section class="section">
+    <div class="wrap">
+      <h2 class="section-title">Soal biaya</h2>
+      <FaqList items={pricingFaq} />
+    </div>
+  </section>
+</SiteLayout>

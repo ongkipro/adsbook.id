@@ -286,3 +286,24 @@ test("the product template runs beside its D1, and the parser sees placement", (
   }
   assert.equal(parseWranglerConfig(`{ "name": "x" }`).placement, undefined);
 });
+
+test("each D1 ledger is compared with its own chain: PLATFORM_DB with the control-plane migrations", async () => {
+  const { migrationLedgerTargets } = await import("./deploy-preflight.ts");
+  const target = parseWranglerConfig(`{
+    // comments survive
+    "d1_databases": [
+      { "binding": "OMS_DB", "database_name": "store-d1", "database_id": "x", "migrations_dir": "src/db/migrations" },
+      { "binding": "PLATFORM_DB", "database_name": "adsbook-platform", "database_id": "y", "migrations_dir": "./src/platform/migrations/" },
+      { "binding": "SCRATCH", "database_name": "scratch", "database_id": "z" },
+    ],
+  }`);
+  assert.deepEqual(migrationLedgerTargets(target), [
+    { binding: "OMS_DB", databaseName: "store-d1", migrationsDir: "src/db/migrations" },
+    { binding: "PLATFORM_DB", databaseName: "adsbook-platform", migrationsDir: "src/platform/migrations" },
+  ]);
+  const repository = parseWranglerConfig(readFileSync(new URL("../../wrangler.jsonc", import.meta.url), "utf8"));
+  assert.equal(
+    migrationLedgerTargets(repository).find((entry) => entry.binding === "PLATFORM_DB")?.migrationsDir,
+    "src/platform/migrations",
+  );
+});

@@ -5,7 +5,7 @@ import {
   type CapiDeliveryWindow,
   type CapiOutboxDepth,
 } from "./capi-outbox.ts";
-import { getEnvValue, getRuntimeEnv } from "./env.ts";
+import { getRuntimeEnv } from "./env.ts";
 import {
   GOOGLE_ADS_MAX_BACKOFF_MS,
   readGoogleAdsOutboxDepth,
@@ -633,7 +633,7 @@ async function readMetaConfigured(database: D1Database, locals?: App.Locals): Pr
   try {
     const ads = await getStoreAdsConfig({
       ...(locals ?? {}),
-      runtimeEnv: { ...(getRuntimeEnv(locals) ?? {}), OMS_DB: database },
+      tenantDb: database,
     } as unknown as App.Locals);
     return Boolean(ads.metaPixelId && ads.metaCapiToken);
   } catch {
@@ -668,7 +668,8 @@ export async function collectOperationalHealth(
     classifyAutoLaris(autolaris, now),
     classifyGoogleAdsOutbox(googleAdsDepth, now),
     classifyAlerting(
-      Boolean(getEnvValue("OPS_ALERT_WEBHOOK_URL", getRuntimeEnv(locals))?.trim()),
+      // The platform's alert channel (a Worker secret), not a tenant value.
+      Boolean(String(getRuntimeEnv(locals)?.OPS_ALERT_WEBHOOK_URL ?? "").trim()),
       now,
     ),
     classifyScheduler(schedulerRunAt, now),

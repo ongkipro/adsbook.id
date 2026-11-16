@@ -9,6 +9,7 @@ import {
   drainGoogleAdsConversionOutbox,
   purgeExpiredGoogleAdsConversions,
   readConversionUploadErrorCodes,
+  planGoogleAdsOfflineSave,
   readGoogleAdsOfflineConfig,
   reconcileGoogleAdsConversions,
   uploadGoogleClickConversion,
@@ -36,21 +37,76 @@ const ORDER = {
   product_value: 249000,
 };
 
+const SAVED = {
+  google_ads_customer_id: "123-456-7890",
+  google_ads_offline_conversion_action_id: "987654321",
+  google_ads_login_customer_id: "112-233-4455",
+  google_ads_developer_token: "developer-token",
+  google_ads_client_id: "client-id",
+  google_ads_client_secret: "client-secret",
+  google_ads_refresh_token: "refresh-token",
+  google_ads_offline_start_at: "2026-08-25T00:00:00.000Z",
+};
+
 test("offline config is all-or-nothing and requires an explicit backfill boundary", () => {
-  assert.deepEqual(readGoogleAdsOfflineConfig({
-    GOOGLE_ADS_CUSTOMER_ID: "123-456-7890",
-    GOOGLE_ADS_OFFLINE_CONVERSION_ACTION_ID: "987654321",
-    GOOGLE_ADS_LOGIN_CUSTOMER_ID: "112-233-4455",
-    GOOGLE_ADS_DEVELOPER_TOKEN: "developer-token",
-    GOOGLE_ADS_CLIENT_ID: "client-id",
-    GOOGLE_ADS_CLIENT_SECRET: "client-secret",
-    GOOGLE_ADS_REFRESH_TOKEN: "refresh-token",
-    GOOGLE_ADS_OFFLINE_START_AT: "2026-08-25T00:00:00.000Z",
-  }), CONFIG);
+  assert.deepEqual(readGoogleAdsOfflineConfig(SAVED), CONFIG);
   assert.equal(readGoogleAdsOfflineConfig({
-    GOOGLE_ADS_CUSTOMER_ID: "1234567890",
-    GOOGLE_ADS_OFFLINE_CONVERSION_ACTION_ID: "987654321",
+    google_ads_customer_id: "1234567890",
+    google_ads_offline_conversion_action_id: "987654321",
   }), null);
+  assert.equal(readGoogleAdsOfflineConfig({ ...SAVED, google_ads_offline_start_at: null }), null);
+  assert.equal(readGoogleAdsOfflineConfig(null), null);
+});
+
+test("an owner's save stamps the backfill boundary once, keeps stored secrets, and can clear (T-45)", () => {
+  const now = new Date("2026-11-16T03:00:00.000Z");
+  const first = planGoogleAdsOfflineSave(
+    {
+      customerId: "123-456-7890",
+      conversionActionId: "987654321",
+      developerToken: "developer-token",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      refreshToken: "refresh-token",
+    },
+    null,
+    now,
+  );
+  assert.ok(first.ok);
+  assert.equal(first.configured, true);
+  assert.equal(first.row.google_ads_customer_id, "1234567890");
+  assert.equal(first.row.google_ads_offline_start_at, now.toISOString(), "no order before the first save is uploaded");
+
+  // A later edit with empty secret fields keeps what is stored and never moves the boundary.
+  const later = planGoogleAdsOfflineSave(
+    { customerId: "1234567890", conversionActionId: "111" },
+    { ...SAVED },
+    new Date("2026-12-01T00:00:00.000Z"),
+  );
+  assert.ok(later.ok);
+  assert.equal(later.row.google_ads_developer_token, "developer-token");
+  assert.equal(later.row.google_ads_refresh_token, "refresh-token");
+  assert.equal(later.row.google_ads_offline_start_at, SAVED.google_ads_offline_start_at);
+
+  // Incomplete: saved, not configured, and no boundary stamped yet.
+  const partial = planGoogleAdsOfflineSave({ customerId: "1234567890" }, null, now);
+  assert.ok(partial.ok);
+  assert.equal(partial.configured, false);
+  assert.equal(partial.row.google_ads_offline_start_at, null);
+
+  const cleared = planGoogleAdsOfflineSave({ clear: true }, { ...SAVED }, now);
+  assert.ok(cleared.ok);
+  assert.ok(Object.values(cleared.row).every((value) => value === null));
+
+  assert.equal(planGoogleAdsOfflineSave({ customerId: "12" }, null, now).ok, false);
+  assert.equal(planGoogleAdsOfflineSave({ customerId: 1234567890 } as never, null, now).ok, false);
+
+  // A request that leaves the ids out keeps them, so the upload stays on.
+  const untouched = planGoogleAdsOfflineSave({}, { ...SAVED }, now);
+  assert.ok(untouched.ok);
+  assert.equal(untouched.configured, true);
+  assert.equal(untouched.row.google_ads_customer_id, "1234567890");
+  assert.equal(untouched.row.google_ads_login_customer_id, "1122334455");
 });
 
 test("COD delivered and online paid produce one click conversion with merchandise value", () => {

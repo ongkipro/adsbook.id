@@ -149,7 +149,7 @@ test("the Expeditions API exposes the repaired catalogue after upgrade", async (
   } as unknown as D1Database;
 
   const response = await listExpeditions({
-    locals: { runtimeEnv: { OMS_DB: binding } },
+    locals: { tenantDb: binding, runtimeEnv: { OMS_DB: binding} },
   } as never);
   const payload = (await response.json()) as {
     success: boolean;

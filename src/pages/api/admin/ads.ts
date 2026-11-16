@@ -1,11 +1,20 @@
+import { CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, CredentialKeyUnavailableError, openCredential, sealCredential } from '../../../lib/credential-crypto';
 import type { APIRoute } from 'astro';
-import { getEnvValue, getRuntimeEnv, maskSecretValue } from '../../../lib/env';
+import { maskSecretValue } from '../../../lib/env';
 import { sendMetaCapiEvent, verifyMetaPixelIdentity } from '../../../lib/meta-capi';
 import { countRecoverableEvents, drainCapiOutbox, requeueRecoverableEvents } from '../../../lib/capi-outbox';
 import {
   GOOGLE_ADS_CONVERSION_ID_PATTERN,
   GOOGLE_ADS_CONVERSION_LABEL_PATTERN,
 } from '../../../lib/store-ads';
+import {
+  planGoogleAdsOfflineSave,
+  readGoogleAdsOfflineConfig,
+  openGoogleAdsOfflineSecrets,
+  sealGoogleAdsOfflineSecrets,
+  type GoogleAdsOfflineRow,
+} from '../../../lib/google-ads-offline';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -15,16 +24,26 @@ const GTM_ID_PATTERN = /^GTM-[A-Z0-9]{4,20}$/;
 const META_TEST_CODE_PATTERN = /^TEST\d{3,20}$/;
 
 type AdsConfigPayload = {
-  action?: 'save-meta' | 'save-google' | 'test-capi' | 'requeue-capi';
+  action?: 'save-meta' | 'save-google' | 'save-google-offline' | 'test-capi' | 'requeue-capi';
   meta_pixel_id?: string;
   meta_capi_token?: string;
   meta_test_event_code?: string;
   google_ads_conversion_id?: string;
   google_tag_manager_id?: string;
   google_ads_conversion_label?: string;
+  google_offline?: {
+    clear?: boolean;
+    customer_id?: string;
+    conversion_action_id?: string;
+    login_customer_id?: string;
+    developer_token?: string;
+    client_id?: string;
+    client_secret?: string;
+    refresh_token?: string;
+  };
 };
 
-type AdsRow = {
+type AdsRow = GoogleAdsOfflineRow & {
   meta_pixel_id: string | null;
   meta_capi_token: string | null;
   google_tag_manager_id: string | null;
@@ -37,7 +56,7 @@ function json(body: unknown, status = 200) {
 }
 
 function getD1(locals: App.Locals) {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database && typeof database === 'object' ? database as D1Database : null;
 }
 
@@ -45,24 +64,48 @@ function clean(value: unknown, maxLength: number) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
+/** The row with its secrets opened (ADR-040); a value that cannot be opened reads as not set. */
 async function getAdsRow(database: D1Database) {
+  const row = await readAdsRow(database);
+  if (!row) return null;
+  const opened = await openGoogleAdsOfflineSecrets(database, row);
+  return { ...opened!, meta_capi_token: await openCredential(database, 'meta_capi_token', row.meta_capi_token) };
+}
+
+async function readAdsRow(database: D1Database) {
   return await database.prepare(`
-    SELECT meta_pixel_id, meta_capi_token, google_tag_manager_id, google_ads_conversion_id, google_ads_conversion_label
+    SELECT meta_pixel_id, meta_capi_token, google_tag_manager_id, google_ads_conversion_id, google_ads_conversion_label,
+      google_ads_customer_id, google_ads_offline_conversion_action_id, google_ads_login_customer_id,
+      google_ads_offline_start_at, google_ads_developer_token, google_ads_client_id, google_ads_client_secret,
+      google_ads_refresh_token
     FROM stores
     ORDER BY id
     LIMIT 1
   `).first() as AdsRow | null;
 }
 
-function publicConfig(row: AdsRow, fallbackToken = '') {
-  const effectiveToken = row.meta_capi_token || fallbackToken;
+/** The tenant's own saved values only (T-45): no env token is shown or used. */
+function publicConfig(row: AdsRow) {
+  const token = row.meta_capi_token ?? '';
   return {
     meta_pixel_id: row.meta_pixel_id ?? '',
-    meta_capi_configured: Boolean(effectiveToken),
-    meta_capi_token_masked: maskSecretValue(effectiveToken),
+    meta_capi_configured: Boolean(token),
+    meta_capi_token_masked: maskSecretValue(token),
     google_tag_manager_id: row.google_tag_manager_id ?? '',
     google_ads_conversion_id: row.google_ads_conversion_id ?? '',
     google_ads_conversion_label: row.google_ads_conversion_label ?? '',
+    // Secrets leave masked or as a flag only (AGENTS.md: never echo a credential).
+    google_offline: {
+      configured: readGoogleAdsOfflineConfig(row) !== null,
+      customer_id: row.google_ads_customer_id ?? '',
+      conversion_action_id: row.google_ads_offline_conversion_action_id ?? '',
+      login_customer_id: row.google_ads_login_customer_id ?? '',
+      start_at: row.google_ads_offline_start_at ?? '',
+      developer_token_masked: maskSecretValue(row.google_ads_developer_token ?? ''),
+      client_id_masked: maskSecretValue(row.google_ads_client_id ?? ''),
+      client_secret_set: Boolean(row.google_ads_client_secret?.trim()),
+      refresh_token_set: Boolean(row.google_ads_refresh_token?.trim()),
+    },
   };
 }
 
@@ -76,7 +119,7 @@ export const GET: APIRoute = async ({ locals }) => {
     return json({
       success: true,
       data: {
-        ...publicConfig(row, getEnvValue('META_CAPI_ACCESS_TOKEN', getRuntimeEnv(locals))),
+        ...publicConfig(row),
         // Surfaced so the operator is told the outage is recoverable rather
         // than having to know to ask. Zero on a healthy store.
         capi_recoverable_events: await countRecoverableEvents(database).catch(() => 0),
@@ -102,7 +145,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     const submittedPixelId = clean(body.meta_pixel_id, 25);
     const submittedToken = clean(body.meta_capi_token, 4096);
     const testEventCode = clean(body.meta_test_event_code, 24).toUpperCase();
-    const storedToken = submittedToken || current.meta_capi_token || getEnvValue('META_CAPI_ACCESS_TOKEN', getRuntimeEnv(locals));
+    const storedToken = submittedToken || current.meta_capi_token || '';
 
     if (body.action === 'requeue-capi') {
       const pixelId = submittedPixelId || current.meta_pixel_id || '';
@@ -118,7 +161,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         new URL(request.url).origin,
         {
           clientIp: request.headers.get('cf-connecting-ip') || '127.0.0.1',
-          userAgent: request.headers.get('user-agent') || 'AdsBookCMS-CAPI-Tester/1.0',
+          userAgent: request.headers.get('user-agent') || 'adsbook.id-CAPI-Tester/1.0',
         },
         {},
         pixelId,
@@ -150,9 +193,9 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         new URL(request.url).origin,
         {
           clientIp: request.headers.get('cf-connecting-ip') || '127.0.0.1',
-          userAgent: request.headers.get('user-agent') || 'AdsBookCMS-CAPI-Tester/1.0',
+          userAgent: request.headers.get('user-agent') || 'adsbook.id-CAPI-Tester/1.0',
         },
-        { contentName: 'AdsBookCMS Meta CAPI connection test' },
+        { contentName: 'adsbook.id Meta CAPI connection test' },
         pixelId,
         storedToken,
         testEventCode,
@@ -201,7 +244,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         SET meta_pixel_id = ?,
             meta_capi_token = CASE WHEN ? = '' THEN meta_capi_token ELSE ? END
         WHERE id = (SELECT id FROM stores ORDER BY id LIMIT 1)
-      `).bind(submittedPixelId || null, submittedToken, submittedToken).run();
+      `).bind(submittedPixelId || null, submittedToken, submittedToken && await sealCredential(database, 'meta_capi_token', submittedToken)).run();
     } else if (body.action === 'save-google') {
       const googleTagManagerId = clean(body.google_tag_manager_id, 24).toUpperCase();
       const googleId = clean(body.google_ads_conversion_id, 24);
@@ -215,6 +258,30 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         SET google_tag_manager_id = ?, google_ads_conversion_id = ?, google_ads_conversion_label = ?
         WHERE id = (SELECT id FROM stores ORDER BY id LIMIT 1)
       `).bind(googleTagManagerId || null, googleId || null, googleLabel || null).run();
+    } else if (body.action === 'save-google-offline') {
+      const offline = body.google_offline ?? {};
+      const plan = planGoogleAdsOfflineSave(
+        {
+          clear: offline.clear,
+          customerId: offline.customer_id,
+          conversionActionId: offline.conversion_action_id,
+          loginCustomerId: offline.login_customer_id,
+          developerToken: offline.developer_token,
+          clientId: offline.client_id,
+          clientSecret: offline.client_secret,
+          refreshToken: offline.refresh_token,
+        },
+        current,
+        new Date(),
+      );
+      if (!plan.ok) return json({ success: false, error: plan.error }, 400);
+      // ADR-040: `current` was opened, so a kept secret is plaintext here; seal it all again.
+      const sealedRow = await sealGoogleAdsOfflineSecrets(database, plan.row);
+      const columns = Object.keys(sealedRow) as (keyof typeof sealedRow)[];
+      await database.prepare(`
+        UPDATE stores SET ${columns.map((column) => `${column} = ?`).join(', ')}
+        WHERE id = (SELECT id FROM stores ORDER BY id LIMIT 1)
+      `).bind(...columns.map((column) => sealedRow[column])).run();
     } else {
       return json({ success: false, error: 'Action tidak dikenal.' }, 400);
     }
@@ -223,9 +290,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     return json({
       success: true,
       message: identityWarning ?? 'Konfigurasi tracking berhasil disimpan.',
-      data: updated ? publicConfig(updated, getEnvValue('META_CAPI_ACCESS_TOKEN', getRuntimeEnv(locals))) : undefined,
+      data: updated ? publicConfig(updated) : undefined,
     });
   } catch (error) {
+    if (error instanceof CredentialKeyUnavailableError) {
+      return json({ success: false, error: CREDENTIAL_KEY_UNAVAILABLE_MESSAGE }, 503);
+    }
     console.error('ads-config-put', error);
     return json({ success: false, error: 'Gagal memperbarui konfigurasi iklan & tracking.' }, 500);
   }

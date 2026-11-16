@@ -1,10 +1,11 @@
+import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { enqueuePurchaseForPaidOrder, manualTransferBecamePaid } from "./paid-order-purchase.ts";
 
 type Row = Record<string, unknown>;
 
-function createDatabase(options: {
+function createDatabase__raw(options: {
   paymentStatus: string;
   shippingStatus?: string;
   stockRestoredAt?: string | null;
@@ -73,7 +74,7 @@ function createDatabase(options: {
 }
 
 const locals = (database: D1Database) =>
-  ({ runtimeEnv: { OMS_DB: database }, tenant: { siteUrl: "https://store.example.test" } }) as unknown as App.Locals;
+  ({ tenantDb: database, runtimeEnv: { OMS_DB: database}, tenant: { siteUrl: "https://store.example.test" } }) as unknown as App.Locals;
 
 test("a paid order enqueues one Purchase keyed on its order number", async (context) => {
   const originalFetch = globalThis.fetch;
@@ -194,7 +195,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { splitMigrationStatements } from "./schema-version.ts";
 import { sweepMissedCodPurchases } from "./paid-order-purchase.ts";
 
-function sweepDatabase() {
+function sweepDatabase__raw() {
   const sqlite = new DatabaseSync(":memory:");
   const directory = new URL("../db/migrations/", import.meta.url);
   for (const name of readdirSync(directory).filter((file) => file.endsWith(".sql")).sort()) {
@@ -256,7 +257,7 @@ test("the hourly sweep sends the COD Purchase /thanks never did, once, and nothi
   sqlite.exec(`INSERT INTO capi_event_outbox (event_id, event_name, payload, status, next_retry_at, created_at, updated_at)
     VALUES ('INV-10001', 'PageView', '{}', 'sent', 't', 't', 't')`);
 
-  const locals = { runtimeEnv: { OMS_DB: database }, tenant: { siteUrl: "https://store.example.test" } } as unknown as App.Locals;
+  const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database}, tenant: { siteUrl: "https://store.example.test" } } as unknown as App.Locals;
   assert.equal(await sweepMissedCodPurchases(database, locals, now), 1);
   assert.deepEqual(purchases().map((row) => row.event_id), ["INV-10001", "INV-10002"]);
   assert.deepEqual(sent, ["INV-10001"]);
@@ -277,7 +278,7 @@ test("the sweep does nothing for a store without Meta configured", async () => {
   const { sqlite, database, order, purchases } = sweepDatabase();
   sqlite.exec("UPDATE stores SET meta_pixel_id = NULL, meta_capi_token = NULL");
   order("INV-10001", "2026-11-10T09:00:00.000Z");
-  const locals = { runtimeEnv: { OMS_DB: database }, tenant: { siteUrl: "https://store.example.test" } } as unknown as App.Locals;
+  const locals = { tenantDb: database, runtimeEnv: { OMS_DB: database}, tenant: { siteUrl: "https://store.example.test" } } as unknown as App.Locals;
   assert.equal(await sweepMissedCodPurchases(database, locals, new Date("2026-11-10T12:00:00.000Z")), 0);
   assert.equal(purchases().length, 0);
 });
@@ -298,7 +299,7 @@ test("checkout sends the COD Purchase itself; a later /thanks or sweep is a no-o
   const transfer = order("INV-10002", "2026-11-10T09:00:00.000Z", "manual_transfer", "pending");
   const waits: Promise<unknown>[] = [];
   const locals = {
-    runtimeEnv: { OMS_DB: database },
+    tenantDb: database, runtimeEnv: { OMS_DB: database},
     tenant: { siteUrl: "https://store.example.test" },
     cfContext: { waitUntil: (task: Promise<unknown>) => waits.push(task) },
   } as unknown as App.Locals;
@@ -421,7 +422,7 @@ test("a CS-converted lead becomes one Purchase carrying the buyer's own captured
   });
   const waits: Promise<unknown>[] = [];
   const locals = {
-    runtimeEnv: { OMS_DB: batchDatabase },
+    tenantDb: batchDatabase, runtimeEnv: { OMS_DB: batchDatabase},
     tenant: { siteUrl: "https://store.example.test" },
     cfContext: { waitUntil: (task: Promise<unknown>) => waits.push(task) },
   } as unknown as App.Locals;
@@ -445,7 +446,7 @@ test("the CS conversion route reports the converted order to Meta", () => {
 // are stubbed (the same two stubs as health-snapshot.test.ts).
 
 import { registerHooks } from "node:module";
-import { envTenantConfig } from "./tenant.ts";
+import { defaultTenantConfig } from "./tenant.ts";
 
 const HANDLER_STUB = "stub:astro-cloudflare-handler";
 const MIGRATIONS_STUB = "stub:bundled-migrations";
@@ -454,6 +455,8 @@ const MIGRATIONS_STUB = "stub:bundled-migrations";
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "@astrojs/cloudflare/handler") return { url: HANDLER_STUB, shortCircuit: true };
+    // worker.ts re-exports TenantStore (T-18); only its base class is needed here, and no `env`.
+    if (specifier === "cloudflare:workers") return { url: "stub:cloudflare-workers", shortCircuit: true };
     if (/bundled-migrations(\.ts)?$/.test(specifier)) return { url: MIGRATIONS_STUB, shortCircuit: true };
     try {
       return nextResolve(specifier, context);
@@ -463,6 +466,9 @@ registerHooks({
     }
   },
   load(url, context, nextLoad) {
+    if (url === "stub:cloudflare-workers") {
+      return { format: "module", source: "export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }", shortCircuit: true };
+    }
     if (url === HANDLER_STUB) {
       return { format: "module", source: "export const handle = () => new Response('');", shortCircuit: true };
     }
@@ -477,8 +483,18 @@ registerHooks({
     return nextLoad(url, context);
   },
 });
-const worker = (await import("../worker.ts")).default as unknown as {
-  scheduled(controller: { scheduledTime: number }, env: Record<string, unknown>, ctx: unknown): Promise<void>;
+const workerModule = (await import("../platform/tenant-maintenance.ts")) as unknown as {
+  runTenantMaintenance(env: Record<string, unknown>, database: D1Database, tenantId: string, scheduledTime: number, ctx: unknown): Promise<void>;
+};
+const { ensureSchemaUpgraded: applyTenantChain } = await import("./schema-version.ts");
+// One tenant's maintenance (T-34). `openTenantDb` brings a store to the
+// release before maintenance runs; here the test applies the chain itself.
+const worker = {
+  async scheduled(controller: { scheduledTime: number }, env: Record<string, unknown>, ctx: unknown) {
+    const database = env.OMS_DB as D1Database;
+    await applyTenantChain(database);
+    await workerModule.runTenantMaintenance(env, database, "t-test", controller.scheduledTime, ctx);
+  },
 };
 
 const D1_SITE = "https://toko-asli.example.test";
@@ -520,6 +536,7 @@ async function cronStore() {
       }
     },
   } as unknown as D1Database;
+  bindTestCredentialsIn(database);
 
   const sent: Array<{ event_id: string; event_source_url: string; user_data: Record<string, unknown> }> = [];
   const errors: string[] = [];
@@ -545,7 +562,7 @@ async function cronStore() {
     }
   };
 
-  await run(); // the first run applies the migration chain to the empty database
+  await applyTenantChain(database); // the chain on the empty database, as openTenantDb would
   sqlite.exec(`
     INSERT INTO stores (id, name, slug, created_at, site_url, meta_pixel_id, meta_capi_token)
     VALUES (1, 'Toko Asli', 'toko-asli', '2026-11-01T00:00:00.000Z', '${D1_SITE}', '1234567890', 'tok');
@@ -567,7 +584,7 @@ async function cronStore() {
 }
 
 test("a scheduled Purchase carries the store's own URL from D1, and its minted email is not sent", async () => {
-  assert.notEqual(new URL(envTenantConfig.siteUrl).host, new URL(D1_SITE).host, "the env fallback must differ for this to prove anything");
+  assert.notEqual(new URL(defaultTenantConfig.siteUrl).host, new URL(D1_SITE).host, "the env fallback must differ for this to prove anything");
   const { run, sent, queued } = await cronStore();
   await run();
 
@@ -580,12 +597,21 @@ test("a scheduled Purchase carries the store's own URL from D1, and its minted e
   assert.ok(purchase.user_data.ph, "the phone is still a match key");
 });
 
-test("the scheduled run still sends the Purchase when the store identity cannot be read", async () => {
-  const { run, sent, errors, queued, failIdentityRead } = await cronStore();
+test("TEN-5: a tenant whose identity cannot be read skips its run and sends nothing", async () => {
+  const { run, sent, failIdentityRead } = await cronStore();
   failIdentityRead();
-  await run();
-
-  assert.ok(errors.includes("tenant-identity-load"), "the failed read is logged");
-  assert.equal(queued().eventSourceUrl, new URL("/thanks", envTenantConfig.siteUrl).toString());
-  assert.ok(sent.some((event) => event.event_id === "INV-10001"));
+  // Never a default identity: the run stops before any step, and the alarm
+  // logs the failure with the tenant id (tenant-alarm.ts).
+  await assert.rejects(run(), /TENANT_IDENTITY_UNAVAILABLE/);
+  assert.equal(sent.length, 0);
 });
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function createDatabase(...args: Parameters<typeof createDatabase__raw>): ReturnType<typeof createDatabase__raw> {
+  return bindTestCredentialsIn(createDatabase__raw(...args));
+}
+
+// T-48: the fixture handle carries the test credential key, like a real tenant handle.
+function sweepDatabase(...args: Parameters<typeof sweepDatabase__raw>): ReturnType<typeof sweepDatabase__raw> {
+  return bindTestCredentialsIn(sweepDatabase__raw(...args));
+}

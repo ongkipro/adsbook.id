@@ -22,7 +22,7 @@ export async function getReceiverPerformance(
     // feature and which key: a whitelist granted to another account's key, or
     // to another feature, reads exactly like no whitelist at all.
     if (error instanceof MengantarNotWhitelistedError) {
-      const key = config.source === 'dashboard' ? 'API key yang tersimpan di dashboard (Profil & Integrasi)' : 'API key dari secret server (MENGANTAR_API_KEY)';
+      const key = 'API key yang tersimpan di dashboard (Profil & Integrasi)';
       throw new MengantarNotWhitelistedError(
         `Mengantar menolak cek skor penerima (403 Not allowed) untuk ${key}. Pastikan CS Mengantar mengaktifkan Receiver Score (getReceiverScoreByNumberUser) untuk akun pemilik key ini.`,
       );

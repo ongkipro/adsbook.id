@@ -3,13 +3,13 @@ import {
   loadStoreCodDisabledProvinceCodes,
   resolveFormModeContext,
 } from '../../lib/form-mode';
-import { getRuntimeEnv } from '../../lib/env';
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ request, locals }) => {
   try {
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     const disabledCodes =
       await loadStoreCodDisabledProvinceCodes(database);
     const context = await resolveFormModeContext(request, disabledCodes);

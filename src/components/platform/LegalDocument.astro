@@ -1,0 +1,73 @@
+---
+/**
+ * A platform legal document by version (T-39, PR-24), in the marketing
+ * site's frame (T-40): `?v=<version>` shows that exact accepted text;
+ * without it, the current version. An unknown or empty version is a 404,
+ * never a different text. Placeholders the operator has not filled yet stay
+ * visible (marked), because filling one is a new version.
+ */
+import SiteLayout from '../../platform/site/SiteLayout.astro';
+import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from '../../platform/site/site.ts';
+import { legalText, legalVersions, renderLegalMarkdown, type LegalDocId } from '../../platform/legal.ts';
+
+interface Props {
+  doc: LegalDocId;
+  title: string;
+}
+
+const { doc, title } = Astro.props;
+const entry = legalText(doc, Astro.url.searchParams.get("v"));
+if (!entry) Astro.response.status = 404;
+const html = entry
+  ? renderLegalMarkdown(entry.text.replace(/^# .+\n/, ''), { versi: entry.version, tanggal_berlaku: entry.date, slug: 'nama-toko' })
+  : '';
+const versions = legalVersions(doc);
+const page = doc === 'seller-terms' ? SITE_PAGES.syarat : SITE_PAGES.privasi;
+---
+
+<SiteLayout page={page}>
+  <section class="page-head legal-page">
+    <div class="wrap">
+      <div class="legal-wrap">
+        <h1>{title}</h1>
+        {entry ? (
+          <>
+            {/* The accepted text states its own version and date; only other versions are linked here. */}
+            {versions.length > 1 && <p class="muted">Versi lain: {versions.filter((v) => v !== entry.version).map((v) => <a href={`?v=${v}`}>{v}</a>)}</p>}
+            <article class="legal" set:html={html} />
+            <p class="legal-cta"><a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a></p>
+          </>
+        ) : (
+          <p role="status">Versi ini tidak ada. <a href="?">Lihat versi terbaru</a>.</p>
+        )}
+      </div>
+    </div>
+  </section>
+</SiteLayout>
+
+<style>
+  .legal-wrap { display: grid; gap: 1rem; max-width: 760px; }
+  .legal { background: var(--surface); border-radius: 16px; padding: 2rem; margin-top: 0.5rem; }
+  .legal :global(h2), .legal :global(h3) { letter-spacing: normal; }
+  .legal :global(h2) { margin-top: 1.75rem; font-size: 1.15rem; }
+  .legal :global(h2:first-child) { margin-top: 0; }
+  .legal :global(h3) { margin-top: 1.25rem; font-size: 1.05rem; }
+  .legal :global(p), .legal :global(ul), .legal :global(ol), .legal :global(blockquote), .legal :global(.table-wrap) { margin-top: 0.6rem; }
+  .legal :global(ul), .legal :global(ol) { padding-left: 1.25rem; }
+  .legal :global(li) { margin-top: 0.25rem; }
+  .legal :global(blockquote) { margin-inline: 0; border-left: 3px solid var(--line); padding-left: 0.75rem; color: var(--ink-muted); }
+  .legal :global(code) { font-size: 0.9em; }
+  .legal :global(mark) { background: var(--accent-tint); color: inherit; border-radius: 0.2rem; padding: 0 0.15rem; }
+  .legal :global(table) { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  .legal :global(th), .legal :global(td) { text-align: left; vertical-align: top; padding: 0.6rem 0.75rem 0.6rem 0; border-bottom: 1px solid var(--line); }
+  .legal :global(th) { font-weight: 700; color: var(--ink); }
+  .legal-cta { margin-top: 1.5rem; }
+  @media (max-width: 760px) { .legal { padding: 1.25rem; } }
+  /* Narrow: each row becomes a small block, each cell labelled by its column. */
+  @media (max-width: 600px) {
+    .legal :global(thead) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .legal :global(tr) { display: block; padding: 0.6rem 0; border-bottom: 1px solid var(--line); }
+    .legal :global(td) { display: block; border: 0; padding: 0.15rem 0; }
+    .legal :global(td)::before { content: attr(data-label); display: block; font-size: 0.85rem; font-weight: 700; color: var(--ink); }
+  }
+</style>

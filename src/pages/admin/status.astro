@@ -1,8 +1,8 @@
 ---
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
 import OperationalStatus from '../../components/admin/OperationalStatus';
-import { getRuntimeEnv } from '../../lib/env';
 import { readHealthSnapshot, statusIconState } from '../../lib/health-snapshot';
 import { buildSetupChecklist, readSetupFacts } from '../../lib/setup-checklist';
 
@@ -12,7 +12,7 @@ export const prerender = false;
 // middleware refuses the other roles before this runs). Signals come from the
 // stored snapshot; the setup checklist is read live, so a step just finished
 // shows as done here even before the icon's hourly count catches up.
-const database = getRuntimeEnv(Astro.locals)?.OMS_DB as D1Database | undefined;
+const database = tenantDatabase(Astro.locals);
 const [snapshot, setupFacts] = database?.prepare
   ? await Promise.all([readHealthSnapshot(database), readSetupFacts(database, Astro.locals)])
   : [null, null];

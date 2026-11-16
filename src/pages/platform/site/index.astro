@@ -1,0 +1,90 @@
+---
+import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import ShotFrame from '../../../platform/site/ShotFrame.astro';
+import StepFlow from '../../../platform/site/StepFlow.astro';
+import Pricing from '../../../platform/site/Pricing.astro';
+import FaqList from '../../../platform/site/FaqList.astro';
+import ClosingCta from '../../../platform/site/ClosingCta.astro';
+import { FAQ_SHORT, SHOTS } from '../../../platform/site/content.ts';
+import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from '../../../platform/site/site.ts';
+
+export const prerender = false;
+// T-40 (PR-25): adsbook.id home — sections per DESIGN.md "Direction".
+---
+
+<SiteLayout page={SITE_PAGES.home}>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div class="hero-text">
+        <h1 id="hero-title">Ubah klik iklan jadi pesanan COD yang terkirim dan tercatat</h1>
+        <p class="lead">Form order cepat di HP, pesanan rapi di admin, kirim lewat akun Mengantar Anda, dan setiap penjualan tercatat di Meta.</p>
+        <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
+        <p class="hero-note">Gratis · tanpa persetujuan · langsung aktif</p>
+      </div>
+      <div class="hero-shot"><ShotFrame shot={SHOTS.form} eager caption /></div>
+    </div>
+  </section>
+
+  <section class="section section-white" aria-labelledby="alur-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="alur-title">Satu pesanan, dari klik sampai tercatat</h2>
+        <p class="lead prose">Lima langkah yang dilewati setiap pesanan di toko Anda. Semua gambar di bawah adalah layar produk yang sebenarnya, dengan data dari toko contoh.</p>
+      </div>
+      <StepFlow />
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="akun-title">
+    <div class="wrap own">
+      <h2 id="akun-title">Uang, akun kurir, pembayaran, dan iklan tetap milik Anda</h2>
+      <div class="own-text">
+        <p>Kurir, pembayaran, dan iklan berjalan dengan akun dan API key Anda sendiri: Mengantar, AutoLaris, Meta, dan Google Ads. Uang pembeli masuk ke akun Anda, bukan ke kami.</p>
+        <p class="muted">Data pembeli juga milik Anda: tersimpan terpisah per toko, bisa diekspor dari admin, dan kebijakan privasi toko Anda hanya menyebut penyedia yang Anda pakai.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-white" aria-labelledby="harga-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="harga-title">Mulai gratis, tanpa persetujuan</h2>
+      </div>
+      <Pricing />
+      <p class="more"><a href="/harga">Rincian paket</a></p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="faq-title">
+    <div class="wrap">
+      <div class="section-head"><h2 id="faq-title">Pertanyaan yang sering muncul</h2></div>
+      <FaqList items={FAQ_SHORT} />
+      <p class="more"><a href="/faq">Semua pertanyaan</a></p>
+    </div>
+  </section>
+
+  <ClosingCta tone="white" />
+</SiteLayout>
+
+<style>
+  .hero { padding: 2rem 0 4rem; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
+  .hero-text { display: grid; gap: 1.25rem; justify-items: start; }
+  .hero-note { font-size: 0.95rem; color: var(--ink-muted); }
+  /* The next section must peek in (dotuiux hero-height): a smaller phone, and
+     on a narrow screen only its top — the variant and buyer fields. */
+  .hero-shot :global(.frame-phone) { max-width: 290px; }
+  @media (max-width: 760px) {
+    .hero-shot :global(.frame-phone) { max-height: 240px; max-width: 260px; }
+    .hero-shot :global(figcaption) { display: none; }
+  }
+  .section-head { display: grid; gap: 0.9rem; margin-bottom: 3rem; }
+  .own { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 3rem; }
+  .own-text { display: grid; gap: 1rem; font-size: 1.1rem; }
+  .more { margin-top: 1.5rem; font-weight: 600; }
+  @media (max-width: 760px) {
+    .hero { padding: 1rem 0 2.5rem; }
+    .hero-grid, .own { grid-template-columns: 1fr; gap: 2rem; }
+    .section-head { margin-bottom: 2rem; }
+  }
+</style>

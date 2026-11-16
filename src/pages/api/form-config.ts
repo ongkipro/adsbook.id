@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { tenantKv, type ScopedKv } from "../../platform/keys.ts";
 import { jsonError, jsonOk } from "../../lib/api";
 import {
   STORE_CONFIG_CACHE_KEY,
@@ -19,6 +20,7 @@ import {
 import { getRuntimeEnv } from "../../lib/env";
 import { getStorefrontProduct } from "../../lib/catalog";
 import { catalogProductIdOrNull } from "../../lib/catalog-feed";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -27,7 +29,7 @@ const PUBLIC_CACHE_CONTROL =
 
 async function loadCachedStoreCodDisabledProvinceCodes(
   database: D1Database | undefined,
-  sessions: KVNamespace | undefined,
+  sessions: ScopedKv | undefined,
 ): Promise<string[]> {
   if (sessions) {
     try {
@@ -94,8 +96,9 @@ export const GET: APIRoute = async ({ request, locals }) => {
   }
 
   const runtimeEnv = getRuntimeEnv(locals);
-  const database = runtimeEnv?.OMS_DB as D1Database | undefined;
-  const sessions = runtimeEnv?.SESSION as KVNamespace | undefined;
+  const database = tenantDatabase(locals);
+  const tenantId = locals.tenantContext?.tenantId;
+  const sessions = tenantId ? tenantKv(runtimeEnv, tenantId) : undefined;
   const disabledCodes = await loadCachedStoreCodDisabledProvinceCodes(
     database,
     sessions,

@@ -7,12 +7,11 @@ import { hasClickId, readClickIdCookie, serializeClickIds } from "../../lib/clic
 import type { ResolvedShippingRates } from "../../lib/shipping-quote";
 import type { APIRoute } from "astro";
 import { selectQuotedRate } from "../../lib/courier-rules";
-import { orderSubmitSchema } from "../../lib/order-schema";
+import { parseOrderSubmit } from "../../lib/order-schema";
 import {
   isCodBlockedForProvince,
   loadStoreCodDisabledProvinceCodes,
 } from "../../lib/form-mode";
-import { getEnvValue, getRuntimeEnv } from "../../lib/env";
 import { buyerEmail } from "../../lib/autolaris-payment";
 import {
   checkRateLimit,
@@ -38,6 +37,7 @@ import {
 } from "../../lib/autolaris-payment";
 import { autoLarisOrderRailGap, getProviderConfig } from "../../lib/provider-config";
 import { normalizePhone } from "../../lib/validation";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -54,7 +54,7 @@ const json = (
 export const POST: APIRoute = async ({ request, locals }) => {
   const clientIp = getClientIp(request.headers);
   const rateLimit = await checkRateLimit(
-    getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined,
+    tenantDatabase(locals),
     `submit-order:${clientIp}`,
     10,
     60_000,
@@ -99,12 +99,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  const parsed = orderSubmitSchema.safeParse(body);
+  const parsed = parseOrderSubmit(body);
   if (!parsed.success) {
     return json(
       {
         success: false,
-        error: parsed.error.errors[0]?.message || "Data tidak valid",
+        error: parsed.error.issues[0]?.message || "Data tidak valid",
         code: "VALIDATION_ERROR",
       },
       422,
@@ -112,7 +112,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   const data = parsed.data;
   const customerPhone = normalizePhone(data.customer_phone);
-  const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const database = tenantDatabase(locals);
   if (!database?.prepare) {
     return json(
       {
@@ -157,11 +157,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           .prepare("SELECT address FROM warehouses ORDER BY id LIMIT 1")
           .first<{ address: string | null }>(),
       ]);
-      const env = getRuntimeEnv(locals);
       const gap = autoLarisOrderRailGap({
         apiKey: provider.apiKey,
-        originId: getEnvValue("AUTOLARIS_ORDER_ORIGIN_ID", env),
-        destinationId: getEnvValue("AUTOLARIS_ORDER_DESTINATION_ID", env),
+        originId: provider.originId,
+        destinationId: provider.destinationId,
         warehouseAddress: warehouse?.address,
       });
       if (gap || store?.is_autolaris_enabled === 0) {

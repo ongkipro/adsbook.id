@@ -1,4 +1,3 @@
-import { getRuntimeEnv } from "./env.ts";
 import { formatIdr } from "./format-idr.ts";
 import { solutionEntries } from "../data/content.ts";
 import {
@@ -12,6 +11,7 @@ import {
   nonCanonicalNativeSlugs,
   type NativeLandingPage,
 } from "./native-landing-pages.ts";
+import { tenantDatabase } from "./tenant-database.ts";
 
 type D1Statement = ReturnType<D1Database["prepare"]>;
 export type LandingSectionType =
@@ -166,10 +166,6 @@ type LandingSectionRow = Omit<LandingSection, "content_config" | "form_config"> 
   form_config: string | null;
 };
 
-type LocalsWithDatabase = {
-  OMS_DB?: D1Database;
-};
-
 const PAGE_COLUMNS = `
   id, slug, title, product_id, is_active, is_product_page, source,
   meta_title, meta_description, created_at, updated_at
@@ -181,13 +177,10 @@ const SECTION_COLUMNS = `
 `;
 
 function getDatabase(locals: App.Locals): D1Database {
-  const localBindings = locals as unknown as LocalsWithDatabase;
-  const database =
-    localBindings.OMS_DB ??
-    (getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined);
+  const database = tenantDatabase(locals);
 
   if (!database || typeof database.prepare !== "function") {
-    throw new Error("OMS_DB binding is unavailable");
+    throw new Error("The tenant database is unavailable");
   }
 
   return database;
@@ -848,11 +841,11 @@ export function parseShortcodes(
  * top-level route this list does not name.
  */
 export const RESERVED_LANDING_SLUGS: ReadonlySet<string> = new Set([
-  "404", "admin", "api", "assets", "contoh-landing", "disclaimer", "embed",
+  "404", "admin", "api", "assets", "disclaimer", "embed",
   "feed", "form-full", "form-hybrid", "form-middle", "full-form", "geoipform",
   "hello", "hybrid-form", "install", "kebijakan-cookie", "kebijakan-privasi",
-  "kontak", "landing", "landing-page", "llms", "media", "middle-form", "payment",
-  "pengiriman", "produk", "robots", "sitemap", "solusi-terbaru",
+  "kontak", "landing", "landing-page", "llms", "media", "middle-form", "payment", "platform",
+  "pemulihan", "pengiriman", "produk", "robots", "sitemap", "solusi-terbaru",
   "syarat-ketentuan", "tentang", "testimoni", "thanks",
 ]);
 

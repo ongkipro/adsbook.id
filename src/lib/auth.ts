@@ -1,14 +1,51 @@
-/** Admin session cookie. Exported so every setter, reader, and deleter shares one name. */
-export const SESSION_COOKIE_NAME = 'adsbook_session';
-const JWT_ALGORITHM = { name: 'HMAC', hash: 'SHA-256' } as const;
+/**
+ * Admin session cookie (IAM-2). Exported so every setter, reader, and deleter
+ * shares one name. The `__Host-` prefix makes the browser refuse it unless it
+ * is `Secure`, `Path=/` and carries no `Domain`: a script on another seller's
+ * host under the same parent domain can neither set nor replace it.
+ */
+export const SESSION_COOKIE_NAME = '__Host-adsbook_session';
 
 /**
- * Cookie security follows the transport the browser is actually using.
- * `wrangler dev` serves a production build over plain HTTP, so build mode is
- * not a transport signal and would make the browser discard the session.
+ * The attributes every set AND every delete of the session cookie carries. A
+ * delete without `Secure` is ignored by the browser for a `__Host-` cookie,
+ * which would leave a logged-out session in place. Never add `domain`.
+ * `http://localhost` counts as a secure context, so local dev keeps working.
  */
-export function shouldSecureSessionCookie(url: URL) {
-  return url.protocol === 'https:';
+export const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax',
+  path: '/',
+} as const;
+
+const JWT_ALGORITHM = { name: 'HMAC', hash: 'SHA-256' } as const;
+
+/** IAM-5: what an old browser is told when only Fetch Metadata is missing. */
+export const BROWSER_UNSUPPORTED_MESSAGE =
+  'Browser ini terlalu lama untuk menyimpan perubahan dengan aman. Perbarui browser Anda, lalu coba lagi.';
+
+export type UnsafeRequestVerdict = 'allowed' | 'forbidden' | 'browser_unsupported';
+
+/**
+ * IAM-5 strict CSRF for POST/PUT/PATCH/DELETE on admin and platform routes:
+ * `Origin` must equal the request origin and `Sec-Fetch-Site` must be
+ * `same-origin`. A missing `Origin` is refused — another seller's host is
+ * same-site, so `SameSite=Lax` alone does not stop it. A request whose only
+ * fault is a missing `Sec-Fetch-Site` (Safari before 16.4) is refused too,
+ * but told why (`browser_unsupported`, SQ-2).
+ */
+export function unsafeRequestVerdict(request: Request, url: URL): UnsafeRequestVerdict {
+  const origin = request.headers.get('origin');
+  if (origin === null || origin !== url.origin) return 'forbidden';
+  const site = request.headers.get('sec-fetch-site');
+  if (site === null) return 'browser_unsupported';
+  return site === 'same-origin' ? 'allowed' : 'forbidden';
+}
+
+/** IAM-5: an admin page fetched without Fetch Metadata shows the update-your-browser banner. */
+export function lacksFetchMetadata(headers: Headers): boolean {
+  return !headers.has('sec-fetch-site');
 }
 
 export const ADMIN_ROLES = [
@@ -47,8 +84,11 @@ const ADMIN_PAGE_ROUTES = [
   '/admin/settings/warehouse',
   '/admin/settings/crm',
   '/admin/settings/plugins',
+  '/admin/settings/domains',
   '/admin/settings/whatsapp',
+  '/admin/settings/privacy',
   '/admin/status',
+  '/admin/setup',
   '/admin/docs',
 ] as const;
 
@@ -69,6 +109,7 @@ const ADMIN_API_ROUTES = [
   '/api/admin/expeditions',
   '/api/admin/rules',
   '/api/admin/settings/developer',
+  '/api/admin/settings/privacy',
   '/api/admin/ads',
   '/api/admin/media',
   '/api/admin/upload-r2',
@@ -79,6 +120,7 @@ const ADMIN_API_ROUTES = [
   '/api/admin/warehouses',
   '/api/admin/profile',
   '/api/admin/plugins',
+  '/api/admin/domains',
   '/api/admin/logout',
 ] as const;
 

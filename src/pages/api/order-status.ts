@@ -4,9 +4,9 @@ import {
   RETRYABLE_PAYMENT_STATUSES,
 } from "../../lib/autolaris-payment.ts";
 import { isAutoLarisCheckoutChannel } from "../../lib/autolaris-client.ts";
-import { getRuntimeEnv } from "../../lib/env.ts";
 import { loadPublicOrderStatus, resolvePublicOrderId } from "../../lib/order-status.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../../lib/rate-limit.ts";
+import { tenantDatabase } from "../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -40,7 +40,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
 
-    const database = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+    const database = tenantDatabase(locals);
     if (!database?.prepare) {
       return json({ success: false, error: "Database order belum tersedia." }, 503);
     }

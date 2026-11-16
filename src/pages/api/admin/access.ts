@@ -7,15 +7,14 @@ import {
 } from "../../../lib/admin-credentials";
 import { revokeAdminSessions } from "../../../lib/admin-session";
 import { jsonError, jsonOk } from "../../../lib/api";
-import { getRuntimeEnv } from "../../../lib/env";
 import { isAdminRole } from "../../../lib/auth";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
 function runtime(locals: App.Locals) {
-  const env = getRuntimeEnv(locals);
   return {
-    database: env?.OMS_DB as D1Database | undefined,
+    database: tenantDatabase(locals),
   };
 }
 

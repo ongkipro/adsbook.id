@@ -1,0 +1,88 @@
+---
+/**
+ * The setup checklist (UX-2, T-38), static HTML: ordered steps whose state is
+ * derived from data (`buildSetupChecklist`), the PR-23 steps marked "wajib",
+ * a progress count, and a link to each step's own admin screen.
+ *
+ * `compact` is the dashboard card: the open required steps only; once the
+ * store is ready it shrinks to one line, and it hides once every step is done
+ * (the full list stays at /admin/setup, linked from Pengaturan).
+ */
+import type { SetupStep } from '../../lib/setup-checklist';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { buttonVariants } from '../ui/button';
+
+interface Props {
+  steps: SetupStep[];
+  storeUrl: string | null;
+  compact?: boolean;
+}
+
+const { steps, storeUrl, compact = false } = Astro.props;
+const required = steps.filter((step) => step.required);
+const requiredLeft = required.filter((step) => !step.done);
+const ready = requiredLeft.length === 0;
+const allDone = steps.every((step) => step.done);
+const outline = buttonVariants({ variant: 'outline', size: 'sm' });
+const shown = compact ? requiredLeft : steps;
+---
+
+{compact && allDone ? null : compact && ready ? (
+  <p class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+    <span><span class="font-semibold">Toko siap jualan.</span> {storeUrl && <a class="underline underline-offset-2" href={storeUrl} target="_blank" rel="noopener">{storeUrl.replace(/^https?:\/\//, '')}</a>}</span>
+    <a href="/admin/setup" class="font-medium underline underline-offset-2">Langkah opsional</a>
+  </p>
+) : (
+  <Card className="border-slate-200 shadow-sm" aria-labelledby="setup-title">
+    <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      <div class="min-w-0">
+        <CardTitle as="h3" id="setup-title" className="text-sm font-semibold text-slate-950 md:text-base">
+          {ready ? 'Toko siap jualan' : 'Siapkan toko untuk jualan'}
+        </CardTitle>
+        <p class="mt-1 text-xs text-slate-500">
+          {ready
+            ? 'Pembeli sudah bisa memesan. Langkah opsional di bawah membantu iklan dan merek Anda.'
+            : 'Pembeli melihat "Toko belum siap" sampai semua langkah wajib selesai.'}
+        </p>
+      </div>
+      <span class="shrink-0 text-xs font-semibold tabular-nums text-slate-600">
+        {required.length - requiredLeft.length}/{required.length} wajib selesai
+      </span>
+    </CardHeader>
+    <CardContent className="pt-2">
+      {ready && storeUrl && (
+        <p class="py-3 text-sm">
+          Alamat toko: <a class="font-medium text-blue-700 underline underline-offset-2" href={storeUrl} target="_blank" rel="noopener">{storeUrl.replace(/^https?:\/\//, '')}</a>
+        </p>
+      )}
+      <ol class="divide-y divide-slate-100">
+        {shown.map((step) => (
+          <li class="flex items-start gap-3 py-3">
+            <span
+              aria-hidden="true"
+              class={`mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                step.done ? 'bg-emerald-600 text-white' : 'border border-slate-300 text-transparent'
+              }`}
+            >✓</span>
+            <div class="min-w-0 flex-1">
+              <p class={`text-sm font-medium ${step.done ? 'text-slate-500' : 'text-slate-900'}`}>
+                {step.label}
+                {step.required
+                  ? <span class="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900">wajib</span>
+                  : <span class="ml-1 text-xs font-normal text-slate-400">(opsional)</span>}
+                <span class="sr-only">{step.done ? ' — selesai' : ' — belum'}</span>
+              </p>
+              <p class="mt-0.5 text-xs text-slate-500">{step.hint}</p>
+            </div>
+            {!step.done && <a href={step.href} class={outline}>Buka</a>}
+          </li>
+        ))}
+      </ol>
+      {compact && (
+        <div class="border-t border-slate-100 pt-3">
+          <a href="/admin/setup" class="text-sm font-medium text-blue-700 underline underline-offset-2">Lihat semua langkah</a>
+        </div>
+      )}
+    </CardContent>
+  </Card>
+)}

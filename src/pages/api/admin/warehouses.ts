@@ -1,6 +1,5 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
-import { getRuntimeEnv } from "../../../lib/env";
 import { MengantarClient } from "../../../lib/mengantar-client";
 import { getProviderConfig } from "../../../lib/provider-config";
 import {
@@ -14,6 +13,7 @@ import {
   WarehouseError,
   type EnsurePickup,
 } from "../../../lib/warehouses";
+import { tenantDatabase } from "../../../lib/tenant-database.ts";
 
 export const prerender = false;
 
@@ -22,7 +22,7 @@ export const prerender = false;
  * Every answer is the full list, so the page never guesses what a write did.
  */
 function database(locals: App.Locals) {
-  const db = getRuntimeEnv(locals)?.OMS_DB as D1Database | undefined;
+  const db = tenantDatabase(locals);
   if (!db?.prepare) throw new WarehouseError("Database belum tersedia.", 503);
   return db;
 }

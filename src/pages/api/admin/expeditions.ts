@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { jsonError, jsonOk } from '../../../lib/api.ts';
 import { getRuntimeEnv } from '../../../lib/env.ts';
 import { invalidateStoreConfigCache } from '../../../lib/store-config-cache.ts';
+import { tenantKv } from '../../../platform/keys.ts';
 import {
   parseProvinceCodeList,
   validateProvinceCodeList,
 } from '../../../lib/province.ts';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
 
 export const prerender = false;
 
@@ -43,7 +45,7 @@ const expeditionMutationSchema = z.union([
 ]);
 
 const getDatabase = (locals: App.Locals) => {
-  const database = getRuntimeEnv(locals)?.OMS_DB;
+  const database = tenantDatabase(locals);
   return database &&
     typeof database === 'object' &&
     typeof (database as D1Database).prepare === 'function'
@@ -144,8 +146,9 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
       }
       // The public form-config endpoint caches this policy in KV. Drop it now
       // so the change is live immediately instead of after the cache TTL.
+      const tenantId = locals.tenantContext?.tenantId;
       await invalidateStoreConfigCache(
-        getRuntimeEnv(locals)?.SESSION as KVNamespace | undefined,
+        tenantId ? tenantKv(getRuntimeEnv(locals), tenantId) : undefined,
       );
       return jsonOk({
         message: 'Kebijakan wilayah COD berhasil disimpan.',

@@ -1,0 +1,30 @@
+---
+import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import FaqList from '../../../platform/site/FaqList.astro';
+import { FAQ_MORE, FAQ_SHORT } from '../../../platform/site/content.ts';
+import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from '../../../platform/site/site.ts';
+
+export const prerender = false;
+---
+
+<SiteLayout page={SITE_PAGES.faq}>
+  <section class="page-head">
+    <div class="wrap"><div class="head">
+      <h1>Pertanyaan umum</h1>
+      <p class="lead">Soal biaya, akun kurir, pembayaran dan iklan, domain sendiri, data pembeli, serta cara berhenti.</p>
+    </div></div>
+  </section>
+  <section class="section section-white">
+    <div class="wrap"><FaqList items={[...FAQ_SHORT, ...FAQ_MORE]} /></div>
+  </section>
+  <section class="section">
+    <div class="wrap end">
+      <h2>Siap mencoba?</h2>
+      <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
+    </div>
+  </section>
+</SiteLayout>
+
+<style>
+  .end { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; }
+</style>
