@@ -150,7 +150,9 @@ let schemaCalls = 0;
 // The request gate (T-17) is tested in src/platform/; these tests start past it, on an active tenant.
 const tenantGate = async () => ({
   kind: 'tenant' as const,
-  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'test.adsbook.cc', hostKind: 'subdomain' as const, primaryHost: 'test.adsbook.cc' },
+  // Coherent with the request host (store.example) the tests send: the gate never
+  // reports a subdomain whose primary is another host without that host being custom.
+  tenant: { tenantId: 't-test', slug: 'test', status: 'active' as const, cacheVersion: 1, host: 'store.example', hostKind: 'custom' as const, primaryHost: 'store.example' },
 });
 const onRequest = createMiddleware(async (env) => { schemaCalls += 1; return (env as { OMS_DB: D1Database }).OMS_DB; }, tenantGate);
 

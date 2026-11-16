@@ -268,7 +268,7 @@ export async function claimDomain(
     return {
       ok: false,
       status: 409,
-      error: `1 akun toko berlaku untuk ${cap.cap} domain sendiri (domain utama dan www dihitung satu). Hapus domain yang terpasang untuk menggantinya, atau buka toko baru (berlangganan lagi) untuk memakai domain lain.`,
+      error: `1 akun toko berlaku untuk ${cap.cap} domain sendiri (domain utama dan www dihitung satu). Pakai "Ganti domain" untuk menggantinya, atau buka toko baru (berlangganan lagi) untuk memakai domain lain.`,
     };
   }
 
@@ -520,6 +520,74 @@ export async function removeDomain(
     }
   }
   return { ok: true, value: { removed: group.map((member) => member.host) } };
+}
+
+/**
+ * Replace the store's own domain (Paduka, 2026-11-16: "seller juga di izinkan
+ * edit/replace domain"). One store holds one domain (migration 0005), so a
+ * new domain replaces the old one in a single step.
+ *
+ * Everything that can be checked without touching the old domain is checked
+ * first: the name and mode (`planClaim`), the plan, and that no other store
+ * holds or has just released (quarantine) any of the new hosts. A typo, a
+ * platform or over-long host, or a taken domain therefore never disconnects
+ * the domain the store is selling on. The same domain under another mode
+ * (root <-> www) is a branch switch, not a replacement, and goes to
+ * `claimDomain` as before.
+ *
+ * Then the old group is removed exactly as "Hapus" removes it (revoked,
+ * quarantined, the primary back on `<slug>.adsbook.cc`, its Cloudflare
+ * hostnames deleted, DOM-5), and the new one is claimed. The store never holds
+ * more than one domain group.
+ * lazy: the two steps are not one transaction. If the new claim still fails
+ * after the old domain is removed (another store wins the same host in that
+ * instant), the store keeps its subdomain and the error says so; the old
+ * domain sits in quarantine and can be added again after it.
+ */
+export async function replaceDomain(
+  platformDb: D1Database,
+  api: CustomHostnameApi,
+  tenantId: string,
+  raw: unknown,
+  mode: ClaimMode,
+  now = new Date(),
+): Promise<DomainResult<DomainView[]>> {
+  const planned = planClaim(raw, mode);
+  if (!planned.ok) return { ok: false, status: 422, error: planned.error };
+  const groups = (
+    await platformDb
+      .prepare(
+        `SELECT DISTINCT domain_group AS grp FROM tenant_hosts
+         WHERE tenant_id = ? AND kind = 'custom' AND status != 'revoked' AND domain_group IS NOT NULL`,
+      )
+      .bind(tenantId)
+      .all<{ grp: string }>()
+  ).results.map((row) => row.grp);
+  // Nothing to replace, or the same domain under another mode: an ordinary claim.
+  if (!groups.length || groups.includes(planned.group)) return claimDomain(platformDb, api, tenantId, raw, mode, now);
+
+  const blocked = await platformDb
+    .prepare(
+      `SELECT host FROM tenant_hosts WHERE host IN (${planned.hosts.map(() => "?").join(", ")})
+       AND ((status != 'revoked' AND tenant_id != ?) OR (status = 'revoked' AND quarantine_until > ?)) LIMIT 1`,
+    )
+    .bind(...planned.hosts, tenantId, now.toISOString())
+    .first<{ host: string }>();
+  if (blocked) {
+    return { ok: false, status: 409, error: `Domain ${blocked.host} sedang dipakai atau baru dilepas toko lain. Domain Anda sekarang tetap terpasang.` };
+  }
+  const tenant = await platformDb.prepare("SELECT 1 AS ok FROM tenants WHERE id = ?").bind(tenantId).first<{ ok: number }>();
+  if (!tenant) return { ok: false, status: 404, error: "Toko tidak ditemukan." };
+
+  for (const group of groups) {
+    const removed = await removeDomain(platformDb, api, tenantId, group, now, "group");
+    if (!removed.ok) return removed;
+  }
+  const claimed = await claimDomain(platformDb, api, tenantId, raw, mode, now);
+  if (!claimed.ok) {
+    return { ...claimed, error: `${claimed.error} Domain lama sudah dilepas; toko tetap bisa dibuka di alamat adsbook.cc.` };
+  }
+  return claimed;
 }
 
 export const PROBE_PATH = "/.well-known/adsbook-probe";

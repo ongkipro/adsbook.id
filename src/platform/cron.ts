@@ -3,9 +3,11 @@ import { CMS_VERSION } from "../lib/version.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { armTenantAlarm, openTenantDb, TenantUnavailableError } from "./tenant-db.ts";
 import { runPlatformJobs } from "./jobs.ts";
-import { noticeStuckDomains } from "./notify.ts";
+import { noticeDomainIfActive, noticeStuckDomains } from "./notify.ts";
+import { pollPendingDomains } from "./domain-poll.ts";
+import { resolveAuthSecret } from "../lib/auth-secret.ts";
 import { runPurges } from "./purge.ts";
-import { deleteHostnameRef, hostnameApiFromEnv } from "./hostnames.ts";
+import { deleteHostnameRef, hostnameApiFromEnv, probeHost } from "./hostnames.ts";
 
 /** MIG-1: tenants migrated by the cron per run, oldest schema first. */
 export const CRON_MIGRATION_BATCH = 50;
@@ -30,7 +32,7 @@ export const CRON_ARM_BATCH = 200;
 export async function runPlatformCron(
   env: CloudflareRuntimeEnv,
   scheduledTime: number,
-  _context: ExecutionContext,
+  context: ExecutionContext,
 ): Promise<{ migrated: string[]; armed: number; failed: string[] }> {
   const platformDb = env.PLATFORM_DB;
   if (!platformDb) {
@@ -98,6 +100,23 @@ export async function runPlatformCron(
     // T-44: custom domains still failing after 24 hours reach the operator once.
     const stuck = await noticeStuckDomains(env as unknown as Record<string, unknown>, platformDb, new Date(scheduledTime));
     if (stuck) console.info("scheduled-domain-notices", { sent: stuck });
+    // Paduka 2026-11-16: pending custom domains go live without the seller
+    // coming back — refreshed, and once active promoted to primary after the
+    // HTTPS probe, which is keyed by each tenant's own session key.
+    if (hostnames) {
+      const record = env as unknown as Record<string, unknown>;
+      const polled = await pollPendingDomains(platformDb, hostnames, {
+        secretFor: async (tenantId) => {
+          const tenant = await platformDb.prepare("SELECT cache_version FROM tenants WHERE id = ?").bind(tenantId).first<{ cache_version: number }>();
+          if (!tenant) return null;
+          const database = await openTenantDb(env, { tenantId, cacheVersion: Number(tenant.cache_version) }, CMS_VERSION.schemaVersion);
+          return resolveAuthSecret(database, tenantId);
+        },
+        probe: (host, secret) => probeHost(host, secret),
+        onActive: (tenantId, slug, view) => noticeDomainIfActive(record, platformDb, { tenantId, slug }, view, (task) => context.waitUntil(task)),
+      });
+      if (polled.checked) console.info("scheduled-domain-poll", polled);
+    }
   } catch (error) {
     console.error("scheduled-platform-jobs-failed", String(error));
   }

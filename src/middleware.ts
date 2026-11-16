@@ -32,7 +32,7 @@ import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind 
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 import { scopeFromLocals } from './platform/keys.ts';
 import { PROBE_NONCE, PROBE_PATH, probeAnswer, tenantHostSuffix } from './platform/hostnames.ts';
-import { platformSitePath } from './platform/host.ts';
+import { platformSitePath, primaryHostRedirect } from './platform/host.ts';
 import { platformGuard } from './platform/admin/guard.ts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -326,17 +326,15 @@ export function createMiddleware(
     return applySecurityHeaders(context.redirect(hostRedirect, 301), false);
   }
 
-  // T-43 (PR-28, root primary): `www.<root>` answers with a permanent redirect
-  // to the root once the root is the active primary. Both hosts are active by
-  // then: an inactive `www` never resolves here, and a root becomes primary
-  // only after its HTTPS probe. Webhooks and APIs are never moved.
-  const wwwToRoot = (() => {
-    const tenant = context.locals.tenantContext;
-    if (!tenant || tenant.hostKind !== 'custom' || !tenant.primaryHost || url.pathname.startsWith('/api/')) return null;
-    return url.hostname === `www.${tenant.primaryHost}` ? `${url.protocol}//${tenant.primaryHost}${url.port ? `:${url.port}` : ''}${url.pathname}${url.search}` : null;
-  })();
-  if (wwwToRoot) {
-    return applySecurityHeaders(context.redirect(wwwToRoot, 301), false);
+  // T-43 (PR-28) and Paduka 2026-11-16: once a custom domain is the active
+  // primary, `www.<root>` and the store's own `<slug>.adsbook.cc` answer
+  // GET/HEAD with a 301 to the same path and query on the primary. APIs,
+  // webhooks, the owner's sign-in and recovery, admin and `.well-known` stay
+  // (`primaryHostRedirect`, src/platform/host.ts). A primary is custom only
+  // after its HTTPS probe; removing the domain moves it back to the subdomain.
+  const toPrimary = primaryHostRedirect(url, context.request.method, context.locals.tenantContext);
+  if (toPrimary) {
+    return applySecurityHeaders(context.redirect(toPrimary, 301), false);
   }
 
   // The edge cache (ADR-029): an anonymous page another visitor rendered in

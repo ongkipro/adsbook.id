@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Globe } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Copy, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ export function DomainManager() {
   const [host, setHost] = useState("");
   const [mode, setMode] = useState<Mode>("root");
   const [addError, setAddError] = useState("");
+  const hostInput = useRef<HTMLInputElement>(null);
   const { confirm, dialog } = useConfirm();
 
   const load = useCallback(async () => {
@@ -78,6 +79,16 @@ export function DomainManager() {
   };
 
   const path = (domain: Domain) => `/api/admin/domains/${encodeURIComponent(domain.host)}`;
+
+  // Sellers set DNS from a phone: one tap copies the exact record name and target.
+  const copy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} disalin: ${text}`);
+    } catch {
+      toast.error("Tidak bisa menyalin otomatis. Salin manual dari teks di atas.");
+    }
+  };
 
   // T-43: root -> `www` only. The root hostname is removed; `www` stays as it is.
   const switchToWww = async (domain: Domain) => {
@@ -107,12 +118,24 @@ export function DomainManager() {
     await run(domain.host, () => call(`${path(domain)}/primary`, { method: "POST", body: "{}" }));
   };
 
+  // One store, one own domain (Paduka, 2026-11-16): with a domain in place the form replaces it.
+  const current = domains?.find((domain) => domain.kind === "custom")?.group ?? null;
+  const subdomain = domains?.find((domain) => domain.kind === "subdomain")?.host ?? "subdomain adsbook.cc";
+
   const add = async (event: { preventDefault(): void }) => {
     event.preventDefault();
     setAddError("");
+    const typed = host.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
+    const sameDomain = current !== null && (typed === current || typed === `www.${current}`);
+    const replace = current !== null && !sameDomain;
+    if (replace && !(await confirm({
+      title: `Ganti ${current} dengan ${typed}?`,
+      description: `${current} dilepas dari toko ini dan tidak lagi membuka toko; ${typed} dipasang sebagai gantinya. Sampai DNS dan SSL ${typed} aktif, toko dibuka di ${subdomain}. Domain yang dilepas tidak bisa langsung dipasang lagi.`,
+      confirmLabel: "Ganti domain",
+    }))) return;
     setBusy("add");
     try {
-      const payload = await call("/api/admin/domains", { method: "POST", body: JSON.stringify({ host, mode }) });
+      const payload = await call("/api/admin/domains", { method: "POST", body: JSON.stringify({ host, mode, ...(replace ? { replace: true } : {}) }) });
       setHost("");
       await load();
       toast.success(payload.message);
@@ -156,9 +179,17 @@ export function DomainManager() {
               </div>
               {pending && (
                 <div className="space-y-1 text-xs text-slate-600">
-                  <p>
+                  <p className="flex flex-wrap items-center gap-1.5">
                     Record DNS: <code className="rounded bg-slate-100 px-1.5 py-0.5">{record} CNAME {domain.cnameTarget}</code>
                   </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" onClick={() => void copy(record, "Nama record")} aria-label={`Salin nama record ${record}`}>
+                      <Copy className="size-3.5" aria-hidden="true" /> Nama: {record}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => void copy(domain.cnameTarget ?? "", "Target CNAME")} aria-label={`Salin target CNAME ${domain.cnameTarget}`}>
+                      <Copy className="size-3.5" aria-hidden="true" /> Target: {domain.cnameTarget}
+                    </Button>
+                  </div>
                   {/* PR-28: never fixed IPs; the root needs flattening or ALIAS/ANAME. */}
                   {record === "@" ? (
                     <p>Di Cloudflare DNS, CNAME di domain utama otomatis di-flatten. Di DNS lain pakai record ALIAS atau ANAME bila ada; kalau tidak ada, pakai mode “Hanya www”. Jangan pakai A record atau alamat IP.</p>
@@ -167,6 +198,11 @@ export function DomainManager() {
                   ) : null}
                   <p className="text-slate-500">Status di sini dibaca dari Cloudflare; pengecekan DNS hanya petunjuk, tidak memastikan record sudah benar.</p>
                 </div>
+              )}
+              {domain.kind === "custom" && domain.isPrimary && domain.status === "active" && (
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  Aktif sebagai domain utama — alamat www dan {subdomain} otomatis dialihkan (301) ke domain ini. Login admin tetap bisa di {subdomain}/hello.
+                </p>
               )}
               {domain.errors.map((message) => (
                 <p key={message} className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{message}</p>
@@ -191,6 +227,18 @@ export function DomainManager() {
                       Pindah ke www saja
                     </Button>
                   )}
+                  {domain.kind === "custom" && domain.host === domain.group && (
+                    <Button
+                      variant="outline"
+                      disabled={busy !== null || !enabled}
+                      onClick={() => {
+                        hostInput.current?.focus();
+                        hostInput.current?.scrollIntoView({ block: "center" });
+                      }}
+                    >
+                      Ganti domain
+                    </Button>
+                  )}
                   {domain.kind === "custom" && (
                     <Button variant="outline" className="text-rose-700" disabled={busy !== null} onClick={() => void remove(domain)}>Hapus</Button>
                   )}
@@ -203,9 +251,15 @@ export function DomainManager() {
 
       {enabled ? (
         <form onSubmit={(event) => void add(event)} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6" aria-busy={busy === "add"} noValidate>
-          <h2 className="font-semibold text-slate-950">Tambah domain sendiri</h2>
+          <h2 className="font-semibold text-slate-950">{current ? "Ganti domain sendiri" : "Tambah domain sendiri"}</h2>
+          {current && (
+            <p className="mt-1 text-xs text-slate-600">
+              1 akun toko berlaku untuk 1 domain sendiri. Domain baru menggantikan {current}; untuk memakai domain lain sekaligus, buka toko baru.
+            </p>
+          )}
           <label className="mt-4 block text-xs font-semibold text-slate-700" htmlFor="domainHost">Domain</label>
           <Input
+            ref={hostInput}
             id="domainHost"
             className="mt-2 font-mono"
             value={host}
@@ -233,7 +287,7 @@ export function DomainManager() {
           </fieldset>
           <div className="mt-5 flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className={`min-h-5 text-xs font-semibold ${addError ? "text-rose-700" : "text-slate-500"}`} role={addError ? "alert" : "status"}>{addError}</p>
-            <Button type="submit" disabled={busy !== null || !host.trim()}>{busy === "add" ? "Menambahkan…" : "Tambah domain"}</Button>
+            <Button type="submit" disabled={busy !== null || !host.trim()}>{busy === "add" ? (current ? "Mengganti…" : "Menambahkan…") : current ? "Ganti domain" : "Tambah domain"}</Button>
           </div>
         </form>
       ) : (
