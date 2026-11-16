@@ -631,8 +631,10 @@ export function classifyPurchaseCoverage(
 /** Pixel and CAPI token both present (D1 first, env fallback). Never returns the token. */
 async function readMetaConfigured(database: D1Database, locals?: App.Locals): Promise<boolean> {
   try {
+    // Whether it is configured, not whether it may send now (ADR-041 pause aside).
     const ads = await getStoreAdsConfig({
       ...(locals ?? {}),
+      billing: undefined,
       tenantDb: database,
     } as unknown as App.Locals);
     return Boolean(ads.metaPixelId && ads.metaCapiToken);

@@ -93,33 +93,48 @@ export const STEPS: Step[] = [
   },
 ];
 
-/** The free plan, from the `pilot` row of PLATFORM_DB.plans (T-37) and the seller terms §1.3. */
-export const PILOT = {
-  name: "Pilot",
-  meaning: "Pilot adalah paket awal adsbook.id: gratis, sebelum paket berbayar hadir.",
-  price: "Rp0",
-  points: [
-    "Satu toko di nama-toko.adsbook.my.id",
-    "1 domain sendiri per toko (domain utama dan www dihitung satu)",
-    "60 unggahan foto per jam",
-    "20 draf konten AI per jam",
-    "Daftar langsung aktif, tanpa persetujuan",
-  ],
-  note: "Biaya kurir dan pembayaran ditagih Mengantar dan AutoLaris langsung ke akun Anda.",
-  later: "Paket berbayar segera hadir. Perubahan harga yang berlaku bagi Anda kami umumkan paling lambat 30 hari sebelumnya.",
+/**
+ * Option A (ADR-041), the same cycles `src/platform/billing.ts` bills; the
+ * limits are the plan row (PLATFORM_DB.plans, migration 0005). No number here
+ * that the product does not enforce.
+ */
+export const PLANS = [
+  { code: "1m", label: "1 Bulan", price: "Rp149.000", period: "30 hari", note: "Fleksibel, perpanjang tiap bulan" },
+  { code: "3m", label: "3 Bulan", price: "Rp399.000", period: "90 hari", note: "Hemat Rp48.000" },
+  { code: "6m", label: "6 Bulan", price: "Rp759.000", period: "180 hari", note: "Hemat Rp135.000" },
+  { code: "12m", label: "1 Tahun", price: "Rp1.490.000", period: "365 hari", note: "Bayar 10 bulan, gratis 2 bulan", best: true },
+] as const;
+
+export const PLAN_POINTS = [
+  "1 toko di nama-toko.adsbook.my.id, plus 1 domain sendiri",
+  "Pixel dan Conversions API Meta dengan satu event_id per pesanan",
+  "Konversi offline Google Ads dari pesanan yang benar-benar terjadi",
+  "0% potongan per transaksi: uang pembeli langsung ke akun Anda",
+  "Produk dan pesanan tanpa batas; 60 unggahan foto dan 20 draf AI per jam",
+];
+
+export const PREVIEW = {
+  title: "Coba buat toko gratis, bayar saat siap beriklan",
+  text: "Daftar tanpa kartu. Di Mode Preview Anda bisa menyiapkan produk, landing page, gudang, dan pengaturan pixel, lalu melihat toko seperti pembeli melihatnya. Pesanan pembeli, sinyal iklan, AI, dan domain sendiri aktif begitu langganan dibayar.",
+  payment: "Bayar langganan dengan QRIS atau Virtual Account (BCA, Mandiri, BNI, BRI, Permata). Perpanjangan menambah hari dari tanggal berakhir, jadi sisa hari tidak hilang.",
+  grace: "Lewat jatuh tempo, toko tetap jalan 48 jam agar iklan tidak terhenti mendadak. Setelah itu pesanan dan iklan dijeda, data toko tetap aman, dan Anda tetap bisa masuk ke admin untuk memperpanjang.",
+  fees: "Biaya kurir dan pembayaran pembeli ditagih Mengantar dan AutoLaris langsung ke akun Anda.",
 };
 
 export type Faq = { q: string; a: string };
 
 export const FAQ_SHORT: Faq[] = [
-  { q: "Apakah benar gratis?", a: "Ya. Paket Pilot tidak berbayar dan tidak perlu kartu. Biaya kurir dan pembayaran dibayar langsung ke penyedianya dari akun Anda sendiri." },
+  { q: "Apakah gratis?", a: "Membuat toko dan menyiapkannya gratis di Mode Preview, tanpa kartu. Saat toko siap menerima pesanan dan diiklankan, berlangganan mulai Rp149.000 per bulan, atau Rp1.490.000 per tahun (bayar 10 bulan, gratis 2 bulan). Tidak ada potongan per transaksi." },
+  { q: "Apa maksud deduplikasi sinyal iklan 1:1?", a: "Satu pesanan dikirim ke Meta dari browser (Pixel) dan dari server (Conversions API) dengan event_id yang sama, jadi Meta menghitungnya satu kali, bukan dua. Purchase dari server tetap terkirim walau pembeli langsung menutup halaman, dengan 8 data pembeli yang di-hash SHA-256 untuk pencocokan." },
+  { q: "Uang pembeli masuk ke mana?", a: "Ke akun Anda. COD dicairkan oleh Mengantar, QRIS dan VA oleh AutoLaris, keduanya ke akun Anda sendiri. adsbook.id tidak memegang dana pembeli dan tidak memotong per transaksi." },
+  { q: "Bisa pakai domain sendiri?", a: "Bisa, 1 domain sendiri per toko yang berlangganan. Untuk domain lain, buka toko baru. Domain utama (contoh.com) bisa dipakai bila DNS Anda mendukung CNAME di root; kalau tidak, pakai www." },
   { q: "Apa saja yang perlu disiapkan?", a: "Satu produk dengan harga dan berat, gudang utama dengan alamat pickup, dan API key Mengantar. Sampai semua langkah wajib selesai, pembeli melihat halaman \"Toko belum siap\" dan belum bisa memesan." },
-  { q: "Uang pembeli masuk ke mana?", a: "Ke akun Anda. COD dicairkan oleh Mengantar, QRIS dan VA oleh AutoLaris, keduanya ke akun Anda sendiri. adsbook.id tidak memegang dana pembeli maupun dana Anda." },
-  { q: "Bisa pakai domain sendiri?", a: "Bisa, 1 domain sendiri per toko. Untuk domain lain, buka toko baru. Domain utama (contoh.com) bisa dipakai bila DNS Anda mendukung CNAME di root; kalau tidak, pakai www." },
-  { q: "Siapa pemilik data pembeli?", a: "Anda. Kami memprosesnya hanya untuk menjalankan toko Anda. Data tiap toko terpisah dan bisa Anda ekspor dari admin." },
 ];
 
 export const FAQ_MORE: Faq[] = [
+  { q: "Apa yang terjadi kalau langganan habis?", a: "Toko tetap jalan 48 jam setelah jatuh tempo. Setelah itu pesanan, iklan, dan AI dijeda, data toko tetap utuh, dan Anda tetap bisa masuk ke admin untuk memperpanjang; toko langsung aktif lagi begitu pembayaran masuk." },
+  { q: "Bayar langganan pakai apa?", a: "QRIS atau Virtual Account BCA, Mandiri, BNI, BRI, dan Permata, langsung dari menu Langganan di admin toko." },
+  { q: "Siapa pemilik data pembeli?", a: "Anda. Kami memprosesnya hanya untuk menjalankan toko Anda. Data tiap toko terpisah dan bisa Anda ekspor dari admin." },
   { q: "Apakah ada aplikasi yang harus dipasang?", a: "Tidak. Toko dan admin berjalan di browser, termasuk di HP." },
   { q: "Bisa dipakai bersama tim?", a: "Bisa. Tambahkan akun untuk admin, advertiser, dan customer service; tiap peran hanya melihat menu yang ia perlukan." },
   { q: "Kalau pembeli tidak membuka halaman terima kasih, apakah konversinya hilang?", a: "Tidak. Purchase dikirim dari server saat pesanan COD dibuat atau saat pembayaran lunas, jadi tidak bergantung pada halaman terima kasih." },
@@ -129,11 +144,11 @@ export const FAQ_MORE: Faq[] = [
 
 /** Feature groups for /fitur: each line is something the product does today. */
 export const FEATURES: Array<{ title: string; items: string[]; shot: Shot }> = [
+  { title: "Deduplikasi sinyal iklan 1:1", items: ["Pixel dan Conversions API Meta mengirim satu pesanan dengan event_id yang sama: dihitung satu kali, bukan dua", "Purchase dari server untuk setiap pesanan COD, walau pembeli langsung menutup halaman", "8 data pembeli di-hash SHA-256 untuk pencocokan, plus ID klik dan UTM yang disimpan 90 hari", "Konversi offline Google Ads dan ID produk yang sama di feed katalog dan event"], shot: SHOTS.meta },
   { title: "Toko dan form order", items: ["Halaman produk dan landing page dengan form order di dalamnya", "Form embed untuk dipasang di halaman lain", "Harga, varian dan berat dari data produk di server", "Draf konten produk dengan AI, Anda yang menerbitkan"], shot: SHOTS.form },
   { title: "Pesanan", items: ["Semua pesanan masuk sebagai menunggu, tidak ada yang terkirim sendiri", "Cek risiko RTS penerima sebelum dikirim", "Lead dari form yang tidak selesai untuk ditindaklanjuti CS", "Ekspor pesanan ke CSV"], shot: SHOTS.orders },
   { title: "Pengiriman", items: ["Ongkir dihitung lewat Mengantar dari gudang Anda", "Rilis ke kurir satu per satu atau sekaligus", "Resi, pickup dan status kiriman di satu halaman", "Sampai 10 gudang: gudang di provinsi pembeli dipakai lebih dulu, lalu gudang satu pulau, lalu gudang utama"], shot: SHOTS.shipping },
   { title: "Pembayaran", items: ["COD", "QRIS dan virtual account lewat akun AutoLaris Anda", "Transfer ke rekening toko dengan konfirmasi manual", "Rekonsiliasi pembayaran otomatis untuk QRIS dan VA"], shot: SHOTS.payments },
-  { title: "Iklan dan sinyal konversi", items: ["Meta Pixel dan Conversions API dengan event_id yang sama", "Purchase dari server untuk setiap pesanan COD", "Konversi offline Google Ads dan Google Tag Manager", "ID klik dan UTM disimpan 90 hari"], shot: SHOTS.meta },
   { title: "Toko Anda, akun Anda", items: ["Alamat nama-toko.adsbook.my.id, plus 1 domain sendiri", "Akun tim dengan peran owner, admin, advertiser dan CS", "API untuk menghubungkan toko dengan aplikasi Anda sendiri", "Kebijakan privasi toko yang menyebut hanya penyedia yang Anda pakai"], shot: SHOTS.access },
 ];
 

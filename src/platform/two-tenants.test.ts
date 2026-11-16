@@ -1799,11 +1799,14 @@ test("T-39/PR-24: signup without the terms is refused; an accepted signup stores
   const created = await run("setuju-versi");
   assert.equal(created.status, 201);
   const event = platformDb.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE kind = 'signup' AND tenant_id = ?").get((created as { tenantId: string }).tenantId) as { detail_json: string };
-  // Seller terms v0.2 (2026-11-16) names the seller zone adsbook.my.id; v0.1 stays served for those who accepted it.
-  assert.deepEqual(JSON.parse(event.detail_json), { terms_version: "0.2", privacy_version: "0.1" });
-  assert.equal(TERMS_VERSION, "0.2");
-  assert.ok(legalText("seller-terms", "0.2") && legalText("seller-terms", "0.1") && legalText("platform-privacy", "0.1"), "every accepted version is served");
+  // Seller terms v0.3 (2026-11-16, ADR-041): paid subscription with Preview Mode, seller zone
+  // adsbook.my.id; v0.1 and v0.2 stay served for those who accepted them.
+  assert.deepEqual(JSON.parse(event.detail_json), { terms_version: "0.3", privacy_version: "0.1" });
+  assert.equal(TERMS_VERSION, "0.3");
+  assert.ok(legalText("seller-terms", "0.3") && legalText("seller-terms", "0.2") && legalText("seller-terms", "0.1") && legalText("platform-privacy", "0.1"), "every accepted version is served");
   assert.match(legalText("seller-terms", "0.2")!.text, /\{slug\}\.adsbook\.cc/);
+  assert.match(legalText("seller-terms", "0.3")!.text, /\{slug\}\.adsbook\.my\.id/);
+  assert.match(legalText("seller-terms", "0.3")!.text, /Rp149\.000[\s\S]*Rp1\.490\.000[\s\S]*48 jam/);
 });
 
 test("T-39/PRIV-2: the store notice's providers come from the store's saved credentials", async () => {

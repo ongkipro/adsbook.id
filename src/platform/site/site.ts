@@ -12,7 +12,9 @@ import { sha256Hex } from "../../lib/meta-identity.ts";
 
 export const SITE_NAME = "adsbook.id";
 export const SIGNUP_PATH = "/daftar";
-export const SIGNUP_LABEL = "Buka toko gratis";
+export const SIGNUP_LABEL = "Coba buat toko gratis";
+/** The header's small button: the same action, short enough for a 360px header. */
+export const SIGNUP_LABEL_SHORT = "Coba gratis";
 
 export type SitePage = { path: string; nav?: string; title: string; description: string };
 
@@ -20,14 +22,14 @@ export type SitePage = { path: string; nav?: string; title: string; description:
 export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
   home: {
     path: "/",
-    title: "Toko Online COD untuk Seller Iklan - adsbook.id",
-    description: "Ubah traffic iklan jadi pesanan COD yang terkirim dan tercatat sebagai konversi. Toko siap pakai, form order cepat, gratis untuk mulai.",
+    title: "Toko COD dengan Sinyal Iklan 1:1 ke Meta - adsbook.id",
+    description: "Toko online COD untuk seller iklan: Pixel dan Conversions API Meta dengan satu event_id, konversi offline Google Ads, dan 0% potongan per transaksi.",
   },
   fitur: {
     path: "/fitur",
     nav: "Fitur",
-    title: "Fitur Toko, Form COD dan Sinyal Iklan - adsbook.id",
-    description: "Form order COD dan QRIS/VA, pesanan rapi di admin, kirim lewat kurir, dan konversi iklan dari server. Semua fitur yang dipakai seller iklan.",
+    title: "Fitur: Sinyal Iklan 1:1, Form COD dan Pesanan - adsbook.id",
+    description: "Pixel dan Conversions API Meta dengan event_id yang sama, konversi offline Google Ads, form COD dan QRIS/VA, serta pesanan yang rapi di admin.",
   },
   caraKerja: {
     path: "/cara-kerja",
@@ -38,8 +40,8 @@ export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq"
   harga: {
     path: "/harga",
     nav: "Harga",
-    title: "Harga: Paket Pilot Gratis untuk Seller - adsbook.id",
-    description: "Mulai dengan paket Pilot tanpa biaya dan tanpa persetujuan. Lihat batas pemakaiannya; paket berbayar menyusul dan diumumkan lebih dulu.",
+    title: "Harga: Mulai Rp149.000 per Bulan per Toko - adsbook.id",
+    description: "Coba buat toko gratis di Mode Preview, lalu berlangganan saat siap beriklan: Rp149.000 per bulan atau Rp1.490.000 per tahun, tanpa potongan transaksi.",
   },
   faq: {
     path: "/faq",
@@ -95,7 +97,13 @@ export function siteJsonLd(env: Record<string, unknown> | null | undefined): str
         inLanguage: "id-ID",
         description: SITE_PAGES.home.description,
         publisher: { "@id": `${origin}/#organization` },
-        offers: { "@type": "Offer", name: "Pilot", price: "0", priceCurrency: "IDR" },
+        // ADR-041 Option A, per store (src/platform/billing.ts BILLING_CYCLES).
+        offers: [
+          { "@type": "Offer", name: "1 Bulan", price: "149000", priceCurrency: "IDR" },
+          { "@type": "Offer", name: "3 Bulan", price: "399000", priceCurrency: "IDR" },
+          { "@type": "Offer", name: "6 Bulan", price: "759000", priceCurrency: "IDR" },
+          { "@type": "Offer", name: "1 Tahun", price: "1490000", priceCurrency: "IDR" },
+        ],
       },
     ],
   };

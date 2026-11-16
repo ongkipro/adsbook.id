@@ -431,9 +431,14 @@ export async function pollOpenInvoices(
       .prepare(
         `SELECT ${INVOICE_COLUMNS} FROM subscription_invoices
          WHERE provider_trx_id IS NOT NULL AND paid_at IS NULL
-           AND (status = 'pending' OR (status IN ('expired', 'cancelled') AND expires_at >= ?))
+           AND (status = 'pending' OR (status IN ('expired', 'cancelled') AND (
+             expires_at >= ?
+             -- One last look after the late window closes, so a backlog never drops an unseen payment.
+             OR last_checked_at IS NULL
+             OR last_checked_at < strftime('%Y-%m-%dT%H:%M:%fZ', expires_at, '+${LATE_PAYMENT_WINDOW_MS / 3_600_000} hours'))))
            ${options.tenantId ? "AND tenant_id = ?" : ""}
-         ORDER BY (status = 'pending') DESC, created_at ASC LIMIT ?`,
+         -- Never-asked first, then the least recently asked: a bounded run rotates through the backlog.
+         ORDER BY (last_checked_at IS NULL) DESC, last_checked_at ASC, created_at ASC LIMIT ?`,
       )
       .bind(...(options.tenantId ? [lateFloor, options.tenantId, options.limit ?? 25] : [lateFloor, options.limit ?? 25]))
       .all<InvoiceRow>()

@@ -238,8 +238,28 @@ test("the cron leg checks open and late instructions, credits a paid one, and ex
   assert.equal(tenant().subscription_ends_at, "2026-12-22T03:00:00.000Z", "credited from the settlement time");
   const states = Object.fromEntries((db.sqlite.prepare("SELECT cycle_code, status FROM subscription_invoices").all() as { cycle_code: string; status: string }[]).map((row) => [row.cycle_code, row.status]));
   assert.deepEqual(states, { "1m": "paid", "3m": "expired" });
-  // Past the late-payment window nothing is asked again.
-  assert.deepEqual(await withGlobalFetch(advice, () => pollOpenInvoices(db, ENV, new Date(NOW.getTime() + 5 * DAY))), { checked: 0, credited: 0 });
+  // Past the late-payment window it is asked once more (it was last asked inside the window), then never again.
+  assert.deepEqual(await withGlobalFetch(advice, () => pollOpenInvoices(db, ENV, new Date(NOW.getTime() + 5 * DAY))), { checked: 1, credited: 0 });
+  assert.deepEqual(await withGlobalFetch(advice, () => pollOpenInvoices(db, ENV, new Date(NOW.getTime() + 6 * DAY))), { checked: 0, credited: 0 });
+});
+
+test("R4 review: a bounded run rotates by last check, so an old backlog never starves a late payment", async () => {
+  const { db, tenant } = await platform();
+  const net = fakeAutoLaris();
+  // Three open instructions on three stores; the run checks one at a time.
+  db.sqlite.exec("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES ('t-c', 'toko-c', 'c@example.test', 'active', '2026-11-16')");
+  const ids: string[] = [];
+  for (const id of ["t-a", "t-b", "t-c"]) {
+    const created = await createInvoice(db, ENV, { tenantId: id, cycle: "1m", channel: "QRIS", customer }, NOW, net.fetcher);
+    ids.push(created.ok ? created.value.id : "");
+  }
+  const lastPaid = (db.sqlite.prepare("SELECT provider_trx_id FROM subscription_invoices WHERE id = ?").get(ids[2]) as { provider_trx_id: string }).provider_trx_id;
+  const advice = (async (_input: RequestInfo | URL, init?: RequestInit) =>
+    Response.json(JSON.parse(String(init?.body)).transaction_id === lastPaid ? { rc: "00", ket: "PAID" } : { rc: "02", ket: "PENDING" })) as typeof fetch;
+  for (let minute = 1; minute <= 3; minute += 1) {
+    await withGlobalFetch(advice, () => pollOpenInvoices(db, ENV, new Date(NOW.getTime() + minute * 60_000), { limit: 1 }));
+  }
+  assert.ok(tenant("t-c").subscription_ends_at, "the newest instruction was reached within three bounded runs");
 });
 
 test("BILL-7 grant: needs a reason, stacks like a renewal, is audited, and refuses an inactive store", async () => {
