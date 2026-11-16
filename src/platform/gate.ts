@@ -6,7 +6,7 @@
  * or tenant query. Nothing here reads or writes KV.
  */
 import { ensureControlPlane, resolveTenantHost, type HostCache, type TenantContext } from "./control-plane.ts";
-import { isPlatformRoute, isValidationPath, normalizeHost, platformHosts } from "./host.ts";
+import { isPlatformRoute, isValidationPath, normalizeHost, platformHosts, platformSitePath } from "./host.ts";
 import { statePage } from "./state-pages.ts";
 
 export type GateResult =
@@ -66,8 +66,9 @@ export async function gateRequest(
 
   const extra = typeof env?.PLATFORM_HOSTS === "string" ? env.PLATFORM_HOSTS : null;
   if (platformHosts(extra).has(host)) {
-    // Platform host: only platform routes exist here; every tenant route is a 404.
-    if (!isPlatformRoute(url.pathname)) {
+    // Platform host: only platform routes and the marketing site's public paths
+    // (T-40) exist here; every tenant route is a 404.
+    if (!isPlatformRoute(url.pathname) && !platformSitePath(url.pathname)) {
       return { kind: "refused", hostKind: "platform", response: statePage("not-found", url.pathname) };
     }
     return { kind: "platform", host };

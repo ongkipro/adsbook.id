@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getRuntimeEnv } from "../../../lib/env.ts";
 import { getClientIp } from "../../../lib/rate-limit.ts";
 import { signup } from "../../../platform/signup.ts";
+import { cookieValue, registrationEventId, sendCompleteRegistration } from "../../../platform/site/site.ts";
 
 export const prerender = false;
 
@@ -35,6 +36,19 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   if (result.status !== 201) {
     return Response.json({ success: false, error: result.error, errors: "errors" in result ? result.errors ?? {} : {} }, { status: result.status });
   }
+  // T-40: the server half of CompleteRegistration, with the browser's event id;
+  // after the response, and never able to affect the signup that succeeded.
+  const signal = sendCompleteRegistration(env, () => ({
+    eventId: registrationEventId(body.event_id),
+    email: result.email,
+    sourceUrl: `${url.origin}/daftar`,
+    ip: getClientIp(request.headers),
+    userAgent: request.headers.get("user-agent"),
+    fbp: cookieValue(request, "_fbp"),
+    fbc: cookieValue(request, "_fbc"),
+  }));
+  if (locals.cfContext) locals.cfContext.waitUntil(signal);
+  else await signal;
   // The seller host answers on the same scheme and port as this platform host (local dev keeps its port).
   const base = `${url.protocol}//${result.host}${url.port ? `:${url.port}` : ""}`;
   return Response.json(

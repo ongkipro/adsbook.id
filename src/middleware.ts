@@ -30,6 +30,7 @@ import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind 
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 import { scopeFromLocals } from './platform/keys.ts';
 import { PROBE_NONCE, PROBE_PATH, probeAnswer, tenantHostSuffix } from './platform/hostnames.ts';
+import { platformSitePath } from './platform/host.ts';
 import { platformGuard } from './platform/admin/guard.ts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -172,13 +173,20 @@ export function createMiddleware(
       } else if (result.kind === 'platform') {
         hostKind = 'platform';
         context.locals.platform = { host: result.host };
+        // T-40: a public marketing path renders its page under /platform/
+        // in place (no second middleware pass); the guard still runs on that
+        // page's path, so a mapped admin path could never skip it.
+        const sitePath = platformSitePath(context.url.pathname);
+        const guardUrl = sitePath ? new URL(sitePath, context.url) : context.url;
         // T-27: platform admin needs a platform session (IAM-3); signup and sign-in are public.
-        const guard = await platformGuard(context.request, context.url, (getRuntimeEnv(context.locals) ?? {}) as Record<string, unknown>);
+        const guard = await platformGuard(context.request, guardUrl, (getRuntimeEnv(context.locals) ?? {}) as Record<string, unknown>);
         if (guard.kind === 'deny') {
           response = applySecurityHeaders(guard.response, true);
         } else {
           if (guard.user) context.locals.platformUser = guard.user;
-          response = applySecurityHeaders(await next(), true);
+          // Marketing pages are public and identical for every visitor, so
+          // they are not marked private the way the admin is.
+          response = applySecurityHeaders(sitePath ? await next(sitePath) : await next(), !sitePath);
         }
         // The signup page posts the IAM-8 handoff to the new seller host.
         response.headers.set('Content-Security-Policy', platformCsp(getRuntimeEnv(context.locals)));

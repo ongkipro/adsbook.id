@@ -41,12 +41,17 @@ test("the renderer escapes everything, renders the drafts' subset, and marks unf
     "## Judul <b>\n\nParagraf **tebal** dan `kode`\nlanjut {nama} {belum}.\n\n1. satu\n   lanjutan\n2. dua\n\n- a\n- <img src=x onerror=alert(1)>\n\n> catatan",
     { nama: "Toko <A>" },
   );
-  assert.match(html, /<h3>Judul &lt;b&gt;<\/h3>/);
+  assert.match(html, /<h2>Judul &lt;b&gt;<\/h2>/, "## is a section heading under the page's h1");
   assert.match(html, /<p>Paragraf <strong>tebal<\/strong> dan <code>kode<\/code> lanjut Toko &lt;A&gt; <mark>\{belum\}<\/mark>\.<\/p>/);
   assert.match(html, /<ol><li>satu lanjutan<\/li><li>dua<\/li><\/ol>/);
   assert.match(html, /<li>&lt;img src=x onerror=alert\(1\)&gt;<\/li>/);
   assert.match(html, /<blockquote>catatan<\/blockquote>/);
   assert.doesNotMatch(html, /<img|<b>/);
+  const table = renderLegalMarkdown("| Data | Peran |\n| --- | --- |\n| Akun <x> | **pengendali** |\n| Pembeli | pemroses |");
+  assert.match(table, /<table><thead><tr><th scope="col">Data<\/th><th scope="col">Peran<\/th><\/tr><\/thead><tbody>/);
+  assert.match(table, /<td data-label="Data">Akun &lt;x&gt;<\/td><td data-label="Peran"><strong>pengendali<\/strong><\/td>/);
+  assert.equal((table.match(/<tr>/g) ?? []).length, 3, "the separator row is not a row");
+  assert.doesNotMatch(table, /\| ---/);
 });
 
 const NONE: StoreProviders = { meta: false, google: false, mengantar: false, autolaris: false, kelola: false };

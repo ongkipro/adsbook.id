@@ -12,6 +12,10 @@
  *   --reset      wipe the local store first (only .wrangler/dev-local-state)
  *   --no-build   reuse the last `astro build`
  *   --port=8787  Worker port (providers use port + 1)
+ *   --platform-pixel  give the platform pages a test Pixel id and send the
+ *                server CompleteRegistration to the local Graph stand-in
+ *                (GET <providers>/__dev/meta/events). Off by default: with an
+ *                id set, the browser loads Meta's script for real.
  *   --ip=<addr>  listen on this address instead of localhost — e.g. the
  *                machine's Tailscale IP, to open the store from another
  *                device on the tailnet. Providers stay on 127.0.0.1.
@@ -106,6 +110,13 @@ const worker = spawn(
     "--var", "CF_SAAS_ZONE_ID:dev-zone",
     "--var", "CF_SAAS_TOKEN:dev-token",
     "--var", `CF_API_BASE:${providerBase}/client/v4`,
+    ...(args.has("--platform-pixel")
+      ? [
+          "--var", "PLATFORM_META_PIXEL_ID:100000000000001",
+          "--var", "PLATFORM_META_CAPI_TOKEN:dev-platform-capi-token",
+          "--var", `PLATFORM_META_GRAPH_BASE:${providerBase}/graph`,
+        ]
+      : []),
     "--test-scheduled",
     "--show-interactive-dev-session=false",
   ],

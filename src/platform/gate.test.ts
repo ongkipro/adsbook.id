@@ -266,11 +266,14 @@ test("platform routes are refused on tenant hosts, and tenant routes on platform
   addHost(db, "toko-a.belanja.cc", "t-a");
   assert.deepEqual([...platformHosts("platform.localhost, BAD HOST")].sort(), ["adsbook.id", "app.adsbook.id", "platform.localhost"]);
   const before = db.queries.length;
-  for (const path of ["/", "/admin/orders", "/api/v1/products", "/produk/x"]) {
+  for (const path of ["/admin/orders", "/api/v1/products", "/produk/x"]) {
     const { result } = await gate(db, `https://adsbook.id${path}`);
     assert.equal(statusOf(result), 404, path);
     assert.equal(result.kind === "refused" && result.hostKind, "platform");
   }
+  // T-40: the marketing site's public paths are platform routes on a platform host.
+  assert.equal((await gate(db, "https://adsbook.id/")).result.kind, "platform");
+  assert.equal((await gate(db, "https://adsbook.id/harga")).result.kind, "platform");
   assert.equal(db.queries.length, before, "a platform host never queries tenant hosts");
   assert.equal((await gate(db, "https://app.adsbook.id/platform/admin")).result.kind, "platform");
   assert.equal((await gate(db, "https://platform.localhost:8787/platform/x", { extraPlatform: "platform.localhost" })).result.kind, "platform");

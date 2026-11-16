@@ -57,6 +57,31 @@ export function platformHosts(extra?: string | null): ReadonlySet<string> {
   return hosts;
 }
 
+/**
+ * The marketing site's public paths on a platform host (T-40, PR-25), each
+ * rewritten to its page under `src/pages/platform/`. Only platform hosts read
+ * this map: on a seller host `/`, `/harga` or `/faq` stay the seller's own.
+ */
+export const PLATFORM_SITE_ROUTES: Readonly<Record<string, string>> = {
+  "/": "/platform/site",
+  "/fitur": "/platform/site/fitur",
+  "/cara-kerja": "/platform/site/cara-kerja",
+  "/harga": "/platform/site/harga",
+  "/faq": "/platform/site/faq",
+  "/kontak": "/platform/site/kontak",
+  "/daftar": "/platform/signup",
+  "/syarat": "/platform/syarat",
+  "/privasi": "/platform/privasi",
+  "/robots.txt": "/platform/site/robots.txt",
+  "/sitemap.xml": "/platform/site/sitemap.xml",
+};
+
+/** The page a public marketing path renders, or null (exact match; one trailing slash allowed). */
+export function platformSitePath(pathname: string): string | null {
+  const key = pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
+  return Object.hasOwn(PLATFORM_SITE_ROUTES, key) ? PLATFORM_SITE_ROUTES[key] : null;
+}
+
 /** Internal platform routes: served on platform hosts only, never on a tenant host. */
 /** Platform pages (`/platform/…`) and platform APIs (`/api/platform/…`, API-4). */
 export function isPlatformRoute(pathname: string): boolean {

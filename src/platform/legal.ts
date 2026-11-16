@@ -28,7 +28,8 @@ const escapeHtml = (value: string) =>
 
 /**
  * The Markdown subset the drafts use — headings, paragraphs, `-` and `1.`
- * lists (with indented continuation lines), `>` notes, **bold** and `code` —
+ * lists (with indented continuation lines), `>` notes, `|` tables, **bold**
+ * and `code` —
  * to HTML. Everything is escaped first; `{placeholder}`s are filled from
  * `values` after escaping, and one left unfilled is marked, never hidden.
  */
@@ -41,9 +42,20 @@ export function renderLegalMarkdown(text: string, values: Record<string, string>
         Object.hasOwn(values, key) ? escapeHtml(values[key]) : `<mark>${whole}</mark>`,
       );
   const html: string[] = [];
+  let table: string[][] | null = null;
   let list: { tag: "ul" | "ol"; items: string[] } | null = null;
   let block: { tag: "p" | "blockquote"; lines: string[] } | null = null;
+  const cells = (row: string) => row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
   const flush = () => {
+    if (table) {
+      const [head = [], ...body] = table.filter((row) => !row.every((cell) => /^:?-{3,}:?$/.test(cell)));
+      const th = head.map((cell) => `<th scope="col">${inline(cell)}</th>`).join("");
+      const rows = body
+        .map((row) => `<tr>${row.map((cell, index) => `<td data-label="${escapeHtml(head[index] ?? "")}">${inline(cell)}</td>`).join("")}</tr>`)
+        .join("");
+      html.push(`<div class="table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`);
+      table = null;
+    }
     if (block) html.push(`<${block.tag}>${inline(block.lines.join(" "))}</${block.tag}>`);
     if (list) html.push(`<${list.tag}>${list.items.map((item) => `<li>${inline(item)}</li>`).join("")}</${list.tag}>`);
     block = null;
@@ -55,9 +67,16 @@ export function renderLegalMarkdown(text: string, values: Record<string, string>
     const numbered = line.match(/^\d+\. (.+)$/);
     const quote = line.match(/^> ?(.*)$/);
     if (!line.trim()) flush();
-    else if (heading) {
+    else if (/^\s*\|.*\|\s*$/.test(line)) {
+      if (!table) flush();
+      table ??= [];
+      table.push(cells(line));
+    } else if (heading) {
       flush();
-      const level = heading[1].length + 1; // the page owns <h1>
+      // The page owns <h1> (the text's own `#` title is dropped by the caller),
+      // so `#`/`##` are section headings (h2) and `###` sub-sections (h3): no
+      // level is skipped under the page's h1 (WCAG 1.3.1).
+      const level = Math.max(2, heading[1].length);
       html.push(`<h${level}>${inline(heading[2])}</h${level}>`);
     } else if (bullet || numbered) {
       const tag = bullet ? "ul" : "ol";

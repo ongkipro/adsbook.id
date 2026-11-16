@@ -145,6 +145,8 @@ export function createDevProviderServer(): Server {
   let sequence = 0;
   const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(sequence += 1)}`;
   const cloudflare = createFakeCloudflare({ zoneId: DEV_CF_ZONE_ID, token: DEV_CF_TOKEN });
+  // T-40: the platform's Conversions API calls (PLATFORM_META_GRAPH_BASE), kept for inspection.
+  const graphEvents: Array<{ path: string; body: unknown; at: string }> = [];
 
   return createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
@@ -154,6 +156,20 @@ export function createDevProviderServer(): Server {
     if (url.pathname === "/turnstile/v0/siteverify" && method === "POST") {
       const form = new URLSearchParams(await readRaw(request));
       return send(response, 200, { success: form.get("response") === DEV_TURNSTILE_TOKEN && Boolean(form.get("secret")) });
+    }
+
+    // ---- Meta Graph stand-in for the platform's CAPI (T-40) -----------------
+    if (url.pathname.startsWith("/graph/") && method === "POST") {
+      const raw = await readRaw(request);
+      let body: unknown = raw;
+      try { body = JSON.parse(raw); } catch { /* kept as text */ }
+      // The access token (sent in the body) stays out of what is recorded.
+      if (body && typeof body === "object") delete (body as Record<string, unknown>).access_token;
+      graphEvents.push({ path: url.pathname, body, at: new Date().toISOString() });
+      return send(response, 200, { events_received: 1, messages: [], fbtrace_id: `dev-${graphEvents.length}` });
+    }
+    if (url.pathname === "/__dev/meta/events" && method === "GET") {
+      return send(response, 200, { events: graphEvents });
     }
 
     // ---- Cloudflare for SaaS custom hostnames (CF_API_BASE) ----------------
@@ -323,6 +339,7 @@ export function createDevProviderServer(): Server {
         settle: "POST /__dev/autolaris/pay?transaction_id=…",
         turnstile: "/turnstile/v0/siteverify (token local-stand-in)",
         cloudflare: "/client/v4/zones/dev-zone/custom_hostnames; POST /__dev/cloudflare/activate?hostname=…",
+        meta: "POST /graph/<version>/<pixel>/events (platform CAPI); GET /__dev/meta/events",
       });
     }
     return send(response, 404, { error: "not found" });

@@ -63,6 +63,7 @@ async function run(href: string, routePattern = "/produk/[slug]", nextImpl?: () 
   const previousLog = console.log;
   console.log = (line: unknown) => void logs.push(String(line));
   let nextCalls = 0;
+  const nextArgs: unknown[] = [];
   const locals: Record<string, unknown> = { runtimeEnv: { PLATFORM_DB: platformDb, OMS_DB: omsDb, ...env } };
   try {
     const response = (await Promise.resolve(onRequest(
@@ -73,12 +74,13 @@ async function run(href: string, routePattern = "/produk/[slug]", nextImpl?: () 
         routePattern,
         redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
       } as never,
-      (async () => {
+      (async (payload?: unknown) => {
         nextCalls += 1;
+        nextArgs.push(payload);
         return nextImpl ? nextImpl() : new Response("route", { status: 200 });
       }) as never,
     )).catch((error: unknown) => error)) as Response | Error;
-    return { response: response as Response, error: response instanceof Error ? response : null, touched, cacheReads, nextCalls, locals, logs: logs.map((line) => JSON.parse(line) as Record<string, unknown>) };
+    return { response: response as Response, error: response instanceof Error ? response : null, touched, cacheReads, nextCalls, nextArgs, locals, logs: logs.map((line) => JSON.parse(line) as Record<string, unknown>) };
   } finally {
     console.log = previousLog;
     (globalThis as { caches?: unknown }).caches = previousCaches;
@@ -147,4 +149,30 @@ test("exactly one log line on every path: a gate refusal with its reason, and a 
   assert.equal(thrown.error?.message, "route failed");
   assert.equal(thrown.logs.length, 1);
   assert.deepEqual({ status: thrown.logs[0].status, reason: thrown.logs[0].reason, host_kind: thrown.logs[0].host_kind }, { status: 500, reason: "unhandled_exception", host_kind: "platform" });
+});
+
+test("T-40: the marketing site's public paths render their /platform pages on a platform host only", async () => {
+  for (const [href, target] of [
+    ["https://adsbook.id/", "/platform/site"],
+    ["https://adsbook.id/fitur", "/platform/site/fitur"],
+    ["https://adsbook.id/harga/", "/platform/site/harga"],
+    ["https://adsbook.id/daftar", "/platform/signup"],
+    ["https://adsbook.id/syarat", "/platform/syarat"],
+    ["https://adsbook.id/sitemap.xml", "/platform/site/sitemap.xml"],
+  ] as const) {
+    const result = await run(href, "/");
+    assert.equal(result.response.status, 200, href);
+    assert.deepEqual(result.nextArgs, [target], `${href} renders ${target}`);
+    assert.notEqual(result.response.headers.get("cache-control"), "private, no-store", `${href}: a public page is not marked private`);
+    assert.deepEqual(result.touched, [], `${href}: no tenant database`);
+  }
+  // Anything else on the platform host is still a 404, and the admin still needs a session.
+  assert.equal((await run("https://adsbook.id/produk/x", "/")).response.status, 404);
+  assert.equal((await run("https://adsbook.id/platform/health", "/")).response.status, 302);
+  // On a seller host the same paths stay the seller's own: never rewritten to a platform page.
+  for (const path of ["/", "/fitur", "/harga", "/faq", "/kontak", "/daftar", "/sitemap.xml", "/robots.txt"]) {
+    const result = await run(`https://toko-a.belanja.cc${path}`, "/");
+    assert.equal(result.logs[0].host_kind, "tenant", path);
+    assert.ok(!result.nextArgs.some((arg) => typeof arg === "string" && arg.startsWith("/platform")), `${path} on a seller host reached a platform page`);
+  }
 });

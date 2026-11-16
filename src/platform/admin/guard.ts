@@ -31,7 +31,8 @@ export async function platformGuard(request: Request, url: URL, env: Record<stri
       };
     }
   }
-  if (PUBLIC.has(path)) return { kind: "pass", user: null };
+  // The marketing site (T-40) is public: its pages render under /platform/site.
+  if (PUBLIC.has(path) || path === "/platform/site" || path.startsWith("/platform/site/")) return { kind: "pass", user: null };
   const user = await resolvePlatformUser(env, request);
   if (user) return { kind: "pass", user };
   return {

@@ -1,0 +1,164 @@
+---
+/**
+ * The adsbook.id marketing site's frame (T-40, PR-25; direction B in
+ * adsbook.id-docs/docs/design/platform-site/DESIGN.md): head and SEO, the
+ * platform Pixel, header with one primary action, footer. Used only by
+ * pages under src/pages/platform/, which seller hosts never serve.
+ */
+import { getRuntimeEnv } from '../../lib/env';
+import PlatformPixel from './PlatformPixel.astro';
+import { SIGNUP_LABEL, SIGNUP_PATH, SITE_NAME, SITE_PAGES, canonicalUrl, siteJsonLd, type SitePage } from './site.ts';
+
+interface Props {
+  page: SitePage;
+  /** Hide the header's signup button (the page carries its own primary action in view). */
+  quietHeader?: boolean;
+}
+
+const { page, quietHeader = false } = Astro.props;
+const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
+const canonical = canonicalUrl(env, page.path);
+const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
+const year = new Date().getFullYear();
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{page.title}</title>
+    <meta name="description" content={page.description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:title" content={page.title} />
+    <meta property="og:description" content={page.description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="theme-color" content="#FAF7F2" />
+    <link rel="icon" href="/favicon.png" />
+    <link rel="preload" href="/platform/fonts/plus-jakarta-sans-800.woff2" as="font" type="font/woff2" crossorigin />
+    <script type="application/ld+json" set:html={siteJsonLd(env)} />
+    <PlatformPixel />
+  </head>
+  <body>
+    <a class="skip" href="#isi">Langsung ke isi</a>
+    <header class="site-header">
+      <div class="wrap header-row">
+        <a class="wordmark" href="/" aria-label="adsbook.id, beranda">adsbook<span>.id</span></a>
+        <nav aria-label="Utama" class="nav-wide">
+          {nav.map((entry) => <a href={entry.path} aria-current={entry.path === page.path ? 'page' : undefined}>{entry.nav}</a>)}
+        </nav>
+        {!quietHeader && <a class="btn btn-small" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>}
+        <details class="nav-narrow">
+          <summary>Menu</summary>
+          <nav aria-label="Utama">
+            {nav.map((entry) => <a href={entry.path} aria-current={entry.path === page.path ? 'page' : undefined}>{entry.nav}</a>)}
+          </nav>
+        </details>
+      </div>
+    </header>
+    <main id="isi">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="wrap footer-row">
+        <p>&copy; {year} {SITE_NAME}</p>
+        <nav aria-label="Informasi">
+          <a href="/syarat">Syarat Layanan</a>
+          <a href="/privasi">Kebijakan Privasi</a>
+          <a href="/kontak">Kontak</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  @font-face {
+    font-family: "Plus Jakarta Sans";
+    src: url("/platform/fonts/plus-jakarta-sans-800.woff2") format("woff2");
+    font-weight: 700 800;
+    font-display: swap;
+  }
+  :root {
+    --canvas: #faf7f2;
+    --surface: #ffffff;
+    --ink: #1c1917;
+    --ink-muted: #57534e;
+    --line: #e7e5e4;
+    --accent: #c2410c;
+    --accent-hover: #9a3412;
+    --accent-tint: #ffedd5;
+    --display: "Plus Jakarta Sans", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --body: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --section: 6rem;
+    color-scheme: light;
+  }
+  @media (max-width: 760px) { :root { --section: 4rem; } }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--canvas); color: var(--ink); font: 17px/1.6 var(--body); }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:hover { color: var(--accent-hover); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  h1, h2, h3 { font-family: var(--display); color: var(--ink); line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 1.4rem + 3vw, 3.4rem); font-weight: 800; }
+  h2 { font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.25rem); font-weight: 800; }
+  h3 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+  p { margin: 0; }
+  .wrap { width: min(1120px, 100% - 2rem); margin-inline: auto; }
+  .prose { max-width: 64ch; }
+  .muted { color: var(--ink-muted); }
+  .skip { position: absolute; left: -9999px; }
+  .skip:focus { left: 1rem; top: 1rem; background: var(--surface); padding: 0.5rem 0.75rem; z-index: 10; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0.75rem 1.4rem; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 700; text-decoration: none; transition: background-color 150ms ease-out; }
+  .btn:hover { background: var(--accent-hover); color: #fff; }
+  /* The header's action is outlined: one filled primary per screen (DESIGN.md C5). */
+  .btn-small { min-height: 44px; padding: 0.5rem 1rem; font-size: 0.95rem; background: transparent; color: var(--accent); border: 2px solid var(--accent); white-space: nowrap; }
+  @media (max-width: 400px) { .btn-small { padding: 0.45rem 0.7rem; font-size: 0.9rem; } .wordmark { font-size: 1.15rem; } }
+  .btn-small:hover { background: var(--accent-tint); color: var(--accent-hover); }
+  @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+
+  .site-header { background: var(--canvas); }
+  .header-row { display: flex; align-items: center; gap: 1.5rem; min-height: 72px; }
+  .wordmark { font-family: var(--display); font-weight: 800; font-size: 1.3rem; color: var(--ink); text-decoration: none; letter-spacing: -0.02em; margin-right: auto; }
+  .wordmark span { color: var(--accent); }
+  .nav-wide { display: flex; gap: 1.5rem; }
+  .nav-wide a, .nav-narrow a { color: var(--ink); text-decoration: none; font-weight: 600; font-size: 0.97rem; }
+  .nav-wide a[aria-current="page"], .nav-narrow a[aria-current="page"] { color: var(--accent); text-decoration: underline; text-decoration-thickness: 2px; }
+  .nav-narrow { display: none; position: relative; }
+  .nav-narrow summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; padding: 0 0.25rem; font-weight: 600; }
+  .nav-narrow summary::-webkit-details-marker { display: none; }
+  .nav-narrow nav { position: absolute; right: 0; top: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem; display: grid; min-width: 12rem; box-shadow: 0 8px 24px rgb(28 25 23 / 0.08); z-index: 5; }
+  .nav-narrow nav a { padding: 0.65rem 0.75rem; }
+  @media (max-width: 900px) {
+    .nav-wide { display: none; }
+    .nav-narrow { display: block; }
+    .header-row { gap: 0.75rem; }
+  }
+
+  /* The footer is chrome, not a section: dark, so it never merges with the last band (C4). */
+  .site-footer { padding: 2.5rem 0; background: var(--ink); color: #d6d3d1; font-size: 0.95rem; }
+  .footer-row { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; align-items: center; }
+  .footer-row nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+  .footer-row a { color: #f5f5f4; }
+  .footer-row a:hover { color: #fed7aa; }
+  .site-footer :focus-visible { outline-color: #fed7aa; }
+
+  .section { padding-block: var(--section); }
+  /* Inner pages: one head, on the same left edge as the content below it. */
+  .page-head { padding: 2.5rem 0 3.5rem; }
+  .page-head .head { display: grid; gap: 1rem; max-width: 64ch; }
+  .section-title { margin-bottom: 1.5rem; }
+  .section-white { background: var(--surface); }
+  .lead { font-size: 1.15rem; color: var(--ink-muted); }
+
+  .frame { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 12px 32px rgb(28 25 23 / 0.08); }
+  .frame-phone { max-width: 340px; border-radius: 28px; border: 8px solid var(--ink); }
+  .caption { margin-top: 0.6rem; font-size: 0.85rem; color: var(--ink-muted); }
+</style>

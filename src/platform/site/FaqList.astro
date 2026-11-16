@@ -1,0 +1,26 @@
+---
+import type { Faq } from './content.ts';
+
+interface Props { items: Faq[] }
+const { items } = Astro.props;
+---
+
+<div class="faq">
+  {items.map((item) => (
+    <details>
+      <summary>{item.q}</summary>
+      <p class="muted">{item.a}</p>
+    </details>
+  ))}
+</div>
+
+<style>
+  /* One look on canvas and on white: outlined rows, the marker inside the row. */
+  .faq { display: grid; gap: 0.75rem; max-width: 760px; }
+  details { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  summary { cursor: pointer; font-weight: 700; padding: 1rem 3rem 1rem 1.25rem; min-height: 44px; list-style: none; position: relative; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; position: absolute; right: 1.25rem; top: 50%; transform: translateY(-50%); font-size: 1.4rem; font-weight: 600; color: var(--accent); line-height: 1; }
+  details[open] summary::after { content: "−"; }
+  details p { padding: 0 1.25rem 1.1rem; }
+</style>
