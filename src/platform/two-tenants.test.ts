@@ -97,6 +97,7 @@ const { getAdminCredential, verifyAdminLoginPassword, validateAdminUsername } = 
 const { buildSetupChecklist, readSetupFacts } = await import("../lib/setup-checklist.ts");
 const { readReadiness, isStoreReady } = await import("./readiness.ts");
 const { legalText, readStoreProviders, storePrivacyMarkdown } = await import("./legal.ts");
+const { recordUsage } = await import("./plans.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -1793,4 +1794,68 @@ test("T-39/PRIV-2: the store notice's providers come from the store's saved cred
   assert.equal((await readStoreProviders(store.database)).autolaris, true, "a saved key is named even with the checkout rail off");
   store.sql.exec("UPDATE stores SET autolaris_api_key = NULL");
   assert.equal((await readStoreProviders(store.database)).autolaris, false);
+});
+
+// ---- T-41: the display-only demo store (PR-26) ----
+
+test("T-41/PR-26: the demo store browses without readiness, refuses every provider route and write, and sends nothing", async () => {
+  const store = await readinessHarness("demo");
+  const platformDb = store.env.PLATFORM_DB as ReturnType<typeof createSqliteD1>;
+  // Every platform environment provider value set: none of it may be used.
+  Object.assign(store.env, {
+    MENGANTAR_API_KEY: "env-mengantar", AUTOLARIS_API_KEY: "env-autolaris", META_PIXEL_ID: "100000000000002", META_CAPI_TOKEN: "env-capi",
+    GOOGLE_ADS_DEVELOPER_TOKEN: "env-google", KELOLA_API_KEY: "env-kelola", PLATFORM_META_PIXEL_ID: "100000000000001", PLATFORM_META_CAPI_TOKEN: "env-platform",
+  });
+  platformDb.sqlite.exec("UPDATE tenants SET is_demo = 1, cache_version = cache_version + 1 WHERE slug = 'demo'");
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    calls.push(String(input instanceof Request ? input.url : input));
+    throw new Error("an outbound request left the demo store");
+  }) as typeof fetch;
+  try {
+    // Browsing: the unready demo store still renders its pages.
+    for (const path of ["/", "/produk/x", "/kebijakan-privasi"]) {
+      assert.equal((await store.open(path)).reached, true, `${path} renders on the demo store`);
+    }
+    // District search, quotes, payment methods, geo: refused before the route.
+    for (const path of ["/api/locations?search=bandung", "/api/shipping-rates", "/api/shipping-options", "/api/payment-methods", "/api/v1/geo/provinces"]) {
+      const response = await store.open(path);
+      assert.equal(response.status, 403, path);
+      assert.equal(response.reached, false, `${path} reached its route`);
+      assert.match(response.body, /DEMO_STORE/, path);
+    }
+    // Both order submits, abandoned leads, browser events, headless checkout, admin writes.
+    for (const path of ["/api/submit-order", "/api/submit-middle-order", "/api/record-abandoned-order", "/api/meta-event", "/api/v1/checkout", "/api/admin/settings", "/api/admin/domains", "/api/admin/products"]) {
+      const response = await store.open(path, "POST");
+      assert.equal(response.status, 403, path);
+      assert.equal(response.reached, false, `${path} reached its route`);
+    }
+    // Signing in still works (the owner can look).
+    assert.equal((await store.open("/hello", "POST")).reached, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.deepEqual(calls, [], "no outbound request");
+  // No provider credential is stored for it.
+  const row = store.sql.prepare("SELECT mengantar_api_key, autolaris_api_key, meta_capi_token FROM stores").get() as Record<string, unknown>;
+  assert.deepEqual({ ...row }, { mengantar_api_key: null, autolaris_api_key: null, meta_capi_token: null });
+});
+
+test("T-41/PR-26: one demo tenant at most, its usage is not counted, and an ordinary unready store is still closed", async () => {
+  const demo = await readinessHarness("demo");
+  const platformDb = demo.env.PLATFORM_DB as ReturnType<typeof createSqliteD1>;
+  platformDb.sqlite.exec("UPDATE tenants SET is_demo = 1 WHERE slug = 'demo'");
+  const other = platformDb.sqlite.prepare("SELECT id FROM tenants WHERE slug = 'demo'").get() as { id: string };
+  platformDb.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES ('t-second', 'kedua', 'k@example.test', 'active', '2026-11-16')").run();
+  assert.throws(() => platformDb.sqlite.exec("UPDATE tenants SET is_demo = 1 WHERE id = 't-second'"), /UNIQUE/, "a second demo tenant");
+  await recordUsage(platformDb as unknown as D1Database, other.id, { mediaBytes: 100 });
+  await recordUsage(platformDb as unknown as D1Database, "t-second", { mediaBytes: 100 });
+  const rows = platformDb.sqlite.prepare("SELECT tenant_id FROM tenant_usage_daily").all().map((r) => (r as { tenant_id: string }).tenant_id);
+  assert.deepEqual(rows, ["t-second"], "the demo store's usage is excluded");
+
+  const ordinary = await readinessHarness("biasa-belum-siap");
+  const response = await ordinary.open("/");
+  assert.equal(response.status, 503);
+  assert.match(response.body, /Toko belum siap/);
 });

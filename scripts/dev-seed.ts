@@ -14,7 +14,12 @@
  * merchant; see ARCHITECTURE.md). The products are invented for this script.
  *
  *   --platform=http://app.localhost:8787   platform host (default)
- *   --slug=demo                            the tenant to sign up (default)
+ *   --slug=toko-uji                        the tenant to sign up (default)
+ *   --catalogue-only              signup, sign-in and products only: no provider
+ *                                 keys, no warehouse, no orders. The only mode
+ *                                 allowed for `demo`, the display-only demo store
+ *                                 (PR-26, `npm run seed:demo`), which must never
+ *                                 hold a provider credential.
  *   --orders=12                   how many checkout orders to place
  *   --images=<dir>                product photos: <dir>/<slug>.webp|.jpg|.png, and an
  *                                 optional <dir>/<slug>-sm.webp card copy
@@ -33,7 +38,12 @@ const argValue = (name: string) =>
   process.argv.slice(2).find((arg) => arg.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
 
 const platform = new URL((argValue("platform") || "http://app.localhost:8787").replace(/\/$/, ""));
-const slug = argValue("slug") || "demo";
+const slug = argValue("slug") || "toko-uji";
+const catalogueOnly = process.argv.slice(2).includes("--catalogue-only");
+if (slug === "demo" && !catalogueOnly) {
+  console.error("[dev:seed] refusing slug demo without --catalogue-only: the demo store never holds provider keys (PR-26). Use npm run seed:demo.");
+  process.exit(1);
+}
 // The tenant answers on <slug>.localhost, same scheme and port (dev:local's TENANT_HOST_SUFFIX).
 const base = `${platform.protocol}//${slug}.localhost${platform.port ? `:${platform.port}` : ""}`;
 const orderCount = Math.max(1, Math.min(50, Number(argValue("orders")) || 12));
@@ -522,6 +532,11 @@ async function exerciseLifecycle(placed: Placed[]) {
 async function main() {
   await signupTenant();
   await login();
+  if (catalogueOnly) {
+    await products();
+    console.log(`[dev:seed] catalogue ready at ${base} (no provider keys, no orders)`);
+    return;
+  }
   await providers();
   await warehouse();
   await products();

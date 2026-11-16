@@ -13,6 +13,7 @@
     "dev:local": "node --experimental-strip-types scripts/dev-local.ts",
     "dev:providers": "node --experimental-strip-types scripts/dev-providers.ts",
     "dev:seed": "node --experimental-strip-types scripts/dev-seed.ts",
+    "seed:demo": "node --experimental-strip-types scripts/seed-demo-tenant.ts",
     "platform:user": "node --experimental-strip-types scripts/platform-user.ts",
     "build": "astro build",
     "check": "astro check && tsc --noEmit",

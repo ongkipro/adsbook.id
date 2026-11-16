@@ -24,6 +24,7 @@ import { resolveHostRedirect } from './lib/host-redirect';
 import { gateRequest, type GateEnv } from './platform/gate';
 import type { TenantContext } from './platform/control-plane';
 import { isStoreReady, readReadiness, servedBeforeReady } from './platform/readiness.ts';
+import { demoRefusal } from './platform/demo.ts';
 import { statePage } from './platform/state-pages';
 import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
 import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
@@ -353,7 +354,12 @@ export function createMiddleware(
   // recovery and provider callbacks still answer. Computed from data on every
   // request, so the store opens the moment the last step is saved. A failed
   // read fails closed. The page is no-store, so nothing unready is edge-cached.
-  if (!servedBeforeReady(url.pathname, context.request.method)) {
+  // PR-26 (T-41): the demo store skips readiness for browsing only; instead,
+  // every provider entry point and every write is refused before any route runs.
+  if (tenantContext.isDemo) {
+    const refusal = demoRefusal(url.pathname, context.request.method);
+    if (refusal) return applySecurityHeaders(refusal, false);
+  } else if (!servedBeforeReady(url.pathname, context.request.method)) {
     const ready = await readReadiness(identityDb).then(isStoreReady, (error) => {
       console.error('store-readiness-unreadable', { tenant_id: tenantContext.tenantId, error: String(error) });
       return null;

@@ -5,7 +5,7 @@
 import { ensureSchemaUpgraded, type MigrationSource } from "../lib/schema-version.ts";
 
 /** Files in `src/platform/migrations/`. Bump with every new control-plane file. */
-export const PLATFORM_SCHEMA_VERSION = 3;
+export const PLATFORM_SCHEMA_VERSION = 4;
 
 async function bundledPlatformMigrations(): Promise<readonly MigrationSource[]> {
   const { PLATFORM_MIGRATIONS } = await import("./bundled-migrations.ts");
@@ -40,6 +40,8 @@ export type TenantContext = {
   /** `subdomain` is the tenant's immutable `<slug>.belanja.cc`; webhooks answer only there (SEC-5). */
   hostKind: "subdomain" | "custom";
   primaryHost: string | null;
+  /** PR-26: the one display-only demo store (`src/platform/demo.ts`). */
+  isDemo?: boolean;
 };
 
 export type HostResolution =
@@ -57,10 +59,11 @@ type HostRow = {
   status: TenantStatus;
   cache_version: number;
   primary_host: string | null;
+  is_demo?: number | null;
 };
 
 const HOST_SQL = `SELECT h.status AS host_status, h.kind AS host_kind, h.quarantine_until,
-    t.id AS tenant_id, t.slug, t.status, t.cache_version,
+    t.id AS tenant_id, t.slug, t.status, t.cache_version, t.is_demo,
     (SELECT p.host FROM tenant_hosts p
       WHERE p.tenant_id = t.id AND p.is_primary = 1 AND p.status = 'active') AS primary_host
   FROM tenant_hosts h JOIN tenants t ON t.id = h.tenant_id
@@ -82,6 +85,7 @@ export function decideHost(row: HostRow | null, host: string, now: Date): HostRe
           host,
           hostKind: row.host_kind === "subdomain" ? "subdomain" : "custom",
           primaryHost: row.primary_host,
+          isDemo: Number(row.is_demo) === 1,
         },
       };
     case "suspended":

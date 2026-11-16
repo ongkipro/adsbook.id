@@ -96,10 +96,12 @@ export async function recordUsage(
   delta: { orders?: number; requests?: number; mediaBytes?: number },
   now = new Date(),
 ): Promise<void> {
+  // PR-26: the demo store's usage is never counted.
   await platformDb
     .prepare(
       `INSERT INTO tenant_usage_daily (tenant_id, day, orders, requests, media_bytes, custom_hostnames)
-       VALUES (?1, ?2, ?3, ?4, ?5, (SELECT COUNT(*) FROM tenant_hosts WHERE tenant_id = ?1 AND kind = 'custom' AND status != 'revoked'))
+       SELECT ?1, ?2, ?3, ?4, ?5, (SELECT COUNT(*) FROM tenant_hosts WHERE tenant_id = ?1 AND kind = 'custom' AND status != 'revoked')
+       WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE id = ?1 AND is_demo = 1)
        ON CONFLICT (tenant_id, day) DO UPDATE SET
          orders = orders + excluded.orders,
          requests = requests + excluded.requests,

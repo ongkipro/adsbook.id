@@ -12,6 +12,10 @@
  *
  * At least one courier must be on (no courier, no quote). Optional steps
  * (custom domain, ad signals) never affect it.
+ *
+ * The one demo store (PR-26) is the only exception: the middleware lets it
+ * browse without this predicate and refuses its provider routes and writes
+ * instead (`src/platform/demo.ts`).
  */
 import { autoLarisOrderRailGap } from "../lib/provider-config.ts";
 
