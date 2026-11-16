@@ -7,7 +7,7 @@
 import { BROWSER_UNSUPPORTED_MESSAGE, unsafeRequestVerdict } from "../../lib/auth.ts";
 import { resolvePlatformUser, type PlatformUser } from "./session.ts";
 
-const PUBLIC = new Set(["/platform/signup", "/platform/login", "/api/platform/signup", "/api/platform/slug", "/api/platform/login"]);
+const PUBLIC = new Set(["/platform/signup", "/platform/login", "/platform/syarat", "/platform/privasi", "/api/platform/signup", "/api/platform/slug", "/api/platform/login"]);
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 export type GuardResult = { kind: "pass"; user: PlatformUser | null } | { kind: "deny"; response: Response };

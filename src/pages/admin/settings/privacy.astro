@@ -1,0 +1,79 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
+import { buttonVariants } from '../../../components/ui/button';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
+import { PRIVACY_EXTRA_MAX, readStoreProviders } from '../../../platform/legal.ts';
+
+export const prerender = false;
+
+// T-39 (PR-24, PRIV-2): what the notice names comes from the store's own
+// settings; the seller writes only the additional section.
+const database = tenantDatabase(Astro.locals);
+const [row, providers] = database
+  ? await Promise.all([
+      database.prepare('SELECT privacy_notice_extra FROM stores ORDER BY id LIMIT 1').first<{ privacy_notice_extra: string | null }>(),
+      readStoreProviders(database).catch(() => null),
+    ])
+  : [null, null];
+const names = providers
+  ? [
+      providers.mengantar && 'Mengantar',
+      providers.autolaris && 'AutoLaris',
+      providers.kelola && 'Kelola',
+      providers.meta && 'Meta',
+      providers.google && 'Google Ads',
+    ].filter(Boolean)
+  : null;
+---
+
+<AdminLayout title="Kebijakan privasi toko" activeMenu="settings">
+  <div class="space-y-4 md:space-y-5">
+    <AdminPageHeader
+      title="Kebijakan privasi toko"
+      description="Ditampilkan ke pembeli di /kebijakan-privasi. Daftar penyedia dibuat otomatis dari pengaturan toko."
+    />
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle as="h3" className="font-semibold">Penyedia yang disebut</CardTitle>
+        <CardDescription>
+          {names === null
+            ? 'Belum bisa dibaca. Muat ulang halaman.'
+            : names.length
+              ? `${names.join(', ')}, serta adsbook.id dan Cloudflare.`
+              : 'Hanya adsbook.id dan Cloudflare. Penyedia lain muncul setelah kuncinya disimpan.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <form id="privacyForm" class="space-y-3">
+          <label for="privacyExtra" class="block text-sm font-semibold text-slate-900">Informasi tambahan dari toko (opsional)</label>
+          <textarea id="privacyExtra" name="extra" rows="6" maxlength={PRIVACY_EXTRA_MAX} class="admin-input-flat min-h-36 w-full" aria-describedby="privacyHint privacyStatus">{row?.privacy_notice_extra ?? ''}</textarea>
+          <p id="privacyHint" class="text-xs text-slate-500">Teks biasa, maksimal {PRIVACY_EXTRA_MAX} karakter. Muncul di akhir kebijakan sebagai bagian terpisah.</p>
+          <div class="flex flex-wrap items-center gap-3">
+            <button type="submit" class={buttonVariants({})}>Simpan</button>
+            <a href="/kebijakan-privasi" target="_blank" rel="noopener" class={buttonVariants({ variant: 'outline' })}>Lihat halaman</a>
+            <p id="privacyStatus" class="text-sm empty:hidden" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  </div>
+</AdminLayout>
+
+<script>
+  const form = document.getElementById('privacyForm') as HTMLFormElement;
+  const status = document.getElementById('privacyStatus') as HTMLElement;
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    status.textContent = 'Menyimpan…';
+    const extra = (document.getElementById('privacyExtra') as HTMLTextAreaElement).value;
+    const response = await fetch('/api/admin/settings/privacy', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ extra }),
+    }).catch(() => null);
+    const payload = response ? await response.json().catch(() => null) : null;
+    status.textContent = response?.ok ? 'Tersimpan.' : (payload?.error ?? 'Gagal menyimpan. Coba lagi.');
+  });
+</script>

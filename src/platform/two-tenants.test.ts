@@ -96,6 +96,7 @@ const { hashAdminPassword } = await import("../lib/admin-credentials.ts");
 const { getAdminCredential, verifyAdminLoginPassword, validateAdminUsername } = await import("../lib/admin-credentials.ts");
 const { buildSetupChecklist, readSetupFacts } = await import("../lib/setup-checklist.ts");
 const { readReadiness, isStoreReady } = await import("./readiness.ts");
+const { legalText, readStoreProviders, storePrivacyMarkdown } = await import("./legal.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -1760,4 +1761,36 @@ test("T-38: an unreadable store fails closed (503, no route), never open", async
   } finally {
     console.error = original;
   }
+});
+
+// ---- T-39: accepted versions and the store's providers (PR-24, PRIV-2) ----
+
+test("T-39/PR-24: signup without the terms is refused; an accepted signup stores both text versions", async () => {
+  const { platformDb, env, input, run } = await signupHarness();
+  const refused = await signup(env, { ...input("tanpa-setuju"), terms: false }, "198.51.100.40", { verifyTurnstile: async () => true });
+  assert.equal(refused.status, 400);
+  assert.equal(platformDb.sqlite.prepare("SELECT COUNT(*) AS n FROM tenants WHERE slug = 'tanpa-setuju'").get()!.n, 0);
+  const created = await run("setuju-versi");
+  assert.equal(created.status, 201);
+  const event = platformDb.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE kind = 'signup' AND tenant_id = ?").get((created as { tenantId: string }).tenantId) as { detail_json: string };
+  assert.deepEqual(JSON.parse(event.detail_json), { terms_version: "0.1", privacy_version: "0.1" });
+  assert.ok(legalText("seller-terms", "0.1") && legalText("platform-privacy", "0.1"), "the accepted versions are served");
+});
+
+test("T-39/PRIV-2: the store notice's providers come from the store's saved credentials", async () => {
+  const store = await readinessHarness("notice-provider");
+  assert.deepEqual(await readStoreProviders(store.database), { meta: false, google: false, mengantar: false, autolaris: false, kelola: false });
+  store.sql.exec("UPDATE stores SET meta_pixel_id = '123456789012345'");
+  store.mengantar();
+  const providers = await readStoreProviders(store.database);
+  assert.deepEqual(providers, { meta: true, google: false, mengantar: true, autolaris: false, kelola: false });
+  const notice = storePrivacyMarkdown(legalText("store-privacy")!.text, providers, "");
+  assert.match(notice, /Meta/);
+  assert.doesNotMatch(notice, /Google/);
+  store.sql.exec("UPDATE stores SET is_autolaris_enabled = 1, autolaris_api_key = 'k'");
+  assert.equal((await readStoreProviders(store.database)).autolaris, true);
+  store.sql.exec("UPDATE stores SET is_autolaris_enabled = 0");
+  assert.equal((await readStoreProviders(store.database)).autolaris, true, "a saved key is named even with the checkout rail off");
+  store.sql.exec("UPDATE stores SET autolaris_api_key = NULL");
+  assert.equal((await readStoreProviders(store.database)).autolaris, false);
 });

@@ -31,9 +31,15 @@ import { tenantHostSuffix } from "./hostnames.ts";
 import { checkSlug } from "./slugs.ts";
 import { openTenantDb } from "./tenant-db.ts";
 import { issueWebhookToken } from "./webhook-secrets.ts";
+import { CURRENT_LEGAL_VERSION } from "./legal-texts.ts";
 
-/** The terms a signup accepts; recorded on the `signup` event. */
-export const TERMS_VERSION = "2026-11-14";
+/**
+ * The seller terms and platform privacy notice a signup accepts (T-39,
+ * PR-24): the versions served at /platform/syarat and /platform/privasi,
+ * recorded on the `signup` event. An accepted version's text never changes.
+ */
+export const TERMS_VERSION = CURRENT_LEGAL_VERSION["seller-terms"];
+export const PRIVACY_VERSION = CURRENT_LEGAL_VERSION["platform-privacy"];
 export const SIGNUP_LIMIT_PER_HOUR = 5;
 
 export type SignupInput = {
@@ -202,9 +208,9 @@ export async function signup(
       platformDb
         .prepare(
           `INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json)
-           SELECT ?, 'signup', ?, ?, json_object('terms_version', ?) WHERE ${active}`,
+           SELECT ?, 'signup', ?, ?, json_object('terms_version', ?, 'privacy_version', ?) WHERE ${active}`,
         )
-        .bind(tenantId, plan.email, now().toISOString(), TERMS_VERSION, tenantId),
+        .bind(tenantId, plan.email, now().toISOString(), TERMS_VERSION, PRIVACY_VERSION, tenantId),
     ]);
     if (Number(activated.meta?.changes ?? 0) !== 1) throw new Error("tenant left provisioning");
     await deps.checkpoint?.("activate", tenantId);
