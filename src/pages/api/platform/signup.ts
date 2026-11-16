@@ -3,6 +3,7 @@ import { getRuntimeEnv } from "../../../lib/env.ts";
 import { getClientIp } from "../../../lib/rate-limit.ts";
 import { signup } from "../../../platform/signup.ts";
 import { cookieValue, registrationEventId, sendCompleteRegistration } from "../../../platform/site/site.ts";
+import { notifyOperator } from "../../../platform/notify.ts";
 
 export const prerender = false;
 
@@ -47,8 +48,17 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     fbp: cookieValue(request, "_fbp"),
     fbc: cookieValue(request, "_fbc"),
   }));
-  if (locals.cfContext) locals.cfContext.waitUntil(signal);
-  else await signal;
+  // T-44 (PR-29): the operator hears of every new seller, once.
+  const notice = notifyOperator(env, env.PLATFORM_DB as D1Database, {
+    tenantId: result.tenantId,
+    slug: result.host.split(".")[0],
+    kind: "signup",
+    storeName: typeof body.store_name === "string" ? body.store_name : null,
+  });
+  if (locals.cfContext) {
+    locals.cfContext.waitUntil(signal);
+    locals.cfContext.waitUntil(notice);
+  } else await Promise.all([signal, notice]);
   // The seller host answers on the same scheme and port as this platform host (local dev keeps its port).
   const base = `${url.protocol}//${result.host}${url.port ? `:${url.port}` : ""}`;
   return Response.json(

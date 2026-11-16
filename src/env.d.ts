@@ -14,6 +14,17 @@ interface SharedEnvVars {
   // (T-45) here: each is a row in the tenant's own store.
   /** The platform's HTTPS endpoint for redacted operational alerts (a Worker secret). */
   OPS_ALERT_WEBHOOK_URL?: string;
+  /** Operator notices (T-44, PR-29): new seller, store ready, domain active/failing, first order. A Worker secret. */
+  PLATFORM_ALERT_WEBHOOK_URL?: string;
+  /** The platform admin origin for links in notices (default https://app.adsbook.id). */
+  PLATFORM_ADMIN_URL?: string;
+  /** The marketing site (T-40): canonical origin, the platform's own Pixel and CAPI token (secret), support contacts. */
+  PLATFORM_SITE_URL?: string;
+  PLATFORM_META_PIXEL_ID?: string;
+  PLATFORM_META_CAPI_TOKEN?: string;
+  PLATFORM_META_TEST_EVENT_CODE?: string;
+  PLATFORM_SUPPORT_EMAIL?: string;
+  PLATFORM_SUPPORT_WHATSAPP?: string;
   /** Cloudflare for SaaS (T-25): the SaaS zone id and a zone-scoped "SSL and Certificates Write" token. */
   CF_SAAS_ZONE_ID?: string;
   CF_SAAS_TOKEN?: string;

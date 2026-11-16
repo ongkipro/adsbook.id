@@ -25,6 +25,7 @@ import { gateRequest, type GateEnv } from './platform/gate';
 import type { TenantContext } from './platform/control-plane';
 import { isStoreReady, readReadiness, servedBeforeReady } from './platform/readiness.ts';
 import { demoRefusal } from './platform/demo.ts';
+import { notifyOperator, type Notice } from './platform/notify.ts';
 import { statePage } from './platform/state-pages';
 import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
 import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
@@ -86,6 +87,20 @@ function applySecurityHeaders(
  * a seller's GTM that loads another vendor's script is blocked (T-47
  * escalation: a per-tenant allowance would be a new requirement).
  */
+/** T-44: per-isolate memory of notices already claimed, so a ready store or a busy checkout costs no write per request. */
+const readyNoticed = new Set<string>();
+const firstOrderNoticed = new Set<string>();
+const FIRST_ORDER_ROUTES = new Set(['/api/submit-order', '/api/submit-middle-order', '/api/v1/checkout']);
+
+/** Fire one operator notice after the response (never awaited by the request). */
+function operatorNotice(context: APIContext, notice: Notice) {
+  const env = (getRuntimeEnv(context.locals) ?? {}) as Record<string, unknown>;
+  const platformDb = env.PLATFORM_DB as D1Database | undefined;
+  if (!platformDb) return;
+  const task = notifyOperator(env, platformDb, notice);
+  context.locals.cfContext?.waitUntil(task);
+}
+
 export const STOREFRONT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://connect.facebook.net",
@@ -407,6 +422,12 @@ export function createMiddleware(
       return null;
     });
     if (ready !== true) return statePage(ready === false ? 'not-ready' : 'unavailable', url.pathname);
+    // T-44: the operator hears once that this store is ready (claimed in
+    // PLATFORM_DB; this isolate stops asking after the first time).
+    if (!readyNoticed.has(tenantContext.tenantId)) {
+      readyNoticed.add(tenantContext.tenantId);
+      operatorNotice(context, { tenantId: tenantContext.tenantId, slug: tenantContext.slug, kind: 'ready', storeName: context.locals.tenant?.name });
+    }
   }
 
   // A native landing page that has taken over a product page must answer on
@@ -560,6 +581,17 @@ export function createMiddleware(
   }
 
   if (!isPrivate) persistClickIds(response);
+
+  // T-44: a store's first order (any checkout route that answered success).
+  if (
+    context.request.method === 'POST' &&
+    response.status >= 200 && response.status < 300 &&
+    FIRST_ORDER_ROUTES.has(url.pathname) &&
+    !firstOrderNoticed.has(tenantContext.tenantId)
+  ) {
+    firstOrderNoticed.add(tenantContext.tenantId);
+    operatorNotice(context, { tenantId: tenantContext.tenantId, slug: tenantContext.slug, kind: 'first_order', storeName: context.locals.tenant?.name });
+  }
 
   return response;
   }

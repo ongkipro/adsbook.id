@@ -99,6 +99,7 @@ const { readReadiness, isStoreReady } = await import("./readiness.ts");
 const { legalText, readStoreProviders, storePrivacyMarkdown } = await import("./legal.ts");
 const { recordUsage } = await import("./plans.ts");
 const submitOrderRoute = await import("../pages/api/submit-order.ts");
+const platformSignupRoute = await import("../pages/api/platform/signup.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -1963,4 +1964,101 @@ test("T-43/HOST-6: www redirects to the root once the root is the active primary
   platformDb.sqlite.exec("UPDATE tenant_hosts SET is_primary = 0 WHERE tenant_id = 'm-a'; UPDATE tenant_hosts SET is_primary = 1 WHERE host = 'm-a.belanja.cc'; UPDATE tenants SET cache_version = cache_version + 1 WHERE id = 'm-a'");
   await new Promise((resolve) => setTimeout(resolve, 5_100)); // the gate's host cache (5 s)
   assert.equal((await ask("https://www.merchant.com/produk/kopi")).status !== 301, true);
+});
+
+// ---- T-44: operator notices through the real middleware (PR-29) ----
+
+test("T-44/PR-29: one 'ready' and one 'first order' notice through the real middleware, neither with buyer data", async () => {
+  const store = await readinessHarness("kabar-satu");
+  store.product();
+  store.warehouse(1, 1, "ORIGIN-1", "pickup-1");
+  store.mengantar();
+  store.sql.exec(`INSERT INTO courier_rules (store_id, courier_code, is_enabled, is_cod_enabled) SELECT 1, 'jne', 1, 1 WHERE NOT EXISTS (SELECT 1 FROM courier_rules WHERE courier_code = 'jne');
+    UPDATE courier_rules SET is_cod_enabled = 1 WHERE courier_code = 'jne';`);
+  Object.assign(store.env, { PLATFORM_ALERT_WEBHOOK_URL: "https://hooks.example/notify" });
+  const variant = store.sql.prepare("SELECT id FROM product_variants WHERE sku = 'KOPI-1'").get() as { id: number };
+  const notices: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === "https://hooks.example/notify") return (notices.push(JSON.parse(String(init?.body)).text), new Response("ok"));
+    if (url.includes("/order/estimate")) return Response.json({ success: true, data: { JNE: { price: 18000 } } });
+    if (url.includes("/getReceiverScoreByNumberUser")) return Response.json({ success: true, data: {} });
+    return Response.json({ success: true, data: [] });
+  }) as typeof fetch;
+  const host = "kabar-satu.belanja.cc";
+  const tasks: Promise<unknown>[] = [];
+  const locals = () => ({ runtimeEnv: store.env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } }) as Record<string, unknown>;
+  const order = (token: string) => {
+    const href = `https://${host}/api/submit-order`;
+    const body = JSON.stringify({
+      submit_token: token, website: "", customer_name: "Rina Lestari", customer_phone: "081234567890",
+      address: "Jl. Melati No. 12, Sukajadi", district: "Sukajadi", city: "Bandung", province: "Jawa Barat",
+      payment_method: "cod", variant_id: String(variant.id), quantity: 1, location_id: "DEST-1",
+      courier_service_id: 1, shipment_provider_code: "JNE", shipping_cost: 18000,
+    });
+    const headers = { "content-type": "application/json", origin: `https://${host}`, "sec-fetch-site": "same-origin" };
+    const context = locals();
+    return createMiddleware()(
+      { request: new Request(href, { method: "POST", headers, body }), url: new URL(href), locals: context, routePattern: "/api/submit-order", redirect: () => new Response(null, { status: 302 }) } as never,
+      (async () => submitOrderRoute.POST({ request: new Request(href, { method: "POST", headers, body }), locals: context } as never)) as never,
+    ) as Promise<Response>;
+  };
+  const quiet = { log: console.log, info: console.info, warn: console.warn, error: console.error };
+  console.log = console.info = console.warn = console.error = () => undefined;
+  try {
+    // The store is ready: the first storefront request announces it.
+    const page = `https://${host}/`;
+    await createMiddleware()(
+      { request: new Request(page), url: new URL(page), locals: locals(), routePattern: "/", redirect: () => new Response(null, { status: 302 }) } as never,
+      (async () => new Response("ok")) as never,
+    );
+    assert.equal((await order("kabar-satu-token-0001")).status, 200);
+    assert.equal((await order("kabar-satu-token-0002")).status, 200);
+    await Promise.all(tasks);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.assign(console, quiet);
+  }
+  assert.equal(notices.filter((text) => text.includes("Toko siap jualan")).length, 1);
+  assert.equal(notices.filter((text) => text.includes("Pesanan pertama")).length, 1, "the second order sends nothing");
+  for (const text of notices) {
+    assert.match(text, /\(kabar-satu\)/);
+    assert.doesNotMatch(text, /Rina|0812|6281|Melati|Sukajadi/, "no buyer name, phone or address");
+  }
+});
+
+test("T-44/PR-29: a signup through the real route sends one notice naming the store and slug", async () => {
+  const { env } = await signupHarness();
+  Object.assign(env, { PLATFORM_ALERT_WEBHOOK_URL: "https://hooks.example/notify", TURNSTILE_SECRET_KEY: "secret", TURNSTILE_VERIFY_URL: "https://turnstile.test/siteverify" });
+  const notices: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === "https://hooks.example/notify") return (notices.push(JSON.parse(String(init?.body)).text), new Response("ok"));
+    if (url.startsWith("https://turnstile.test/")) return Response.json({ success: true });
+    return Response.json({});
+  }) as typeof fetch;
+  const tasks: Promise<unknown>[] = [];
+  const quiet = { log: console.log, info: console.info };
+  console.log = console.info = () => undefined;
+  try {
+    const href = "https://adsbook.id/api/platform/signup";
+    const response = (await platformSignupRoute.POST({
+      request: new Request(href, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "https://adsbook.id", "cf-connecting-ip": "198.51.100.77" },
+        body: JSON.stringify({ store_name: "Toko Kabar Baru", slug: "kabar-baru", email: "owner@kabar-baru.example", password: "kata-sandi-panjang-1", terms: true, turnstile_token: "ok" }),
+      }),
+      url: new URL(href),
+      locals: { runtimeEnv: env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } },
+    } as never)) as Response;
+    assert.equal(response.status, 201, await response.clone().text());
+    await Promise.all(tasks);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.assign(console, quiet);
+  }
+  assert.equal(notices.length, 1);
+  assert.match(notices[0], /^\[adsbook\.id\] Seller baru mendaftar: Toko Kabar Baru \(kabar-baru\) — https:\/\/app\.adsbook\.id\/platform\/tenants\/t_/);
 });

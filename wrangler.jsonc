@@ -38,6 +38,10 @@
   // No required secret (T-21). Each tenant's session key is generated into its
   // own store at signup (`install_secrets`, ADR-026); there is no installer and
   // no INSTALL_TOKEN. Provider keys are saved per tenant from /admin.
+  // Optional platform secrets, set with `wrangler secret put` on the platform
+  // account (T-30/T-31), never here: PLATFORM_AUTH_SECRET (platform admin),
+  // PLATFORM_ALERT_WEBHOOK_URL (operator notices, T-44), PLATFORM_META_CAPI_TOKEN
+  // (the marketing site's Conversions API, T-40).
 
   // The workers.dev copy answers `X-Robots-Tag: noindex`; the gate refuses any
   // host that is not a platform host or a tenant row.

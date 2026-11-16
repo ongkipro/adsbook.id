@@ -3,6 +3,7 @@ import { CMS_VERSION } from "../lib/version.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { armTenantAlarm, openTenantDb, TenantUnavailableError } from "./tenant-db.ts";
 import { runPlatformJobs } from "./jobs.ts";
+import { noticeStuckDomains } from "./notify.ts";
 import { runPurges } from "./purge.ts";
 import { deleteHostnameRef, hostnameApiFromEnv } from "./hostnames.ts";
 
@@ -94,6 +95,9 @@ export async function runPlatformCron(
       deleteCustomHostname: hostnames ? (reference) => deleteHostnameRef(hostnames, reference) : undefined,
     });
     console.info("scheduled-purges", purges);
+    // T-44: custom domains still failing after 24 hours reach the operator once.
+    const stuck = await noticeStuckDomains(env as unknown as Record<string, unknown>, platformDb, new Date(scheduledTime));
+    if (stuck) console.info("scheduled-domain-notices", { sent: stuck });
   } catch (error) {
     console.error("scheduled-platform-jobs-failed", String(error));
   }

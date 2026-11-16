@@ -118,6 +118,7 @@ export async function purgeTenant(
     platformDb.prepare("DELETE FROM migration_bookmarks WHERE tenant_id = ?").bind(tenantId),
     platformDb.prepare("DELETE FROM tenant_health WHERE tenant_id = ?").bind(tenantId),
     platformDb.prepare("DELETE FROM tenant_usage_daily WHERE tenant_id = ?").bind(tenantId),
+    platformDb.prepare("DELETE FROM operator_notices WHERE tenant_id = ?").bind(tenantId),
     ...(everActive
       ? [
           platformDb

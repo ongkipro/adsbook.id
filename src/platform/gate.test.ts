@@ -83,6 +83,7 @@ test("the control-plane chain creates every table of the data model, with the pi
   assert.deepEqual(tables, [
     "handoff_tokens",
     "migration_bookmarks",
+    "operator_notices",
     "plans",
     "platform_sessions",
     "platform_users",
