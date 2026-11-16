@@ -87,6 +87,7 @@ const ADMIN_PAGE_ROUTES = [
   '/admin/settings/domains',
   '/admin/settings/whatsapp',
   '/admin/status',
+  '/admin/setup',
   '/admin/docs',
 ] as const;
 

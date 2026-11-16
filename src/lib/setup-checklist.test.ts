@@ -1,51 +1,45 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isStoreReady } from "../platform/readiness.ts";
 import { buildSetupChecklist, type SetupFacts } from "./setup-checklist.ts";
 
+// A fresh signup: the name comes from the form, COD and the default couriers start on.
 const fresh: SetupFacts = {
-  activeProducts: 0,
-  warehouseReady: false,
-  mengantarConfigured: false,
-  autolarisConfigured: false,
-  activeBankAccounts: 0,
-  // Install seeds the default couriers.
+  storeName: true,
+  product: false,
+  primaryWarehouse: false,
+  mengantar: false,
+  payment: true,
   enabledCouriers: 4,
-  siteUrl: "https://adsbookcms.toko.workers.dev",
+  signals: false,
+  customDomain: false,
 };
 
-test("a fresh one-click install owes three required steps and two optional ones", () => {
+test("a fresh signup owes product, primary warehouse and Mengantar; domain and signals are optional", () => {
   const steps = buildSetupChecklist(fresh);
-  assert.deepEqual(
-    steps.filter((step) => step.required && !step.done).map((step) => step.id),
-    ["product", "mengantar", "warehouse"],
-  );
-  assert.deepEqual(steps.filter((step) => !step.required).map((step) => step.id), ["payment", "domain"]);
+  assert.deepEqual(steps.map((step) => step.id), ["store", "product", "warehouse", "mengantar", "couriers", "payment", "domain", "signals"]);
+  assert.deepEqual(steps.filter((step) => step.required && !step.done).map((step) => step.id), ["product", "warehouse", "mengantar"]);
+  assert.deepEqual(steps.filter((step) => !step.required).map((step) => step.id), ["domain", "signals"]);
   assert.ok(steps.every((step) => step.href.startsWith("/admin/")));
 });
 
-test("every step ticks itself from what the store already holds", () => {
-  const ready = buildSetupChecklist({
-    activeProducts: 3,
-    warehouseReady: true,
-    mengantarConfigured: true,
-    autolarisConfigured: false,
-    activeBankAccounts: 1,
-    enabledCouriers: 2,
-    siteUrl: "https://tokosaya.com",
-  });
-  assert.ok(ready.every((step) => step.done));
-});
-
-test("a workers.dev, placeholder or unparsable address is not the store's own domain", () => {
-  for (const siteUrl of ["https://x.y.workers.dev", "https://example.com", "not a url"]) {
-    assert.equal(buildSetupChecklist({ ...fresh, siteUrl }).find((s) => s.id === "domain")?.done, false, siteUrl);
+test("the required steps are exactly the ready predicate, fact by fact (UX-2 = PR-23)", () => {
+  const done: SetupFacts = { ...fresh, product: true, primaryWarehouse: true, mengantar: true };
+  assert.equal(isStoreReady(done), true);
+  assert.ok(buildSetupChecklist(done).filter((step) => step.required).every((step) => step.done));
+  const cases: Array<[Partial<SetupFacts>, string]> = [
+    [{ storeName: false }, "store"],
+    [{ product: false }, "product"],
+    [{ primaryWarehouse: false }, "warehouse"],
+    [{ mengantar: false }, "mengantar"],
+    [{ enabledCouriers: 0 }, "couriers"],
+    [{ payment: false }, "payment"],
+  ];
+  for (const [change, id] of cases) {
+    const facts = { ...done, ...change };
+    assert.equal(isStoreReady(facts), false, id);
+    assert.deepEqual(buildSetupChecklist(facts).filter((step) => step.required && !step.done).map((step) => step.id), [id]);
   }
-});
-
-test("a store with every courier switched off owes the courier step before it can quote", () => {
-  const step = buildSetupChecklist({ ...fresh, enabledCouriers: 0 }).find((s) => s.id === "couriers");
-  assert.equal(step?.done, false);
-  assert.equal(step?.required, true);
-  // Couriers are switched on at Ekspedisi; /admin/couriers redirects to Shipping.
-  assert.equal(step?.href, "/admin/expeditions");
+  // Optional steps never change readiness.
+  assert.equal(isStoreReady({ ...done, signals: true }), true);
 });

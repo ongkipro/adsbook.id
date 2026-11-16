@@ -23,6 +23,7 @@ import { CMS_VERSION } from './lib/version';
 import { resolveHostRedirect } from './lib/host-redirect';
 import { gateRequest, type GateEnv } from './platform/gate';
 import type { TenantContext } from './platform/control-plane';
+import { isStoreReady, readReadiness, servedBeforeReady } from './platform/readiness.ts';
 import { statePage } from './platform/state-pages';
 import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
 import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
@@ -337,6 +338,19 @@ export function createMiddleware(
     return applySecurityHeaders(new Response(await probeAnswer(secret, url.hostname, nonce), {
       headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
     }), false);
+  }
+
+  // PR-23 (T-38): until the store meets the ready predicate, buyers get the
+  // neutral "toko belum siap" page and no checkout; the owner's admin, sign-in,
+  // recovery and provider callbacks still answer. Computed from data on every
+  // request, so the store opens the moment the last step is saved. A failed
+  // read fails closed. The page is no-store, so nothing unready is edge-cached.
+  if (!servedBeforeReady(url.pathname, context.request.method)) {
+    const ready = await readReadiness(identityDb).then(isStoreReady, (error) => {
+      console.error('store-readiness-unreadable', { tenant_id: tenantContext.tenantId, error: String(error) });
+      return null;
+    });
+    if (ready !== true) return statePage(ready === false ? 'not-ready' : 'unavailable', url.pathname);
   }
 
   // A native landing page that has taken over a product page must answer on

@@ -153,6 +153,11 @@ const tenantGate = async () => ({
 });
 const onRequest = createMiddleware(async (env) => { schemaCalls += 1; return (env as { OMS_DB: D1Database }).OMS_DB; }, tenantGate);
 
+const READY_ROW = {
+  store_name: 1, product: 1, primary_warehouse: 1, mengantar_api_key: "k", cod: 1, autolaris_on: 0, autolaris_key: null,
+  autolaris_origin: null, autolaris_destination: null, warehouse_address: "Jl. 1", couriers: 1, signals: 0,
+};
+
 async function run(
   href: string,
   next: () => Promise<Response>,
@@ -165,7 +170,19 @@ async function run(
   const context = {
     request,
     url: new URL(href),
-    locals: { runtimeEnv: { OMS_DB: { prepare() { d1Calls += 1; throw new Error("d1 unavailable"); } } } },
+    locals: {
+      runtimeEnv: {
+        OMS_DB: {
+          // A ready store (T-38): the readiness read answers; every other read fails,
+          // so the page renders from its defaults.
+          prepare(sql: string) {
+            d1Calls += 1;
+            if (sql.includes("AS primary_warehouse")) return { first: async () => READY_ROW };
+            throw new Error("d1 unavailable");
+          },
+        },
+      },
+    },
     redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
   };
   const response = await onRequest(context as never, next as never);

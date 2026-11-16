@@ -3,7 +3,7 @@
  * link, never cached. The same body answers every unknown host, so a 404
  * reveals nothing about which hosts or slugs exist.
  */
-export type StatePage = "not-found" | "suspended" | "recovery" | "unavailable";
+export type StatePage = "not-found" | "suspended" | "recovery" | "unavailable" | "not-ready";
 
 const PAGES: Record<StatePage, { status: number; title: string; body: string }> = {
   "not-found": {
@@ -26,6 +26,12 @@ const PAGES: Record<StatePage, { status: number; title: string; body: string }> 
     title: "Layanan sedang tidak tersedia",
     body: "Permintaan tidak dapat diproses saat ini. Silakan coba lagi beberapa saat lagi.",
   },
+  // PR-23: a store that has not met the ready predicate. No checkout, no seller data.
+  "not-ready": {
+    status: 503,
+    title: "Toko belum siap",
+    body: "Toko ini sedang disiapkan dan belum menerima pesanan. Silakan kembali lagi nanti.",
+  },
 };
 
 const API_CODES: Record<StatePage, string> = {
@@ -33,6 +39,7 @@ const API_CODES: Record<StatePage, string> = {
   suspended: "STORE_SUSPENDED",
   recovery: "STORE_MAINTENANCE",
   unavailable: "SERVICE_UNAVAILABLE",
+  "not-ready": "STORE_NOT_READY",
 };
 
 const HEADERS = {

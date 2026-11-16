@@ -94,6 +94,8 @@ const platformTenantsRoute = await import("../pages/api/platform/tenants/index.t
 const platformActionRoute = await import("../pages/api/platform/tenants/[id]/[action].ts");
 const { hashAdminPassword } = await import("../lib/admin-credentials.ts");
 const { getAdminCredential, verifyAdminLoginPassword, validateAdminUsername } = await import("../lib/admin-credentials.ts");
+const { buildSetupChecklist, readSetupFacts } = await import("../lib/setup-checklist.ts");
+const { readReadiness, isStoreReady } = await import("./readiness.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -182,6 +184,18 @@ async function fireAlarm(
   });
 }
 
+/** T-38: give a store row what the PR-23 ready predicate needs, so buyer routes answer. */
+function makeReady(sql: { exec(source: string): void }) {
+  sql.exec(`
+    UPDATE stores SET mengantar_api_key = 'mengantar-test-key';
+    INSERT INTO products (id, store_id, title, slug, is_active, created_at) VALUES (900, 1, 'Siap', 'siap-900', 1, '2026-11-16');
+    INSERT INTO product_variants (product_id, sku, title, price, weight_grams) VALUES (900, 'SIAP-900', 'Siap', 10000, 100);
+    INSERT INTO warehouses (store_id, name, origin_area_id, pickup_address_id, address, city, province, is_primary, is_active)
+      VALUES (1, 'Utama', '12345', 'pickup-1', 'Jl. Siap 1', 'Bandung', 'Jawa Barat', 1, 1);
+    INSERT INTO courier_rules (store_id, courier_code, is_enabled) SELECT 1, 'jne', 1 WHERE NOT EXISTS (SELECT 1 FROM courier_rules WHERE is_enabled = 1);
+  `);
+}
+
 async function platform(rows: Array<[id: string, status: string, host: string]>) {
   const db = createSqliteD1();
   await ensureControlPlane(db, PLATFORM_CHAIN);
@@ -197,6 +211,8 @@ test("each tenant host reaches its own store, and the shared OMS_DB binding is n
   const stores = namespace({ migrated: true });
   stores.get("t-a").storage.db.exec("INSERT INTO stores (id, name, slug, created_at, site_url) VALUES (1, 'Toko A', 'toko-a', '2026-11-16', 'https://toko-a.belanja.cc')");
   stores.get("t-b").storage.db.exec("INSERT INTO stores (id, name, slug, created_at, site_url) VALUES (1, 'Toko B', 'toko-b', '2026-11-16', 'https://toko-b.belanja.cc')");
+  makeReady(stores.get("t-a").storage.db);
+  makeReady(stores.get("t-b").storage.db);
   const sharedOmsDb = { prepare: () => { throw new Error("the shared OMS_DB binding was read"); } };
   const onRequest = createMiddleware();
   const previousLog = console.log;
@@ -384,6 +400,7 @@ test("ISO-5: an order's status token answers on its own tenant's host only", asy
         total_amount, created_at, public_status_token)
       VALUES (1, '${number}', 1, 'Siti Rahayu', '6281234567890', 'Jl. Melati 10', 'Jawa Barat', 'Bogor', 'Kec', 60000, '2026-11-16T00:00:00.000Z', '${token}');
     `);
+    makeReady(stores.get(id).storage.db);
   }
   const onRequest = createMiddleware();
   const ask = async (host: string, token: string) => {
@@ -657,6 +674,7 @@ test("T-23/API-7: a webhook writes only on its tenant's subdomain with that tena
   const stores = namespace({ migrated: true });
   for (const id of ["w-a", "w-b"]) {
     stores.get(id).storage.db.exec(`INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16')`);
+    makeReady(stores.get(id).storage.db);
   }
   const tokenA = await issueWebhookToken(platformDb, "w-a", "autolaris");
   const tokenB = await issueWebhookToken(platformDb, "w-b", "autolaris");
@@ -715,6 +733,7 @@ test("T-25: a custom primary moves indexing off the subdomain; the probe answers
   `);
   const stores = namespace({ migrated: true });
   stores.get("d-a").storage.db.exec("INSERT INTO stores (id, name, slug, created_at) VALUES (1, 'Toko A', 'toko-a', '2026-11-16')");
+  makeReady(stores.get("d-a").storage.db);
   const onRequest = createMiddleware();
   const visit = async (host: string, path = "/") => {
     const href = `https://${host}${path}`;
@@ -769,6 +788,7 @@ test("API-3 and ISO-4: each OpenAPI document names its own tenant's host, and a 
         VALUES ('Storefront', ?, 'adsbook_live_…', 'owner', '2026-11-16', 'storefront:read,ops:orders:read')`)
       .run(await hashApiKeySecret(secrets[id]));
     stores.get(id).storage.db.exec(`INSERT INTO stores (id, name, slug, created_at) VALUES (1, '${id}', '${id}', '2026-11-16')`);
+    makeReady(stores.get(id).storage.db);
   }
   const onRequest = createMiddleware();
   const call = async (host: string, path: string, route: { GET: unknown }, key: string) => {
@@ -1583,4 +1603,161 @@ test("T-27 review: every unresolved recovery is listed, beyond any page size", a
   for (let index = 0; index < 60; index += 1) insert.run(`t_r${index}`, new Date(Date.now() - (index + 10) * 60_000).toISOString(), JSON.stringify({ issuance: `i${index}`, outcome: "pending" }));
   platformDb.sqlite.prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES ('t_r0', 'owner_recovery_completed', 'platform', ?, ?)").run(new Date().toISOString(), JSON.stringify({ issuance: "i0" }));
   assert.equal((await platformHealth(platformDb)).unresolvedRecoveries.length, 59);
+});
+
+// ---- T-38: store readiness (PR-23, UX-2, UX-5) ----
+
+async function readinessHarness(slug: string) {
+  const { stores, env, run } = await signupHarness();
+  const created = await run(slug);
+  assert.equal(created.status, 201);
+  if (created.status !== 201) throw new Error("signup failed");
+  const sql = stores.get(created.tenantId).storage.db;
+  const database = createTenantDb(stores.get(created.tenantId).stub);
+  const host = `${slug}.belanja.cc`;
+  /** One request through the real middleware: the status, and whether the route ran. */
+  const open = async (path: string, method = "GET") => {
+    const href = `https://${host}${path}`;
+    let reached = false;
+    const onRequest = createMiddleware();
+    const original = { log: console.log, info: console.info };
+    console.log = console.info = () => undefined;
+    try {
+      const response = (await onRequest(
+        {
+          request: new Request(href, { method, headers: method === "GET" ? {} : { origin: `https://${host}`, "sec-fetch-site": "same-origin" } }),
+          url: new URL(href),
+          locals: { runtimeEnv: env },
+          routePattern: path,
+          redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
+        } as never,
+        (async () => ((reached = true), new Response("ok"))) as never,
+      )) as Response;
+      return { status: response.status, reached, body: await response.text() };
+    } finally {
+      Object.assign(console, original);
+    }
+  };
+  const product = () =>
+    sql.exec(`INSERT INTO products (id, store_id, title, slug, is_active, created_at) VALUES (1, 1, 'Kopi', 'kopi', 1, '2026-11-16');
+              INSERT INTO product_variants (product_id, sku, title, price, weight_grams) VALUES (1, 'KOPI-1', 'Kopi 250g', 85000, 300);`);
+  const warehouse = (id: number, primary: 0 | 1, origin: string, pickup: string) =>
+    sql.prepare(`INSERT INTO warehouses (id, store_id, name, origin_area_id, pickup_address_id, address, city, province, is_primary, is_active)
+                 VALUES (?, 1, ?, ?, ?, 'Jl. Contoh 1', 'Bandung', 'Jawa Barat', ?, 1)`).run(id, `Gudang ${id}`, origin, pickup, primary);
+  const mengantar = () => sql.exec("UPDATE stores SET mengantar_api_key = 'mengantar-test-key'");
+  const facts = async () => readReadiness(database);
+  return { open, product, warehouse, mengantar, facts, sql, database, env, tenantId: created.tenantId };
+}
+
+test("T-38: a new store says 'toko belum siap' (no checkout) until the ready predicate holds, and opens right after", async () => {
+  const store = await readinessHarness("siap-jualan");
+  for (const [path, method] of [["/", "GET"], ["/produk/kopi", "GET"], ["/api/submit-order", "POST"], ["/api/v1/checkout", "POST"], ["/api/shipping-rates", "GET"], ["/thanks", "GET"]] as const) {
+    const response = await store.open(path, method);
+    assert.equal(response.status, 503, path);
+    assert.equal(response.reached, false, `${path} reached its route on an unready store`);
+    assert.match(response.body, path.startsWith("/api/") ? /STORE_NOT_READY/ : /Toko belum siap/, path);
+  }
+  // The owner's way in stays open: sign-in renders, admin answers its own
+  // session gate (redirect / 401), never the not-ready page.
+  assert.equal((await store.open("/hello")).reached, true);
+  assert.equal((await store.open("/api/locations")).reached, true, "the warehouse step's area lookup");
+  assert.equal((await store.open("/api/ops/v1/orders")).reached, true, "read-only ops");
+  assert.equal((await store.open("/api/ops/v1/orders", "POST")).status, 503, "an ops write stays gated");
+  for (const path of ["/admin", "/admin/setup", "/api/admin/products"]) {
+    const response = await store.open(path);
+    assert.ok(response.status === 302 || response.status === 401, `${path} → ${response.status}`);
+    assert.doesNotMatch(response.body, /belum siap|STORE_NOT_READY/, path);
+  }
+
+  // Step by step: closed until the last required step, open right after.
+  const required = async () => {
+    const steps = buildSetupChecklist({ ...(await store.facts()), customDomain: false });
+    return steps.filter((step) => step.required && !step.done).map((step) => step.id);
+  };
+  assert.deepEqual(await required(), ["product", "warehouse", "mengantar"], "signup sets the name; COD and couriers start on");
+  store.product();
+  assert.deepEqual(await required(), ["warehouse", "mengantar"]);
+  assert.equal((await store.open("/")).status, 503);
+  store.mengantar();
+  assert.deepEqual(await required(), ["warehouse"], "COD on, product present, Mengantar set: still the warehouse");
+  assert.equal((await store.open("/")).status, 503);
+  store.warehouse(1, 1, "12345", "pickup-1");
+  assert.deepEqual(await required(), []);
+  const opened = await store.open("/produk/kopi");
+  assert.equal(opened.reached, true, "the store opens the moment the predicate holds");
+  assert.equal((await store.open("/api/submit-order", "POST")).reached, true);
+
+  // And closes again if a required fact goes away (derived, never stored).
+  store.sql.exec("UPDATE stores SET mengantar_api_key = NULL");
+  assert.equal((await store.open("/")).status, 503);
+});
+
+test("T-38/PR-23: COD + product without a Mengantar key is not ready", async () => {
+  const store = await readinessHarness("tanpa-mengantar");
+  store.product();
+  store.warehouse(1, 1, "12345", "pickup-1");
+  const facts = await store.facts();
+  assert.equal(facts.payment, true);
+  assert.equal(isStoreReady(facts), false);
+  assert.equal((await store.open("/")).status, 503);
+});
+
+test("T-38/PR-23: a primary warehouse without origin or pickup is not ready, however complete a secondary one is", async () => {
+  for (const [origin, pickup] of [["", "pickup-1"], ["12345", ""]]) {
+    const store = await readinessHarness(`gudang-${origin ? "tanpa-pickup" : "tanpa-origin"}`);
+    store.product();
+    store.mengantar();
+    store.warehouse(1, 1, origin, pickup);
+    store.warehouse(2, 0, "67890", "pickup-2");
+    assert.equal(isStoreReady(await store.facts()), false, `origin=${origin} pickup=${pickup}`);
+    assert.equal((await store.open("/")).status, 503);
+    // An inactive primary is not ready either.
+    store.sql.exec("UPDATE warehouses SET origin_area_id = '12345', pickup_address_id = 'pickup-1', is_active = 0 WHERE id = 1");
+    assert.equal(isStoreReady(await store.facts()), false, "inactive primary");
+  }
+});
+
+test("T-38: payment, product price/weight and couriers each gate readiness; optional steps never do", async () => {
+  const store = await readinessHarness("syarat-lengkap");
+  store.product();
+  store.mengantar();
+  store.warehouse(1, 1, "12345", "pickup-1");
+  assert.equal(isStoreReady(await store.facts()), true);
+  store.sql.exec("UPDATE stores SET is_cod_enabled = 0");
+  assert.equal((await store.facts()).payment, false, "COD off and AutoLaris without its key");
+  store.sql.exec("UPDATE stores SET autolaris_api_key = 'k', autolaris_order_origin_id = '1', autolaris_order_destination_id = '2'");
+  assert.equal(isStoreReady(await store.facts()), true, "AutoLaris with what its rail validates");
+  store.sql.exec("UPDATE product_variants SET weight_grams = 0");
+  assert.equal(isStoreReady(await store.facts()), false, "a product without weight");
+  store.sql.exec("UPDATE product_variants SET weight_grams = 300; UPDATE courier_rules SET is_enabled = 0");
+  assert.equal(isStoreReady(await store.facts()), false, "no courier, no quote");
+  store.sql.exec("UPDATE courier_rules SET is_enabled = 1");
+  const ready = await store.facts();
+  assert.equal(ready.signals, false);
+  assert.equal(isStoreReady(ready), true, "no domain and no pixel: still ready");
+  // The checklist through the page's own reader, with the control plane's custom-domain fact.
+  const setup = await readSetupFacts(store.database, { tenantContext: { tenantId: store.tenantId }, runtimeEnv: store.env } as never);
+  assert.ok(setup);
+  const steps = buildSetupChecklist(setup!);
+  assert.deepEqual(steps.map((step) => [step.id, step.required, step.done]), [
+    ["store", true, true], ["product", true, true], ["warehouse", true, true], ["mengantar", true, true],
+    ["couriers", true, true], ["payment", true, true], ["domain", false, false], ["signals", false, false],
+  ]);
+});
+
+test("T-38: an unreadable store fails closed (503, no route), never open", async () => {
+  const store = await readinessHarness("tak-terbaca");
+  store.product();
+  store.mengantar();
+  store.warehouse(1, 1, "12345", "pickup-1");
+  store.sql.exec("DROP TABLE courier_rules");
+  const original = console.error;
+  console.error = () => undefined;
+  try {
+    const response = await store.open("/");
+    assert.equal(response.status, 503);
+    assert.equal(response.reached, false);
+  } finally {
+    console.error = original;
+  }
 });
