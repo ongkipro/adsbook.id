@@ -15,6 +15,12 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { indonesiaDistricts } from "../src/data/indonesia-districts.ts";
 import { isAutoLarisCheckoutChannel } from "../src/lib/autolaris-client.ts";
 import { calculatePaymentAdminFee } from "../src/lib/payment-fee-policy.ts";
+import { createFakeCloudflare } from "../src/platform/testing/fake-cloudflare.ts";
+
+/** Local stand-ins for the platform's own providers (T-26): Turnstile and Cloudflare for SaaS. */
+export const DEV_TURNSTILE_TOKEN = "local-stand-in";
+export const DEV_CF_ZONE_ID = "dev-zone";
+export const DEV_CF_TOKEN = "dev-token";
 
 type Json = Record<string, unknown> | unknown[];
 
@@ -138,10 +144,37 @@ export function createDevProviderServer(): Server {
   const payments = new Map<string, { paid: boolean; total: number; receiver?: string; channel?: string }>();
   let sequence = 0;
   const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(sequence += 1)}`;
+  const cloudflare = createFakeCloudflare({ zoneId: DEV_CF_ZONE_ID, token: DEV_CF_TOKEN });
 
   return createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
     const method = request.method || "GET";
+
+    // ---- Turnstile siteverify (TURNSTILE_VERIFY_URL) ----------------------
+    if (url.pathname === "/turnstile/v0/siteverify" && method === "POST") {
+      const form = new URLSearchParams(await readRaw(request));
+      return send(response, 200, { success: form.get("response") === DEV_TURNSTILE_TOKEN && Boolean(form.get("secret")) });
+    }
+
+    // ---- Cloudflare for SaaS custom hostnames (CF_API_BASE) ----------------
+    if (url.pathname.startsWith("/client/v4/zones/")) {
+      const body = method === "GET" || method === "DELETE" ? undefined : await readRaw(request);
+      const answer = await cloudflare.handle(
+        new Request(url, { method, headers: { authorization: String(request.headers.authorization ?? ""), "content-type": "application/json" }, body }),
+      );
+      response.writeHead(answer.status, { "content-type": "application/json" });
+      return response.end(await answer.text());
+    }
+    // The seller pointed DNS and the certificate issued.
+    if (url.pathname === "/__dev/cloudflare/activate" && method === "POST") {
+      const hostname = url.searchParams.get("hostname") || "";
+      try {
+        cloudflare.activate(hostname);
+        return send(response, 200, { activated: hostname });
+      } catch {
+        return send(response, 404, { error: `no custom hostname ${hostname}` });
+      }
+    }
 
     // ---- AutoLaris: /api/h2h/* ------------------------------------------
     if (url.pathname === "/api/h2h/list_payment") {
@@ -288,6 +321,8 @@ export function createDevProviderServer(): Server {
         mengantar: "/api/public/<any-key>/…",
         autolaris: "/api/h2h/…",
         settle: "POST /__dev/autolaris/pay?transaction_id=…",
+        turnstile: "/turnstile/v0/siteverify (token local-stand-in)",
+        cloudflare: "/client/v4/zones/dev-zone/custom_hostnames; POST /__dev/cloudflare/activate?hostname=…",
       });
     }
     return send(response, 404, { error: "not found" });
@@ -306,4 +341,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const port = Number(process.env.DEV_PROVIDERS_PORT) || 8788;
   await startDevProviders(port);
   console.log(`dev providers on http://127.0.0.1:${port}`);
+}
+
+function readRaw(request: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk: Buffer) => chunks.push(chunk));
+    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.on("error", reject);
+  });
 }

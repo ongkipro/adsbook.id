@@ -22,7 +22,7 @@
  * INSTALL_TOKEN (T-21); a tenant exists once PLATFORM_DB names it.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { startDevProviders } from "./dev-providers.ts";
 
@@ -69,6 +69,15 @@ const providerBase = `http://127.0.0.1:${providerPort}`;
 mkdirSync(`${root}.wrangler`, { recursive: true });
 writeFileSync(envFile, "");
 
+// The built config without `routes`: with a route, wrangler dev rewrites every
+// request URL's host to the route's zone (`belanja.cc`), and the gate — which
+// reads the request's own host — would see one host for every tenant. The copy
+// sits beside the built config so its relative paths still resolve.
+const builtConfig = `${root}dist/server/wrangler.json`;
+const devConfig = `${root}dist/server/wrangler.dev-local.json`;
+const { routes: _routes, ...withoutRoutes } = JSON.parse(readFileSync(builtConfig, "utf8"));
+writeFileSync(devConfig, JSON.stringify(withoutRoutes));
+
 // The provider stand-ins are a tenant's saved settings, not Worker env (T-45):
 // a seeded tenant stores this base URL and a dummy key in its own store.
 
@@ -76,6 +85,7 @@ const worker = spawn(
   "npx",
   [
     "wrangler", "dev", "--local",
+    "-c", devConfig,
     "--port", String(port),
     ...(host ? ["--ip", host] : []),
     "--persist-to", stateDir,
@@ -85,6 +95,15 @@ const worker = spawn(
     // Chrome treats as a secure context, so the `__Host-` session cookie is set,
     // sent and deleted there (T-22, proven in a real browser 2026-11-16).
     "--var", "PLATFORM_HOSTS:app.localhost",
+    // Seller hosts are <slug>.localhost; signup's Turnstile and the custom
+    // hostname API answer from the local stand-ins (scripts/dev-providers.ts).
+    "--var", "TENANT_HOST_SUFFIX:localhost",
+    "--var", "TURNSTILE_SITE_KEY:local-stand-in",
+    "--var", "TURNSTILE_SECRET_KEY:local-stand-in-secret",
+    "--var", `TURNSTILE_VERIFY_URL:${providerBase}/turnstile/v0/siteverify`,
+    "--var", "CF_SAAS_ZONE_ID:dev-zone",
+    "--var", "CF_SAAS_TOKEN:dev-token",
+    "--var", `CF_API_BASE:${providerBase}/client/v4`,
     "--test-scheduled",
     "--show-interactive-dev-session=false",
   ],
@@ -94,7 +113,7 @@ const worker = spawn(
 console.log(`
   AdsBookCMS local store
   ─────────────────────────────────────────────
-  Platform   http://app.localhost:${port}
+  Platform   http://app.localhost:${port}/platform/signup
   Tenants    http://<slug>.localhost:${port}   (a tenant exists once PLATFORM_DB names it)
   Providers  ${providerBase}   (Mengantar + AutoLaris stand-ins)
   Cron       http://${host || "localhost"}:${port}/cdn-cgi/handler/scheduled?cron=7+*+*+*+*

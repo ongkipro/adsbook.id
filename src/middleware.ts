@@ -28,7 +28,7 @@ import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platfo
 import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
 import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 import { scopeFromLocals } from './platform/keys.ts';
-import { PROBE_NONCE, PROBE_PATH, probeAnswer } from './platform/hostnames.ts';
+import { PROBE_NONCE, PROBE_PATH, probeAnswer, tenantHostSuffix } from './platform/hostnames.ts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -68,6 +68,13 @@ function applySecurityHeaders(
 }
 
 export const ADMIN_CSP = "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+
+/** Platform pages: the admin policy, except a form may also post to a seller subdomain (IAM-8). */
+function platformCsp(env: ReturnType<typeof getRuntimeEnv>): string {
+  const suffix = tenantHostSuffix((env ?? {}) as Record<string, unknown>);
+  const sellers = suffix === 'localhost' ? 'http://*.localhost:*' : `https://*.${suffix}`;
+  return `frame-ancestors 'none'; base-uri 'self'; form-action 'self' ${sellers}; object-src 'none'`;
+}
 
 async function loadStoredEmbedAllowedOrigins(
   database: D1Database | undefined,
@@ -164,6 +171,8 @@ export function createMiddleware(
         hostKind = 'platform';
         context.locals.platform = { host: result.host };
         response = applySecurityHeaders(await next(), true);
+        // The signup page posts the IAM-8 handoff to the new seller host.
+        response.headers.set('Content-Security-Policy', platformCsp(getRuntimeEnv(context.locals)));
       } else {
         hostKind = 'tenant';
         tenantId = result.tenant.tenantId;

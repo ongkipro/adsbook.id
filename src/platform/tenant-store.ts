@@ -118,6 +118,23 @@ export class TenantStore extends DurableObject {
     return { armed: true };
   }
 
+  /**
+   * T-26 purge: drop the alarm and every row of this store. Bound to its own
+   * tenant exactly as `armAlarm` is. Idempotent: an empty store purges again.
+   */
+  async purge(protocol: number, tenantId: string): Promise<void> {
+    this.#store.checkProtocol(protocol);
+    const namespace = (this.env as { TENANT_STORE?: { idFromName(name: string): { equals(other: unknown): boolean } } })
+      .TENANT_STORE;
+    if (!namespace || !namespace.idFromName(tenantId).equals(this.ctx.id)) {
+      throw new Error("TENANT_STORE_ID_MISMATCH");
+    }
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    // The engine read the ledger at start; the object restarts on next use with an empty one.
+    this.ctx.abort("purged");
+  }
+
   /** TEN-5: this tenant's housekeeping, in its own invocation (`tenant-alarm.ts`). */
   async alarm(): Promise<void> {
     const env = this.env as CloudflareRuntimeEnv;

@@ -21,6 +21,8 @@ export interface InstallInput {
 }
 
 export interface InstallPlan {
+  /** IAM-10: the owner's signup email, written as the credential's email too. */
+  ownerEmail?: string;
   storeName: string;
   siteUrl: string;
   slug: string;
@@ -236,11 +238,12 @@ export async function runInstall(
       database
         .prepare(
           `UPDATE admin_credentials
-             SET username = ?, password_hash = ?, must_change_password = 0, updated_at = ?
+             SET username = ?, email = COALESCE(?, email), role = 'owner', password_hash = ?,
+                 must_change_password = 0, updated_at = ?
            WHERE id = (SELECT MIN(id) FROM admin_credentials)
              AND must_change_password = 1`,
         )
-        .bind(plan.adminUsername, passwordHash, now),
+        .bind(plan.adminUsername, plan.ownerEmail ?? null, passwordHash, now),
       database
         .prepare(
           `INSERT INTO courier_rules (

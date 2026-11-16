@@ -218,8 +218,8 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
 
         <form id="loginForm" method="POST" class="space-y-4" aria-busy="false" aria-describedby={[errorMessage && 'loginError'].filter(Boolean).join(' ') || undefined}>
           <div class="space-y-2">
-            <label for="username" class="text-sm font-semibold text-slate-900">Username operator</label>
-            <input id="username" type="text" name="username" required autocomplete="username" autofocus={!focusPassword} value={submittedUsername} placeholder="Username Anda" class="admin-input-flat" spellcheck="false" />
+            <label for="username" class="text-sm font-semibold text-slate-900">Email atau username</label>
+            <input id="username" type="text" name="username" required maxlength="254" autocomplete="username" autofocus={!focusPassword} value={submittedUsername} placeholder="nama@email.com" class="admin-input-flat" spellcheck="false" />
           </div>
 
           <div class="space-y-2">

@@ -1,9 +1,10 @@
 /**
- * `npm run dev:seed` — fill a running `npm run dev:local` store with dummy
- * products and orders.
+ * `npm run dev:seed` — sign up a demo tenant on a running `npm run dev:local`
+ * platform and fill it with dummy products and orders.
  *
- * Everything goes through the store's own HTTP surface — /api/install, the
- * /hello login form, the admin APIs, the public checkout endpoints — exactly
+ * Everything goes through the platform's own HTTP surface — the signup API on
+ * app.localhost, the tenant's /hello login form, the admin APIs, the public
+ * checkout endpoints — exactly
  * as a browser would, so a seed run is also a smoke test of those paths: any
  * refusal stops the run and prints the endpoint and the answer.
  *
@@ -12,7 +13,8 @@
  * and no migration seeds data (a demo seed shipped once and reached a real
  * merchant; see ARCHITECTURE.md). The products are invented for this script.
  *
- *   --url=http://localhost:8787   store to seed (default)
+ *   --platform=http://app.localhost:8787   platform host (default)
+ *   --slug=demo                            the tenant to sign up (default)
  *   --orders=12                   how many checkout orders to place
  *   --images=<dir>                product photos: <dir>/<slug>.webp|.jpg|.png, and an
  *                                 optional <dir>/<slug>-sm.webp card copy
@@ -21,7 +23,7 @@
  *                                 another merchant's photos must never be
  *                                 committed here (AGENTS.md §3, Content).
  *
- * Re-running is safe: install is skipped once claimed, a product whose slug
+ * Re-running is safe: signup is skipped once the slug exists, a product whose slug
  * exists is left alone, and each run adds another batch of orders.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -30,21 +32,23 @@ import { deflateSync } from "node:zlib";
 const argValue = (name: string) =>
   process.argv.slice(2).find((arg) => arg.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
 
-const base = (argValue("url") || "http://localhost:8787").replace(/\/$/, "");
+const platform = new URL((argValue("platform") || "http://app.localhost:8787").replace(/\/$/, ""));
+const slug = argValue("slug") || "demo";
+// The tenant answers on <slug>.localhost, same scheme and port (dev:local's TENANT_HOST_SUFFIX).
+const base = `${platform.protocol}//${slug}.localhost${platform.port ? `:${platform.port}` : ""}`;
 const orderCount = Math.max(1, Math.min(50, Number(argValue("orders")) || 12));
 const imageDir = argValue("images");
 const providerBase = (() => {
-  const url = new URL(base);
-  return `http://127.0.0.1:${Number(url.port || 80) + 1}`;
+  return `http://127.0.0.1:${Number(platform.port || 80) + 1}`;
 })();
 
-// Must match scripts/dev-local.ts.
-const INSTALL_TOKEN = "dev-local-install-token";
-const DEV_ADMIN = { username: "admin", password: "dev-local-password-123" } as const;
+// The owner the signup creates; signs in at /hello with the email (IAM-10).
+const DEV_ADMIN = { username: `owner@${slug}.local.test`, password: "dev-local-password-123" } as const;
 
-const host = new URL(base).hostname;
+const host = platform.hostname;
 const isLocalHost =
   host === "localhost" ||
+  host.endsWith(".localhost") ||
   /^127\./.test(host) ||
   /^10\./.test(host) ||
   /^192\.168\./.test(host) ||
@@ -59,6 +63,8 @@ let cookie = "";
 async function call(path: string, init: RequestInit & { json?: unknown } = {}) {
   const headers = new Headers(init.headers);
   headers.set("Origin", base);
+  // What a current browser sends on a same-origin call (IAM-5 strict CSRF).
+  headers.set("Sec-Fetch-Site", "same-origin");
   if (cookie) headers.set("Cookie", cookie);
   let body = init.body;
   if (init.json !== undefined) {
@@ -258,37 +264,43 @@ const BUYERS = [
   { name: "Hendra Wijaya", phone: "081234500006", area: "Medan Baru Medan", address: "Jl. Sei Batang Hari No. 21" },
 ];
 
-// The store's own address must be https, or plain http on this machine only
-// (isAcceptedSiteProtocol) — so a store seeded over a tailnet or LAN address
-// (`dev:local --ip=…`) installs as http://localhost:<port>, the one http
-// address it accepts. Browsing it over the tailnet still works; only absolute
-// links (feeds, canonical) name localhost.
-const installSiteUrl = /^(localhost|127\.)/.test(host) || host === "[::1]"
-  ? base
-  : `http://localhost:${new URL(base).port || 80}`;
-
-async function install() {
-  const result = await call("/api/install", {
+/** Sign the demo tenant up on the platform host, as the signup page does. */
+async function signupTenant() {
+  const response = await fetch(`${platform.origin}/api/platform/signup`, {
     method: "POST",
-    json: {
-      install_token: INSTALL_TOKEN,
+    headers: { "Content-Type": "application/json", Origin: platform.origin, "Sec-Fetch-Site": "same-origin" },
+    body: JSON.stringify({
       store_name: "Toko Dummy Lokal",
-      site_url: installSiteUrl,
-      admin_username: DEV_ADMIN.username,
-      admin_password: DEV_ADMIN.password,
-      admin_password_confirm: DEV_ADMIN.password,
-      tagline: "Toko contoh untuk pengembangan lokal",
-      support_whatsapp: "6281234500000",
-      locale: "id-ID",
-      storefront_template: "compact-market",
-    },
+      slug,
+      email: DEV_ADMIN.username,
+      password: DEV_ADMIN.password,
+      terms: true,
+      turnstile_token: "local-stand-in",
+    }),
   });
-  // Once claimed, the middleware redirects /install and /api/install away.
-  if (result.status === 409 || (result.status >= 300 && result.status < 400)) {
-    return console.log("[dev:seed] store already installed — skipping install");
-  }
-  ok("install", result);
-  console.log("[dev:seed] installed");
+  const payload = await response.json().catch(() => null);
+  if (response.status === 409) return console.log(`[dev:seed] tenant ${slug} already exists — skipping signup`);
+  ok("signup", { status: response.status, payload });
+  console.log(`[dev:seed] signed up ${base}`);
+}
+
+/** Point the tenant's own provider settings at the local stand-ins (T-45: never env). */
+async function providers() {
+  ok("providers", await call("/api/admin/settings", {
+    method: "PUT",
+    json: {
+      action: "save-integrations",
+      integrations: {
+        mengantar_api_key: "dev",
+        mengantar_base_url: providerBase,
+        autolaris_api_key: "dev",
+        autolaris_base_url: providerBase,
+        autolaris_order_origin_id: "1",
+        autolaris_order_destination_id: "2",
+      },
+    },
+  }));
+  console.log("[dev:seed] provider stand-ins saved for this tenant");
 }
 
 async function login() {
@@ -299,7 +311,7 @@ async function login() {
     body: form.toString(),
   });
   const setCookie = result.headers.getSetCookie?.() ?? [];
-  const session = setCookie.map((value) => value.split(";")[0]).find((value) => value.startsWith("adsbook_session="));
+  const session = setCookie.map((value) => value.split(";")[0]).find((value) => value.startsWith("__Host-adsbook_session="));
   if (!session) fail("login (/hello)", result);
   cookie = session;
   console.log("[dev:seed] logged in as", DEV_ADMIN.username);
@@ -488,7 +500,8 @@ async function exerciseLifecycle(placed: Placed[]) {
   if (online && transaction) {
     const settle = await fetch(`${providerBase}/__dev/autolaris/pay?transaction_id=${encodeURIComponent(transaction.transaction_id)}`, { method: "POST" });
     if (!settle.ok) throw new Error(`settle ${online.orderNumber} → HTTP ${settle.status}`);
-    const cron = await fetch(`${base}/cdn-cgi/handler/scheduled?cron=7+*+*+*+*`);
+    // wrangler dev answers its scheduled trigger on `localhost` only.
+    const cron = await fetch(`${platform.protocol}//localhost${platform.port ? `:${platform.port}` : ""}/cdn-cgi/handler/scheduled?cron=7+*+*+*+*`);
     console.log(`[dev:seed] settled ${online.orderNumber}; scheduled job HTTP ${cron.status}`);
   }
   // Release two COD orders to the courier stand-in; leave the rest pending.
@@ -507,8 +520,9 @@ async function exerciseLifecycle(placed: Placed[]) {
 }
 
 async function main() {
-  await install();
+  await signupTenant();
   await login();
+  await providers();
   await warehouse();
   await products();
   const catalogue = await activeVariants();

@@ -19,6 +19,13 @@ interface SharedEnvVars {
   CF_SAAS_TOKEN?: string;
   /** Local development only: a stand-in for api.cloudflare.com. */
   CF_API_BASE?: string;
+  /** Signup's Turnstile (T-26): the public site key and the Worker secret. */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  /** Local development only: a stand-in for Turnstile's siteverify. */
+  TURNSTILE_VERIFY_URL?: string;
+  /** Local development only: seller hosts under `localhost` instead of `belanja.cc`. */
+  TENANT_HOST_SUFFIX?: string;
 }
 
 interface CloudflareRuntimeEnv extends SharedEnvVars {

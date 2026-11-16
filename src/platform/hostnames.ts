@@ -23,6 +23,12 @@ export const MAX_HOST_LENGTH = 64;
 /** DOM-3: a removed host is unroutable for this long before anyone may claim it. */
 export const QUARANTINE_MS = 60_000;
 
+/** The seller-host suffix: `belanja.cc`, or a local stand-in such as `localhost` (dev only). */
+export function tenantHostSuffix(env: Record<string, unknown>): string {
+  const suffix = typeof env.TENANT_HOST_SUFFIX === "string" ? env.TENANT_HOST_SUFFIX.trim().toLowerCase() : "";
+  return suffix || SELLER_ZONE;
+}
+
 export type ClaimMode = "root" | "www" | "subdomain";
 
 export type CfHostname = {

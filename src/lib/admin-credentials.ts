@@ -34,12 +34,20 @@ function encodeBase64Url(bytes: Uint8Array) {
   return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
+/** IAM-10: the owner signs in with the signup email (≤254 characters). */
+export const EMAIL_USERNAME_PATTERN = /^[^\s@]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,63}$/;
+
 export function normalizeAdminUsername(value: unknown) {
-  return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 64) : '';
+  return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 254) : '';
 }
 
+/**
+ * IAM-10: a username is the inherited staff form (`[a-z0-9._-]{3,64}`) or an
+ * email address of at most 254 characters (the owner's signup email).
+ */
 export function validateAdminUsername(username: string) {
-  return USERNAME_PATTERN.test(username);
+  if (USERNAME_PATTERN.test(username)) return true;
+  return username.length <= 254 && EMAIL_USERNAME_PATTERN.test(username);
 }
 
 export function validateNewAdminPassword(password: string, username: string) {
@@ -126,7 +134,7 @@ export async function updateAdminCredential(
 
   const normalizedUsername = normalizeAdminUsername(username);
   if (!validateAdminUsername(normalizedUsername)) {
-    return { ok: false as const, error: 'Username harus 3–64 karakter: huruf kecil, angka, titik, garis bawah, atau tanda hubung.' };
+    return { ok: false as const, error: 'Pakai email, atau username 3–64 karakter: huruf kecil, angka, titik, garis bawah, atau tanda hubung.' };
   }
   const passwordError = validateNewAdminPassword(newPassword, normalizedUsername);
   if (passwordError) return { ok: false as const, error: passwordError };

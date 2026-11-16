@@ -519,8 +519,9 @@ test('the privileged allowlists cover every admin route that exists on disk', ()
   ];
   assert.ok(routes.length > 30, `expected the admin route table, found ${routes.length} routes`);
 
-  // Operator management is the one surface reserved to the owner.
-  const ownerOnly = ['/admin/settings/access', '/api/admin/access'];
+  // Operator management is reserved to the owner.
+  // Store removal (PRIV-4, T-26) is the owner's alone too.
+  const ownerOnly = ['/admin/settings/access', '/api/admin/access', '/api/admin/store-removal'];
   for (const route of ownerOnly) {
     assert.ok(routes.includes(route), `${route} must exist for the exception to mean anything`);
   }

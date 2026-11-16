@@ -117,3 +117,29 @@ export function scopeFromLocals(
   const context = locals?.tenantContext;
   return context ? { tenantId: context.tenantId, cacheVersion: context.cacheVersion } : undefined;
 }
+
+/**
+ * Purge (T-26): delete up to `limit` of the tenant's R2 objects. `done` is
+ * true once nothing is left under its prefix; a large store drains over
+ * several runs. Absent binding: nothing to delete.
+ */
+export async function purgeTenantR2(env: Bindings, tenantId: string, limit = 500): Promise<{ deleted: number; done: boolean }> {
+  const bucket = env?.ASSET_BUCKET as R2Bucket | undefined;
+  if (!bucket || typeof bucket !== "object") return { deleted: 0, done: true };
+  const prefix = `t/${checkedTenant(tenantId)}/`;
+  const listing = await bucket.list({ prefix, limit });
+  const keys = listing.objects.map((object) => object.key).filter((key) => key.startsWith(prefix));
+  if (keys.length) await bucket.delete(keys);
+  return { deleted: keys.length, done: !listing.truncated };
+}
+
+/** Purge (T-26): delete up to `limit` of the tenant's KV keys; `done` once none is left. */
+export async function purgeTenantKv(env: Bindings, tenantId: string, limit = 500): Promise<{ deleted: number; done: boolean }> {
+  const kv = env?.SESSION as KVNamespace | undefined;
+  if (!kv || typeof kv !== "object") return { deleted: 0, done: true };
+  const prefix = tenantKvKey(tenantId, "");
+  const listing = await kv.list({ prefix, limit });
+  const keys = listing.keys.map((key) => key.name).filter((name) => name.startsWith(prefix));
+  for (const name of keys) await kv.delete(name);
+  return { deleted: keys.length, done: listing.list_complete };
+}

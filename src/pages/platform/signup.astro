@@ -1,0 +1,207 @@
+---
+import '../../styles/admin.css';
+import { getRuntimeEnv } from '../../lib/env';
+import { tenantHostSuffix } from '../../platform/hostnames';
+
+export const prerender = false;
+
+// UX-1 (T-26): one form on the platform host. Turnstile's site key is public;
+// `local-stand-in` is the local development key the dev providers answer.
+const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
+const siteKey = typeof env.TURNSTILE_SITE_KEY === 'string' ? env.TURNSTILE_SITE_KEY : '';
+const localStandIn = siteKey === 'local-stand-in';
+const suffix = tenantHostSuffix(env);
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Buat toko - adsbook.id</title>
+    {siteKey && !localStandIn && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+  </head>
+  <body class="min-h-dvh bg-[#f6f7f9] text-slate-900 antialiased">
+    <main class="mx-auto w-full max-w-lg px-4 py-10 sm:py-16">
+      <p class="text-sm font-semibold text-blue-700">adsbook.id</p>
+      <h1 class="mt-1 text-2xl font-semibold text-slate-950">Buat toko Anda</h1>
+      <p class="mt-2 text-sm text-slate-600">Gratis untuk mulai. Toko langsung aktif di alamat belanja.cc Anda sendiri.</p>
+
+      <div id="errorSummary" class="mt-6 hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" tabindex="-1"></div>
+
+      <form id="signupForm" class="mt-6 space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6" novalidate aria-busy="false" data-suffix={suffix} data-standin={localStandIn ? '1' : ''}>
+        <div>
+          <label for="storeName" class="block text-sm font-semibold text-slate-900">Nama toko</label>
+          <input id="storeName" name="store_name" required maxlength="80" autocomplete="organization" class="admin-input-flat mt-2" aria-describedby="storeNameError" />
+          <p id="storeNameError" class="mt-1 hidden text-xs font-semibold text-rose-700"></p>
+        </div>
+        <div>
+          <label for="slug" class="block text-sm font-semibold text-slate-900">Alamat toko</label>
+          <div class="mt-2 flex items-stretch overflow-hidden rounded-lg border border-slate-300 focus-within:ring-2 focus-within:ring-blue-600">
+            <input id="slug" name="slug" required maxlength="32" autocomplete="off" spellcheck="false" inputmode="url" class="min-w-0 flex-1 border-0 px-3 py-2 font-mono text-sm outline-none" aria-describedby="slugHint slugError" />
+            <span class="flex items-center bg-slate-50 px-3 font-mono text-sm text-slate-500">.{suffix}</span>
+          </div>
+          <p id="slugHint" class="mt-1 text-xs text-slate-500" aria-live="polite">Huruf kecil, angka, dan tanda hubung.</p>
+          <p id="slugError" class="mt-1 hidden text-xs font-semibold text-rose-700"></p>
+        </div>
+        <div>
+          <label for="email" class="block text-sm font-semibold text-slate-900">Email</label>
+          <input id="email" name="email" type="email" required maxlength="254" autocomplete="email" class="admin-input-flat mt-2" aria-describedby="emailHint emailError" />
+          <p id="emailHint" class="mt-1 text-xs text-slate-500">Email ini dipakai untuk masuk ke toko.</p>
+          <p id="emailError" class="mt-1 hidden text-xs font-semibold text-rose-700"></p>
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-semibold text-slate-900">Password</label>
+          <div class="relative mt-2">
+            <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password" class="admin-input-flat pr-24" aria-describedby="passwordHint passwordError" />
+            <button id="togglePassword" type="button" class="absolute inset-y-1 right-1 min-w-20 rounded-lg px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" aria-controls="password" aria-pressed="false" aria-label="Tampilkan password">Lihat</button>
+          </div>
+          <p id="passwordHint" class="mt-1 text-xs text-slate-500">Minimal 10 karakter, tidak sama dengan email.</p>
+          <p id="passwordError" class="mt-1 hidden text-xs font-semibold text-rose-700"></p>
+        </div>
+        <div>
+          <label class="flex items-start gap-2 text-sm text-slate-700">
+            <input id="terms" name="terms" type="checkbox" required class="mt-0.5 size-4" aria-describedby="termsError" />
+            <span>Saya setuju dengan syarat &amp; ketentuan adsbook.id.</span>
+          </label>
+          <p id="termsError" class="mt-1 hidden text-xs font-semibold text-rose-700"></p>
+        </div>
+        {siteKey && !localStandIn && <div class="cf-turnstile" data-sitekey={siteKey} data-language="id"></div>}
+        <p id="turnstileError" class="hidden text-xs font-semibold text-rose-700" role="alert"></p>
+        <button id="submitSignup" type="submit" class="btn-primary w-full">Buat toko</button>
+      </form>
+
+      <section id="signupDone" class="mt-6 hidden rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-950" aria-live="polite">
+        <p class="font-semibold">Toko Anda sudah aktif. Membuka admin…</p>
+        <p class="mt-2">Masuk dengan email <strong id="doneEmail"></strong> dan password yang baru Anda buat.</p>
+        <p class="mt-3"><a id="doneLogin" href="#" class="font-semibold text-blue-700 underline">Masuk ke toko</a></p>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById('signupForm') as HTMLFormElement;
+      const summary = document.getElementById('errorSummary') as HTMLElement;
+      const submit = document.getElementById('submitSignup') as HTMLButtonElement;
+      const slugInput = document.getElementById('slug') as HTMLInputElement;
+      const slugHint = document.getElementById('slugHint') as HTMLElement;
+      const nameInput = document.getElementById('storeName') as HTMLInputElement;
+      const password = document.getElementById('password') as HTMLInputElement;
+      const toggle = document.getElementById('togglePassword') as HTMLButtonElement;
+      const suffix = form.dataset.suffix || 'belanja.cc';
+      let slugTouched = false;
+      let pending = false;
+
+      const toSlug = (value: string) =>
+        value.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/g, '');
+
+      let availabilityTimer = 0;
+      const checkAvailability = () => {
+        window.clearTimeout(availabilityTimer);
+        const slug = slugInput.value.trim();
+        if (!slug) { slugHint.textContent = 'Huruf kecil, angka, dan tanda hubung.'; return; }
+        availabilityTimer = window.setTimeout(async () => {
+          const response = await fetch(`/api/platform/slug?slug=${encodeURIComponent(slug)}`).catch(() => null);
+          const payload = await response?.json().catch(() => null);
+          if (!payload?.success || slugInput.value.trim() !== slug) return;
+          slugHint.textContent = payload.data.available ? `${slug}.${suffix} tersedia.` : payload.data.reason;
+          slugHint.className = `mt-1 text-xs ${payload.data.available ? 'text-emerald-700' : 'text-rose-700'}`;
+        }, 300);
+      };
+
+      nameInput.addEventListener('input', () => {
+        if (!slugTouched) { slugInput.value = toSlug(nameInput.value); checkAvailability(); }
+      });
+      slugInput.addEventListener('input', () => { slugTouched = true; checkAvailability(); });
+      toggle.addEventListener('click', () => {
+        const show = password.type === 'password';
+        password.type = show ? 'text' : 'password';
+        toggle.textContent = show ? 'Sembunyikan' : 'Lihat';
+        toggle.setAttribute('aria-pressed', String(show));
+        toggle.setAttribute('aria-label', `${show ? 'Sembunyikan' : 'Tampilkan'} password`);
+      });
+
+      const fields: Record<string, { input: HTMLElement; error: HTMLElement }> = {
+        storeName: { input: nameInput, error: document.getElementById('storeNameError') as HTMLElement },
+        slug: { input: slugInput, error: document.getElementById('slugError') as HTMLElement },
+        email: { input: document.getElementById('email') as HTMLElement, error: document.getElementById('emailError') as HTMLElement },
+        password: { input: password, error: document.getElementById('passwordError') as HTMLElement },
+        terms: { input: document.getElementById('terms') as HTMLElement, error: document.getElementById('termsError') as HTMLElement },
+        turnstile: { input: submit, error: document.getElementById('turnstileError') as HTMLElement },
+      };
+
+      const showErrors = (message: string, errors: Record<string, string>) => {
+        for (const [name, field] of Object.entries(fields)) {
+          const text = errors[name] || '';
+          field.error.textContent = text;
+          field.error.classList.toggle('hidden', !text);
+          if (field.input !== submit) field.input.setAttribute('aria-invalid', text ? 'true' : 'false');
+        }
+        const listed = Object.values(errors).filter(Boolean);
+        summary.textContent = listed.length ? `${message} ${listed.join(' ')}` : message;
+        summary.classList.remove('hidden');
+        summary.focus();
+      };
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (pending) return;
+        pending = true;
+        submit.disabled = true;
+        submit.textContent = 'Membuat toko…';
+        form.setAttribute('aria-busy', 'true');
+        summary.classList.add('hidden');
+        const values = new FormData(form);
+        const turnstileToken = form.dataset.standin
+          ? 'local-stand-in'
+          : String(values.get('cf-turnstile-response') || '');
+        try {
+          const response = await fetch('/api/platform/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              store_name: values.get('store_name'),
+              slug: values.get('slug'),
+              email: values.get('email'),
+              password: values.get('password'),
+              terms: values.get('terms') === 'on',
+              turnstile_token: turnstileToken,
+            }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || !payload.success) {
+            showErrors(payload.error || 'Pendaftaran gagal.', payload.errors || {});
+            (window as unknown as { turnstile?: { reset(): void } }).turnstile?.reset();
+            return;
+          }
+          const data = payload.data as { login_url: string; handoff_url: string | null; handoff_token: string | null; email: string };
+          form.classList.add('hidden');
+          (document.getElementById('doneEmail') as HTMLElement).textContent = data.email;
+          (document.getElementById('doneLogin') as HTMLAnchorElement).href = data.login_url;
+          document.getElementById('signupDone')?.classList.remove('hidden');
+          if (data.handoff_url && data.handoff_token) {
+            // IAM-8: the token travels in a POST body to the seller host, never in a URL.
+            const handoff = document.createElement('form');
+            handoff.method = 'POST';
+            handoff.action = data.handoff_url;
+            handoff.hidden = true;
+            const field = document.createElement('input');
+            field.type = 'hidden';
+            field.name = 'token';
+            field.value = data.handoff_token;
+            handoff.append(field);
+            document.body.append(handoff);
+            handoff.submit();
+          }
+        } catch {
+          showErrors('Koneksi terputus. Coba lagi.', {});
+        } finally {
+          pending = false;
+          submit.disabled = false;
+          submit.textContent = 'Buat toko';
+          form.setAttribute('aria-busy', 'false');
+        }
+      });
+    </script>
+  </body>
+</html>

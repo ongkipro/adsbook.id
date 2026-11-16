@@ -58,7 +58,8 @@ const hooks = registerHooks({
   },
 });
 const { createMiddleware } = await import("../middleware.ts");
-const { runPlatformCron, CRON_MIGRATION_BATCH, CRON_ARM_BATCH } = await import("../worker.ts");
+const { runPlatformCron, CRON_MIGRATION_BATCH, CRON_ARM_BATCH } = await import("./cron.ts");
+const workerModule = await import("../worker.ts");
 const { runTenantMaintenance } = await import("./tenant-maintenance.ts");
 const { readTenantRow, runTenantAlarm, TENANT_ALARM_INTERVAL_MS } = await import("./tenant-alarm.ts");
 const { tenantDatabase } = await import("../lib/tenant-database.ts");
@@ -77,6 +78,13 @@ const { loadGoogleAdsOfflineConfig } = await import("../lib/google-ads-offline.t
 const autolarisWebhookRoute = await import("../pages/api/webhooks/autolaris/[token].ts");
 const { issueWebhookToken } = await import("./webhook-secrets.ts");
 const { probeAnswer } = await import("./hostnames.ts");
+const { signup, TERMS_VERSION } = await import("./signup.ts");
+const { runPurges, requestStoreRemoval, cancelStoreRemoval, PURGE_DRAIN_MS, POST_PURGE_SWEEP_BATCH } = await import("./purge.ts");
+const { issueHandoff, prepareHandoffRequest, HANDOFF_ORIGIN_HEADER } = await import("./handoff.ts");
+const { RESERVED_SLUGS, SELLER_ZONE_RECORDS } = await import("./slugs.ts");
+const { runPlatformJobs } = await import("./jobs.ts");
+const handoffRoute = await import("../pages/api/handoff.ts");
+const { getAdminCredential, verifyAdminLoginPassword, validateAdminUsername } = await import("../lib/admin-credentials.ts");
 // Not deregistered: both chains are imported lazily, on first use, so the stubs
 // must still resolve then. node --test gives this file its own process.
 void hooks;
@@ -105,6 +113,13 @@ function namespace(options: { migrated?: boolean; failing?: string[] } = {}) {
         schemaState: (protocol) => hop(() => (engine.checkProtocol(protocol), engine.schemaState())),
         prepareMigration: (protocol) => hop(() => (engine.checkProtocol(protocol), { bookmark: `bm-${id}`, state: engine.schemaState() })),
         applyMigrations: (protocol, target, bookmarkId) => hop(() => (engine.checkProtocol(protocol), engine.applyMigrations(target, bookmarkId))),
+        // T-26: deleteAll + deleteAlarm — the next use starts an empty store.
+        purge: (protocol: number, tenantId: string) =>
+          hop(() => {
+            engine.checkProtocol(protocol);
+            stores.delete(tenantId);
+            alarms.delete(tenantId);
+          }),
         armAlarm: (protocol: number, tenantId: string) =>
           hop(() => {
             engine.checkProtocol(protocol);
@@ -772,4 +787,479 @@ test("API-3 and ISO-4: each OpenAPI document names its own tenant's host, and a 
     const crossed = await call("key-b.belanja.cc", path, route, secrets["k-a"]);
     assert.equal(crossed.status, 401, `${path}: tenant A's key on tenant B's host`);
   }
+});
+
+// ---------------------------------------------------------------- T-26 ----
+
+/** A signup harness: one control plane, one store namespace, Turnstile passing. */
+async function signupHarness() {
+  const platformDb = await platform([]);
+  const stores = namespace();
+  const env = { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding } as Record<string, unknown>;
+  const input = (slug: string, email = `owner@${slug}.example`) => ({
+    storeName: `Toko ${slug}`,
+    slug,
+    email,
+    password: "kata-sandi-panjang-1",
+    terms: true,
+    turnstileToken: "ok",
+  });
+  let ip = 0;
+  const run = (slug: string, deps: Parameters<typeof signup>[3] = {}, email?: string) =>
+    signup(env, input(slug, email), `203.0.113.${(ip += 1) % 250}`, { verifyTurnstile: async () => true, ...deps });
+  const tenant = (slug: string) =>
+    platformDb.sqlite.prepare("SELECT id, status FROM tenants WHERE slug = ?").get(slug) as { id: string; status: string } | undefined;
+  return { platformDb, stores, env, run, tenant, input };
+}
+
+test("T-26/IAM-10: a signup yields an active tenant whose owner signs in with the email; admin/admin never does", async () => {
+  const { platformDb, stores, run } = await signupHarness();
+  const result = await run("toko-baru");
+  assert.equal(result.status, 201);
+  if (result.status !== 201) return;
+  assert.equal(result.host, "toko-baru.belanja.cc");
+  const row = platformDb.sqlite.prepare("SELECT status, schema_version FROM tenants WHERE id = ?").get(result.tenantId) as { status: string; schema_version: number };
+  assert.deepEqual({ ...row }, { status: "active", schema_version: CHAIN.length });
+  const host = platformDb.sqlite.prepare("SELECT status, is_primary, kind FROM tenant_hosts WHERE host = 'toko-baru.belanja.cc'").get() as object;
+  assert.deepEqual({ ...host }, { status: "active", is_primary: 1, kind: "subdomain" });
+  const event = platformDb.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE tenant_id = ? AND kind = 'signup'").get(result.tenantId) as { detail_json: string };
+  assert.equal(JSON.parse(event.detail_json).terms_version, TERMS_VERSION);
+  assert.ok(platformDb.sqlite.prepare("SELECT 1 FROM webhook_secrets WHERE tenant_id = ?").get(result.tenantId));
+
+  const database = createTenantDb(stores.get(result.tenantId).stub);
+  const owner = await getAdminCredential(database, "owner@toko-baru.example");
+  assert.ok(owner);
+  assert.equal(owner.role, "owner");
+  assert.equal(owner.mustChangePassword, false);
+  assert.equal(await verifyAdminLoginPassword("kata-sandi-panjang-1", owner), true, "the owner signs in with the signup password");
+  const seeded = await getAdminCredential(database, "admin");
+  assert.equal(seeded, null, "no default `admin` row remains");
+  assert.equal(validateAdminUsername("cs.siti"), true, "staff usernames still work");
+  assert.equal(validateAdminUsername("owner@toko-baru.example"), true);
+  assert.equal(validateAdminUsername("bukan email@x"), false);
+});
+
+test("T-26/API-4: invalid input 400, taken or reserved slug 409, rate limited 429, the password never the email", async () => {
+  const { run, env, input } = await signupHarness();
+  assert.equal((await run("sudah-ada")).status, 201);
+  assert.equal((await run("sudah-ada")).status, 409, "a taken slug");
+  for (const reserved of ["cname", "fallback", "www", "admin", "api"]) {
+    assert.equal((await run(reserved)).status, 409, reserved);
+  }
+  assert.equal((await run("x")).status, 400, "too short");
+  const same = await signup(env, { ...input("sama-email"), password: "owner@sama-email.example" }, "198.51.100.1", { verifyTurnstile: async () => true });
+  assert.equal(same.status, 400);
+  const robot = await signup(env, input("robot"), "198.51.100.2", { verifyTurnstile: async () => false });
+  assert.equal(robot.status, 400);
+  const statuses: number[] = [];
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    statuses.push((await signup(env, input(`banjir-${attempt}`), "198.51.100.9", { verifyTurnstile: async () => true })).status);
+  }
+  assert.equal(statuses.at(-1), 429, "the sixth signup from one address in an hour");
+});
+
+test("T-26: the reserved list holds every non-wildcard record of the seller zone", () => {
+  for (const record of SELLER_ZONE_RECORDS.filter((name) => name !== "@" && name !== "*")) {
+    assert.ok(RESERVED_SLUGS.has(record), record);
+  }
+  assert.ok(RESERVED_SLUGS.has("www"));
+  assert.equal(RESERVED_SLUGS.has("demo"), false, "the demo seed signs up normally");
+});
+
+test("T-26: a failure at each provisioning step leaves no active tenant, its host answers 404, and the purge frees the slug", async () => {
+  for (const step of ["reserve", "store", "install", "secrets"] as const) {
+    const { platformDb, stores, env, run, tenant } = await signupHarness();
+    const original = { error: console.error, log: console.log, info: console.info };
+    console.error = console.log = console.info = () => undefined;
+    try {
+      const failed = await run(`gagal-${step}`, { checkpoint: (at) => { if (at === step) throw new Error(`injected at ${step}`); } });
+      assert.equal(failed.status, 500, step);
+      assert.equal(tenant(`gagal-${step}`)?.status, "purging", step);
+      const event = platformDb.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE kind = 'provision_failed'").get() as { detail_json: string };
+      assert.equal(JSON.parse(event.detail_json).step, step);
+
+      // The host never routes.
+      const href = `https://gagal-${step}.belanja.cc/hello`;
+      let reached = false;
+      const onRequest = createMiddleware();
+      const response = (await onRequest(
+        { request: new Request(href), url: new URL(href), locals: { runtimeEnv: env }, routePattern: "/hello", redirect: () => new Response(null, { status: 302 }) } as never,
+        (async () => { reached = true; return new Response("ok"); }) as never,
+      )) as Response;
+      assert.equal(response.status, 404, step);
+      assert.equal(reached, false, step);
+
+      // The purge removes it entirely (it was never active), and the slug is free again.
+      const fenced = await runPurges(env, new Date());
+      assert.deepEqual(fenced.completed, [], `${step}: the first run only fences`);
+      const purged = await runPurges(env, new Date(Date.now() + PURGE_DRAIN_MS + 1000));
+      assert.equal(purged.completed.length, 1, step);
+      assert.equal(tenant(`gagal-${step}`), undefined, step);
+      assert.equal([...stores.stores.keys()].some((id) => id.startsWith("t_")), false, `${step}: a store survived`);
+      assert.equal((await run(`gagal-${step}`)).status, 201, `${step}: coba lagi`);
+    } finally {
+      Object.assign(console, original);
+    }
+  }
+});
+
+test("T-26/IAM-10: a provisioning whose claim updates no seeded row ends in purging, never active", async () => {
+  const { stores, run, tenant } = await signupHarness();
+  const original = { error: console.error };
+  console.error = () => undefined;
+  try {
+    const result = await run("tanpa-kursi", {
+      checkpoint: (step, tenantId) => {
+        if (step === "store") stores.get(tenantId).storage.db.exec("UPDATE admin_credentials SET must_change_password = 0");
+      },
+    });
+    assert.equal(result.status, 500);
+  } finally {
+    Object.assign(console, original);
+  }
+  assert.equal(tenant("tanpa-kursi")?.status, "purging");
+});
+
+test("T-26: a provisioning row older than 15 minutes is moved to purging and purged", async () => {
+  const { platformDb, env, tenant } = await signupHarness();
+  platformDb.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES ('t_mati', 'mati-tengah', 'x@y.example', 'provisioning', ?)").run(new Date(Date.now() - 16 * 60_000).toISOString());
+  platformDb.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES ('t_baru', 'baru-mulai', 'x@z.example', 'provisioning', ?)").run(new Date(Date.now() - 60_000).toISOString());
+  const result = await runPurges(env, new Date());
+  assert.equal(result.staleProvisioning, 1);
+  assert.equal(tenant("mati-tengah")?.status, "purging");
+  assert.equal(tenant("baru-mulai")?.status, "provisioning", "a young provisioning row is left alone");
+  await runPurges(env, new Date(Date.now() + PURGE_DRAIN_MS + 1000));
+  assert.equal(tenant("mati-tengah"), undefined);
+});
+
+test("T-26/IAM-8: a handoff redeems once on its own host and purpose; replay, expiry, wrong host or purpose, foreign origin are refused; the token is never logged", async () => {
+  const { platformDb, stores, env, run } = await signupHarness();
+  const a = await run("serah-a");
+  const b = await run("serah-b");
+  assert.ok(a.status === 201 && b.status === 201);
+  if (a.status !== 201 || b.status !== 201) return;
+  const onRequest = createMiddleware();
+  const logged: string[] = [];
+  const redeem = async (host: string, token: string, headers: Record<string, string> = { origin: "https://app.adsbook.id", "sec-fetch-site": "cross-site" }) => {
+    const href = `https://${host}/api/handoff`;
+    const body = new URLSearchParams({ token });
+    // Through the Worker entry's preparation, as in production.
+    const request = prepareHandoffRequest(new Request(href, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", ...headers }, body }));
+    const cookies = new Map<string, { value: string; options: Record<string, unknown> }>();
+    const context = {
+      request,
+      url: new URL(href),
+      locals: { runtimeEnv: env },
+      routePattern: "/api/handoff",
+      cookies: { set: (name: string, value: string, options: Record<string, unknown>) => cookies.set(name, { value, options }) },
+      redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
+    };
+    const previous = { log: console.log, error: console.error };
+    console.log = (...args: unknown[]) => void logged.push(args.map(String).join(" "));
+    console.error = (...args: unknown[]) => void logged.push(args.map((arg) => JSON.stringify(arg) ?? String(arg)).join(" "));
+    try {
+      const response = (await onRequest(context as never, (async () => handoffRoute.POST(context as never)) as never)) as Response;
+      return { status: response.status, location: response.headers.get("location"), cookie: cookies.get("__Host-adsbook_session") };
+    } finally {
+      Object.assign(console, previous);
+    }
+  };
+
+  assert.equal((await redeem("serah-b.belanja.cc", a.handoffToken)).status, 401, "A's token on B's host");
+  assert.equal((await redeem("serah-a.belanja.cc", a.handoffToken, { origin: "https://serah-b.belanja.cc", "sec-fetch-site": "same-site" })).status, 401, "posted from another seller host");
+  assert.equal((await redeem("serah-a.belanja.cc", a.handoffToken, { "sec-fetch-site": "cross-site" })).status, 401, "no Origin");
+  const first = await redeem("serah-a.belanja.cc", a.handoffToken);
+  assert.equal(first.status, 303);
+  assert.equal(first.location, "/admin/dashboard");
+  assert.ok(first.cookie?.value);
+  assert.equal(first.cookie?.options.secure, true);
+  assert.equal(first.cookie?.options.path, "/");
+  assert.equal("domain" in (first.cookie?.options ?? {}), false);
+  assert.equal((await redeem("serah-a.belanja.cc", a.handoffToken)).status, 401, "replay");
+
+  const recovery = await issueHandoff(platformDb, a.tenantId, "serah-a.belanja.cc", "owner_recovery");
+  assert.equal((await redeem("serah-a.belanja.cc", recovery)).status, 401, "wrong purpose");
+  const expired = await issueHandoff(platformDb, a.tenantId, "serah-a.belanja.cc", "signup", new Date(Date.now() - 11 * 60_000));
+  assert.equal((await redeem("serah-a.belanja.cc", expired)).status, 401, "expired");
+
+  for (const token of [a.handoffToken, b.handoffToken, recovery, expired]) {
+    assert.equal(logged.some((line) => line.includes(token)), false, "a handoff token reached a log line");
+  }
+  // The session works: it verifies under A's own key only.
+  const secretA = await resolveAuthSecret(createTenantDb(stores.get(a.tenantId).stub), a.tenantId);
+  assert.ok(await verifyJwt(first.cookie!.value, secretA));
+});
+
+test("T-26/PRIV-4: removal is requested for 30 days, cancellable, then the purge leaves nothing of the tenant", async () => {
+  const { platformDb, stores, env, run, tenant } = await signupHarness();
+  const gone = await run("pergi");
+  const stays = await run("tinggal");
+  assert.ok(gone.status === 201 && stays.status === 201);
+  if (gone.status !== 201 || stays.status !== 201) return;
+  // Shared resources of both tenants.
+  const objects = new Map<string, string>();
+  const kv = new Map<string, string>();
+  env.ASSET_BUCKET = {
+    list: async ({ prefix, limit }: { prefix: string; limit: number }) => {
+      const keys = [...objects.keys()].filter((key) => key.startsWith(prefix)).slice(0, limit);
+      return { objects: keys.map((key) => ({ key })), truncated: false };
+    },
+    delete: async (keys: string[]) => void keys.forEach((key) => objects.delete(key)),
+  };
+  env.SESSION = {
+    list: async ({ prefix }: { prefix: string }) => ({ keys: [...kv.keys()].filter((key) => key.startsWith(prefix)).map((name) => ({ name })), list_complete: true }),
+    delete: async (key: string) => void kv.delete(key),
+  };
+  for (const id of [gone.tenantId, stays.tenantId]) {
+    objects.set(`t/${id}/uploads/2026-11-16/a.webp`, "x");
+    kv.set(`t:${id}:store-config:x`, "y");
+  }
+  platformDb.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, domain_group, status, is_primary, created_at, cf_custom_hostname_id) VALUES ('pergi.example', ?, 'custom', 'pergi.example', 'active', 0, '2026-11-16', 'cf-pergi')").run(gone.tenantId);
+
+  const now = new Date();
+  const purgeAfter = await requestStoreRemoval(platformDb, gone.tenantId, "owner", now);
+  assert.ok(purgeAfter);
+  assert.equal(Date.parse(purgeAfter!) - now.getTime(), 30 * 24 * 60 * 60 * 1000);
+  assert.equal(await cancelStoreRemoval(platformDb, gone.tenantId, "owner", now), true, "cancellable");
+  assert.ok(await requestStoreRemoval(platformDb, gone.tenantId, "owner", now));
+
+  // A day early nothing happens; after the date the job starts the purge and the purge finishes it.
+  await runPlatformJobs(platformDb, new Date(now.getTime() + 29 * 24 * 3_600_000));
+  assert.equal(tenant("pergi")?.status, "active");
+  await runPlatformJobs(platformDb, new Date(now.getTime() + 31 * 24 * 3_600_000));
+  assert.equal(tenant("pergi")?.status, "purging");
+  const deleted: string[] = [];
+  const day31 = now.getTime() + 31 * 24 * 3_600_000;
+  const fenceRun = await runPurges(env, new Date(day31), { deleteCustomHostname: async (ref) => void deleted.push(ref) });
+  assert.deepEqual(fenceRun.completed, [], "the first run fences and waits for in-flight writers");
+  assert.equal(platformDb.sqlite.prepare("SELECT 1 FROM tenant_hosts WHERE tenant_id = ? AND status != 'revoked'").get(gone.tenantId), undefined, "fenced: no host routes");
+  // A write admitted before the fence lands during the drain window; the sweep still catches it.
+  objects.set(`t/${gone.tenantId}/uploads/2026-11-16/late.webp`, "late");
+  const result = await runPurges(env, new Date(day31 + PURGE_DRAIN_MS + 1000), { deleteCustomHostname: async (ref) => void deleted.push(ref) });
+  assert.deepEqual(result.completed, [gone.tenantId]);
+  assert.equal(tenant("pergi")?.status, "purged", "an active tenant ends as a tombstone");
+  assert.deepEqual(deleted, ["cf-pergi"]);
+  assert.equal([...objects.keys()].some((key) => key.includes(gone.tenantId)), false, "an R2 object survived");
+  assert.equal([...kv.keys()].some((key) => key.includes(gone.tenantId)), false, "a KV key survived");
+  assert.equal(stores.stores.has(gone.tenantId), false, "the store survived");
+  for (const table of ["webhook_secrets", "handoff_tokens", "migration_bookmarks"]) {
+    assert.equal(platformDb.sqlite.prepare(`SELECT 1 FROM ${table} WHERE tenant_id = ?`).get(gone.tenantId), undefined, table);
+  }
+  assert.equal(platformDb.sqlite.prepare("SELECT 1 FROM tenant_hosts WHERE tenant_id = ? AND status != 'revoked'").get(gone.tenantId), undefined);
+  // The other tenant is untouched.
+  assert.equal(tenant("tinggal")?.status, "active");
+  assert.ok(objects.has(`t/${stays.tenantId}/uploads/2026-11-16/a.webp`));
+  assert.ok(kv.has(`t:${stays.tenantId}:store-config:x`));
+  assert.ok(stores.stores.has(stays.tenantId));
+  // Idempotent: a second purge run of a purged tenant does nothing harmful.
+  assert.deepEqual((await runPurges(env, new Date())).completed, []);
+  // A request that outlived the drain writes after completion: the post-purge sweep removes it.
+  objects.set(`t/${gone.tenantId}/uploads/2026-11-16/very-late.webp`, "x");
+  kv.set(`t:${gone.tenantId}:late`, "y");
+  await runPurges(env, new Date(day31 + 2 * 24 * 3_600_000));
+  assert.equal([...objects.keys()].some((key) => key.includes(gone.tenantId)), false, "a late object survived the sweep");
+  assert.equal([...kv.keys()].some((key) => key.includes(gone.tenantId)), false, "a late key survived the sweep");
+  assert.ok(objects.has(`t/${stays.tenantId}/uploads/2026-11-16/a.webp`), "the sweep touched another tenant");
+});
+
+test("T-26 review: a handoff failure fails the signup; losing the activation race leaves a never-active tenant", async () => {
+  const original = { error: console.error, log: console.log, info: console.info };
+  console.error = console.log = console.info = () => undefined;
+  try {
+    for (const step of ["handoff", "activate"] as const) {
+      const { platformDb, env, run, tenant } = await signupHarness();
+      const failed = await run(`akhir-${step}`, { checkpoint: (at) => { if (at === step) throw new Error(`injected at ${step}`); } });
+      assert.equal(failed.status, 500, step);
+      assert.equal(tenant(`akhir-${step}`)?.status, "purging", step);
+      await runPurges(env, new Date());
+      await runPurges(env, new Date(Date.now() + PURGE_DRAIN_MS + 1000));
+      // `activate` failed after its commit: the tenant was active once, so it is a tombstone.
+      assert.equal(tenant(`akhir-${step}`)?.status, step === "activate" ? "purged" : undefined, step);
+      assert.ok(platformDb);
+    }
+    // The stale-provisioning job takes the row just before activation.
+    const { platformDb, run, tenant } = await signupHarness();
+    const raced = await run("kalah-balap", {
+      checkpoint: (at, tenantId) => {
+        if (at === "handoff") platformDb.sqlite.prepare("UPDATE tenants SET status = 'purging' WHERE id = ?").run(tenantId);
+      },
+    });
+    assert.equal(raced.status, 500);
+    const id = tenant("kalah-balap")!.id;
+    assert.equal(platformDb.sqlite.prepare("SELECT 1 FROM tenant_events WHERE tenant_id = ? AND kind = 'signup'").get(id), undefined, "no signup event for a tenant never activated");
+    assert.equal(platformDb.sqlite.prepare("SELECT status FROM tenant_hosts WHERE tenant_id = ?").get(id) && (platformDb.sqlite.prepare("SELECT status FROM tenant_hosts WHERE tenant_id = ?").get(id) as { status: string }).status, "pending");
+  } finally {
+    Object.assign(console, original);
+  }
+});
+
+test("T-26 review: the handoff origin is an exact platform origin; local relaxations stay on *.localhost", async () => {
+  const { isPlatformHandoffOrigin } = await import("./handoff.ts");
+  const hosts = new Set(["adsbook.id", "app.adsbook.id", "app.localhost"]);
+  assert.equal(isPlatformHandoffOrigin("https://app.adsbook.id", "cross-site", hosts), true);
+  assert.equal(isPlatformHandoffOrigin("https://app.adsbook.id:8443", "cross-site", hosts), false, "a port");
+  assert.equal(isPlatformHandoffOrigin("http://app.adsbook.id", "cross-site", hosts), false, "plain http");
+  assert.equal(isPlatformHandoffOrigin("https://app.adsbook.id", "same-site", hosts), false);
+  assert.equal(isPlatformHandoffOrigin("https://evil.example", "cross-site", hosts), false);
+  assert.equal(isPlatformHandoffOrigin(null, "cross-site", hosts), false);
+  assert.equal(isPlatformHandoffOrigin("http://app.localhost:8787", "same-site", hosts), true, "local dev");
+  assert.equal(isPlatformHandoffOrigin("http://toko.localhost:8787", "same-site", hosts), false, "another seller host");
+});
+
+test("T-26 review: purges that keep waiting do not starve the others (hourly rotation)", async () => {
+  const { platformDb, env } = await signupHarness();
+  const at = new Date(Date.now() - 60 * 60_000).toISOString();
+  for (let index = 0; index < 8; index += 1) {
+    platformDb.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES (?, ?, 'x@y.example', 'purging', ?)").run(`t_putar${index}`, `putar-${index}`, at);
+    // Each holds a custom hostname Cloudflare refuses to delete.
+    platformDb.sqlite.prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at, cf_custom_hostname_id) VALUES (?, ?, 'custom', 'revoked', 0, ?, 'cf-x')").run(`putar-${index}.example`, `t_putar${index}`, at);
+  }
+  const touched = new Set<string>();
+  const original = console.error;
+  console.error = () => undefined;
+  try {
+    const base = Date.parse("2026-11-16T00:30:00.000Z");
+    for (let hour = 0; hour < 4; hour += 1) {
+      const result = await runPurges(env, new Date(base + hour * 3_600_000), { deleteCustomHostname: async () => { throw new Error("Cloudflare down"); } });
+      [...result.pending, ...result.completed].forEach((id) => touched.add(id));
+    }
+  } finally {
+    console.error = original;
+  }
+  assert.equal(touched.size, 8, "a tenant was never reached");
+});
+
+test("T-26 review: the post-purge sweep reaches every recently completed tenant, with completions still arriving", async () => {
+  const { platformDb, env } = await signupHarness();
+  const objects = new Map<string, string>();
+  env.ASSET_BUCKET = {
+    list: async ({ prefix, limit }: { prefix: string; limit: number }) => ({
+      objects: [...objects.keys()].filter((key) => key.startsWith(prefix)).slice(0, limit).map((key) => ({ key })),
+      truncated: false,
+    }),
+    delete: async (keys: string[]) => void keys.forEach((key) => objects.delete(key)),
+  };
+  const base = Date.parse("2026-11-16T00:30:00.000Z");
+  const complete = (id: string, at: number) => {
+    platformDb.sqlite.prepare("INSERT INTO purge_sweeps (tenant_id, completed_at) VALUES (?, ?)").run(id, new Date(at).toISOString());
+    objects.set(`t/${id}/late.webp`, "x");
+  };
+  const total = POST_PURGE_SWEEP_BATCH * 2 + 10;
+  for (let index = 0; index < total; index += 1) complete(`t_z${String(index).padStart(4, "0")}`, base - 3_600_000 + index);
+  for (let hour = 0; hour < 4; hour += 1) {
+    // New completions with low ids keep arriving.
+    complete(`t_a${hour}`, base + hour * 3_600_000 - 1000);
+    await runPurges(env, new Date(base + hour * 3_600_000));
+  }
+  const left = [...objects.keys()].filter((key) => key.startsWith("t/t_z"));
+  assert.deepEqual(left, [], `${left.length} completed tenants were never swept`);
+});
+
+test("T-26 review: at the documented ceiling (25 completions an hour, rolling expiry) every tenant is swept before its window ends", async () => {
+  const { platformDb, env } = await signupHarness();
+  const swept = new Set<string>();
+  env.ASSET_BUCKET = {
+    list: async ({ prefix }: { prefix: string }) => {
+      swept.add(prefix.slice(2, -1));
+      return { objects: [], truncated: false };
+    },
+    delete: async () => undefined,
+  };
+  const base = Date.parse("2026-11-16T00:30:00.000Z");
+  const insert = platformDb.sqlite.prepare("INSERT INTO purge_sweeps (tenant_id, completed_at) VALUES (?, ?)");
+  const hours = 200;
+  for (let hour = 0; hour < hours; hour += 1) {
+    for (let index = 0; index < POST_PURGE_SWEEP_BATCH / 2; index += 1) {
+      insert.run(`t_h${hour}x${index}`, new Date(base + hour * 3_600_000 - 1000).toISOString());
+    }
+    await runPurges(env, new Date(base + hour * 3_600_000));
+  }
+  const missed: string[] = [];
+  for (let hour = 0; hour < hours; hour += 1) {
+    for (let index = 0; index < POST_PURGE_SWEEP_BATCH / 2; index += 1) {
+      if (!swept.has(`t_h${hour}x${index}`)) missed.push(`t_h${hour}x${index}`);
+    }
+  }
+  assert.deepEqual(missed.slice(0, 5), [], `${missed.length} tenants were never swept`);
+});
+
+test("T-26 review: under sustained arrivals a late write after the first sweep is still removed; failing sweeps rotate", async () => {
+  const { platformDb, env } = await signupHarness();
+  const objects = new Map<string, string>();
+  const failing = new Set<string>();
+  env.ASSET_BUCKET = {
+    list: async ({ prefix }: { prefix: string }) => {
+      const id = prefix.slice(2, -1);
+      if (failing.has(id)) throw new Error("R2 down for this tenant");
+      return { objects: [...objects.keys()].filter((key) => key.startsWith(prefix)).map((key) => ({ key })), truncated: false };
+    },
+    delete: async (keys: string[]) => void keys.forEach((key) => objects.delete(key)),
+  };
+  const base = Date.parse("2026-11-16T00:30:00.000Z");
+  const insert = platformDb.sqlite.prepare("INSERT INTO purge_sweeps (tenant_id, completed_at) VALUES (?, ?)");
+  const original = console.error;
+  console.error = () => undefined;
+  try {
+    // 50 tenants whose sweep always fails, then one healthy tenant.
+    for (let index = 0; index < POST_PURGE_SWEEP_BATCH; index += 1) {
+      failing.add(`t_bad${index}`);
+      insert.run(`t_bad${index}`, new Date(base - 10_000 + index).toISOString());
+    }
+    insert.run("t_good", new Date(base - 1).toISOString());
+    objects.set("t/t_good/x.webp", "x");
+    let hour = 0;
+    const tick = async () => {
+      for (let index = 0; index < 20; index += 1) insert.run(`t_new${hour}x${index}`, new Date(base + hour * 3_600_000 - 500).toISOString());
+      await runPurges(env, new Date(base + hour * 3_600_000));
+      hour += 1;
+    };
+    for (let run = 0; run < 3; run += 1) await tick();
+    assert.equal(objects.has("t/t_good/x.webp"), false, "the healthy tenant was starved by failing ones");
+    // A late write after its first sweep, while 20 new completions arrive every hour.
+    objects.set("t/t_good/late.webp", "x");
+    for (let run = 0; run < 6; run += 1) await tick();
+    assert.equal(objects.has("t/t_good/late.webp"), false, "a late write after the first sweep survived");
+  } finally {
+    console.error = original;
+  }
+});
+
+test("T-26 review: a completion that queued past its window is still swept before it leaves", async () => {
+  const { platformDb, env } = await signupHarness();
+  const swept: string[] = [];
+  env.ASSET_BUCKET = {
+    list: async ({ prefix }: { prefix: string }) => (swept.push(prefix.slice(2, -1)), { objects: [], truncated: false }),
+    delete: async () => undefined,
+  };
+  platformDb.sqlite.prepare("INSERT INTO purge_sweeps (tenant_id, completed_at) VALUES ('t_tua', ?)").run(new Date(Date.now() - 8 * 24 * 3_600_000).toISOString());
+  await runPurges(env, new Date());
+  assert.ok(swept.includes("t_tua"), "an expired but never-swept completion was dropped");
+  await runPurges(env, new Date());
+  assert.equal(platformDb.sqlite.prepare("SELECT 1 FROM purge_sweeps WHERE tenant_id = 't_tua'").get(), undefined, "swept and expired rows leave");
+});
+
+test("the Worker entry module exports only its handler and the Durable Object class", () => {
+  // workerd treats every export as an entrypoint and refuses the script when
+  // one is neither a handler nor a class (caught on local workerd, T-26).
+  assert.deepEqual(Object.keys(workerModule).sort(), ["TenantStore", "default"]);
+});
+
+test("T-26: the handoff's real Origin is carried past Astro only on its own path, and a client copy is dropped", () => {
+  const forged = prepareHandoffRequest(new Request("https://toko.belanja.cc/api/handoff", {
+    method: "POST",
+    headers: {
+      origin: "https://evil.example",
+      "sec-fetch-site": "cross-site",
+      [HANDOFF_ORIGIN_HEADER]: "https://app.adsbook.id",
+      "x-adsbook-handoff-fetch-site": "cross-site",
+    },
+  }));
+  assert.equal(forged.headers.get(HANDOFF_ORIGIN_HEADER), "https://evil.example", "a client-sent copy is replaced");
+  assert.equal(forged.headers.get("origin"), "https://toko.belanja.cc");
+  assert.equal(forged.headers.get("sec-fetch-site"), "same-origin", "presented as same-origin to Astro only");
+  const noOrigin = prepareHandoffRequest(new Request("https://toko.belanja.cc/api/handoff", { method: "POST", headers: { [HANDOFF_ORIGIN_HEADER]: "https://app.adsbook.id" } }));
+  assert.equal(noOrigin.headers.get(HANDOFF_ORIGIN_HEADER), null, "no Origin, no carried origin");
+  assert.equal(noOrigin.headers.get("x-adsbook-handoff-fetch-site"), null, "a client-sent fetch-site copy is dropped");
+  const other = new Request("https://toko.belanja.cc/api/admin/orders", { method: "POST", headers: { origin: "https://evil.example" } });
+  assert.equal(prepareHandoffRequest(other), other, "every other path keeps Astro's check");
 });

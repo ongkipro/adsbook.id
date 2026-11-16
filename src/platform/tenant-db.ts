@@ -372,6 +372,21 @@ export async function armTenantAlarm(env: TenantDbEnv | null | undefined, tenant
   return (await stub.armAlarm(TENANT_STORE_PROTOCOL, tenantId)).armed;
 }
 
+/** T-26: delete everything in the tenant's store (and its alarm). Idempotent. */
+export async function purgeTenantStore(env: TenantDbEnv | null | undefined, tenantId: string): Promise<void> {
+  const namespace = env?.TENANT_STORE as StoreNamespace | undefined;
+  if (typeof namespace?.getByName !== "function") {
+    throw new TenantUnavailableError("protocol", "TENANT_STORE is not bound");
+  }
+  const stub = namespace.getByName(tenantId, { locationHint: "apac-se" }) as unknown as {
+    purge(protocol: number, tenantId: string): Promise<void>;
+  };
+  await stub.purge(TENANT_STORE_PROTOCOL, tenantId).catch((error: unknown) => {
+    // `ctx.abort` ends the call that made it; the purge itself has completed.
+    if (!/purged/.test(String(error))) throw error;
+  });
+}
+
 export async function openTenantDb(
   env: TenantDbEnv | null | undefined,
   tenant: TenantRef,

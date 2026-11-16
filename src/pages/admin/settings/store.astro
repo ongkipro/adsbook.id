@@ -3,6 +3,8 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
 export const prerender = false;
 import NativeSelect from '../../../components/ui/NativeSelect.astro';
+import { StoreRemoval } from '../../../components/admin/StoreRemoval';
+const isOwner = Astro.locals.admin?.role === 'owner';
 ---
 
 <AdminLayout title="Toko & customer service" activeMenu="settings">
@@ -152,6 +154,7 @@ import NativeSelect from '../../../components/ui/NativeSelect.astro';
       </div>
       <div class="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><p id="embedOriginsStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true">Perubahan belum ada.</p><button id="saveEmbedOrigins" type="submit" class="btn-blue w-full sm:w-auto">Simpan domain embed</button></div>
     </form>
+    {isOwner && <StoreRemoval client:load />}
   </div>
   <script>
     const form = document.getElementById('storeForm') as HTMLFormElement | null;

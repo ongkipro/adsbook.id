@@ -35,7 +35,8 @@ function sqliteD1() {
       id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       must_change_password INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      email TEXT, role TEXT NOT NULL DEFAULT 'owner'
     );
     CREATE TABLE courier_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,7 +219,7 @@ test("the install writes the store and the credential together", async () => {
   );
 
   // The password must be stored hashed, never in the clear.
-  const storedHash = bindings[1][1] as string;
+  const storedHash = bindings[1][2] as string; // username, email, then the hash
   assert.notEqual(storedHash, valid.adminPassword);
   assert.equal(await verifyPasswordHash(valid.adminPassword, storedHash), true);
 });

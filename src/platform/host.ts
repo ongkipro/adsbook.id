@@ -58,6 +58,12 @@ export function platformHosts(extra?: string | null): ReadonlySet<string> {
 }
 
 /** Internal platform routes: served on platform hosts only, never on a tenant host. */
+/** Platform pages (`/platform/…`) and platform APIs (`/api/platform/…`, API-4). */
 export function isPlatformRoute(pathname: string): boolean {
-  return pathname === "/platform" || pathname.startsWith("/platform/");
+  return (
+    pathname === "/platform" ||
+    pathname.startsWith("/platform/") ||
+    pathname === "/api/platform" ||
+    pathname.startsWith("/api/platform/")
+  );
 }

@@ -29,16 +29,16 @@ const pageTitle = mustChangePassword
 
     <form id="profileForm" class="hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-7" novalidate aria-busy="false">
       <div id="defaultCredentialNotice" class="hidden mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900" role="alert">
-        Akun masih memakai password default. Ganti password sebelum membuka menu admin lainnya.
+        Akun ini wajib ganti password sebelum membuka menu admin lainnya.
       </div>
       <fieldset>
         <legend class="font-semibold text-slate-950">Kredensial login</legend>
         <p class="mt-1 text-xs leading-5 text-slate-500">Perubahan akan mengakhiri seluruh sesi admin. Login kembali memakai kredensial baru.</p>
         <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
           <label class="block text-xs font-semibold text-slate-700" for="profileUsername">
-            Username baru
-            <input id="profileUsername" name="username" type="text" required minlength="3" maxlength="64" pattern="[a-z0-9._-]{3,64}" autocomplete="username" class="admin-input-flat mt-2 sm:text-sm" />
-            <span class="mt-1 block text-xs font-medium text-slate-500">Huruf kecil, angka, titik, garis bawah, atau tanda hubung.</span>
+            Email atau username untuk masuk
+            <input id="profileUsername" name="username" type="text" required minlength="3" maxlength="254" autocomplete="username" aria-describedby="profileUsernameHint" class="admin-input-flat mt-2 sm:text-sm" />
+            <span id="profileUsernameHint" class="mt-1 block text-xs font-medium text-slate-500">Anda masuk di /hello dengan ini. Email, atau huruf kecil, angka, titik, garis bawah, tanda hubung.</span>
           </label>
           <label class="block text-xs font-semibold text-slate-700" for="currentPassword">
             Password saat ini
