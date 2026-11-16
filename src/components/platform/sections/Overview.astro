@@ -1,0 +1,95 @@
+---
+import PlatformLayout from '../PlatformLayout.astro';
+import Kpi from '../Kpi.astro';
+import DailyChart from '../DailyChart.astro';
+import { getRuntimeEnv } from '../../../lib/env';
+import { formatIdr } from '../../../lib/format-idr';
+import { actionItems, ageText, dailySeries, overviewKpis, ownerWhatsAppLink, previewLeads } from '../../../platform/admin/metrics';
+
+// UX-7: what needs the operator today, and how the business is doing.
+const platformDb = (getRuntimeEnv(Astro.locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database;
+const now = new Date();
+const [kpis, actions, leads, series] = await Promise.all([
+  overviewKpis(platformDb, now),
+  actionItems(platformDb, now),
+  previewLeads(platformDb, 15),
+  dailySeries(platformDb, now, 30),
+]);
+const conversion = kpis.activated ? `${Math.round((kpis.everSubscribed / kpis.activated) * 100)}%` : '—';
+const monthName = new Intl.DateTimeFormat('id-ID', { month: 'long', timeZone: 'Asia/Jakarta' }).format(now);
+const tone: Record<string, string> = {
+  grace: 'text-amber-800', ending: 'text-amber-800', invoice: 'text-blue-800', domain: 'text-blue-800',
+  heartbeat: 'text-rose-800', recovery: 'text-rose-800', purge: 'text-slate-700',
+};
+---
+<PlatformLayout title="Ringkasan" active="overview">
+  <div class="flex flex-wrap items-end justify-between gap-2">
+    <h1 class="text-xl font-semibold text-slate-950">Ringkasan</h1>
+    <p class="text-xs text-slate-500">Waktu WIB · dimuat {new Intl.DateTimeFormat('id-ID', { timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(now)}</p>
+  </div>
+
+  <section aria-label="Angka utama" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <Kpi id="kpiPaying" label="Toko berbayar" value={String(kpis.payingStores)} basis={kpis.inGrace ? `${kpis.inGrace} dalam masa tenggang` : 'aktif atau dalam masa tenggang'} />
+    <Kpi id="kpiCollected" label={`Pendapatan ${monthName}`} value={formatIdr(kpis.collectedThisMonth)} basis={`bulan lalu ${formatIdr(kpis.collectedLastMonth)} · tagihan dibayar`} />
+    <Kpi id="kpiMrr" label="Perkiraan MRR" value={formatIdr(kpis.estimatedMrr)} basis="paket terakhir yang dibayar, per 30 hari" />
+    <Kpi id="kpiConversion" label="Preview → bayar" value={conversion} basis={`${kpis.everSubscribed} dari ${kpis.activated} toko · ${kpis.signupsLast7Days} daftar 7 hari terakhir`} />
+  </section>
+
+  <div class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-5">
+    <section class="rounded-xl border border-slate-200 bg-white xl:col-span-3" aria-labelledby="actionsTitle">
+      <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <h2 id="actionsTitle" class="text-base font-semibold text-slate-950">Perlu tindakan</h2>
+        <span class="text-xs text-slate-500">{actions.length} item</span>
+      </div>
+      {actions.length ? (
+        <ul class="divide-y divide-slate-100" id="actionList">
+          {actions.map((item) => (
+            <li>
+              <a href={item.href} class="flex flex-col gap-0.5 px-4 py-3 hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <span class="min-w-0">
+                  <span class={`text-sm font-semibold ${tone[item.kind] ?? 'text-slate-800'}`}>{item.label}</span>
+                  <span class="text-sm text-slate-700"> · {item.slug}</span>
+                </span>
+                <span class="text-xs text-slate-500 sm:text-right">{item.detail}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="px-4 py-6 text-sm text-slate-600" id="actionList">Tidak ada yang perlu ditindak.</p>
+      )}
+    </section>
+
+    <section class="rounded-xl border border-slate-200 bg-white xl:col-span-2" aria-labelledby="leadsTitle">
+      <div class="border-b border-slate-100 px-4 py-3">
+        <h2 id="leadsTitle" class="text-base font-semibold text-slate-950">Follow-up Mode Preview</h2>
+        <p class="text-xs text-slate-500">Toko yang belum pernah berlangganan, terbaru di atas.</p>
+      </div>
+      {leads.length ? (
+        <ul class="divide-y divide-slate-100" id="leadList">
+          {leads.map((lead) => {
+            const wa = ownerWhatsAppLink(lead.owner_whatsapp, lead.slug);
+            return (
+              <li class="flex items-center justify-between gap-3 px-4 py-3">
+                <div class="min-w-0">
+                  <a href={`/platform/tenants/${lead.id}`} class="text-sm font-semibold text-blue-700 hover:underline">{lead.slug}</a>
+                  <p class="truncate text-xs text-slate-500">{lead.owner_email} · {ageText(lead.created_at, now)} lalu</p>
+                </div>
+                <div class="flex shrink-0 gap-2">
+                  {wa && <a href={wa} target="_blank" rel="noopener" class="btn-secondary">WhatsApp</a>}
+                  <a href={`mailto:${lead.owner_email}`} class="btn-secondary">Email</a>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p class="px-4 py-6 text-sm text-slate-600" id="leadList">Belum ada toko di Mode Preview.</p>
+      )}
+    </section>
+  </div>
+
+  <div class="mt-6">
+    <DailyChart points={series} />
+  </div>
+</PlatformLayout>

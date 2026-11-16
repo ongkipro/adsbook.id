@@ -34,6 +34,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { ADMIN_ROLES, canAccessAdminRoute } from "./auth.ts";
 import { isPlatformPublicPath } from "../platform/admin/guard.ts";
 import { ACTION_ROLES } from "../platform/admin/tenants.ts";
+import { isOwnerOnlyPlatformPath } from "../platform/admin/team.ts";
 import { PLATFORM_SITE_ROUTES } from "../platform/host.ts";
 
 export const PAGES_DIR = "src/pages";
@@ -213,7 +214,7 @@ const PLATFORM_ROLES = [...new Set(Object.values(ACTION_ROLES).flat())].sort();
  */
 export function rolesFor(path: string, family: RouteFamily): string[] {
   if (family === "Admin page" || family === "Admin API") return ADMIN_ROLES.filter((role) => canAccessAdminRoute(role, path));
-  if (authFor(path, family) === "platform session") return [...PLATFORM_ROLES];
+  if (authFor(path, family) === "platform session") return isOwnerOnlyPlatformPath(path.replace(/\/\[id\]$/, "/x")) ? ["platform_owner"] : [...PLATFORM_ROLES];
   return [];
 }
 

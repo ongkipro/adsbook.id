@@ -1,0 +1,47 @@
+---
+import type { DailyPoint } from '../../platform/admin/metrics';
+
+/** UX-7: signups (columns) and paid invoices (dots) per WIB day; SVG, no script, no dependency. */
+interface Props { points: DailyPoint[] }
+const { points } = Astro.props;
+const width = 720;
+const height = 180;
+const pad = { top: 12, right: 8, bottom: 22, left: 28 };
+const max = Math.max(1, ...points.map((point) => Math.max(point.signups, point.paid)));
+const step = (width - pad.left - pad.right) / Math.max(1, points.length);
+const y = (value: number) => pad.top + (height - pad.top - pad.bottom) * (1 - value / max);
+const totalSignups = points.reduce((sum, point) => sum + point.signups, 0);
+const totalPaid = points.reduce((sum, point) => sum + point.paid, 0);
+const ticks = [0, Math.ceil(max / 2), max].filter((value, index, all) => all.indexOf(value) === index);
+const label = (day: string) => `${Number(day.slice(8, 10))}/${Number(day.slice(5, 7))}`;
+---
+<figure class="rounded-xl border border-slate-200 bg-white p-4">
+  <figcaption class="text-sm">
+    <span class="font-semibold text-slate-950">30 hari terakhir:</span>{' '}
+    <span class="text-slate-700">{totalSignups} toko baru, {totalPaid} pembayaran langganan</span>
+    <span class="block text-xs text-slate-500">Per hari WIB. Kolom = toko baru, titik = tagihan dibayar.</span>
+  </figcaption>
+  <div class="relative mt-3 overflow-x-auto"><svg viewBox={`0 0 ${width} ${height}`} class="h-auto w-full min-w-[560px]" role="img" aria-label={`Grafik 30 hari: ${totalSignups} toko baru dan ${totalPaid} pembayaran`}>
+    {ticks.map((tick) => (
+      <g>
+        <line x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} stroke="#e2e8f0" stroke-width="1" />
+        <text x={pad.left - 6} y={y(tick) + 4} text-anchor="end" font-size="10" fill="#64748b">{tick}</text>
+      </g>
+    ))}
+    {points.map((point, index) => {
+      const x = pad.left + index * step;
+      return (
+        <g>
+          {point.signups > 0 && <rect x={x + step * 0.18} y={y(point.signups)} width={step * 0.64} height={y(0) - y(point.signups)} rx="2" fill="#2563eb"><title>{label(point.day)}: {point.signups} toko baru</title></rect>}
+          {point.paid > 0 && <circle cx={x + step / 2} cy={y(point.paid)} r="4" fill="#ffffff" stroke="#d55e00" stroke-width="2.5"><title>{label(point.day)}: {point.paid} dibayar</title></circle>}
+          {index % 5 === 0 && <text x={x + step / 2} y={height - 6} text-anchor="middle" font-size="10" fill="#64748b">{label(point.day)}</text>}
+        </g>
+      );
+    })}
+  </svg></div>
+  <table class="sr-only">
+    <caption>Toko baru dan tagihan dibayar per hari (WIB)</caption>
+    <thead><tr><th scope="col">Tanggal</th><th scope="col">Toko baru</th><th scope="col">Dibayar</th></tr></thead>
+    <tbody>{points.map((point) => <tr><td>{point.day}</td><td>{point.signups}</td><td>{point.paid}</td></tr>)}</tbody>
+  </table>
+</figure>
