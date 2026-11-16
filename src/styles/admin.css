@@ -28,7 +28,7 @@
 @source "../layouts/AdminLayout.astro";
 
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./vendor/shadcn-tailwind.css";
 
 /* These component classes live in `@layer components` on purpose. Declared
    unlayered they beat every Tailwind utility regardless of specificity —
