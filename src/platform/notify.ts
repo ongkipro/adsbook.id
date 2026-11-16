@@ -101,27 +101,55 @@ export async function notifyOperator(
   fetcher: typeof fetch = fetch,
   now = new Date(),
 ): Promise<"sent" | "duplicate" | "skipped" | "failed"> {
+  const key = notice.host ? `${notice.kind}:${notice.host}` : notice.kind;
+  return sendOnce(env, platformDb, notice.tenantId, key, () => noticeText(env, notice), notice.kind, fetcher, now);
+}
+
+/**
+ * A notice about the platform itself, not one store (`tenant_id` `_platform`),
+ * sent once per `key` on the same channel.
+ */
+export function notifyPlatform(
+  env: Record<string, unknown> | null | undefined,
+  platformDb: D1Database,
+  key: string,
+  text: string,
+  fetcher: typeof fetch = fetch,
+  now = new Date(),
+): Promise<"sent" | "duplicate" | "skipped" | "failed"> {
+  return sendOnce(env, platformDb, "_platform", key, () => `[adsbook.id] ${text}`, key.split(":")[0], fetcher, now);
+}
+
+async function sendOnce(
+  env: Record<string, unknown> | null | undefined,
+  platformDb: D1Database,
+  tenantId: string,
+  key: string,
+  text: () => string,
+  kind: string,
+  fetcher: typeof fetch,
+  now: Date,
+): Promise<"sent" | "duplicate" | "skipped" | "failed"> {
   const url = webhookUrl(env);
   if (!url) return "skipped";
   try {
-    const key = notice.host ? `${notice.kind}:${notice.host}` : notice.kind;
     const claimed = await platformDb
       .prepare("INSERT INTO operator_notices (tenant_id, notice, sent_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING")
-      .bind(notice.tenantId, key, now.toISOString())
+      .bind(tenantId, key, now.toISOString())
       .run();
     if (Number(claimed.meta?.changes ?? 0) !== 1) return "duplicate";
-    const text = noticeText(env, notice);
+    const body = text();
     const response = await fetcher(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, content: text }),
+      body: JSON.stringify({ text: body, content: body }),
       signal: AbortSignal.timeout(8_000),
     });
     if (response.ok) return "sent";
-    console.error("operator-notice-failed", { kind: notice.kind, status: response.status });
+    console.error("operator-notice-failed", { kind, status: response.status });
     return "failed";
   } catch (error) {
-    console.error("operator-notice-failed", { kind: notice.kind, error: error instanceof Error ? error.name : "unknown" });
+    console.error("operator-notice-failed", { kind, error: error instanceof Error ? error.name : "unknown" });
     return "failed";
   }
 }

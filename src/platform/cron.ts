@@ -5,6 +5,7 @@ import { armTenantAlarm, openTenantDb, TenantUnavailableError } from "./tenant-d
 import { runPlatformJobs } from "./jobs.ts";
 import { noticeDomainIfActive, noticeStuckDomains } from "./notify.ts";
 import { pollPendingDomains } from "./domain-poll.ts";
+import { checkTrustPositif } from "./trust-watch.ts";
 import { resolveAuthSecret } from "../lib/auth-secret.ts";
 import { runPurges } from "./purge.ts";
 import { deleteHostnameRef, hostnameApiFromEnv, probeHost } from "./hostnames.ts";
@@ -116,6 +117,11 @@ export async function runPlatformCron(
         onActive: (tenantId, slug, view) => noticeDomainIfActive(record, platformDb, { tenantId, slug }, view, (task) => context.waitUntil(task)),
       });
       if (polled.checked) console.info("scheduled-domain-poll", polled);
+    }
+    // Once a day (01:07 UTC, 08:07 WIB): are the platform's own IPs on Komdigi's Trust+ list?
+    if (new Date(scheduledTime).getUTCHours() === 1) {
+      const watch = await checkTrustPositif(env as unknown as Record<string, unknown>, platformDb, new Date(scheduledTime));
+      if (watch) console.info("scheduled-trustpositif", { checked: watch.checked, blocked: watch.blocked.length });
     }
   } catch (error) {
     console.error("scheduled-platform-jobs-failed", String(error));

@@ -280,14 +280,14 @@ under both headings wherever they are named; which database a statement meant is
 | `/api/platform/login` | POST | public | — | `src/pages/api/platform/login.ts` | `env` `platform/admin/session` `rate-limit` | `rate_limits` | `platform_sessions` `platform_users` `rate_limits` | `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/logout` | POST | platform session | platform_owner, platform_support | `src/pages/api/platform/logout.ts` | `env` `platform/admin/session` | — | `platform_sessions` `platform_users` | `lib/env.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/signup` | POST | public | — | `src/pages/api/platform/signup.ts` | `env` `platform/notify` `platform/signup` `platform/site/site` `rate-limit` | `rate_limits` | `operator_notices` `rate_limits` `tenant_events` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/notify.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
-| `/api/platform/slug` | GET | public | — | `src/pages/api/platform/slug.ts` | `env` `platform/control-plane` `platform/slugs` | — | `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/gate.test.ts` `platform/hostnames.test.ts` `platform/isolation.test.ts` `platform/jobs.test.ts` `platform/middleware-gate.test.ts` `platform/notify.test.ts` `platform/plans.test.ts` `platform/tenant-store.test.ts` `platform/two-tenants.test.ts` |
+| `/api/platform/slug` | GET | public | — | `src/pages/api/platform/slug.ts` | `env` `platform/control-plane` `platform/slugs` | — | `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/gate.test.ts` `platform/hostnames.test.ts` `platform/isolation.test.ts` `platform/jobs.test.ts` `platform/middleware-gate.test.ts` `platform/notify.test.ts` `platform/plans.test.ts` `platform/tenant-store.test.ts` `platform/trust-watch.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/tenants` | GET | platform session | platform_owner, platform_support | `src/pages/api/platform/tenants/index.ts` | `env` `platform/admin/tenants` | — | `plans` `tenant_events` `tenant_health` `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/tenants/[id]` | GET | platform session | platform_owner, platform_support | `src/pages/api/platform/tenants/[id]/index.ts` | `env` `platform/admin/tenants` | — | `plans` `tenant_events` `tenant_health` `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/tenants/[id]/[action]` | POST | platform session | platform_owner, platform_support | `src/pages/api/platform/tenants/[id]/[action].ts` | `env` `platform/admin/tenants` | — | `plans` `tenant_events` `tenant_health` `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/two-tenants.test.ts` |
 
 ## Modules
 
-178 modules under `src/lib` and `src/platform`; 9 that no test imports.
+179 modules under `src/lib` and `src/platform`; 9 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -443,7 +443,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/admin/tenants` | 8 | — | `plans` `tenant_events` `tenant_health` `tenant_hosts` `tenants` | 1 | `/platform` `/platform/tenants/[id]` `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` |
 | `platform/admin/totp` | 6 | — | — | 1 | — |
 | `platform/bundled-migrations` | 1 | — | — | **none** | — |
-| `platform/control-plane` | 10 | — | `tenant_hosts` `tenants` | 10 | `/api/platform/slug` |
+| `platform/control-plane` | 10 | — | `tenant_hosts` `tenants` | 11 | `/api/platform/slug` |
 | `platform/cron` | 3 | — | `tenants` | 1 | — |
 | `platform/demo` | 2 | — | — | **none** | — |
 | `platform/domain-poll` | 6 | — | `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]/recheck` |
@@ -455,7 +455,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/keys` | 13 | — | — | 1 | `/assets/[...key]` `/media/[...key]` `/api/form-config` `/api/admin/expeditions` `/api/admin/media` `/api/admin/upload-r2` |
 | `platform/legal-texts` | 3 | — | — | 1 | — |
 | `platform/legal` | 7 | `plugins` `stores` | — | 2 | `/kebijakan-privasi` `/admin/settings/privacy` `/api/admin/settings/privacy` |
-| `platform/notify` | 6 | — | `operator_notices` `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]` `/api/admin/domains/[host]/recheck` `/api/platform/signup` |
+| `platform/notify` | 7 | — | `operator_notices` `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]` `/api/admin/domains/[host]/recheck` `/api/platform/signup` |
 | `platform/plans` | 7 | `rate_limits` | `plans` `rate_limits` `tenant_hosts` `tenant_usage_daily` `tenants` | 2 | `/api/admin/content` `/api/admin/media` `/api/admin/upload-r2` |
 | `platform/purge` | 12 | — | `handoff_tokens` `migration_bookmarks` `operator_notices` `purge_sweeps` `tenant_events` `tenant_health` `tenant_hosts` `tenant_usage_daily` `tenants` `webhook_secrets` | 1 | `/api/admin/store-removal` |
 | `platform/readiness` | 4 | `courier_rules` `product_variants` `products` `stores` `warehouses` | — | 2 | — |
@@ -471,4 +471,5 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/tenant-db` | 13 | — | `migration_bookmarks` `tenant_events` `tenants` | 3 | — |
 | `platform/tenant-maintenance` | 1 | — | — | 3 | — |
 | `platform/tenant-store` | 1 | `capi_event_outbox` | — | 1 | — |
+| `platform/trust-watch` | 4 | — | — | 1 | — |
 | `platform/webhook-secrets` | 7 | — | `tenant_hosts` `webhook_secrets` | 1 | `/api/webhooks/autolaris/[token]` `/api/admin/settings` |
