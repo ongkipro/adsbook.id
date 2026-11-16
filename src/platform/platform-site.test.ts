@@ -66,7 +66,7 @@ test("CompleteRegistration from the server shares the browser's event id and has
   const env = { PLATFORM_META_PIXEL_ID: "100000000000001", PLATFORM_META_CAPI_TOKEN: "tok en", PLATFORM_META_TEST_EVENT_CODE: "TEST123" };
   const eventId = registrationEventId("2f0c8a8e-1f5b-4c9e-9a51-3c1f2b7d9e10");
   assert.equal(eventId, "2f0c8a8e-1f5b-4c9e-9a51-3c1f2b7d9e10");
-  const result = await sendCompleteRegistration(env, { eventId, email: " Owner@Toko.Example ", sourceUrl: "https://adsbook.id/daftar", ip: "203.0.113.5", userAgent: "UA", fbp: "fb.1.1.2" }, fetcher);
+  const result = await sendCompleteRegistration(env, { eventId, email: " Owner@Toko.Example ", phone: "6281234567890", sourceUrl: "https://adsbook.id/daftar", ip: "203.0.113.5", userAgent: "UA", fbp: "fb.1.1.2" }, fetcher);
   assert.equal(result, "sent");
   assert.equal(calls.length, 1);
   assert.match(calls[0].url, /^https:\/\/graph\.facebook\.com\/v\d+\.\d+\/100000000000001\/events$/, "no token in the URL");
@@ -76,6 +76,7 @@ test("CompleteRegistration from the server shares the browser's event id and has
   assert.equal(event.event_id, eventId);
   assert.equal(event.action_source, "website");
   assert.deepEqual((event.user_data as { em: string[] }).em, [createHash("sha256").update("owner@toko.example").digest("hex")]);
+  assert.deepEqual((event.user_data as { ph: string[] }).ph, [createHash("sha256").update("6281234567890").digest("hex")]);
   assert.equal(calls[0].body.test_event_code, "TEST123");
   assert.doesNotMatch(JSON.stringify(calls[0].body), /Owner@Toko|owner@toko/, "no plain email leaves");
 });

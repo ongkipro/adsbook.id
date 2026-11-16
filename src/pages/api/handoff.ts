@@ -10,15 +10,28 @@ import { platformHosts } from "../../platform/host.ts";
 
 export const prerender = false;
 
-/** Any failure: 401 with a way forward, and no session. */
+/** Safe post-signup destinations on the seller's own admin surface. */
+export function resolveHandoffTarget(raw: unknown): string {
+  if (typeof raw !== "string") return "/admin/dashboard";
+  const trimmed = raw.trim();
+  if (/^\/admin\/(?:setup|dashboard|billing)(?:\?[A-Za-z0-9=&_-]{1,64})?$/.test(trimmed)) {
+    return trimmed;
+  }
+  return "/admin/dashboard";
+}
+
+/** Any failure: 401 with a clear way forward on the seller's login page, and no session. */
 function refused() {
   return new Response(
     `<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Tautan masuk tidak berlaku</title>
-<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;color:#0f172a">
-<h1 style="font-size:1.25rem">Tautan masuk tidak berlaku</h1>
-<p>Tautan ini sudah dipakai atau kedaluwarsa. Masuk dengan email dan password toko Anda.</p>
-<p><a href="/hello" style="color:#1d4ed8;font-weight:600">Masuk ke toko</a></p></body></html>`,
+<title>Sesi masuk otomatis sudah berakhir - adsbook.id</title>
+<body style="font-family:ui-sans-serif,system-ui,sans-serif;background:#faf7f2;margin:0;padding:12vh 1rem;color:#1c1917">
+<main style="max-width:30rem;margin:0 auto;background:#fff;border:1px solid #e7e5e4;border-radius:16px;padding:1.75rem">
+<p style="margin:0;font-weight:800;font-size:1.05rem">adsbook<span style="color:#c2410c">.id</span></p>
+<h1 style="margin:0.75rem 0 0;font-size:1.3rem;line-height:1.25">Tautan masuk otomatis sudah dipakai</h1>
+<p style="margin:0.75rem 0 1.25rem;color:#57534e;line-height:1.55">Toko Anda sudah siap. Masuk menggunakan email dan password yang baru Anda daftarkan.</p>
+<a href="/hello" style="display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0.6rem 1.2rem;border-radius:8px;background:#c2410c;color:#fff;font-weight:700;text-decoration:none">Masuk ke Admin Toko</a>
+</main></body></html>`,
     { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
   );
 }
@@ -53,5 +66,5 @@ export const POST: APIRoute = async ({ request, locals, cookies, redirect }) => 
   const { token, session } = await signJwt({ username: credential.username, role: credential.role }, secret);
   await storeAdminSession(database, session, credential);
   cookies.set(SESSION_COOKIE_NAME, token, { ...SESSION_COOKIE_OPTIONS, maxAge: 60 * 60 * 24 });
-  return redirect("/admin/dashboard", 303);
+  return redirect(resolveHandoffTarget(form?.get("next")), 303);
 };

@@ -28,6 +28,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       storeName: body.store_name,
       slug: body.slug,
       email: body.email,
+      whatsapp: body.whatsapp,
       password: body.password,
       terms: body.terms,
       turnstileToken: body.turnstile_token,
@@ -35,13 +36,22 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     getClientIp(request.headers),
   );
   if (result.status !== 201) {
-    return Response.json({ success: false, error: result.error, errors: "errors" in result ? result.errors ?? {} : {} }, { status: result.status });
+    return Response.json(
+      {
+        success: false,
+        error: result.error,
+        errors: "errors" in result ? result.errors ?? {} : {},
+        suggestions: "suggestions" in result ? result.suggestions ?? [] : [],
+      },
+      { status: result.status },
+    );
   }
   // T-40: the server half of CompleteRegistration, with the browser's event id;
   // after the response, and never able to affect the signup that succeeded.
   const signal = sendCompleteRegistration(env, () => ({
     eventId: registrationEventId(body.event_id),
     email: result.email,
+    phone: result.whatsapp,
     sourceUrl: `${url.origin}/daftar`,
     ip: getClientIp(request.headers),
     userAgent: request.headers.get("user-agent"),

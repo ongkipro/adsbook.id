@@ -2,16 +2,16 @@
  * Signup and provisioning (T-26, PR-11), in the order of
  * MULTI-TENANT-DESIGN §3.1:
  *
- * 1. validate (slug rule and reserved list, email, password, terms,
- *    Turnstile, per-address rate limit) — nothing is written before this;
+ * 1. validate (slug rule and reserved list, email, optional WhatsApp, password,
+ *    terms, Turnstile, per-address rate limit) — nothing is written before this;
  *    one batch inserts the tenant (`provisioning`, never routable) and its
  *    subdomain host (`pending`); the UNIQUE slug and the host key pick one
  *    winner of a race;
  * 2. create the tenant's store and apply the chain (bookmark first);
  * 3. the inherited install write in the store — the `stores` row, default
- *    courier rules and the **claim of the seeded credential** (zero rows
- *    claimed is a failure, IAM-10) — then the tenant's session key and its
- *    webhook token;
+ *    courier rules, optional support WhatsApp rotator, and the **claim of the
+ *    seeded credential** (zero rows claimed is a failure, IAM-10) — then the
+ *    tenant's session key and its webhook token;
  * 4. one batch: tenant `active`, host `active` and primary, the `signup`
  *    event with the accepted terms version;
  * 5. a handoff token (IAM-8) for the owner's first session.
@@ -24,11 +24,12 @@ import { resolveAuthSecret } from "../lib/auth-secret.ts";
 import { EMAIL_USERNAME_PATTERN } from "../lib/admin-credentials.ts";
 import { runInstall } from "../lib/install.ts";
 import { checkRateLimit } from "../lib/rate-limit.ts";
+import { isValidWa62, normalizePhone } from "../lib/validation.ts";
 import { CMS_VERSION } from "../lib/version.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { issueHandoff } from "./handoff.ts";
 import { tenantHostSuffix } from "./hostnames.ts";
-import { checkSlug } from "./slugs.ts";
+import { checkSlug, suggestFreeSlugs } from "./slugs.ts";
 import { openTenantDb } from "./tenant-db.ts";
 import { issueWebhookToken } from "./webhook-secrets.ts";
 import { CURRENT_LEGAL_VERSION } from "./legal-texts.ts";
@@ -46,14 +47,21 @@ export type SignupInput = {
   storeName?: unknown;
   slug?: unknown;
   email?: unknown;
+  whatsapp?: unknown;
   password?: unknown;
   terms?: unknown;
   turnstileToken?: unknown;
 };
 
-export type SignupFieldErrors = Partial<Record<"storeName" | "slug" | "email" | "password" | "terms" | "turnstile", string>>;
+export type SignupFieldErrors = Partial<Record<"storeName" | "slug" | "email" | "whatsapp" | "password" | "terms" | "turnstile", string>>;
 
-export type SignupPlan = { storeName: string; slug: string; email: string; password: string };
+export type SignupPlan = {
+  storeName: string;
+  slug: string;
+  email: string;
+  whatsapp: string | null;
+  password: string;
+};
 
 /** UX-1 field rules, decided before any write. */
 export function planSignup(input: SignupInput): { ok: true; plan: SignupPlan } | { ok: false; errors: SignupFieldErrors; reserved?: boolean } {
@@ -64,6 +72,16 @@ export function planSignup(input: SignupInput): { ok: true; plan: SignupPlan } |
   if (!slug.ok) errors.slug = slug.error;
   const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
   if (email.length > 254 || !EMAIL_USERNAME_PATTERN.test(email)) errors.email = "Email tidak valid.";
+  const rawWhatsapp = typeof input.whatsapp === "string" ? input.whatsapp.trim() : "";
+  let whatsapp: string | null = null;
+  if (rawWhatsapp) {
+    const normalized = normalizePhone(rawWhatsapp);
+    if (!isValidWa62(normalized)) {
+      errors.whatsapp = "Nomor WhatsApp harus nomor aktif Indonesia (contoh: 0812-3456-7890).";
+    } else {
+      whatsapp = normalized;
+    }
+  }
   const password = typeof input.password === "string" ? input.password : "";
   if (password.length < 10 || password.length > 128) errors.password = "Password 10–128 karakter.";
   else if (password.toLowerCase() === email) errors.password = "Password tidak boleh sama dengan email.";
@@ -71,7 +89,7 @@ export function planSignup(input: SignupInput): { ok: true; plan: SignupPlan } |
   if (Object.keys(errors).length || !slug.ok) {
     return { ok: false, errors, reserved: !slug.ok && slug.reserved };
   }
-  return { ok: true, plan: { storeName, slug: slug.slug, email, password } };
+  return { ok: true, plan: { storeName, slug: slug.slug, email, whatsapp, password } };
 }
 
 /** Cloudflare Turnstile siteverify. No secret configured: signup is closed (fail closed). */
@@ -106,8 +124,8 @@ export type SignupDeps = {
 };
 
 export type SignupResult =
-  | { status: 201; tenantId: string; host: string; email: string; handoffToken: string }
-  | { status: 400 | 409 | 429 | 500 | 503; error: string; errors?: SignupFieldErrors };
+  | { status: 201; tenantId: string; host: string; email: string; whatsapp: string | null; handoffToken: string }
+  | { status: 400 | 409 | 429 | 500 | 503; error: string; errors?: SignupFieldErrors; suggestions?: string[] };
 
 export { tenantHostSuffix };
 
@@ -126,15 +144,17 @@ export async function signup(
   if (!platformDb || !env.TENANT_STORE) return { status: 503, error: "Pendaftaran belum tersedia." };
   const now = deps.now ?? (() => new Date());
 
+  await ensureControlPlane(platformDb);
   const planned = planSignup(input);
   if (!planned.ok) {
-    return planned.reserved && Object.keys(planned.errors).length === 1
-      ? { status: 409, error: "Alamat toko ini tidak tersedia.", errors: planned.errors }
-      : { status: 400, error: "Periksa kembali isian formulir.", errors: planned.errors };
+    if (planned.reserved && Object.keys(planned.errors).length === 1) {
+      const suggestions = await suggestFreeSlugs(platformDb, String(input.slug ?? input.storeName ?? ""), 3).catch(() => []);
+      return { status: 409, error: "Alamat toko ini tidak tersedia.", errors: planned.errors, suggestions };
+    }
+    return { status: 400, error: "Periksa kembali isian formulir.", errors: planned.errors };
   }
   const { plan } = planned;
 
-  await ensureControlPlane(platformDb);
   const limit = await checkRateLimit(platformDb, `signup:${ip}`, SIGNUP_LIMIT_PER_HOUR, 60 * 60 * 1000);
   if (!limit.allowed) return { status: 429, error: "Terlalu banyak pendaftaran dari jaringan ini. Coba lagi nanti." };
   const human = await (deps.verifyTurnstile ?? ((token, address) => verifyTurnstile(env, token, address)))(input.turnstileToken, ip);
@@ -146,15 +166,21 @@ export async function signup(
   try {
     await platformDb.batch([
       platformDb
-        .prepare("INSERT INTO tenants (id, slug, owner_email, status, plan_id, created_at) VALUES (?, ?, ?, 'provisioning', 'pilot', ?)")
-        .bind(tenantId, plan.slug, plan.email, at),
+        .prepare("INSERT INTO tenants (id, slug, owner_email, owner_whatsapp, status, plan_id, created_at) VALUES (?, ?, ?, ?, 'provisioning', 'pilot', ?)")
+        .bind(tenantId, plan.slug, plan.email, plan.whatsapp, at),
       platformDb
         .prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'pending', 0, ?)")
         .bind(host, tenantId, at),
     ]);
   } catch (error) {
     if (/UNIQUE|PRIMARY KEY|constraint/i.test(String(error))) {
-      return { status: 409, error: "Alamat toko ini sudah dipakai.", errors: { slug: "Alamat toko ini sudah dipakai." } };
+      const suggestions = await suggestFreeSlugs(platformDb, plan.slug, 3).catch(() => []);
+      return {
+        status: 409,
+        error: "Alamat toko ini sudah dipakai.",
+        errors: { slug: "Alamat toko ini sudah dipakai." },
+        suggestions,
+      };
     }
     console.error("signup-reserve-failed", { error: String(error) });
     return { status: 500, error: "Pendaftaran gagal. Coba lagi beberapa saat lagi." };
@@ -176,7 +202,7 @@ export async function signup(
       adminUsername: plan.email,
       adminPassword: plan.password,
       tagline: "",
-      supportWhatsapp: "",
+      supportWhatsapp: plan.whatsapp ?? "",
       locale: "id-ID",
       storefrontTemplate: "compact-market",
     });
@@ -214,7 +240,7 @@ export async function signup(
     ]);
     if (Number(activated.meta?.changes ?? 0) !== 1) throw new Error("tenant left provisioning");
     await deps.checkpoint?.("activate", tenantId);
-    return { status: 201, tenantId, host, email: plan.email, handoffToken };
+    return { status: 201, tenantId, host, email: plan.email, whatsapp: plan.whatsapp, handoffToken };
   } catch (error) {
     console.error("signup-provision-failed", { tenant_id: tenantId, step, error: String(error) });
     await platformDb

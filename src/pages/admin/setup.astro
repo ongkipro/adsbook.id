@@ -7,22 +7,46 @@ import { buildSetupChecklist, readSetupFacts } from '../../lib/setup-checklist';
 
 export const prerender = false;
 
-// UX-2 (T-38): owner and admin (ADMIN_PAGE_ROUTES). Every step is read live
-// from the store's data, so a step just saved shows as done on reload.
 const facts = await readSetupFacts(tenantDatabase(Astro.locals), Astro.locals);
-const steps = facts ? buildSetupChecklist(facts) : null;
+const steps = facts ? buildSetupChecklist(facts) : [];
 const host = Astro.locals.tenantContext?.primaryHost ?? Astro.locals.tenantContext?.host ?? null;
 const storeUrl = host ? `${Astro.url.protocol}//${host}${Astro.url.port && !host.includes(':') ? `:${Astro.url.port}` : ''}` : null;
+const welcome = Astro.url.searchParams.get('welcome') === '1';
+const ownerEmail = Astro.locals.admin?.username ?? '';
 ---
 
-<AdminLayout title="Checklist setup" activeMenu="settings">
+<AdminLayout title="Siapkan toko" activeMenu="settings">
   <div class="space-y-4 md:space-y-5">
     <AdminPageHeader
-      title="Checklist setup toko"
-      description="Langkah wajib membuka toko untuk pembeli. Status tiap langkah dibaca dari data toko."
+      title={welcome ? `Selamat datang di ${Astro.locals.tenant.name}` : 'Siapkan toko'}
+      description="Langkah wajib membuka toko untuk pembeli. Langkah opsional membantu merek dan iklan Anda."
     />
-    {steps
-      ? <SetupChecklist steps={steps} storeUrl={storeUrl} />
-      : <p class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600" role="status">Checklist belum bisa dibaca. Muat ulang halaman sebentar lagi.</p>}
+
+    {welcome && (
+      <section id="welcomeBanner" class="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-950 shadow-xs md:p-5" aria-label="Informasi akun toko baru">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="space-y-1">
+            <p class="font-semibold text-emerald-950">Toko Anda sudah aktif dalam Mode Preview.</p>
+            <p class="text-xs leading-5 text-emerald-900">
+              Simpan login pemilik Anda: <strong>{ownerEmail}</strong>
+              {storeUrl && <> · Alamat toko: <a href={storeUrl} target="_blank" rel="noopener" class="font-mono font-semibold underline">{storeUrl.replace(/^https?:\/\//, '')}</a></>}
+            </p>
+          </div>
+          {storeUrl && (
+            <a href={storeUrl} target="_blank" rel="noopener" class="btn-secondary shrink-0 text-center">
+              Lihat Preview Toko
+            </a>
+          )}
+        </div>
+      </section>
+    )}
+
+    {facts ? (
+      <SetupChecklist steps={steps} storeUrl={storeUrl} />
+    ) : (
+      <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+        Gagal memuat, muat ulang.
+      </p>
+    )}
   </div>
 </AdminLayout>

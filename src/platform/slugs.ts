@@ -50,10 +50,52 @@ export function checkSlug(raw: unknown): SlugCheck {
 export function slugFromName(name: string): string {
   return name
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 32)
     .replace(/-+$/g, "");
+}
+
+const SUGGESTION_SUFFIXES = ["id", "official", "store", "shop", "online", "mart", "jaya", "kita", "asli"] as const;
+
+/**
+ * UX-1 exception map: when a requested slug is taken or reserved, suggest up to
+ * `limit` (default 3) valid, unreserved, unclaimed alternatives derived from
+ * the seller's own base name.
+ */
+export async function suggestFreeSlugs(
+  platformDb: D1Database,
+  rawBase: string,
+  limit = 3,
+): Promise<string[]> {
+  let base = slugFromName(rawBase);
+  if (base.length < 2 || RESERVED_SLUGS.has(base)) {
+    base = base ? `toko-${base}`.slice(0, 24).replace(/-+$/g, "") : "toko";
+  }
+  const candidates: string[] = [];
+  const push = (candidate: string) => {
+    const checked = checkSlug(candidate);
+    if (checked.ok && !candidates.includes(checked.slug)) candidates.push(checked.slug);
+  };
+  for (const suffix of SUGGESTION_SUFFIXES) {
+    const trimmed = base.slice(0, Math.max(2, 31 - suffix.length)).replace(/-+$/g, "");
+    push(`${trimmed}-${suffix}`);
+  }
+  for (let n = 2; n <= 9; n += 1) {
+    const trimmed = base.slice(0, 30).replace(/-+$/g, "");
+    push(`${trimmed}-${n}`);
+  }
+  if (!candidates.length) return [];
+  const sample = candidates.slice(0, 12);
+  const placeholders = sample.map(() => "?").join(", ");
+  const takenRows = (
+    await platformDb
+      .prepare(`SELECT slug FROM tenants WHERE slug IN (${placeholders})`)
+      .bind(...sample)
+      .all<{ slug: string }>()
+  ).results;
+  const taken = new Set(takenRows.map((row) => row.slug));
+  return sample.filter((slug) => !taken.has(slug)).slice(0, limit);
 }

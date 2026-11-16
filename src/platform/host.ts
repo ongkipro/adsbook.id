@@ -70,6 +70,7 @@ export const PLATFORM_SITE_ROUTES: Readonly<Record<string, string>> = {
   "/faq": "/platform/site/faq",
   "/kontak": "/platform/site/kontak",
   "/daftar": "/platform/signup",
+  "/masuk": "/platform/masuk",
   "/syarat": "/platform/syarat",
   "/privasi": "/platform/privasi",
   "/robots.txt": "/platform/site/robots.txt",

@@ -111,7 +111,11 @@ function QrImage({ payload }: { payload: string }) {
 export function BillingManager() {
   const [billing, setBilling] = useState<Billing | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [cycle, setCycle] = useState<Cycle["code"]>("12m");
+  const [cycle, setCycle] = useState<Cycle["code"]>(() => {
+    if (typeof window === "undefined") return "12m";
+    const requested = new URLSearchParams(window.location.search).get("cycle");
+    return requested === "1m" || requested === "3m" || requested === "6m" || requested === "12m" ? requested : "12m";
+  });
   const [channel, setChannel] = useState("QRIS");
   const [busy, setBusy] = useState<"create" | "check" | null>(null);
 

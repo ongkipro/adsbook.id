@@ -2410,3 +2410,85 @@ test("T-50/BILL-7: only platform_owner grants subscription days; the grant needs
   assert.equal(JSON.parse(audit[0].detail_json).reason, "pilot Saraku");
 });
 
+// ------------------------------------------------ Register UX & Flow ----
+
+test("UX-1: suggestFreeSlugs returns 3 valid, unreserved, unclaimed alternatives", async () => {
+  const { suggestFreeSlugs } = await import("./slugs.ts");
+  const { platformDb } = await signupHarness();
+  platformDb.sqlite
+    .prepare("INSERT INTO tenants (id, slug, owner_email, status, plan_id, created_at) VALUES ('t1', 'herbal', 'a@b.co', 'active', 'pilot', '2026-11-16'), ('t2', 'herbal-id', 'b@b.co', 'active', 'pilot', '2026-11-16')")
+    .run();
+  const suggestions = await suggestFreeSlugs(platformDb, "herbal", 3);
+  assert.deepEqual(suggestions, ["herbal-official", "herbal-store", "herbal-shop"]);
+  const reserved = await suggestFreeSlugs(platformDb, "admin", 3);
+  assert.equal(reserved.length, 3);
+  assert.equal(reserved.includes("admin"), false);
+});
+
+test("UX-1: optional WhatsApp at signup seeds store CS WhatsApp & owner_whatsapp, and 409 returns 3 suggestions", async () => {
+  const { planSignup } = await import("./signup.ts");
+  const badWa = planSignup({
+    storeName: "Toko Uji",
+    slug: "toko-wa-salah",
+    email: "owner@wa.example",
+    whatsapp: "12345",
+    password: "password-aman-123",
+    terms: true,
+  });
+  assert.equal(badWa.ok, false);
+  if (!badWa.ok) assert.ok(badWa.errors.whatsapp);
+
+  const { platformDb, stores, env } = await signupHarness();
+  const created = await signup(
+    env,
+    {
+      storeName: "Herbal Segar",
+      slug: "herbal-segar",
+      email: "owner@herbalsegar.id",
+      whatsapp: "0812-3456-7890",
+      password: "password-aman-123",
+      terms: true,
+      turnstileToken: "ok",
+    },
+    "203.0.113.77",
+    { verifyTurnstile: async () => true },
+  );
+  assert.equal(created.status, 201);
+  if (created.status !== 201) return;
+  assert.equal(created.whatsapp, "6281234567890");
+  const row = platformDb.sqlite.prepare("SELECT owner_whatsapp FROM tenants WHERE id = ?").get(created.tenantId) as { owner_whatsapp: string | null };
+  assert.equal(row.owner_whatsapp, "6281234567890");
+
+  const tenantDb = createTenantDb(stores.get(created.tenantId).stub);
+  const storeRow = await tenantDb.prepare("SELECT support_whatsapp FROM stores LIMIT 1").first<{ support_whatsapp: string | null }>();
+  assert.equal(storeRow?.support_whatsapp, "6281234567890");
+  const rotator = await tenantDb.prepare("SELECT phone, is_active FROM whatsapp_numbers LIMIT 1").first<{ phone: string; is_active: number }>();
+  assert.deepEqual({ ...rotator }, { phone: "6281234567890", is_active: 1 });
+
+  const taken = await signup(
+    env,
+    {
+      storeName: "Herbal Segar",
+      slug: "herbal-segar",
+      email: "other@herbalsegar.id",
+      password: "password-aman-123",
+      terms: true,
+      turnstileToken: "ok",
+    },
+    "203.0.113.78",
+    { verifyTurnstile: async () => true },
+  );
+  assert.equal(taken.status, 409);
+  assert.equal(taken.suggestions?.length, 3);
+});
+
+test("IAM-8: resolveHandoffTarget routes new owners to /admin/setup or /admin/billing?cycle= and blocks open redirects", async () => {
+  const { resolveHandoffTarget } = await import("../pages/api/handoff.ts");
+  assert.equal(resolveHandoffTarget(undefined), "/admin/dashboard");
+  assert.equal(resolveHandoffTarget("/admin/setup?welcome=1"), "/admin/setup?welcome=1");
+  assert.equal(resolveHandoffTarget("/admin/billing?cycle=12m"), "/admin/billing?cycle=12m");
+  assert.equal(resolveHandoffTarget("/admin/dashboard"), "/admin/dashboard");
+  assert.equal(resolveHandoffTarget("https://evil.example"), "/admin/dashboard");
+  assert.equal(resolveHandoffTarget("//evil.example"), "/admin/dashboard");
+});
+

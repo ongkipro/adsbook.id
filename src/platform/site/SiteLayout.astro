@@ -29,7 +29,9 @@ const year = new Date().getFullYear();
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{page.title}</title>
     <meta name="description" content={page.description} />
+    {page.noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical} />
+    <slot name="head" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content={SITE_NAME} />
     <meta property="og:locale" content="id_ID" />
@@ -67,6 +69,7 @@ const year = new Date().getFullYear();
       <div class="wrap footer-row">
         <p>&copy; {year} {SITE_NAME}</p>
         <nav aria-label="Informasi">
+          <a href="/daftar?masuk=1">Masuk Toko</a>
           <a href="/syarat">Syarat Layanan</a>
           <a href="/privasi">Kebijakan Privasi</a>
           <a href="/kontak">Kontak</a>
