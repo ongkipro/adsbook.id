@@ -140,3 +140,24 @@ test("T-51: no page claims the platform is free forever, and the pricing states 
   assert.match(readFileSync("src/platform/site/Pricing.astro", "utf8"), /1 langganan = 1 toko dan 1 domain sendiri/);
   assert.match(site, /Bayar 10 bulan, gratis 2 bulan/);
 });
+
+test("brand: the site uses the blue wordmark files and blue tokens; the animated logo respects reduced motion", async () => {
+  const { existsSync } = await import("node:fs");
+  const layout = readFileSync("src/platform/site/SiteLayout.astro", "utf8");
+  for (const file of ["adsbook-id-wordmark.svg", "adsbook-id-wordmark-on-dark.svg", "adsbook-id-wordmark-animated.svg", "adsbook-id-mark-on-accent.svg"]) {
+    assert.ok(existsSync(`public/platform/brand/${file}`), file);
+  }
+  assert.match(layout, /\/platform\/brand\/adsbook-id-wordmark\.svg/, "header logo");
+  assert.match(layout, /\/platform\/brand\/adsbook-id-wordmark-on-dark\.svg/, "footer logo");
+  assert.match(layout, /--accent: #2563eb;/i, "blue accent");
+  assert.doesNotMatch(layout + readFileSync("src/pages/platform/signup.astro", "utf8"), /#c2410c|#9a3412|#fed7aa|#faf7f2/i, "no orange brand left");
+  const animated = readFileSync("public/platform/brand/adsbook-id-wordmark-animated.svg", "utf8");
+  assert.match(animated, /prefers-reduced-motion: reduce/);
+  for (const name of ["rise l0", "rise l6", "rise id", "streak browser", "streak server", "dot", "lock"]) assert.ok(animated.includes(`class="${name}"`), name);
+  // The precision rule: the dot is one 150-unit module, 60 units from k and from i.
+  const wordmark = readFileSync("public/platform/brand/adsbook-id-wordmark.svg", "utf8");
+  assert.match(wordmark, /fill="#2563EB"/i);
+  const sales = readFileSync("src/pages/platform/site/coba.astro", "utf8");
+  assert.match(sales, /prefers-reduced-motion: reduce/, "the sales page plays the logo only when motion is allowed");
+});
+

@@ -39,8 +39,9 @@ const year = new Date().getFullYear();
     <meta property="og:description" content={page.description} />
     <meta property="og:url" content={canonical} />
     <meta name="twitter:card" content="summary" />
-    <meta name="theme-color" content="#FAF7F2" />
-    <link rel="icon" href="/favicon.png" />
+    <meta name="theme-color" content="#F8FAFC" />
+    <link rel="icon" type="image/svg+xml" href="/platform/brand/adsbook-id-mark-on-accent.svg" />
+    <link rel="icon" href="/favicon.png" sizes="32x32" />
     <link rel="preload" href="/platform/fonts/plus-jakarta-sans-800.woff2" as="font" type="font/woff2" crossorigin />
     <script type="application/ld+json" set:html={siteJsonLd(env)} />
     <PlatformPixel />
@@ -49,7 +50,7 @@ const year = new Date().getFullYear();
     <a class="skip" href="#isi">Langsung ke isi</a>
     <header class="site-header">
       <div class="wrap header-row">
-        <a class="wordmark" href="/" aria-label="adsbook.id, beranda">adsbook<span>.id</span></a>
+        <a class="wordmark" href="/" aria-label="adsbook.id, beranda"><img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="151" height="24" loading="eager" decoding="async" /></a>
         <nav aria-label="Utama" class="nav-wide">
           {nav.map((entry) => <a href={entry.path} aria-current={entry.path === page.path ? 'page' : undefined}>{entry.nav}</a>)}
         </nav>
@@ -67,7 +68,7 @@ const year = new Date().getFullYear();
     </main>
     <footer class="site-footer">
       <div class="wrap footer-row">
-        <p>&copy; {year} {SITE_NAME}</p>
+        <p class="footer-brand"><img src="/platform/brand/adsbook-id-wordmark-on-dark.svg" alt="adsbook.id" width="126" height="20" loading="lazy" decoding="async" /><span>&copy; {year} {SITE_NAME}</span></p>
         <nav aria-label="Informasi">
           <a href="/daftar?masuk=1">Masuk Toko</a>
           <a href="/syarat">Syarat Layanan</a>
@@ -87,14 +88,16 @@ const year = new Date().getFullYear();
     font-display: swap;
   }
   :root {
-    --canvas: #faf7f2;
+    /* Blue brand (logo, 2026-11-17): the dot's #2563EB is the accent, slate is the ink.
+       Contrast: accent 4.94:1 on canvas, white on accent 5.17:1, ink 17.06:1, muted 7.24:1. */
+    --canvas: #f8fafc;
     --surface: #ffffff;
-    --ink: #1c1917;
-    --ink-muted: #57534e;
-    --line: #e7e5e4;
-    --accent: #c2410c;
-    --accent-hover: #9a3412;
-    --accent-tint: #ffedd5;
+    --ink: #0f172a;
+    --ink-muted: #475569;
+    --line: #e2e8f0;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-tint: #dbeafe;
     --display: "Plus Jakarta Sans", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
     --body: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --section: 6rem;
@@ -108,7 +111,8 @@ const year = new Date().getFullYear();
   a { color: var(--accent); text-underline-offset: 3px; }
   a:hover { color: var(--accent-hover); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-  h1, h2, h3 { font-family: var(--display); color: var(--ink); line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance; margin: 0; }
+  /* The display face's space is 0.18em; with -0.02em tracking words ran together in long headings. */
+  h1, h2, h3 { font-family: var(--display); color: var(--ink); line-height: 1.15; letter-spacing: -0.02em; word-spacing: 0.06em; text-wrap: balance; margin: 0; }
   h1 { font-size: clamp(2.1rem, 1.4rem + 3vw, 3.4rem); font-weight: 800; }
   h2 { font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.25rem); font-weight: 800; }
   h3 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
@@ -123,21 +127,22 @@ const year = new Date().getFullYear();
   .btn:hover { background: var(--accent-hover); color: #fff; }
   /* The header's action is outlined: one filled primary per screen (DESIGN.md C5). */
   .btn-small { min-height: 44px; padding: 0.5rem 1rem; font-size: 0.95rem; background: transparent; color: var(--accent); border: 2px solid var(--accent); white-space: nowrap; }
-  @media (max-width: 400px) { .btn-small { padding: 0.45rem 0.7rem; font-size: 0.9rem; } .wordmark { font-size: 1.15rem; } }
+  @media (max-width: 400px) { .btn-small { padding: 0.45rem 0.7rem; font-size: 0.9rem; } .wordmark img { height: 21px; } }
   .btn-small:hover { background: var(--accent-tint); color: var(--accent-hover); }
   @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 
   .site-header { background: var(--canvas); }
   .header-row { display: flex; align-items: center; gap: 1.5rem; min-height: 72px; }
-  .wordmark { font-family: var(--display); font-weight: 800; font-size: 1.3rem; color: var(--ink); text-decoration: none; letter-spacing: -0.02em; margin-right: auto; }
-  .wordmark span { color: var(--accent); }
+  /* The logo is outlines (src: logo/make-logo.mjs in the content folder): 1 module dot, 60|150|60. */
+  .wordmark { display: inline-flex; align-items: center; min-height: 44px; margin-right: auto; border-radius: 6px; }
+  .wordmark img { height: 24px; width: auto; }
   .nav-wide { display: flex; gap: 1.5rem; }
   .nav-wide a, .nav-narrow a { color: var(--ink); text-decoration: none; font-weight: 600; font-size: 0.97rem; }
   .nav-wide a[aria-current="page"], .nav-narrow a[aria-current="page"] { color: var(--accent); text-decoration: underline; text-decoration-thickness: 2px; }
   .nav-narrow { display: none; position: relative; }
   .nav-narrow summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; padding: 0 0.25rem; font-weight: 600; }
   .nav-narrow summary::-webkit-details-marker { display: none; }
-  .nav-narrow nav { position: absolute; right: 0; top: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem; display: grid; min-width: 12rem; box-shadow: 0 8px 24px rgb(28 25 23 / 0.08); z-index: 5; }
+  .nav-narrow nav { position: absolute; right: 0; top: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem; display: grid; min-width: 12rem; box-shadow: 0 8px 24px rgb(15 23 42 / 0.08); z-index: 5; }
   .nav-narrow nav a { padding: 0.65rem 0.75rem; }
   @media (max-width: 900px) {
     .nav-wide { display: none; }
@@ -146,12 +151,14 @@ const year = new Date().getFullYear();
   }
 
   /* The footer is chrome, not a section: dark, so it never merges with the last band (C4). */
-  .site-footer { padding: 2.5rem 0; background: var(--ink); color: #d6d3d1; font-size: 0.95rem; }
+  .site-footer { padding: 2.5rem 0; background: var(--ink); color: #cbd5e1; font-size: 0.95rem; }
   .footer-row { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; align-items: center; }
   .footer-row nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
-  .footer-row a { color: #f5f5f4; }
-  .footer-row a:hover { color: #fed7aa; }
-  .site-footer :focus-visible { outline-color: #fed7aa; }
+  .footer-row a { color: #f8fafc; }
+  .footer-brand { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .footer-brand img { height: 20px; width: auto; }
+  .footer-row a:hover { color: #bfdbfe; }
+  .site-footer :focus-visible { outline-color: #93c5fd; }
 
   .section { padding-block: var(--section); }
   /* Inner pages: one head, on the same left edge as the content below it. */
@@ -161,7 +168,7 @@ const year = new Date().getFullYear();
   .section-white { background: var(--surface); }
   .lead { font-size: 1.15rem; color: var(--ink-muted); }
 
-  .frame { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 12px 32px rgb(28 25 23 / 0.08); }
+  .frame { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 12px 32px rgb(15 23 42 / 0.08); }
   .frame-phone { max-width: 340px; border-radius: 28px; border: 8px solid var(--ink); }
   .caption { margin-top: 0.6rem; font-size: 0.85rem; color: var(--ink-muted); }
 </style>

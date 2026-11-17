@@ -156,3 +156,101 @@ export const FEATURES: Array<{ title: string; items: string[]; shot: Shot }> = [
 export const SETUP_STEPS = ["Tambah produk pertama dengan harga dan berat", "Lengkapi gudang utama dan alamat pickup", "Simpan API key Mengantar Anda"];
 /** What signup already completes (identity, couriers on, COD on): the other three of six. */
 export const SETUP_DONE = "Nama toko, kurir, dan COD sudah siap sejak Anda mendaftar.";
+
+/**
+ * The sales page (/coba): six flagship features, each a fact the product holds
+ * today (content/adsbook-id-sales-lp/features.md §2, checked against the code
+ * 2026-11-17). Infrastructure figures are the provider's published ones, named
+ * without the vendor (Paduka, 2026-11-17).
+ */
+export type SalesFlagship = {
+  kicker: string;
+  title: string;
+  points: string[];
+  shot?: Shot;
+  specs?: Array<{ value: string; label: string }>;
+};
+
+export const SALES_FLAGSHIPS: SalesFlagship[] = [
+  {
+    kicker: "Sinyal iklan 1:1",
+    title: "Satu pesanan, satu Purchase. Tidak dobel, tidak hilang",
+    points: [
+      "Pixel di browser dan Conversions API dari server memakai event_id yang sama untuk setiap pesanan",
+      "Purchase dikirim dari server saat pesanan COD dibuat atau saat pembayaran lunas",
+      "8 data pembeli di-hash SHA-256 untuk pencocokan, ID klik dan UTM disimpan 90 hari",
+      "Konversi offline Google Ads dari pesanan yang benar-benar terjadi",
+    ],
+    shot: SHOTS.meta,
+  },
+  {
+    kicker: "Form COD",
+    title: "Form cepat di HP, yang tidak selesai pun jadi lead",
+    points: [
+      "Form singkat, lengkap, atau hybrid dengan ongkir per kecamatan",
+      "Form di halaman produk dan landing page, atau dipasang di situs lain",
+      "Harga, varian, dan berat selalu dari data toko, bukan dari browser",
+      "Form yang tidak selesai masuk Pesanan tertinggal untuk di-follow up CS, dengan hingga 10 nomor WhatsApp CS bergiliran",
+    ],
+    shot: SHOTS.form,
+  },
+  {
+    kicker: "Kontrol RTS",
+    title: "Anda yang memutuskan apa yang dikirim",
+    points: [
+      "Tidak ada pesanan yang terkirim sendiri: semua masuk sebagai menunggu",
+      "Cek risiko RTS penerima sebelum dikirim",
+      "Rilis ke kurir satu per satu atau sekaligus, resi dan pickup di satu halaman",
+      "Hingga 10 gudang: gudang di provinsi pembeli dipakai lebih dulu",
+    ],
+    shot: SHOTS.orders,
+  },
+  {
+    kicker: "Akun Anda sendiri",
+    title: "Uang pembeli langsung ke akun Anda",
+    points: [
+      "0% potongan per transaksi dari adsbook.id",
+      "COD lewat Mengantar, QRIS dan Virtual Account lewat AutoLaris, keduanya akun Anda",
+      "QRIS dan VA aktif cukup dengan API key AutoLaris",
+      "Rekonsiliasi pembayaran QRIS dan VA otomatis",
+    ],
+    shot: SHOTS.payments,
+  },
+  {
+    kicker: "Mulai gratis",
+    title: "Siapkan toko gratis, buka saat siap beriklan",
+    points: [
+      "Toko aktif di nama-toko.adsbook.my.id sejak Anda mendaftar, tanpa kartu",
+      "Mode Preview: Anda melihat toko seperti pembeli, pembeli melihat toko belum siap",
+      "Checklist menunjukkan tiga langkah yang tersisa",
+      "Lewat jatuh tempo, toko tetap jalan 48 jam agar iklan tidak berhenti mendadak",
+    ],
+    shot: SHOTS.setup,
+  },
+  {
+    kicker: "Infrastruktur",
+    title: "Cepat di mana pun pembeli Anda, terpisah untuk setiap toko",
+    points: [
+      "Dilayani dari jaringan edge global, dengan database sendiri untuk setiap toko di Asia-Pasifik",
+      "Backup harian dan SSL otomatis, termasuk untuk domain sendiri",
+    ],
+    specs: [
+      { value: "348 kota", label: "jaringan edge di 100+ negara" },
+      { value: "50 ms", label: "dari 95% pengguna internet dunia" },
+      { value: "10 GB", label: "database sendiri per toko" },
+      { value: "1.000/dtk", label: "permintaan per toko" },
+    ],
+  },
+];
+
+export const SALES_SUPPORT: Array<{ title: string; text: string }> = [
+  { title: "Domain sendiri", text: "Satu record CNAME, SSL otomatis, dan bisa diganti kapan saja." },
+  { title: "Landing page", text: "Buat dari admin, dengan form order di dalamnya." },
+  { title: "Katalog dan feed", text: "Varian dan foto; feed Google Merchant dan katalog Meta terisi otomatis." },
+  { title: "Analitik dari pesanan", text: "Omzet, funnel, produk, landing page, lokasi, jam beli, dan UTM." },
+  { title: "Link UTM", text: "Buat link iklan bertanda UTM, lalu bandingkan hasil per kampanye." },
+  { title: "Tim dengan peran", text: "Owner, admin, advertiser, dan CS hanya melihat menu tugasnya." },
+  { title: "Draf konten AI", text: "Draf deskripsi produk dengan AI; Anda yang menerbitkan." },
+  { title: "Template CRM", text: "Pesan WhatsApp dengan nama, produk, dan data pesanan terisi." },
+  { title: "API dan CLI", text: "REST API untuk frontend sendiri, Operations API dan CLI untuk skrip." },
+];

@@ -26,11 +26,17 @@ export const SIGNUP_PAGE: SitePage = {
 };
 
 /** One entry per indexable page; titles ≤ 70 and descriptions 120–155 characters (copy QA gate). */
-export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
+export const SITE_PAGES: Record<"home" | "coba" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
   home: {
     path: "/",
     title: "Toko COD dengan Sinyal Iklan 1:1 ke Meta - adsbook.id",
     description: "Toko online COD untuk seller iklan: Pixel dan Conversions API Meta dengan satu event_id, konversi offline Google Ads, dan 0% potongan per transaksi.",
+  },
+  // The long-form sales page for ad traffic (content/adsbook-id-sales-lp/features.md, 2026-11-17).
+  coba: {
+    path: "/coba",
+    title: "Toko COD Presisi untuk Seller Iklan Meta dan Google - adsbook.id",
+    description: "Satu pesanan, satu Purchase: sinyal iklan dari browser dan server, form COD cepat di HP, cek RTS sebelum kirim, dan uang langsung ke akun Anda.",
   },
   fitur: {
     path: "/fitur",

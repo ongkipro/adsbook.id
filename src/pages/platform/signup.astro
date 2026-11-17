@@ -8,7 +8,7 @@ import { SIGNUP_PAGE } from '../../platform/site/site.ts';
 export const prerender = false;
 
 // UX-1: signup on the platform host, sharing the warm editorial SiteLayout
-// (#FAF7F2 canvas, Plus Jakarta Sans headings, #C2410C accent).
+// (#F8FAFC canvas, Plus Jakarta Sans headings, #2563EB accent).
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 const siteKey = typeof env.TURNSTILE_SITE_KEY === 'string' ? env.TURNSTILE_SITE_KEY : '';
 const localStandIn = siteKey === 'local-stand-in';
@@ -718,7 +718,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
     border: 1px solid var(--line);
     border-radius: 16px;
     padding: 2rem;
-    box-shadow: 0 12px 32px rgb(28 25 23 / 0.06);
+    box-shadow: 0 12px 32px rgb(15 23 42 / 0.06);
   }
   .card-head { display: grid; gap: 0.25rem; margin-bottom: 1.5rem; }
   .card-head h2 { font-size: 1.45rem; }
@@ -748,7 +748,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
     width: 100%;
     min-height: 46px;
     padding: 0.65rem 0.85rem;
-    border: 1px solid #d6d3d1;
+    border: 1px solid #cbd5e1;
     border-radius: 8px;
     background: #fff;
     color: var(--ink);
@@ -758,7 +758,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   .field input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgb(194 65 12 / 0.16);
+    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18);
   }
   .field input[aria-invalid="true"] {
     border-color: #e11d48;
@@ -768,7 +768,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   .slug-box {
     display: flex;
     align-items: stretch;
-    border: 1px solid #d6d3d1;
+    border: 1px solid #cbd5e1;
     border-radius: 8px;
     overflow: hidden;
     background: #fff;
@@ -776,7 +776,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   }
   .slug-box:focus-within {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgb(194 65 12 / 0.16);
+    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18);
   }
   .slug-box[data-state="ok"] { border-color: #15803d; }
   .slug-box[data-state="err"] { border-color: #e11d48; }
@@ -792,7 +792,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
     display: flex;
     align-items: center;
     padding: 0 0.8rem;
-    background: #f5f5f4;
+    background: #f1f5f9;
     border-left: 1px solid var(--line);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.88rem;
@@ -818,7 +818,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   .sug-label { font-size: 0.8rem; color: var(--ink-muted); font-weight: 600; }
   :global(.sug-chip) {
     appearance: none;
-    border: 1px solid #fed7aa;
+    border: 1px solid #bfdbfe;
     background: var(--accent-tint);
     color: var(--accent-hover);
     border-radius: 999px;
@@ -829,7 +829,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
     font-weight: 700;
     cursor: pointer;
   }
-  :global(.sug-chip:hover) { background: #fed7aa; }
+  :global(.sug-chip:hover) { background: #bfdbfe; }
 
   .pw-box { position: relative; display: flex; align-items: center; }
   .pw-box input { padding-right: 6.2rem !important; }
@@ -847,7 +847,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
     font-weight: 700;
     cursor: pointer;
   }
-  .pw-toggle:hover { background: #f5f5f4; color: var(--ink); }
+  .pw-toggle:hover { background: #f1f5f9; color: var(--ink); }
 
   .pw-rules {
     list-style: none;
