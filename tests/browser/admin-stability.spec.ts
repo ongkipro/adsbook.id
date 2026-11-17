@@ -64,6 +64,16 @@ test("the sidebar stays where the operator clicked, and admin pages load without
     expect(Math.abs(after.y - beforeY), `${href} stays under the pointer`).toBeLessThanOrEqual(2);
   }
 
+  // Direct navigation (bookmark / address bar) to a bottom submenu item: not hidden behind the floating footer card.
+  await page.goto(`${origin(store.slug)}/admin/settings/access`);
+  await page.waitForLoadState("networkidle");
+  const clearOfFooter = await page.evaluate(() => {
+    const active = document.querySelector('[data-sidebar="content"] [aria-current="page"]')!;
+    const footer = document.querySelector('[data-sidebar="footer"]')!;
+    return active.getBoundingClientRect().bottom <= footer.getBoundingClientRect().top;
+  });
+  expect(clearOfFooter, "direct load keeps Akses Pengguna above the footer card").toBe(true);
+
   for (const path of [
     "/admin/settings/domains",
     "/admin/settings/developer",
