@@ -36,11 +36,11 @@ export const STEPS: Step[] = [
     text: [
       "Arahkan iklan ke halaman produk atau landing page toko. Toko langsung aktif di alamat nama-toko.adsbook.my.id, atau di domain Anda sendiri.",
       // middleware.ts: click-id cookie, Max-Age 90 days.
-      "ID klik iklan (fbclid, gclid) dan UTM disimpan 90 hari, jadi pesanan yang datang belakangan tetap tersambung ke iklannya.",
+      "ID klik Meta dan Google serta UTM dari kanal mana pun (TikTok dan jaringan lain) disimpan 90 hari, jadi pesanan yang datang belakangan tetap tersambung ke iklannya.",
     ],
     shot: SHOTS.product,
     buyer: "Mengklik iklan dan membuka halaman produk atau landing page Anda.",
-    seller: "Memasang tautan halaman di iklan, lalu Pixel dan tag Google di admin.",
+    seller: "Memasang tautan halaman di iklan (Link UTM untuk kanal mana pun), lalu Pixel Meta dan tag Google di admin.",
   },
   {
     id: "form",
@@ -80,16 +80,16 @@ export const STEPS: Step[] = [
   },
   {
     id: "purchase",
-    label: "Purchase ke Meta",
-    title: "Penjualan sampai ke Meta, walau pembeli langsung menutup halaman",
+    label: "Konversi tercatat",
+    title: "Penjualan sampai ke jaringan iklan, walau pembeli langsung menutup halaman",
     text: [
       // ADR-036: every Purchase-qualifying order is sent from the server.
       "Setiap pesanan COD mengirim Purchase dari server ke Conversions API, dengan event_id yang sama seperti Pixel di browser, jadi tidak dobel dan tidak hilang.",
-      "Data pembeli di-hash SHA-256 sebelum dikirim. Konversi offline Google Ads juga bisa diaktifkan.",
+      "Konversi offline Google Ads dari pesanan yang benar-benar terjadi. Data pembeli di-hash SHA-256 sebelum dikirim, dan setiap pesanan tercatat ke kanalnya di Analitik.",
     ],
     shot: SHOTS.meta,
     buyer: "Tidak melihat apa-apa: semuanya terjadi di server.",
-    seller: "Melihat penjualan di Meta Ads Manager: COD saat pesanan dibuat, QRIS dan VA saat lunas.",
+    seller: "Melihat penjualan di Meta Ads Manager dan Google Ads, dan semua kanal di Analitik: COD saat pesanan dibuat, QRIS dan VA saat lunas.",
   },
 ];
 
@@ -107,8 +107,8 @@ export const PLANS = [
 
 export const PLAN_POINTS = [
   "1 toko di nama-toko.adsbook.my.id, plus 1 domain sendiri",
-  "Pixel dan Conversions API Meta dengan satu event_id per pesanan",
-  "Konversi offline Google Ads dari pesanan yang benar-benar terjadi",
+  "Semua kanal iklan tercatat per sumber dan kampanye: Meta, Google, TikTok, dan lainnya",
+  "Konversi 1:1 ke Meta (Pixel + Conversions API) dan Google Ads (tag + konversi offline)",
   "0% potongan per transaksi: uang pembeli langsung ke akun Anda",
   "Produk dan pesanan tanpa batas; 60 unggahan foto dan 20 draf AI per jam",
 ];
@@ -125,7 +125,7 @@ export type Faq = { q: string; a: string };
 
 export const FAQ_SHORT: Faq[] = [
   { q: "Apakah gratis?", a: "Membuat toko dan menyiapkannya gratis di Mode Preview, tanpa kartu. Saat toko siap menerima pesanan dan diiklankan, berlangganan mulai Rp149.000 per bulan, atau Rp1.490.000 per tahun (bayar 10 bulan, gratis 2 bulan). Tidak ada potongan per transaksi." },
-  { q: "Apa maksud deduplikasi sinyal iklan 1:1?", a: "Satu pesanan dikirim ke Meta dari browser (Pixel) dan dari server (Conversions API) dengan event_id yang sama, jadi Meta menghitungnya satu kali, bukan dua. Purchase dari server tetap terkirim walau pembeli langsung menutup halaman, dengan 8 data pembeli yang di-hash SHA-256 untuk pencocokan." },
+  { q: "Apa maksud deduplikasi sinyal iklan 1:1?", a: "Satu pesanan dikirim dari browser dan dari server dengan ID yang sama, jadi jaringan iklan menghitungnya satu kali, bukan dua. Di Meta: Pixel dan Conversions API dengan event_id yang sama. Di Google Ads: tag konversi dan konversi offline dengan ID transaksi yang sama. Dari server, konversi tetap terkirim walau pembeli langsung menutup halaman." },
   { q: "Uang pembeli masuk ke mana?", a: "Ke akun Anda. COD dicairkan oleh Mengantar, QRIS dan VA oleh AutoLaris, keduanya ke akun Anda sendiri. adsbook.id tidak memegang dana pembeli dan tidak memotong per transaksi." },
   { q: "Bisa pakai domain sendiri?", a: "Bisa, 1 domain sendiri per toko yang berlangganan. Untuk domain lain, buka toko baru. Domain utama (contoh.com) bisa dipakai bila DNS Anda mendukung CNAME di root; kalau tidak, pakai www." },
   { q: "Apa saja yang perlu disiapkan?", a: "Satu produk dengan harga dan berat, gudang utama dengan alamat pickup, dan API key Mengantar. Sampai semua langkah wajib selesai, pembeli melihat halaman \"Toko belum siap\" dan belum bisa memesan." },
@@ -138,6 +138,7 @@ export const FAQ_MORE: Faq[] = [
   { q: "Apakah ada aplikasi yang harus dipasang?", a: "Tidak. Toko dan admin berjalan di browser, termasuk di HP." },
   { q: "Bisa dipakai bersama tim?", a: "Bisa. Tambahkan akun untuk admin, advertiser, dan customer service; tiap peran hanya melihat menu yang ia perlukan." },
   { q: "Kalau pembeli tidak membuka halaman terima kasih, apakah konversinya hilang?", a: "Tidak. Purchase dikirim dari server saat pesanan COD dibuat atau saat pembayaran lunas, jadi tidak bergantung pada halaman terima kasih." },
+  { q: "Saya beriklan di TikTok atau jaringan lain. Apakah tercatat?", a: "Ya. Buat link iklan dengan Link UTM di admin, lalu setiap pesanan tercatat per sumber dan kampanye di Analitik, sama seperti Meta dan Google. Sinyal konversi dari server saat ini dikirim ke Meta dan Google Ads." },
   { q: "Bagaimana kalau saya ingin berhenti?", a: "Minta penghapusan toko dari admin. Data toko dihapus 30 hari setelah permintaan; selama itu Anda masih bisa membatalkannya." },
   { q: "Di mana data toko disimpan?", a: "Setiap toko punya database sendiri, diutamakan berada di Asia-Pasifik, dengan backup harian; pemrosesan dapat berlangsung di jaringan edge global penyedia infrastruktur kami. Nama penyedia dan rinciannya ada di Kebijakan Privasi." },
 ];
@@ -168,14 +169,14 @@ export type Pillar = {
 export const PILLARS: Pillar[] = [
   {
     id: "sinyal",
-    label: "Sinyal iklan 1:1",
-    title: "Satu pesanan, satu Purchase",
-    summary: "Pixel dan Conversions API mengirim pesanan yang sama dengan satu event_id. Tidak dobel, tidak hilang.",
+    label: "Semua kanal iklan",
+    title: "Satu pesanan, satu konversi, di kanal mana pun",
+    summary: "Setiap pesanan tercatat ke kanal iklannya. Meta dan Google menerimanya dari browser dan server dengan satu ID: tidak dobel, tidak hilang.",
     points: [
-      "Pixel di browser dan Conversions API dari server memakai event_id yang sama untuk setiap pesanan",
-      "Purchase dikirim dari server saat pesanan COD dibuat atau saat pembayaran lunas, walau pembeli langsung menutup halaman",
-      "8 data pembeli di-hash SHA-256 untuk pencocokan; ID klik dan UTM disimpan 90 hari",
-      "Konversi offline Google Ads dari pesanan yang benar-benar terjadi, dengan ID produk yang sama di feed dan event",
+      "Meta, Google, TikTok, dan jaringan lain: setiap pesanan menyimpan kanal dan kampanyenya dari ID klik dan UTM, selama 90 hari",
+      "Meta: Pixel di browser dan Conversions API dari server dengan event_id yang sama",
+      "Google Ads: tag konversi dan konversi offline dari pesanan yang benar-benar terjadi, dengan ID produk yang sama di feed",
+      "Dari server saat pesanan COD dibuat atau lunas, walau pembeli langsung menutup halaman; 8 data pembeli di-hash SHA-256",
     ],
     shot: SHOTS.meta,
   },
@@ -254,8 +255,8 @@ export const CAPABILITIES: Array<{ title: string; text: string }> = [
   { title: "Domain sendiri", text: "Satu record CNAME, SSL otomatis, dan bisa diganti kapan saja." },
   { title: "Landing page", text: "Dibuat dari admin, dengan form order di dalamnya." },
   { title: "Katalog dan feed", text: "Varian dan foto; feed Google Merchant dan katalog Meta terisi otomatis." },
-  { title: "Analitik dari pesanan", text: "Omzet, funnel, produk, landing page, lokasi, jam beli, dan UTM." },
-  { title: "Link UTM", text: "Buat link iklan bertanda UTM, lalu bandingkan hasil per kampanye." },
+  { title: "Analitik per kanal", text: "Omzet dan pesanan per kanal iklan, kampanye, produk, landing page, lokasi, dan jam beli." },
+  { title: "Link UTM", text: "Link iklan bertanda UTM untuk Facebook, Instagram, Google, TikTok, atau WhatsApp." },
   { title: "Tim dengan peran", text: "Owner, admin, advertiser, dan CS hanya melihat menu tugasnya." },
   { title: "Draf konten AI", text: "Draf deskripsi produk dengan AI; Anda yang menerbitkan." },
   { title: "Template CRM", text: "Pesan WhatsApp dengan nama, produk, dan data pesanan terisi." },
@@ -264,8 +265,8 @@ export const CAPABILITIES: Array<{ title: string; text: string }> = [
 
 /** FAQ grouped by the question a seller brings (/faq), drawn from the two lists above. */
 export const FAQ_GROUPS: Array<{ title: string; items: Faq[] }> = [
-  { title: "Biaya dan langganan", items: [FAQ_SHORT[0], FAQ_MORE[0], FAQ_MORE[1], FAQ_MORE[6]] },
-  { title: "Iklan dan sinyal", items: [FAQ_SHORT[1], FAQ_MORE[5]] },
-  { title: "Uang, data, dan domain", items: [FAQ_SHORT[2], FAQ_MORE[2], FAQ_MORE[7], FAQ_SHORT[3]] },
+  { title: "Biaya dan langganan", items: [FAQ_SHORT[0], FAQ_MORE[0], FAQ_MORE[1], FAQ_MORE[7]] },
+  { title: "Iklan dan sinyal", items: [FAQ_SHORT[1], FAQ_MORE[5], FAQ_MORE[6]] },
+  { title: "Uang, data, dan domain", items: [FAQ_SHORT[2], FAQ_MORE[2], FAQ_MORE[8], FAQ_SHORT[3]] },
   { title: "Memulai", items: [FAQ_SHORT[4], FAQ_MORE[3], FAQ_MORE[4]] },
 ];

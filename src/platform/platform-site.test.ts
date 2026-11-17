@@ -175,6 +175,14 @@ test("one site: every marketing page uses the shared frame, ends its title on th
   assert.equal(new Set(PILLARS.map((pillar) => pillar.id)).size, 6);
   for (const pillar of PILLARS) assert.ok(pillar.shot || pillar.specs?.length, pillar.id);
   assert.ok(CAPABILITIES.length >= 6);
+  // All ad channels, not one network (Paduka, 2026-11-17): the signal pillar names them, and the
+  // channels it names are the ones Analitik reports (AD_CHANNEL_LABELS).
+  const { AD_CHANNEL_LABELS } = await import("../lib/ad-channel.ts");
+  const signal = PILLARS.find((pillar) => pillar.id === "sinyal")!;
+  for (const channel of [AD_CHANNEL_LABELS.meta, AD_CHANNEL_LABELS.google, AD_CHANNEL_LABELS.tiktok]) {
+    assert.ok(signal.points.join(" ").includes(channel), `the signal pillar names ${channel}`);
+  }
+  assert.match(readFileSync("src/pages/platform/site/index.astro", "utf8"), /semua kanal/, "the home hero says all channels");
   // Every FAQ answer appears exactly once in the grouped FAQ.
   const grouped = FAQ_GROUPS.flatMap((group) => group.items);
   assert.equal(grouped.length, FAQ_SHORT.length + FAQ_MORE.length);

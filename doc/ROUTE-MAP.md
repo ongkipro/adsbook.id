@@ -304,7 +304,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | --- | --- | --- | --- | --- | --- |
 | `abandoned-lead-session` | 6 | — | — | 1 | — |
 | `abandoned-lead` | 9 | `order_items` `orders` `product_variants` `products` `stores` | — | 3 | `/api/admin/abandoned-orders` |
-| `ad-channel` | 5 | — | — | 1 | — |
+| `ad-channel` | 5 | — | — | 2 | — |
 | `ad-taxonomy` | 4 | — | — | 1 | `/admin/ads/google` |
 | `admin-credentials` | 12 | `admin_credentials` | — | 3 | `/api/handoff` `/hello` `/api/admin/access` `/api/admin/profile` |
 | `admin-date-filter` | 26 | — | — | 1 | — |
