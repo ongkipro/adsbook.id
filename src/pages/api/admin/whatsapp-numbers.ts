@@ -37,11 +37,35 @@ function failure(error: unknown, fallback: string) {
   return jsonError(fallback, 500);
 }
 
+/** Whether /thanks hands COD buyers to WhatsApp by itself (migration 0060). */
+async function readThanksRedirect(db: D1Database) {
+  const row = await db.prepare("SELECT thanks_whatsapp_redirect FROM stores ORDER BY id LIMIT 1").first<{ thanks_whatsapp_redirect: number | null }>();
+  return Number(row?.thanks_whatsapp_redirect) === 1;
+}
+
 export const GET: APIRoute = async ({ locals }) => {
   try {
-    return jsonOk({ data: await listWhatsappNumbers(database(locals)) });
+    const db = database(locals);
+    return jsonOk({ data: await listWhatsappNumbers(db), thanks_redirect: await readThanksRedirect(db) });
   } catch (error) {
     return failure(error, "Nomor WhatsApp gagal dimuat.");
+  }
+};
+
+/**
+ * The redirect switch lives beside the numbers it hands buyers to (Paduka,
+ * 2026-11-18). It writes this one column only, so it can never overwrite the
+ * store profile the Toko & CS page saves.
+ */
+export const PUT: APIRoute = async ({ request, locals }) => {
+  try {
+    const db = database(locals);
+    const body = await readBody(request);
+    if (typeof body.thanks_redirect !== "boolean") throw new WhatsappNumberError("Nilai pengalihan tidak valid.", 400);
+    await db.prepare("UPDATE stores SET thanks_whatsapp_redirect = ? WHERE id = (SELECT id FROM stores ORDER BY id LIMIT 1)").bind(body.thanks_redirect ? 1 : 0).run();
+    return jsonOk({ thanks_redirect: await readThanksRedirect(db) });
+  } catch (error) {
+    return failure(error, "Pengaturan pengalihan gagal disimpan.");
   }
 };
 

@@ -223,3 +223,18 @@ test("a tenant with no stored identity never shows a value from the Worker envir
     }
   }
 });
+
+test("the COD → WhatsApp switch lives on the WhatsApp page; the Toko & CS save keeps it (Paduka, 2026-11-18)", () => {
+  const settings = readFileSync(new URL("../pages/api/admin/settings.ts", import.meta.url), "utf8");
+  const update = settings.slice(settings.indexOf('if (body.action === "save-store")'));
+  // A Toko & CS save that does not send the field keeps the stored value.
+  assert.match(update, /typeof body\.thanks_whatsapp_redirect === "boolean"[^\n]*current\.thanks_whatsapp_redirect/);
+  const storePage = readFileSync(new URL("../pages/admin/settings/store.astro", import.meta.url), "utf8");
+  assert.doesNotMatch(storePage, /thanksWhatsappRedirect|thanks_whatsapp_redirect/);
+  const route = readFileSync(new URL("../pages/api/admin/whatsapp-numbers.ts", import.meta.url), "utf8");
+  assert.match(route, /export const PUT/);
+  assert.match(route, /typeof body\.thanks_redirect !== "boolean"/);
+  assert.match(route, /UPDATE stores SET thanks_whatsapp_redirect = \? WHERE/);
+  const island = readFileSync(new URL("../components/admin/WhatsappNumbers.tsx", import.meta.url), "utf8");
+  assert.match(island, /Arahkan pembeli COD ke WhatsApp setelah order/);
+});

@@ -1,3 +1,7 @@
+import { getRuntimeEnv } from "./env.ts";
+import { sharedAreaDropper } from "../platform/shared-areas.ts";
+import { scopeFromLocals } from "../platform/keys.ts";
+import { cachedEstimator } from "./rate-cache.ts";
 import {
   isCourierRateEnabled,
   type CourierAvailabilityRule,
@@ -231,6 +235,16 @@ export async function resolveEligibleShippingRates(
   }
 
   const client = new MengantarClient(config.apiKey, config.baseUrl);
+  // The checkout estimates go through a ten-minute per-tenant cache
+  // (rate-cache.ts): the form, a variant switch and submit's re-quote ask the
+  // same route. The A-415 probes keep the raw client.
+  const cfContext = (locals as { cfContext?: { waitUntil(task: Promise<unknown>): void } }).cfContext;
+  const estimateRates = cachedEstimator(
+    (estimateInput) => client.estimateRates(estimateInput),
+    scopeFromLocals(locals),
+    undefined,
+    cfContext ? (task) => cfContext.waitUntil(task) : undefined,
+  );
   // `COD_AMOUNT` is deliberately not sent on a checkout quote.
   //
   // Mengantar returns its own COD fee when asked, but this store already bills a
@@ -249,7 +263,7 @@ export async function resolveEligibleShippingRates(
   const hasCityFallback = isCod && destinationCity.trim() !== "";
   const quoteStartedAt = new Date();
   const estimate = (origin: string) =>
-    client.estimateRates({ originId: origin, destinationId, weight: weightKg }).then(
+    estimateRates({ originId: origin, destinationId, weight: weightKg }).then(
       (rates) => ({ rates, error: undefined as unknown }),
       (error: unknown) => ({ rates: [] as CourierRateResult[], error }),
     );
@@ -281,7 +295,7 @@ export async function resolveEligibleShippingRates(
   // check runs beside the rest of the quote (never before it) and never
   // changes its outcome; it is awaited before this quote answers.
   const areaCheck = firstEstimate.error
-    ? dropRefusedDestination(database, client, { originId, destinationId }, firstEstimate.error, quoteStartedAt).catch((error) =>
+    ? dropRefusedDestination(database, client, { originId, destinationId }, firstEstimate.error, quoteStartedAt, sharedAreaDropper(getRuntimeEnv(locals))).catch((error) =>
         console.error("mengantar-area-drop-failed", { error: error instanceof Error ? error.message : String(error) }),
       )
     : null;
@@ -368,7 +382,7 @@ export async function resolveEligibleShippingRates(
     .slice(0, 3);
   const sampleResults = await Promise.allSettled(
     candidates.map((candidate) =>
-      client.estimateRates({
+      estimateRates({
         originId,
         destinationId: candidate._id,
         weight: weightKg,

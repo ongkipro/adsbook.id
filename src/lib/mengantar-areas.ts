@@ -184,6 +184,7 @@ export async function dropRefusedDestination(
   input: { originId: string; destinationId: string },
   error: unknown,
   startedAt: Date = new Date(),
+  dropShared?: (areaId: string, resolvedBefore: Date) => Promise<unknown>,
 ): Promise<"dropped" | "kept" | "origin_refused" | "not_a_refusal" | "cooldown"> {
   const originId = input.originId.trim();
   const destinationId = input.destinationId.trim();
@@ -201,6 +202,7 @@ export async function dropRefusedDestination(
   if (origin === "refused") return "origin_refused";
   if (origin !== "accepted" || destination !== "refused") return "kept";
   const dropped = await dropMengantarArea(database, destinationId, startedAt);
+  if (dropShared) await Promise.resolve(dropShared(destinationId, startedAt)).catch((dropError) => console.error("shared-area-drop-failed", dropError));
   console.warn("mengantar-area-dropped", { area_id: destinationId, rows: dropped });
   return "dropped";
 }
@@ -232,16 +234,40 @@ async function forgetMengantarArea(database: D1Database, input: District, now: D
  * failure on either side is logged and never fails the buyer's form — it
  * just costs a provider call.
  */
+/**
+ * The cross-tenant layer (src/platform/shared-areas.ts), passed in by the
+ * route so this module never reaches PLATFORM_DB itself. Optional: without it
+ * the resolve is the tenant store plus Mengantar, as before.
+ */
+export type SharedAreaLayer = {
+  read(input: District): Promise<string | null>;
+  write(input: District, body: string): Promise<unknown>;
+};
+
 export async function resolveMengantarArea(
   database: D1Database,
   provider: () => Promise<((keyword: string) => Promise<ProviderAddressRow[]>) | null>,
   input: District,
+  shared?: SharedAreaLayer,
 ): Promise<{ body: string; stored: boolean } | null> {
   try {
     const stored = await readMengantarArea(database, input);
     if (stored) return { body: stored, stored: true };
   } catch (error) {
     console.error("mengantar-area-read-failed", error);
+  }
+  // Another store already resolved this district: no Mengantar call. The
+  // tenant keeps its own copy so its next buyer stays inside its store.
+  if (shared) {
+    try {
+      const body = await shared.read(input);
+      if (body) {
+        await storeMengantarArea(database, input, body).catch((error) => console.error("mengantar-area-write-failed", error));
+        return { body, stored: true };
+      }
+    } catch (error) {
+      console.error("shared-area-read-failed", error);
+    }
   }
   const searchAddress = await provider();
   if (!searchAddress) return null;
@@ -264,6 +290,9 @@ export async function resolveMengantarArea(
     else await forgetMengantarArea(database, input);
   } catch (error) {
     console.error("mengantar-area-write-failed", error);
+  }
+  if (exact && shared) {
+    await Promise.resolve(shared.write(input, body)).catch((error) => console.error("shared-area-write-failed", error));
   }
   return { body, stored: false };
 }

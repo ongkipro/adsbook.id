@@ -25,7 +25,7 @@ import { useConfirm } from "./useConfirm";
 const ENDPOINT = "/api/admin/whatsapp-numbers";
 const PHONE_HINT = "Nomor Indonesia, contoh 081234567890.";
 
-type ApiAnswer = { data?: WhatsappNumber[]; error?: string };
+type ApiAnswer = { data?: WhatsappNumber[]; thanks_redirect?: boolean; error?: string };
 
 async function send(method: string, body?: unknown): Promise<WhatsappNumber[]> {
   const response = await fetch(ENDPOINT, {
@@ -54,13 +54,42 @@ export default function WhatsappNumbers() {
   const [editing, setEditing] = useState<WhatsappNumber | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [redirect, setRedirect] = useState(false);
+  const [redirectBusy, setRedirectBusy] = useState(false);
+  const [redirectNote, setRedirectNote] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
-    send("GET")
-      .then(setRows)
+    fetch(ENDPOINT)
+      .then(async (response) => {
+        const answer = (await response.json().catch(() => ({}))) as ApiAnswer;
+        if (!response.ok) throw new Error(answer.error || "Nomor WhatsApp gagal dimuat.");
+        setRows(answer.data ?? []);
+        setRedirect(answer.thanks_redirect === true);
+      })
       .catch((error: Error) => setLoadError(error.message));
   }, []);
+
+  // The switch saves itself: one column, nothing else on the store row.
+  async function toggleRedirect(next: boolean) {
+    setRedirectBusy(true);
+    setRedirectNote(null);
+    try {
+      const response = await fetch(ENDPOINT, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thanks_redirect: next }),
+      });
+      const answer = (await response.json().catch(() => ({}))) as ApiAnswer;
+      if (!response.ok) throw new Error(answer.error || "Pengaturan pengalihan gagal disimpan.");
+      setRedirect(answer.thanks_redirect === true);
+      setRedirectNote(answer.thanks_redirect ? "Aktif: pembeli COD diarahkan ke WhatsApp setelah order." : "Nonaktif: pembeli COD menekan tombol WhatsApp sendiri.");
+    } catch (error) {
+      setRedirectNote((error as Error).message);
+    } finally {
+      setRedirectBusy(false);
+    }
+  }
 
   async function run(action: () => Promise<WhatsappNumber[]>) {
     setBusy(true);
@@ -130,6 +159,28 @@ export default function WhatsappNumbers() {
 
   return (
     <div className="space-y-4">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="thanks-redirect-title">
+        <div className="flex items-start gap-4 p-5 md:p-6">
+          <div className="min-w-0 flex-1">
+            <p id="thanks-redirect-title" className="text-sm font-semibold text-slate-900">Arahkan pembeli COD ke WhatsApp setelah order</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Halaman terima kasih membuka chat ke nomor CS di bawah dalam ±3 detik, setelah pixel Purchase terkirim,
+              dengan pesan berisi nomor invoice, nama, dan produk. Pembeli QRIS, VA, dan transfer tetap di halaman pembayaran.
+            </p>
+            {redirectNote && <p className="mt-2 text-xs font-medium text-slate-700" role="status">{redirectNote}</p>}
+          </div>
+          <Switch
+            checked={redirect}
+            disabled={redirectBusy || active === 0}
+            aria-labelledby="thanks-redirect-title"
+            onCheckedChange={(checked) => void toggleRedirect(checked)}
+          />
+        </div>
+        {active === 0 && (
+          <p className="border-t border-slate-100 px-5 py-3 text-xs text-amber-800 md:px-6">Tambahkan nomor WhatsApp aktif dulu untuk memakai pengalihan.</p>
+        )}
+      </section>
+
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-5 md:p-6">
           <p className="text-sm font-semibold text-slate-900">{whatsappShareSummary(active)}</p>
