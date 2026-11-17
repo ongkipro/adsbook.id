@@ -260,12 +260,21 @@ const preloadImageUrls =
     {Astro.locals.tenantContext?.isDemo && (
       <p role="note" class="bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">Toko contoh adsbook.id: lihat-lihat saja, pemesanan tidak aktif.</p>
     )}
-    {/* ADR-041 (BILL-5): a store that is not live says so to anyone who opens it. */}
+    {/* ADR-041 (BILL-5): a store that is not live says so to anyone who opens it —
+        one quiet bar, not a popup: the person who sees a Preview store is almost
+        always its owner, and a modal on every page view only gets in the way.
+        The link takes the owner straight to billing (sign-in first if needed);
+        it is a plain link, so the page stays edge-cacheable (ADR-029). */}
     {Astro.locals.billing?.adSignalsPaused && (
-      <p role="note" class="bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">
-        {Astro.locals.billing.state === 'expired'
-          ? 'Toko ini sedang tidak menerima pesanan. Pemilik toko perlu memperpanjang langganan di Admin.'
-          : 'Mode Preview — Aktifkan langganan di Admin agar toko siap diiklankan dan menerima pesanan.'}
+      <p role="note" id="storePreviewBar" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">
+        <span>
+          {Astro.locals.billing.state === 'expired'
+            ? 'Toko ini sedang tidak menerima pesanan.'
+            : 'Mode Preview — toko belum menerima pesanan.'}
+        </span>
+        <a href="/admin/billing" class="underline underline-offset-2 hover:no-underline">
+          {Astro.locals.billing.state === 'expired' ? 'Pemilik toko: perpanjang langganan' : 'Pemilik toko: aktifkan langganan'}
+        </a>
       </p>
     )}
     {/* The storefront is a phone-width column on every screen (compact

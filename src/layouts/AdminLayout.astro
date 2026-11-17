@@ -15,7 +15,9 @@ const adminRole = Astro.locals.admin?.role ?? 'customer_service';
 const mustChangePassword = Astro.locals.admin?.mustChangePassword ?? false;
 // ADR-041 (T-50): Preview, grace and expired say so on every admin page; the
 // owner and admin get the way to pay. Subscribed stores show nothing.
-const billingState = Astro.locals.billing?.state;
+// PR-26: the demo store never pays, so it never carries a subscription notice.
+const isDemo = Boolean(Astro.locals.tenantContext?.isDemo);
+const billingState = isDemo ? undefined : Astro.locals.billing?.state;
 const canPay = adminRole === 'owner' || adminRole === 'admin';
 const billingNotice =
   billingState === 'preview'
@@ -74,6 +76,11 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
       {browserUnsupported && (
         <div id="browserUnsupportedNotice" role="alert" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
           {BROWSER_UNSUPPORTED_MESSAGE}
+        </div>
+      )}
+      {isDemo && (
+        <div id="demoNotice" role="note" class="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <strong class="text-slate-900">Toko contoh adsbook.id.</strong> Hanya untuk dilihat: perubahan, pesanan, dan pembayaran tidak aktif, dan tidak perlu berlangganan.
         </div>
       )}
       {billingNotice && Astro.url.pathname !== '/admin/billing' && (

@@ -1,6 +1,6 @@
 {
   "name": "adsbook-id",
-  "version": "1.10.1",
+  "version": "1.0.0",
   "description": "adsbook.id — multi-tenant direct-response commerce platform for Indonesian sellers on Cloudflare Workers",
   "engines": {
     "node": ">=22",

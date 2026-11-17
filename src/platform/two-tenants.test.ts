@@ -1688,11 +1688,14 @@ test("T-38: a new store says 'toko belum siap' (no checkout) until the ready pre
   assert.equal((await store.open("/api/locations")).reached, true, "the warehouse step's area lookup");
   assert.equal((await store.open("/api/ops/v1/orders")).reached, true, "read-only ops");
   assert.equal((await store.open("/api/ops/v1/orders", "POST")).status, 503, "an ops write stays gated");
-  for (const path of ["/admin", "/admin/setup", "/api/admin/products"]) {
+  // `/api/admin/payment-methods` too: the Pembayaran page reads its list there,
+  // because the public `/api/payment-methods` is (rightly) closed until ready.
+  for (const path of ["/admin", "/admin/setup", "/admin/payments", "/api/admin/products", "/api/admin/payment-methods"]) {
     const response = await store.open(path);
     assert.ok(response.status === 302 || response.status === 401, `${path} → ${response.status}`);
     assert.doesNotMatch(response.body, /belum siap|STORE_NOT_READY/, path);
   }
+  assert.equal((await store.open("/api/payment-methods")).status, 503, "the buyer-facing list stays closed until ready");
 
   // Step by step: closed until the last required step, open right after.
   const required = async () => {

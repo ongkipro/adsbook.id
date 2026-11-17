@@ -59,10 +59,15 @@ for (const width of [390, 1280]) {
     // Preview: the storefront says so, is not indexed, and takes no order.
     const storefront = await page.goto(`${base}/`);
     expect(storefront?.headers()["x-robots-tag"]).toBe("noindex, nofollow");
-    await expect(page.getByText("Mode Preview — Aktifkan langganan di Admin")).toBeVisible();
+    // One quiet bar with a link for the owner, not a popup.
+    await expect(page.locator("#storePreviewBar")).toContainText("Mode Preview — toko belum menerima pesanan.");
+    await expect(page.locator("#storePreviewBar").getByRole("link", { name: "Pemilik toko: aktifkan langganan" })).toHaveAttribute("href", "/admin/billing");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     const order = await page.request.post(`${base}/api/submit-order`, { headers: { origin: base }, data: {} });
     expect(order.status()).toBe(402);
-    expect((await order.json()).code).toBe("SUBSCRIPTION_REQUIRED");
+    const refusal = await order.json();
+    expect(refusal.code).toBe("SUBSCRIPTION_REQUIRED");
+    expect(refusal.buyer_message).toBe("Toko ini belum menerima pesanan. Silakan hubungi penjual atau coba lagi nanti.");
 
     // The owner sees the banner on every admin page and reaches billing from it.
     await signIn(page, base, slug);
@@ -93,7 +98,7 @@ for (const width of [390, 1280]) {
     // Live: the storefront banner is gone and it may be indexed again.
     const live = await page.goto(`${base}/`);
     expect(live?.headers()["x-robots-tag"]).toBeUndefined();
-    await expect(page.getByText("Mode Preview — Aktifkan langganan di Admin")).toHaveCount(0);
+    await expect(page.locator("#storePreviewBar")).toHaveCount(0);
 
     // Past the grace: orders pause, the owner still signs in and renews by VA.
     lapse(slug);
