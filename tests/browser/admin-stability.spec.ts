@@ -30,7 +30,7 @@ test("the sidebar stays where the operator clicked, and admin pages load without
   await desktop.addInitScript(() => {
     (window as unknown as { __cls: number }).__cls = 0;
     new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as Array<{ value: number; hadRecentInput: boolean }>) {
+      for (const entry of list.getEntries() as unknown as Array<{ value: number; hadRecentInput: boolean }>) {
         if (!entry.hadRecentInput) (window as unknown as { __cls: number }).__cls += entry.value;
       }
     }).observe({ type: "layout-shift", buffered: true });
