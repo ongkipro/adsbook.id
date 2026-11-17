@@ -1,0 +1,180 @@
+---
+import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import ShotFrame from '../../../platform/site/ShotFrame.astro';
+import StepFlow from '../../../platform/site/StepFlow.astro';
+import Pricing from '../../../platform/site/Pricing.astro';
+import FaqList from '../../../platform/site/FaqList.astro';
+import ClosingCta from '../../../platform/site/ClosingCta.astro';
+import { FAQ_SHORT, SALES_FLAGSHIPS, SALES_SUPPORT, SHOTS } from '../../../platform/site/content.ts';
+import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from '../../../platform/site/site.ts';
+
+export const prerender = false;
+// The long-form sales page for ad traffic (/coba). Outline and every claim:
+// content/adsbook-id-sales-lp/features.md (2026-11-17), facts from content.ts.
+---
+
+<SiteLayout page={SITE_PAGES.coba}>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div class="hero-text">
+        <h1 id="hero-title">Setiap pesanan dari iklan tercatat tepat satu kali</h1>
+        <p class="lead">Toko COD untuk seller Meta dan Google Ads. Form cepat di HP, pesanan Anda periksa sebelum dikirim, dan Purchase sampai ke Meta dari server, walau pembeli langsung menutup halaman.</p>
+        <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
+        <p class="hero-note">Gratis di Mode Preview · berlangganan mulai Rp149.000/bulan saat siap beriklan · 0% potongan per transaksi</p>
+      </div>
+      <div class="hero-shot"><ShotFrame shot={SHOTS.form} eager caption /></div>
+    </div>
+  </section>
+
+  <section class="signal" aria-labelledby="signal-title">
+    <div class="wrap signal-grid">
+      <div class="signal-mark">
+        <!-- The static logo first; the animated one is swapped in when the band
+             scrolls into view, so it plays when it is seen (an <img> SVG starts its
+             animation when it loads). Without JS the static logo stays. -->
+        <img id="signalLogo" src="/platform/brand/adsbook-id-wordmark.svg" data-animated="/platform/brand/adsbook-id-wordmark-animated.svg" alt="" width="530" height="85" loading="lazy" decoding="async" />
+        <ol class="signal-legend" aria-label="Arti titik pada logo">
+          <li><span class="tick tick-v" aria-hidden="true"></span>Pixel dari browser pembeli</li>
+          <li><span class="tick tick-h" aria-hidden="true"></span>Conversions API dari server toko</li>
+          <li><span class="tick tick-dot" aria-hidden="true"></span>Satu event_id: Meta menghitung satu Purchase</li>
+        </ol>
+      </div>
+      <div class="signal-text">
+        <h2 id="signal-title">Titik di logo kami adalah janji kami</h2>
+        <p class="lead">Dua sinyal untuk pesanan yang sama bertemu di satu titik. Tidak dobel, tidak hilang.</p>
+        <p class="muted">Penjualan yang dihitung dua kali membuat ROAS terlihat bagus padahal tidak. Penjualan yang tidak sampai membuat iklan yang menghasilkan terlihat rugi. adsbook.id mengirim keduanya dengan event_id yang sama, jadi algoritma iklan belajar dari pesanan yang benar-benar terjadi.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-white" aria-labelledby="unggulan-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="unggulan-title">Enam hal yang menentukan hasil iklan COD Anda</h2>
+        <p class="lead prose">Semuanya sudah berjalan hari ini. Gambar di bawah adalah layar produk yang sebenarnya, dengan data dari toko contoh.</p>
+      </div>
+      <div class="flagships">
+        {SALES_FLAGSHIPS.map((item, index) => (
+          <article class={`flag ${index % 2 ? 'flag-flip' : ''}`} aria-labelledby={`flag-${index}`}>
+            <div class="flag-text">
+              <p class="flag-no"><span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span> {item.kicker}</p>
+              <h3 id={`flag-${index}`}>{item.title}</h3>
+              <ul>{item.points.map((point) => <li>{point}</li>)}</ul>
+            </div>
+            {item.shot ? <ShotFrame shot={item.shot} /> : (
+              <dl class="spec" aria-label={item.title}>
+                {item.specs?.map((spec) => <div><dt>{spec.value}</dt><dd>{spec.label}</dd></div>)}
+              </dl>
+            )}
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="alur-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="alur-title">Satu pesanan, dari klik sampai tercatat</h2>
+      </div>
+      <StepFlow />
+    </div>
+  </section>
+
+  <section class="section section-white" aria-labelledby="lengkap-title">
+    <div class="wrap">
+      <div class="section-head"><h2 id="lengkap-title">Dan yang Anda perlukan setiap hari</h2></div>
+      <dl class="support">
+        {SALES_SUPPORT.map((item) => <div><dt>{item.title}</dt><dd>{item.text}</dd></div>)}
+      </dl>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="harga-title">
+    <div class="wrap">
+      <div class="section-head"><h2 id="harga-title">Coba gratis, bayar saat siap beriklan</h2></div>
+      <Pricing compact />
+    </div>
+  </section>
+
+  <section class="section section-white" aria-labelledby="faq-title">
+    <div class="wrap">
+      <div class="section-head"><h2 id="faq-title">Pertanyaan yang sering muncul</h2></div>
+      <FaqList items={FAQ_SHORT} />
+      <p class="more"><a href="/faq">Semua pertanyaan</a></p>
+    </div>
+  </section>
+
+  <ClosingCta />
+</SiteLayout>
+
+<script>
+  const logo = document.getElementById('signalLogo') as HTMLImageElement | null;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (logo && !reduce && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      logo.src = logo.dataset.animated ?? logo.src;
+    }, { threshold: 0.6 });
+    observer.observe(logo);
+  }
+</script>
+
+<style>
+  .hero { padding: 2rem 0 4rem; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
+  .hero-text { display: grid; gap: 1.25rem; justify-items: start; }
+  .hero-note { font-size: 0.95rem; color: var(--ink-muted); }
+  .hero-shot :global(.frame-phone) { max-width: 290px; }
+
+  /* The brand band: the one dark section, where the logo explains the product. */
+  .signal { background: var(--ink); color: #cbd5e1; padding-block: var(--section); }
+  .signal h2 { color: #f8fafc; }
+  .signal .lead { color: #e2e8f0; }
+  .signal .muted { color: #cbd5e1; }
+  .signal-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
+  .signal-mark { display: grid; gap: 2rem; padding: 2.5rem; border-radius: 16px; background: #ffffff; }
+  .signal-mark img { width: 100%; height: auto; }
+  .signal-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; color: var(--ink); font-size: 0.97rem; font-weight: 600; }
+  .signal-legend li { display: grid; grid-template-columns: 28px 1fr; gap: 0.75rem; align-items: center; }
+  .tick { justify-self: center; background: var(--accent); }
+  .tick-v { width: 4px; height: 22px; background: linear-gradient(var(--accent-tint), var(--accent)); }
+  .tick-h { width: 22px; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent-tint)); }
+  .tick-dot { width: 12px; height: 12px; }
+  .signal-text { display: grid; gap: 1.1rem; }
+
+  .section-head { display: grid; gap: 0.9rem; margin-bottom: 3rem; }
+  .flagships { display: grid; gap: 5rem; }
+  .flag { display: grid; grid-template-columns: 5fr 7fr; gap: 3.5rem; align-items: center; }
+  .flag-flip .flag-text { order: 2; }
+  .flag-text { display: grid; gap: 0.9rem; }
+  .flag-no { color: var(--accent); font-weight: 700; font-size: 0.95rem; }
+  .flag-no span { font-family: var(--display); font-variant-numeric: tabular-nums; margin-right: 0.35rem; }
+  .flag-text h3 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.015em; }
+  .flag-text ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.55rem; color: var(--ink-muted); }
+  .spec { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .spec div { background: var(--surface); padding: 1.5rem; display: grid; gap: 0.35rem; }
+  .spec dt { font-family: var(--display); font-weight: 800; font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.25rem); letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .spec dd { margin: 0; color: var(--ink-muted); font-size: 0.95rem; }
+
+  .support { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem 3rem; }
+  .support div { display: grid; gap: 0.35rem; align-content: start; }
+  .support dt { font-weight: 700; color: var(--ink); }
+  .support dd { margin: 0; color: var(--ink-muted); }
+  .more { margin-top: 1.5rem; font-weight: 600; }
+
+  @media (max-width: 900px) { .support { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 760px) {
+    .hero { padding: 1rem 0 2.5rem; }
+    .hero-grid, .signal-grid { grid-template-columns: 1fr; gap: 2rem; }
+    .hero-shot :global(.frame-phone) { max-height: 240px; max-width: 260px; }
+    .hero-shot :global(figcaption) { display: none; }
+    .signal-mark { padding: 1.5rem; gap: 1.5rem; }
+    .section-head { margin-bottom: 2rem; }
+    .flagships { gap: 3.5rem; }
+    .flag { grid-template-columns: 1fr; gap: 1.5rem; }
+    .flag-flip .flag-text { order: 0; }
+    .support { grid-template-columns: 1fr; gap: 1.25rem; }
+  }
+</style>

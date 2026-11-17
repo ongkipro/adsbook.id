@@ -65,6 +65,7 @@ export function platformHosts(extra?: string | null): ReadonlySet<string> {
 export const PLATFORM_SITE_ROUTES: Readonly<Record<string, string>> = {
   "/": "/platform/site",
   "/fitur": "/platform/site/fitur",
+  "/coba": "/platform/site/coba",
   "/cara-kerja": "/platform/site/cara-kerja",
   "/harga": "/platform/site/harga",
   "/faq": "/platform/site/faq",
