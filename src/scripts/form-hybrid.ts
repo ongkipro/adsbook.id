@@ -5,7 +5,7 @@ import { normalizePhone } from "../lib/validation";
 import { buyerPaymentAdminFee, calculateCodFeeBreakdown } from "../lib/payment-fee-policy";
 import { paymentBrandAsset } from "../lib/payment-brand";
 
-import { formatDeliveryLocation, groupLocationResults } from "../lib/location-search";
+import { createDistrictDiscoveryLocation, formatDeliveryLocation, groupLocationResults } from "../lib/location-search";
 import { pushGtmEcomEvent } from "../lib/gtm";
 import { isValidWa62, missingCheckoutContact } from "../lib/validation";
 import { normalizeProvinceCode } from "../lib/province";
@@ -271,6 +271,38 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
     string,
     { items: DistrictOption[]; source: string }
   >();
+  // Paduka, 2026-11-18: the kecamatan list answers from the bundled catalogue
+  // in the browser — a hashed chunk (~40 KB compressed, cached for good),
+  // fetched when the field is first touched — so typing never waits for the
+  // network. The server route stays the fallback (and the precision search).
+  let districtCatalog: Promise<typeof import("../lib/district-catalog")> | null = null;
+  const loadDistrictCatalog = () => {
+    districtCatalog ??= import("../lib/district-catalog").catch((error) => {
+      districtCatalog = null;
+      throw error;
+    });
+    return districtCatalog;
+  };
+  // A district's resolve starts when the finger lands on it (pointerdown),
+  // not when it lifts (click): the click reuses the request already in flight.
+  const districtResolves = new Map<string, Promise<Response>>();
+  const resolveDistrict = async (group: { district: string; city: string; province: string }) => {
+    const params = new URLSearchParams({
+      search: group.district,
+      city: group.city,
+      province: group.province,
+      level: "resolve",
+    });
+    const key = params.toString();
+    let request = districtResolves.get(key);
+    if (!request) {
+      request = fetch(`/api/locations?${key}`, { cache: "no-store" });
+      districtResolves.set(key, request);
+      // A failed resolve is asked again next time.
+      request.then((response) => { if (!response.ok) districtResolves.delete(key); }, () => districtResolves.delete(key));
+    }
+    return (await request).clone();
+  };
   const shippingOptionsCache = new Map<
     string,
     { items: ShippingOption[]; postalCode: string; source: string }
@@ -1471,6 +1503,9 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
       btn.addEventListener("mousedown", (e) => {
         e.preventDefault();
       });
+      btn.addEventListener("pointerdown", () => {
+        void resolveDistrict(group).catch(() => undefined);
+      }, { passive: true });
       btn.addEventListener("click", async () => {
         closeDistrictList();
         districtInput.value = `${group.district}, ${group.city}, ${group.province}`;
@@ -1486,15 +1521,7 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
         );
 
         try {
-          const params = new URLSearchParams({
-            search: group.district,
-            city: group.city,
-            province: group.province,
-            level: "resolve",
-          });
-          const response = await fetch(`/api/locations?${params.toString()}`, {
-            cache: "no-store",
-          });
+          const response = await resolveDistrict(group);
           const data = (await response.json().catch(() => ({}))) as {
             items?: Array<Record<string, unknown>>;
             alternatives?: Array<Record<string, unknown>>;
@@ -1609,6 +1636,32 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
     districtList.innerHTML =
       '<div class="district-empty">Memuat hasil kecamatan...</div>';
 
+    if (!providerPrecisionSearch) {
+      try {
+        const { searchDistrictCatalog } = await loadDistrictCatalog();
+        if (searchId !== districtSearchSeq) return;
+        const items = searchDistrictCatalog(q)
+          .map(createDistrictDiscoveryLocation)
+          .map((item) => ({
+            id: "",
+            label: item.label,
+            district: item.district_name,
+            subdistrict: "",
+            city: item.city_name,
+            province: item.province_name,
+            postal_code: "",
+            location_id: "",
+          }) satisfies DistrictOption);
+        districtSearchCache.set(cacheKey, { items, source: "catalogue" });
+        attachDistrictItems(items, q);
+        state.districtLoading = false;
+        syncSubmitButton();
+        return;
+      } catch {
+        // The chunk did not load (offline, blocked): ask the server below.
+      }
+    }
+
     try {
       districtSearchController = new AbortController();
       const locationParams = new URLSearchParams({ search: q });
@@ -1720,6 +1773,7 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
   districtEditButton?.addEventListener("click", resetLocationState);
 
   districtInput.addEventListener("focus", () => {
+    void loadDistrictCatalog().catch(() => undefined);
     const value = String(districtInput.value || "").trim();
     if (value.length >= 3 && !state.locationId) {
       districtList.hidden = false;

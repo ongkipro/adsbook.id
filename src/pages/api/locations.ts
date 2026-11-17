@@ -6,6 +6,8 @@ import { MengantarClient } from '../../lib/mengantar-client';
 import { getProviderConfig } from '../../lib/provider-config';
 import { checkRateLimit, getClientIp, rateLimitHeaders } from '../../lib/rate-limit';
 import { tenantDatabase } from '../../lib/tenant-database.ts';
+import { getRuntimeEnv } from '../../lib/env';
+import { sharedAreaLayer } from '../../platform/shared-areas.ts';
 
 export const prerender = false;
 
@@ -72,7 +74,9 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
     // A district resolved once (or seeded from this store's orders) is
     // answered from D1 with no Mengantar call and no KV write (PRD A43).
     if (level === 'resolve' && city) {
-      const resolved = await resolveMengantarArea(db, provider, { district: search, city, province });
+      // Public geography shared by every store (src/platform/shared-areas.ts).
+      const shared = sharedAreaLayer(getRuntimeEnv(locals));
+      const resolved = await resolveMengantarArea(db, provider, { district: search, city, province }, shared);
       if (!resolved) return catalogueOnly();
       // Same headers each branch had before: a stored answer was a KV hit.
       return resolved.stored

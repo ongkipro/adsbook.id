@@ -858,7 +858,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           themeColorValue || null,
           localeValue || null,
           clean(body.admin_name, 120) || null,
-          body.thanks_whatsapp_redirect === true ? 1 : 0,
+          // Set on the WhatsApp page since 2026-11-18; an old client that still sends it is honoured.
+          typeof body.thanks_whatsapp_redirect === "boolean" ? (body.thanks_whatsapp_redirect ? 1 : 0) : Number(current.thanks_whatsapp_redirect) === 1 ? 1 : 0,
           supportEmail || null,
           businessAddress || null,
           current.store_id,

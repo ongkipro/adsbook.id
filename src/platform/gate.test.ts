@@ -89,6 +89,7 @@ test("the control-plane chain creates every table of the data model, with the pi
     "platform_users",
     "purge_sweeps",
     "rate_limits",
+    "shared_mengantar_areas",
     "subscription_invoices",
     "tenant_events",
     "tenant_health",
