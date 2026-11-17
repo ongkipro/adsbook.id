@@ -1,0 +1,66 @@
+---
+/**
+ * The brand band: the logo explains the product. The two signals and the dot
+ * are the 1:1 promise; the animated logo is swapped in when the band is in
+ * view and stays static under reduced motion (brand test in platform-site.test.ts).
+ */
+interface Props { id?: string }
+const { id = 'signal-title' } = Astro.props;
+---
+
+<section class="signal" aria-labelledby={id}>
+  <div class="wrap signal-grid">
+    <div class="signal-mark">
+      <img class="signal-logo" src="/platform/brand/adsbook-id-wordmark.svg" data-animated="/platform/brand/adsbook-id-wordmark-animated.svg" alt="" width="530" height="85" loading="lazy" decoding="async" />
+      <ol class="signal-legend" aria-label="Arti titik pada logo">
+        <li><span class="tick tick-v" aria-hidden="true"></span>Pixel dari browser pembeli</li>
+        <li><span class="tick tick-h" aria-hidden="true"></span>Conversions API dari server toko</li>
+        <li><span class="tick tick-dot" aria-hidden="true"></span>Satu event_id: dihitung satu Purchase</li>
+      </ol>
+    </div>
+    <div class="signal-text">
+      <h2 id={id}>Titik di logo kami adalah janji kami</h2>
+      <p class="lead">Dua sinyal untuk pesanan yang sama bertemu di satu titik. Tidak dobel, tidak hilang.</p>
+      <p>Penjualan yang terhitung dua kali membuat iklan terlihat lebih untung dari kenyataannya. Penjualan yang tidak sampai membuat iklan yang menjual terlihat rugi. adsbook.id mengirim keduanya dengan event_id yang sama, jadi iklan belajar dari pesanan yang benar-benar terjadi.</p>
+      <a class="text-link" href="/fitur#sinyal">Cara kerja sinyal 1:1</a>
+    </div>
+  </div>
+</section>
+
+<script>
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const logos = Array.from(document.querySelectorAll<HTMLImageElement>('img.signal-logo'));
+  if (!reduce && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const logo = entry.target as HTMLImageElement;
+        observer.unobserve(logo);
+        if (logo.dataset.animated) logo.src = logo.dataset.animated;
+      }
+    }, { threshold: 0.6 });
+    logos.forEach((logo) => observer.observe(logo));
+  }
+</script>
+
+<style>
+  .signal { background: var(--ink); color: #cbd5e1; padding-block: var(--section); }
+  .signal h2 { color: #f8fafc; }
+  .signal .lead { color: #e2e8f0; }
+  .signal-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
+  .signal-mark { display: grid; gap: 2rem; padding: 2.5rem; border-radius: 16px; background: #ffffff; }
+  .signal-mark img { width: 100%; height: auto; }
+  .signal-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; color: var(--ink); font-size: 0.97rem; font-weight: 600; }
+  .signal-legend li { display: grid; grid-template-columns: 28px 1fr; gap: 0.75rem; align-items: center; }
+  .tick { justify-self: center; background: var(--accent); }
+  .tick-v { width: 4px; height: 22px; background: linear-gradient(var(--accent-tint), var(--accent)); }
+  .tick-h { width: 22px; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent-tint)); }
+  .tick-dot { width: 12px; height: 12px; }
+  .signal-text { display: grid; gap: 1.1rem; justify-items: start; }
+  .signal .text-link { color: #93c5fd; }
+  .signal .text-link:hover { color: #bfdbfe; }
+  @media (max-width: 760px) {
+    .signal-grid { grid-template-columns: 1fr; gap: 2rem; }
+    .signal-mark { padding: 1.5rem; gap: 1.5rem; }
+  }
+</style>

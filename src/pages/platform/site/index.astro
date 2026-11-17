@@ -1,7 +1,8 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import ShotFrame from '../../../platform/site/ShotFrame.astro';
-import StepFlow from '../../../platform/site/StepFlow.astro';
+import SignalBand from '../../../platform/site/SignalBand.astro';
+import PillarGrid from '../../../platform/site/PillarGrid.astro';
 import Pricing from '../../../platform/site/Pricing.astro';
 import FaqList from '../../../platform/site/FaqList.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
@@ -9,82 +10,77 @@ import { FAQ_SHORT, SHOTS } from '../../../platform/site/content.ts';
 import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from '../../../platform/site/site.ts';
 
 export const prerender = false;
-// T-40 (PR-25): adsbook.id home — sections per DESIGN.md "Direction".
+// The home (2026-11-17 site pass): the promise, the proof in the logo, the six
+// pillars short (full on /fitur), price, questions. One job per section.
 ---
 
 <SiteLayout page={SITE_PAGES.home}>
   <section class="hero" aria-labelledby="hero-title">
     <div class="wrap hero-grid">
       <div class="hero-text">
-        <h1 id="hero-title">Pesanan COD dari iklan, dengan sinyal 1:1 ke Meta</h1>
-        <p class="lead">Pixel dan Conversions API mengirim setiap pesanan dengan event_id yang sama: satu penjualan dihitung satu kali. Tanpa potongan per transaksi.</p>
-        <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
-        <p class="hero-note">Coba gratis di Mode Preview · berlangganan mulai Rp149.000/bulan saat siap beriklan</p>
+        <p class="hero-kicker">Toko COD untuk seller Meta dan Google Ads</p>
+        <h1 id="hero-title" class="dot-end">Setiap pesanan dari iklan tercatat tepat satu kali</h1>
+        <p class="lead">Form cepat di HP, pesanan Anda periksa sebelum dikirim, dan Purchase sampai ke Meta dari server, walau pembeli langsung menutup halaman.</p>
+        <div class="hero-actions">
+          <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
+          <a class="text-link" href="/cara-kerja">Lihat cara kerjanya</a>
+        </div>
+        <ul class="hero-facts" aria-label="Ringkasan">
+          <li>Gratis di Mode Preview</li>
+          <li>Mulai Rp149.000/bulan</li>
+          <li>0% potongan transaksi</li>
+        </ul>
       </div>
       <div class="hero-shot"><ShotFrame shot={SHOTS.form} eager caption /></div>
     </div>
   </section>
 
-  <section class="section section-white" aria-labelledby="alur-title">
+  <SignalBand />
+
+  <section class="section section-white" aria-labelledby="pilar-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="alur-title">Satu pesanan, dari klik sampai tercatat</h2>
-        <p class="lead prose">Lima langkah yang dilewati setiap pesanan di toko Anda. Semua gambar di bawah adalah layar produk yang sebenarnya, dengan data dari toko contoh.</p>
+        <h2 id="pilar-title">Presisi di setiap langkah pesanan</h2>
+        <p class="lead">Enam hal yang menentukan hasil iklan COD Anda, semuanya sudah berjalan hari ini.</p>
       </div>
-      <StepFlow />
+      <PillarGrid />
     </div>
   </section>
 
-  <section class="section" aria-labelledby="akun-title">
-    <div class="wrap own">
-      <h2 id="akun-title">Uang, akun kurir, pembayaran, dan iklan tetap milik Anda</h2>
-      <div class="own-text">
-        <p>Kurir, pembayaran, dan iklan berjalan dengan akun dan API key Anda sendiri: Mengantar, AutoLaris, Meta, dan Google Ads. Uang pembeli masuk ke akun Anda, bukan ke kami.</p>
-        <p class="muted">Data pembeli juga milik Anda: tersimpan terpisah per toko, bisa diekspor dari admin, dan kebijakan privasi toko Anda hanya menyebut penyedia yang Anda pakai.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="section section-white" aria-labelledby="harga-title">
+  <section class="section" aria-labelledby="harga-title">
     <div class="wrap">
-      <div class="section-head">
-        <h2 id="harga-title">Coba gratis, bayar saat siap beriklan</h2>
-      </div>
+      <div class="section-head"><h2 id="harga-title">Satu harga, semua fitur, per toko</h2></div>
       <Pricing compact />
-      <p class="more"><a href="/harga">Rincian paket</a></p>
+      <p class="more"><a class="text-link" href="/harga">Rincian paket</a></p>
     </div>
   </section>
 
-  <section class="section" aria-labelledby="faq-title">
+  <section class="section section-white" aria-labelledby="faq-title">
     <div class="wrap">
       <div class="section-head"><h2 id="faq-title">Pertanyaan yang sering muncul</h2></div>
       <FaqList items={FAQ_SHORT} />
-      <p class="more"><a href="/faq">Semua pertanyaan</a></p>
+      <p class="more"><a class="text-link" href="/faq">Semua pertanyaan</a></p>
     </div>
   </section>
 
-  <ClosingCta tone="white" />
+  <ClosingCta />
 </SiteLayout>
 
 <style>
-  .hero { padding: 2rem 0 4rem; }
+  .hero { padding: 2.5rem 0 5rem; }
   .hero-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
-  .hero-text { display: grid; gap: 1.25rem; justify-items: start; }
-  .hero-note { font-size: 0.95rem; color: var(--ink-muted); }
-  /* The next section must peek in (dotuiux hero-height): a smaller phone, and
-     on a narrow screen only its top — the variant and buyer fields. */
+  .hero-text { display: grid; gap: 1.35rem; justify-items: start; }
+  .hero-kicker { font-weight: 700; color: var(--accent); font-size: 0.97rem; }
+  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; }
+  .hero-facts { list-style: none; margin: 0.25rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; color: var(--ink-muted); font-size: 0.95rem; }
+  .hero-facts li { display: flex; align-items: center; gap: 0.5rem; }
+  .hero-facts li::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
   .hero-shot :global(.frame-phone) { max-width: 290px; }
+  .more { margin-top: 1.75rem; }
   @media (max-width: 760px) {
+    .hero { padding: 1rem 0 3rem; }
+    .hero-grid { grid-template-columns: 1fr; gap: 2rem; }
     .hero-shot :global(.frame-phone) { max-height: 240px; max-width: 260px; }
     .hero-shot :global(figcaption) { display: none; }
-  }
-  .section-head { display: grid; gap: 0.9rem; margin-bottom: 3rem; }
-  .own { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 3rem; }
-  .own-text { display: grid; gap: 1rem; font-size: 1.1rem; }
-  .more { margin-top: 1.5rem; font-weight: 600; }
-  @media (max-width: 760px) {
-    .hero { padding: 1rem 0 2.5rem; }
-    .hero-grid, .own { grid-template-columns: 1fr; gap: 2rem; }
-    .section-head { margin-bottom: 2rem; }
   }
 </style>

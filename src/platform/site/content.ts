@@ -114,7 +114,7 @@ export const PLAN_POINTS = [
 ];
 
 export const PREVIEW = {
-  title: "Coba buat toko gratis, bayar saat siap beriklan",
+  title: "Gratis sampai siap beriklan",
   text: "Daftar tanpa kartu. Di Mode Preview Anda bisa menyiapkan produk, landing page, gudang, dan pengaturan pixel, lalu melihat toko seperti pembeli melihatnya. Pesanan pembeli, sinyal iklan, AI, dan domain sendiri aktif begitu langganan dibayar.",
   payment: "Bayar langganan dengan QRIS atau Virtual Account (BCA, Mandiri, BNI, BRI, Permata). Perpanjangan menambah hari dari tanggal berakhir, jadi sisa hari tidak hilang.",
   grace: "Lewat jatuh tempo, toko tetap jalan 48 jam agar iklan tidak terhenti mendadak. Setelah itu pesanan dan iklan dijeda, data toko tetap aman, dan Anda tetap bisa masuk ke admin untuk memperpanjang.",
@@ -139,17 +139,7 @@ export const FAQ_MORE: Faq[] = [
   { q: "Bisa dipakai bersama tim?", a: "Bisa. Tambahkan akun untuk admin, advertiser, dan customer service; tiap peran hanya melihat menu yang ia perlukan." },
   { q: "Kalau pembeli tidak membuka halaman terima kasih, apakah konversinya hilang?", a: "Tidak. Purchase dikirim dari server saat pesanan COD dibuat atau saat pembayaran lunas, jadi tidak bergantung pada halaman terima kasih." },
   { q: "Bagaimana kalau saya ingin berhenti?", a: "Minta penghapusan toko dari admin. Data toko dihapus 30 hari setelah permintaan; selama itu Anda masih bisa membatalkannya." },
-  { q: "Di mana data toko disimpan?", a: "Di Cloudflare dengan penyimpanan diutamakan di Asia-Pasifik; pemrosesan dapat berlangsung di jaringan global Cloudflare. Rinciannya ada di Kebijakan Privasi." },
-];
-
-/** Feature groups for /fitur: each line is something the product does today. */
-export const FEATURES: Array<{ title: string; items: string[]; shot: Shot }> = [
-  { title: "Deduplikasi sinyal iklan 1:1", items: ["Pixel dan Conversions API Meta mengirim satu pesanan dengan event_id yang sama: dihitung satu kali, bukan dua", "Purchase dari server untuk setiap pesanan COD, walau pembeli langsung menutup halaman", "8 data pembeli di-hash SHA-256 untuk pencocokan, plus ID klik dan UTM yang disimpan 90 hari", "Konversi offline Google Ads dan ID produk yang sama di feed katalog dan event"], shot: SHOTS.meta },
-  { title: "Toko dan form order", items: ["Halaman produk dan landing page dengan form order di dalamnya", "Form embed untuk dipasang di halaman lain", "Harga, varian dan berat dari data produk di server", "Draf konten produk dengan AI, Anda yang menerbitkan"], shot: SHOTS.form },
-  { title: "Pesanan", items: ["Semua pesanan masuk sebagai menunggu, tidak ada yang terkirim sendiri", "Cek risiko RTS penerima sebelum dikirim", "Lead dari form yang tidak selesai untuk ditindaklanjuti CS", "Ekspor pesanan ke CSV"], shot: SHOTS.orders },
-  { title: "Pengiriman", items: ["Ongkir dihitung lewat Mengantar dari gudang Anda", "Rilis ke kurir satu per satu atau sekaligus", "Resi, pickup dan status kiriman di satu halaman", "Sampai 10 gudang: gudang di provinsi pembeli dipakai lebih dulu, lalu gudang satu pulau, lalu gudang utama"], shot: SHOTS.shipping },
-  { title: "Pembayaran", items: ["COD", "QRIS dan virtual account lewat akun AutoLaris Anda", "Transfer ke rekening toko dengan konfirmasi manual", "Rekonsiliasi pembayaran otomatis untuk QRIS dan VA"], shot: SHOTS.payments },
-  { title: "Toko Anda, akun Anda", items: ["Alamat nama-toko.adsbook.my.id, plus 1 domain sendiri", "Akun tim dengan peran owner, admin, advertiser dan CS", "API untuk menghubungkan toko dengan aplikasi Anda sendiri", "Kebijakan privasi toko yang menyebut hanya penyedia yang Anda pakai"], shot: SHOTS.access },
+  { q: "Di mana data toko disimpan?", a: "Setiap toko punya database sendiri, diutamakan berada di Asia-Pasifik, dengan backup harian; pemrosesan dapat berlangsung di jaringan edge global penyedia infrastruktur kami. Nama penyedia dan rinciannya ada di Kebijakan Privasi." },
 ];
 
 /** The setup steps a new store sees (the readiness predicate, T-38), for the closing band. */
@@ -158,69 +148,83 @@ export const SETUP_STEPS = ["Tambah produk pertama dengan harga dan berat", "Len
 export const SETUP_DONE = "Nama toko, kurir, dan COD sudah siap sejak Anda mendaftar.";
 
 /**
- * The sales page (/coba): six flagship features, each a fact the product holds
- * today (content/adsbook-id-sales-lp/features.md §2, checked against the code
- * 2026-11-17). Infrastructure figures are the provider's published ones, named
- * without the vendor (Paduka, 2026-11-17).
+ * One vocabulary for every page (2026-11-17 site pass): the promise is
+ * "presisi" — one order, one Purchase — and every page says it the same way.
+ * Each pillar is a fact the product holds today (content/adsbook-id-sales-lp/
+ * features.md §2, checked against the code). The home shows the pillars short;
+ * /fitur shows them in full, with their screen or their numbers. Infrastructure
+ * figures are the provider's published ones, named without the vendor.
  */
-export type SalesFlagship = {
-  kicker: string;
+export type Pillar = {
+  id: string;
+  label: string;
   title: string;
+  summary: string;
   points: string[];
   shot?: Shot;
   specs?: Array<{ value: string; label: string }>;
 };
 
-export const SALES_FLAGSHIPS: SalesFlagship[] = [
+export const PILLARS: Pillar[] = [
   {
-    kicker: "Sinyal iklan 1:1",
-    title: "Satu pesanan, satu Purchase. Tidak dobel, tidak hilang",
+    id: "sinyal",
+    label: "Sinyal iklan 1:1",
+    title: "Satu pesanan, satu Purchase",
+    summary: "Pixel dan Conversions API mengirim pesanan yang sama dengan satu event_id. Tidak dobel, tidak hilang.",
     points: [
       "Pixel di browser dan Conversions API dari server memakai event_id yang sama untuk setiap pesanan",
-      "Purchase dikirim dari server saat pesanan COD dibuat atau saat pembayaran lunas",
-      "8 data pembeli di-hash SHA-256 untuk pencocokan, ID klik dan UTM disimpan 90 hari",
-      "Konversi offline Google Ads dari pesanan yang benar-benar terjadi",
+      "Purchase dikirim dari server saat pesanan COD dibuat atau saat pembayaran lunas, walau pembeli langsung menutup halaman",
+      "8 data pembeli di-hash SHA-256 untuk pencocokan; ID klik dan UTM disimpan 90 hari",
+      "Konversi offline Google Ads dari pesanan yang benar-benar terjadi, dengan ID produk yang sama di feed dan event",
     ],
     shot: SHOTS.meta,
   },
   {
-    kicker: "Form COD",
-    title: "Form cepat di HP, yang tidak selesai pun jadi lead",
+    id: "form",
+    label: "Form COD",
+    title: "Form cepat di HP, tidak ada pesanan yang lepas",
+    summary: "Form singkat dengan ongkir per kecamatan. Yang tidak selesai tetap tercatat sebagai lead untuk CS.",
     points: [
       "Form singkat, lengkap, atau hybrid dengan ongkir per kecamatan",
-      "Form di halaman produk dan landing page, atau dipasang di situs lain",
-      "Harga, varian, dan berat selalu dari data toko, bukan dari browser",
-      "Form yang tidak selesai masuk Pesanan tertinggal untuk di-follow up CS, dengan hingga 10 nomor WhatsApp CS bergiliran",
+      "Di halaman produk dan landing page, atau dipasang di situs lain",
+      "Harga, varian, dan berat selalu dari data toko, bukan dari browser pembeli",
+      "Form yang tidak selesai masuk Pesanan tertinggal; hingga 10 nomor WhatsApp CS bergiliran",
     ],
     shot: SHOTS.form,
   },
   {
-    kicker: "Kontrol RTS",
+    id: "kirim",
+    label: "Kontrol pengiriman",
     title: "Anda yang memutuskan apa yang dikirim",
+    summary: "Semua pesanan menunggu keputusan Anda. Cek risiko RTS dulu, baru rilis ke kurir.",
     points: [
       "Tidak ada pesanan yang terkirim sendiri: semua masuk sebagai menunggu",
       "Cek risiko RTS penerima sebelum dikirim",
-      "Rilis ke kurir satu per satu atau sekaligus, resi dan pickup di satu halaman",
+      "Rilis ke kurir satu per satu atau sekaligus; resi dan pickup di satu halaman",
       "Hingga 10 gudang: gudang di provinsi pembeli dipakai lebih dulu",
     ],
     shot: SHOTS.orders,
   },
   {
-    kicker: "Akun Anda sendiri",
+    id: "uang",
+    label: "Akun Anda sendiri",
     title: "Uang pembeli langsung ke akun Anda",
+    summary: "COD, QRIS, dan VA lewat akun Mengantar dan AutoLaris Anda. Tanpa potongan per transaksi.",
     points: [
       "0% potongan per transaksi dari adsbook.id",
       "COD lewat Mengantar, QRIS dan Virtual Account lewat AutoLaris, keduanya akun Anda",
-      "QRIS dan VA aktif cukup dengan API key AutoLaris",
-      "Rekonsiliasi pembayaran QRIS dan VA otomatis",
+      "QRIS dan VA aktif cukup dengan API key AutoLaris; rekonsiliasi otomatis",
+      "Data pembeli milik Anda, terpisah per toko, dan bisa diekspor",
     ],
     shot: SHOTS.payments,
   },
   {
-    kicker: "Mulai gratis",
-    title: "Siapkan toko gratis, buka saat siap beriklan",
+    id: "mulai",
+    label: "Mulai gratis",
+    title: "Siapkan gratis, buka saat siap beriklan",
+    summary: "Toko aktif sejak mendaftar. Anda melihat toko seperti pembeli; pembeli menunggu sampai Anda siap.",
     points: [
-      "Toko aktif di nama-toko.adsbook.my.id sejak Anda mendaftar, tanpa kartu",
+      "Toko aktif di nama-toko.adsbook.my.id sejak mendaftar, tanpa kartu",
       "Mode Preview: Anda melihat toko seperti pembeli, pembeli melihat toko belum siap",
       "Checklist menunjukkan tiga langkah yang tersisa",
       "Lewat jatuh tempo, toko tetap jalan 48 jam agar iklan tidak berhenti mendadak",
@@ -228,14 +232,16 @@ export const SALES_FLAGSHIPS: SalesFlagship[] = [
     shot: SHOTS.setup,
   },
   {
-    kicker: "Infrastruktur",
-    title: "Cepat di mana pun pembeli Anda, terpisah untuk setiap toko",
+    id: "infra",
+    label: "Infrastruktur",
+    title: "Cepat di mana pun pembeli Anda",
+    summary: "Jaringan edge global dan database sendiri untuk setiap toko di Asia-Pasifik.",
     points: [
       "Dilayani dari jaringan edge global, dengan database sendiri untuk setiap toko di Asia-Pasifik",
       "Backup harian dan SSL otomatis, termasuk untuk domain sendiri",
     ],
     specs: [
-      { value: "348 kota", label: "jaringan edge di 100+ negara" },
+      { value: "348", label: "kota jaringan edge, di 100+ negara" },
       { value: "50 ms", label: "dari 95% pengguna internet dunia" },
       { value: "10 GB", label: "database sendiri per toko" },
       { value: "1.000/dtk", label: "permintaan per toko" },
@@ -243,9 +249,10 @@ export const SALES_FLAGSHIPS: SalesFlagship[] = [
   },
 ];
 
-export const SALES_SUPPORT: Array<{ title: string; text: string }> = [
+/** Everything else a store runs on, one line each (/fitur and the home). */
+export const CAPABILITIES: Array<{ title: string; text: string }> = [
   { title: "Domain sendiri", text: "Satu record CNAME, SSL otomatis, dan bisa diganti kapan saja." },
-  { title: "Landing page", text: "Buat dari admin, dengan form order di dalamnya." },
+  { title: "Landing page", text: "Dibuat dari admin, dengan form order di dalamnya." },
   { title: "Katalog dan feed", text: "Varian dan foto; feed Google Merchant dan katalog Meta terisi otomatis." },
   { title: "Analitik dari pesanan", text: "Omzet, funnel, produk, landing page, lokasi, jam beli, dan UTM." },
   { title: "Link UTM", text: "Buat link iklan bertanda UTM, lalu bandingkan hasil per kampanye." },
@@ -253,4 +260,12 @@ export const SALES_SUPPORT: Array<{ title: string; text: string }> = [
   { title: "Draf konten AI", text: "Draf deskripsi produk dengan AI; Anda yang menerbitkan." },
   { title: "Template CRM", text: "Pesan WhatsApp dengan nama, produk, dan data pesanan terisi." },
   { title: "API dan CLI", text: "REST API untuk frontend sendiri, Operations API dan CLI untuk skrip." },
+];
+
+/** FAQ grouped by the question a seller brings (/faq), drawn from the two lists above. */
+export const FAQ_GROUPS: Array<{ title: string; items: Faq[] }> = [
+  { title: "Biaya dan langganan", items: [FAQ_SHORT[0], FAQ_MORE[0], FAQ_MORE[1], FAQ_MORE[6]] },
+  { title: "Iklan dan sinyal", items: [FAQ_SHORT[1], FAQ_MORE[5]] },
+  { title: "Uang, data, dan domain", items: [FAQ_SHORT[2], FAQ_MORE[2], FAQ_MORE[7], FAQ_SHORT[3]] },
+  { title: "Memulai", items: [FAQ_SHORT[4], FAQ_MORE[3], FAQ_MORE[4]] },
 ];

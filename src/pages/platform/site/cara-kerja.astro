@@ -1,5 +1,6 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import PageHead from '../../../platform/site/PageHead.astro';
 import StepFlow from '../../../platform/site/StepFlow.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
 import { SITE_PAGES } from '../../../platform/site/site.ts';
@@ -8,13 +9,8 @@ export const prerender = false;
 ---
 
 <SiteLayout page={SITE_PAGES.caraKerja}>
-  <section class="page-head">
-    <div class="wrap"><div class="head">
-      <h1>Dari klik iklan sampai paket terkirim</h1>
-      <p class="lead">Lima langkah yang sama untuk setiap pesanan: apa yang dilihat pembeli, dan apa yang Anda kerjakan di tiap langkah. Keputusan kapan pesanan dikirim selalu ada di tangan Anda, dan langkah terakhir mengirim penjualan ke Meta tepat satu kali.</p>
-    </div></div>
-  </section>
-  <section class="section section-white">
+  <PageHead title="Dari klik iklan sampai Purchase tercatat" lead="Lima langkah yang sama untuk setiap pesanan: apa yang dilihat pembeli dan apa yang Anda kerjakan. Kapan pesanan dikirim selalu keputusan Anda, dan langkah terakhir mengirim penjualan ke Meta tepat satu kali." />
+  <section class="section section-white" aria-label="Lima langkah satu pesanan">
     <div class="wrap"><StepFlow headingLevel="h2" detail /></div>
   </section>
   <ClosingCta />

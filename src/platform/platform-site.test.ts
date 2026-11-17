@@ -157,7 +157,32 @@ test("brand: the site uses the blue wordmark files and blue tokens; the animated
   // The precision rule: the dot is one 150-unit module, 60 units from k and from i.
   const wordmark = readFileSync("public/platform/brand/adsbook-id-wordmark.svg", "utf8");
   assert.match(wordmark, /fill="#2563EB"/i);
-  const sales = readFileSync("src/pages/platform/site/coba.astro", "utf8");
-  assert.match(sales, /prefers-reduced-motion: reduce/, "the sales page plays the logo only when motion is allowed");
+  const band = readFileSync("src/platform/site/SignalBand.astro", "utf8");
+  assert.match(band, /prefers-reduced-motion: reduce/, "the brand band plays the logo only when motion is allowed");
+});
+
+test("one site: every marketing page uses the shared frame, ends its title on the brand dot, and links to signup", async () => {
+  const { PILLARS, CAPABILITIES, FAQ_GROUPS, FAQ_SHORT, FAQ_MORE } = await import("./site/content.ts");
+  const pages = ["index", "coba", "fitur", "cara-kerja", "harga", "faq", "kontak"];
+  for (const name of pages) {
+    const source = readFileSync(`src/pages/platform/site/${name}.astro`, "utf8");
+    assert.match(source, /<SiteLayout page=\{SITE_PAGES\./, `${name}: the shared frame`);
+    assert.match(source, /class="dot-end"|<PageHead /, `${name}: the h1 ends on the dot`);
+    assert.match(source, /<ClosingCta|SIGNUP_PATH|<Pricing/, `${name}: a way to sign up`);
+  }
+  // The home and /coba show the same pillars that /fitur details; every pillar has a screen or numbers.
+  assert.equal(PILLARS.length, 6);
+  assert.equal(new Set(PILLARS.map((pillar) => pillar.id)).size, 6);
+  for (const pillar of PILLARS) assert.ok(pillar.shot || pillar.specs?.length, pillar.id);
+  assert.ok(CAPABILITIES.length >= 6);
+  // Every FAQ answer appears exactly once in the grouped FAQ.
+  const grouped = FAQ_GROUPS.flatMap((group) => group.items);
+  assert.equal(grouped.length, FAQ_SHORT.length + FAQ_MORE.length);
+  assert.equal(new Set(grouped).size, grouped.length);
+  // Product language: no infrastructure vendor named in the marketing copy (Paduka, 2026-11-17).
+  // Rendered copy only: string literals in content.ts and the markup text of each page.
+  const strings = [...readFileSync("src/platform/site/content.ts", "utf8").matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
+  const markup = pages.map((name) => readFileSync(`src/pages/platform/site/${name}.astro`, "utf8").split("---").slice(2).join("---").replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>|\{[^}]*\}|<[^>]+>/g, " "));
+  assert.doesNotMatch([...strings, ...markup].join("\n"), /Cloudflare|\bAstro\b|Durable Object/);
 });
 

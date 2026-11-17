@@ -1,0 +1,18 @@
+---
+/**
+ * The head of every inner page: one h1 ending on the brand's square dot, one
+ * lead. Same left edge as the content below (DESIGN.md C4).
+ */
+interface Props { title: string; lead?: string; id?: string }
+const { title, lead, id = 'page-title' } = Astro.props;
+---
+
+<section class="page-head" aria-labelledby={id}>
+  <div class="wrap">
+    <div class="head">
+      <h1 id={id} class="dot-end">{title}</h1>
+      {lead && <p class="lead">{lead}</p>}
+      <slot />
+    </div>
+  </div>
+</section>
