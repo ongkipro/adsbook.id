@@ -80,6 +80,10 @@ const CHANGELOG_RELEASES: ChangelogRelease[] = [
         title: "Tim dengan peran masing-masing",
         description: "Owner, admin, CS, dan advertiser masing-masing hanya melihat menu yang menjadi tugasnya.",
       },
+      {
+        title: "Infrastruktur edge global, server di Asia-Pasifik",
+        description: "Toko dilayani dari jaringan edge di 348 kota dan 100+ negara, dengan 95% pengguna internet dunia berada dalam 50 ms dari titik layanan terdekat. Setiap toko punya database sendiri hingga 10 GB yang diutamakan berada di Asia-Pasifik, mampu menangani hingga 1.000 permintaan per detik per toko, dengan backup harian dan SSL otomatis.",
+      },
     ],
   },
 ];
@@ -174,7 +178,7 @@ export function ChangelogModal({ open, onOpenChange }: ChangelogModalProps) {
 
         <DialogFooter className="m-0 rounded-none border-t border-slate-200 bg-slate-50/70 px-6 py-3 sm:flex sm:items-center sm:justify-between">
           <div className="text-xs font-mono text-slate-500">
-            {CMS_VERSION.coreEngine} · Schema v{CMS_VERSION.schemaVersion}
+            {CMS_VERSION.coreEngine} · skema v{CMS_VERSION.schemaVersion}
           </div>
           <DialogClose asChild>
             <Button variant="outline" size="sm" type="button">

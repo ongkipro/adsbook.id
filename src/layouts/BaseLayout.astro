@@ -260,6 +260,13 @@ const preloadImageUrls =
     {Astro.locals.tenantContext?.isDemo && (
       <p role="note" class="bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">Toko contoh adsbook.id: lihat-lihat saja, pemesanan tidak aktif.</p>
     )}
+    {/* PR-23: the owner previewing a store that buyers cannot see yet. */}
+    {Astro.locals.ownerPreview && (
+      <p role="note" id="ownerPreviewBar" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#1d4ed8] px-4 py-2 text-center text-sm font-semibold text-white">
+        <span>Pratinjau pemilik — pembeli masih melihat "Toko belum siap".</span>
+        <a href="/admin/setup" class="underline underline-offset-2 hover:no-underline">Lengkapi langkah wajib</a>
+      </p>
+    )}
     {/* ADR-041 (BILL-5): a store that is not live says so to anyone who opens it —
         one quiet bar, not a popup: the person who sees a Preview store is almost
         always its owner, and a modal on every page view only gets in the way.

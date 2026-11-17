@@ -95,6 +95,12 @@ declare namespace App {
      */
     billing?: { state: import("./platform/billing").BillingState; adSignalsPaused: boolean };
     /**
+     * PR-23: set when the signed-in owner views their store before it is
+     * ready; buyers get the "Toko belum siap" page instead. BaseLayout shows
+     * an owner-preview bar; the answer is private and never edge-cached.
+     */
+    ownerPreview?: boolean;
+    /**
      * This tenant's database (TEN-2): opened by the middleware from
      * `tenantContext.tenantId` through `src/platform/tenant-db.ts`. Read it
      * through `tenantDatabase(locals)` (`src/lib/tenant-database.ts`).

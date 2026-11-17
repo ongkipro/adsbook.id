@@ -59,7 +59,10 @@ export function statePage(kind: StatePage, pathname: string): Response {
       headers: { ...HEADERS, ...retry, "Content-Type": "application/json; charset=utf-8" },
     });
   }
-  const html = `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${page.title}</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:#fafafa;color:#1c1c1c}main{max-width:28rem;padding:2rem 1.25rem;text-align:center}h1{font-size:1.375rem;margin:0 0 .5rem}p{margin:0;color:#4b4b4b}</style></head><body><main><h1>${page.title}</h1><p>${page.body}</p></main></body></html>`;
+  // The not-ready page tells the owner where the preview is (their own sign-in
+  // on this host); it names no seller and links nowhere else.
+  const ownerLink = kind === "not-ready" ? `<p class="owner"><a href="/hello">Pemilik toko? Masuk untuk melihat pratinjau</a></p>` : "";
+  const html = `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${page.title}</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:#fafafa;color:#1c1c1c}main{max-width:28rem;padding:2rem 1.25rem;text-align:center}h1{font-size:1.375rem;margin:0 0 .5rem}p{margin:0;color:#4b4b4b}.owner{margin-top:1.5rem;font-size:.875rem}.owner a{color:#4b4b4b}</style></head><body><main><h1>${page.title}</h1><p>${page.body}</p>${ownerLink}</main></body></html>`;
   return new Response(html, {
     status: page.status,
     headers: { ...HEADERS, ...retry, "Content-Type": "text/html; charset=utf-8" },

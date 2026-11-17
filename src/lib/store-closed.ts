@@ -5,7 +5,7 @@
  * The order forms stop retrying on it and show the buyer one plain sentence;
  * they used to retry and then say the shipping cost could not be calculated.
  */
-export const STORE_CLOSED_CODES: ReadonlySet<string> = new Set(["SUBSCRIPTION_REQUIRED", "SUBSCRIPTION_EXPIRED", "DEMO_STORE"]);
+export const STORE_CLOSED_CODES: ReadonlySet<string> = new Set(["SUBSCRIPTION_REQUIRED", "SUBSCRIPTION_EXPIRED", "DEMO_STORE", "STORE_NOT_READY"]);
 
 const FALLBACK = "Toko ini belum menerima pesanan. Silakan hubungi penjual atau coba lagi nanti.";
 const DEMO = "Ini toko contoh adsbook.id: pemesanan tidak aktif.";
@@ -18,6 +18,8 @@ export function isStoreClosed(payload: unknown): boolean {
 export function storeClosedMessage(payload: unknown): string {
   const body = payload as { code?: unknown; buyer_message?: unknown } | null;
   if (body?.code === "DEMO_STORE") return DEMO;
+  // Seen by the owner previewing an unready store: its checkout stays closed.
+  if (body?.code === "STORE_NOT_READY") return "Toko belum siap menerima pesanan. Lengkapi langkah wajib di Admin → Siapkan toko.";
   return typeof body?.buyer_message === "string" && body.buyer_message.trim() ? body.buyer_message.trim() : FALLBACK;
 }
 
