@@ -430,7 +430,19 @@ export function createMiddleware(
       console.error('store-readiness-unreadable', { tenant_id: tenantContext.tenantId, error: String(error) });
       return null;
     });
-    if (ready !== true) return statePage(ready === false ? 'not-ready' : 'unavailable', url.pathname);
+    if (ready !== true) {
+      // Owner preview: the signed-in seller sees the real storefront before it
+      // opens, buyers keep the neutral page. Pages only (GET/HEAD, never /api:
+      // checkout stays closed), and never cached — a request with the session
+      // cookie never has an edge-cache key, and the answer is marked no-store.
+      const ownerPreview =
+        ready === false &&
+        (context.request.method === 'GET' || context.request.method === 'HEAD') &&
+        !(url.pathname === '/api' || url.pathname.startsWith('/api/')) &&
+        Boolean(await resolveAdminSession(identityDb, context.request, await resolveAuthSecret(identityDb, tenantContext.tenantId)));
+      if (!ownerPreview) return statePage(ready === false ? 'not-ready' : 'unavailable', url.pathname);
+      context.locals.ownerPreview = true;
+    }
     // T-44: the operator hears once that this store is ready (claimed in
     // PLATFORM_DB; this isolate stops asking after the first time).
     if (!readyNoticed.has(tenantContext.tenantId)) {
@@ -593,9 +605,11 @@ export function createMiddleware(
 
   // A *.workers.dev address, or the platform subdomain once a custom primary
   // is active, must never compete with the store's domain in search.
-  if (url.hostname.endsWith('.workers.dev') || indexedElsewhere) {
+  if (url.hostname.endsWith('.workers.dev') || indexedElsewhere || context.locals.ownerPreview) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
+  // The owner's preview of an unready store is for them alone.
+  if (context.locals.ownerPreview) response.headers.set('Cache-Control', 'private, no-store');
 
   if (!isPrivate) persistClickIds(response);
 

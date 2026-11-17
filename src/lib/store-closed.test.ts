@@ -4,8 +4,9 @@ import { isStoreClosed, storeClosedMessage } from "./store-closed.ts";
 import { subscriptionRefusalBody } from "../platform/billing.ts";
 
 test("a not-live or demo store refusal is 'store closed'; a field error is not", () => {
-  for (const code of ["SUBSCRIPTION_REQUIRED", "SUBSCRIPTION_EXPIRED", "DEMO_STORE"]) assert.equal(isStoreClosed({ code }), true, code);
-  for (const payload of [{ code: "COD_NOT_AVAILABLE_FOR_REGION" }, { code: "STORE_NOT_READY" }, { error: "x" }, null, "x"]) assert.equal(isStoreClosed(payload), false);
+  // STORE_NOT_READY too: the owner previewing an unready store sees its order form.
+  for (const code of ["SUBSCRIPTION_REQUIRED", "SUBSCRIPTION_EXPIRED", "DEMO_STORE", "STORE_NOT_READY"]) assert.equal(isStoreClosed({ code }), true, code);
+  for (const payload of [{ code: "COD_NOT_AVAILABLE_FOR_REGION" }, { error: "x" }, null, "x"]) assert.equal(isStoreClosed(payload), false);
 });
 
 test("the buyer reads one plain sentence: the server's buyer_message, a demo line, or the fallback", () => {
@@ -17,3 +18,8 @@ test("the buyer reads one plain sentence: the server's buyer_message, a demo lin
   // The seller and API clients still get the original wording in `error`.
   assert.match(preview.error, /Admin → Langganan/);
 });
+
+test("the owner previewing an unready store is told what to finish", () => {
+  assert.match(storeClosedMessage({ code: "STORE_NOT_READY" }), /Lengkapi langkah wajib/);
+});
+

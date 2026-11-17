@@ -1641,7 +1641,7 @@ async function readinessHarness(slug: string, options: { preview?: boolean } = {
   const database = bindCredentials(createTenantDb(stores.get(created.tenantId).stub), created.tenantId, env);
   const host = `${slug}.adsbook.my.id`;
   /** One request through the real middleware: the status, and whether the route ran. */
-  const open = async (path: string, method = "GET") => {
+  const open = async (path: string, method = "GET", cookie?: string) => {
     const href = `https://${host}${path}`;
     let reached = false;
     const onRequest = createMiddleware();
@@ -1650,7 +1650,7 @@ async function readinessHarness(slug: string, options: { preview?: boolean } = {
     try {
       const response = (await onRequest(
         {
-          request: new Request(href, { method, headers: method === "GET" ? {} : { origin: `https://${host}`, "sec-fetch-site": "same-origin" } }),
+          request: new Request(href, { method, headers: { ...(method === "GET" ? {} : { origin: `https://${host}`, "sec-fetch-site": "same-origin" }), ...(cookie ? { cookie } : {}) } }),
           url: new URL(href),
           locals: { runtimeEnv: env },
           routePattern: path,
@@ -1658,7 +1658,7 @@ async function readinessHarness(slug: string, options: { preview?: boolean } = {
         } as never,
         (async () => ((reached = true), new Response("ok"))) as never,
       )) as Response;
-      return { status: response.status, reached, body: await response.text(), robots: response.headers.get("x-robots-tag") };
+      return { status: response.status, reached, body: await response.text(), robots: response.headers.get("x-robots-tag"), cacheControl: response.headers.get("cache-control") };
     } finally {
       Object.assign(console, original);
     }
@@ -1673,6 +1673,33 @@ async function readinessHarness(slug: string, options: { preview?: boolean } = {
   const facts = async () => readReadiness(database);
   return { open, product, warehouse, mengantar, facts, sql, database, env, tenantId: created.tenantId, stub: stores.get(created.tenantId).stub };
 }
+
+test("PR-23 owner preview: the signed-in owner sees the unready storefront, buyers and checkout stay closed", async () => {
+  const store = await readinessHarness("pratinjau-pemilik");
+  // Buyers: the neutral page, with a sign-in link for the owner and nothing else.
+  const anonymous = await store.open("/");
+  assert.equal(anonymous.status, 503);
+  assert.equal(anonymous.reached, false);
+  assert.match(anonymous.body, /Toko belum siap/);
+  assert.match(anonymous.body, /href="\/hello"/);
+  // The owner, signed in on this host.
+  const secret = await resolveAuthSecret(store.database, store.tenantId);
+  const credential = (await getAdminCredential(store.database, "owner@pratinjau-pemilik.example"))!;
+  const { token, session } = await signJwt({ username: credential.username, role: credential.role }, secret);
+  await storeAdminSession(store.database, session, credential);
+  const cookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`;
+  for (const path of ["/", "/produk/kopi", "/kebijakan-privasi"]) {
+    const page = await store.open(path, "GET", cookie);
+    assert.equal(page.reached, true, `${path} renders for the owner`);
+    assert.equal(page.robots, "noindex, nofollow", `${path} is not indexed`);
+    assert.match(page.cacheControl ?? "", /private/, `${path} is private`);
+  }
+  // Checkout and quotes stay closed even for the owner, and a forged cookie opens nothing.
+  for (const [path, method] of [["/api/submit-order", "POST"], ["/api/shipping-options", "GET"]] as const) {
+    assert.equal((await store.open(path, method, cookie)).status, 503, path);
+  }
+  assert.equal((await store.open("/", "GET", `${SESSION_COOKIE_NAME}=forged.token.value`)).status, 503);
+});
 
 test("T-38: a new store says 'toko belum siap' (no checkout) until the ready predicate holds, and opens right after", async () => {
   const store = await readinessHarness("siap-jualan");
