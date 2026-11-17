@@ -1,31 +1,32 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import PageHead from '../../../platform/site/PageHead.astro';
 import Pricing from '../../../platform/site/Pricing.astro';
 import FaqList from '../../../platform/site/FaqList.astro';
-import { FAQ_MORE, FAQ_SHORT } from '../../../platform/site/content.ts';
+import { FAQ_GROUPS } from '../../../platform/site/content.ts';
 import { SITE_PAGES } from '../../../platform/site/site.ts';
 
 export const prerender = false;
-const pricingFaq = [...FAQ_SHORT, ...FAQ_MORE].filter((item) => /gratis|Uang pembeli|domain|langganan/i.test(item.q));
+const pricingFaq = FAQ_GROUPS[0].items;
 ---
 
 <SiteLayout page={SITE_PAGES.harga}>
-  <section class="page-head">
-    <div class="wrap"><div class="head">
-      <h1>Coba gratis, bayar saat toko siap diiklankan</h1>
-      <p class="lead">Satu harga untuk semua fitur, per toko. Sinyal iklan 1:1 ke Meta dan Google sudah termasuk, dan tidak ada potongan per transaksi.</p>
-    </div></div>
-  </section>
-  <section class="section section-white">
+  <PageHead title="Gratis sampai siap beriklan" lead="Satu harga untuk semua fitur, per toko. Sinyal iklan 1:1 ke Meta dan Google sudah termasuk, dan tidak ada potongan per transaksi." />
+  <section class="section section-white" aria-labelledby="paket-title">
     <div class="wrap">
-      <h2 class="section-title">Paket per toko</h2>
+      <div class="section-head"><h2 id="paket-title">Paket per toko</h2></div>
       <Pricing />
     </div>
   </section>
-  <section class="section">
+  <section class="section" aria-labelledby="biaya-title">
     <div class="wrap">
-      <h2 class="section-title">Soal biaya</h2>
+      <div class="section-head"><h2 id="biaya-title">Soal biaya</h2></div>
       <FaqList items={pricingFaq} />
+      <p class="more"><a class="text-link" href="/faq">Semua pertanyaan</a></p>
     </div>
   </section>
 </SiteLayout>
+
+<style>
+  .more { margin-top: 1.75rem; }
+</style>

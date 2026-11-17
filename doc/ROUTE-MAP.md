@@ -262,7 +262,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/platform/site/cara-kerja` ⇐ `/cara-kerja` | GET | public | — | `src/pages/platform/site/cara-kerja.astro` | `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/coba` ⇐ `/coba` | GET | public | — | `src/pages/platform/site/coba.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/faq` ⇐ `/faq` | GET | public | — | `src/pages/platform/site/faq.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
-| `/platform/site/fitur` ⇐ `/fitur` | GET | public | — | `src/pages/platform/site/fitur.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
+| `/platform/site/fitur` ⇐ `/fitur` | GET | public | — | `src/pages/platform/site/fitur.astro` | `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/harga` ⇐ `/harga` | GET | public | — | `src/pages/platform/site/harga.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/kontak` ⇐ `/kontak` | GET | public | — | `src/pages/platform/site/kontak.astro` | `env` `platform/site/site` | — | — | `lib/env.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/site/robots.txt` ⇐ `/robots.txt` | GET | public | — | `src/pages/platform/site/robots.txt.ts` | `env` `platform/site/site` | — | — | `lib/env.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
@@ -295,7 +295,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-184 modules under `src/lib` and `src/platform`; 9 that no test imports.
+184 modules under `src/lib` and `src/platform`; 8 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -474,7 +474,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/readiness` | 4 | `courier_rules` `product_variants` `products` `stores` `warehouses` | — | 2 | — |
 | `platform/request-log` | 6 | — | — | 1 | — |
 | `platform/signup` | 12 | — | `tenant_events` `tenant_hosts` `tenants` | 2 | `/api/platform/signup` |
-| `platform/site/content` | 16 | — | — | **none** | `/platform/signup` `/platform/site` `/platform/site/coba` `/platform/site/faq` `/platform/site/fitur` `/platform/site/harga` |
+| `platform/site/content` | 16 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/coba` `/platform/site/faq` `/platform/site/harga` |
 | `platform/site/site` | 15 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/cara-kerja` `/platform/site/coba` `/platform/site/faq` `/platform/site/fitur` `/platform/site/harga` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/api/platform/signup` |
 | `platform/slugs` | 6 | — | `tenants` | 1 | `/api/platform/slug` |
 | `platform/state-pages` | 2 | — | — | 1 | `/kebijakan-privasi` |

@@ -29,7 +29,7 @@ export const SIGNUP_PAGE: SitePage = {
 export const SITE_PAGES: Record<"home" | "coba" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
   home: {
     path: "/",
-    title: "Toko COD dengan Sinyal Iklan 1:1 ke Meta - adsbook.id",
+    title: "Toko COD Presisi: Satu Pesanan, Satu Purchase - adsbook.id",
     description: "Toko online COD untuk seller iklan: Pixel dan Conversions API Meta dengan satu event_id, konversi offline Google Ads, dan 0% potongan per transaksi.",
   },
   // The long-form sales page for ad traffic (content/adsbook-id-sales-lp/features.md, 2026-11-17).
@@ -41,19 +41,19 @@ export const SITE_PAGES: Record<"home" | "coba" | "fitur" | "caraKerja" | "harga
   fitur: {
     path: "/fitur",
     nav: "Fitur",
-    title: "Fitur: Sinyal Iklan 1:1, Form COD dan Pesanan - adsbook.id",
-    description: "Pixel dan Conversions API Meta dengan event_id yang sama, konversi offline Google Ads, form COD dan QRIS/VA, serta pesanan yang rapi di admin.",
+    title: "Fitur: Sinyal Iklan 1:1, Form COD, Kontrol RTS - adsbook.id",
+    description: "Enam pilar toko COD yang presisi: sinyal iklan 1:1, form cepat di HP, kontrol RTS, uang ke akun sendiri, mulai gratis, dan infrastruktur cepat.",
   },
   caraKerja: {
     path: "/cara-kerja",
     nav: "Cara kerja",
-    title: "Cara Kerja: dari Klik Iklan sampai Paket Terkirim - adsbook.id",
+    title: "Cara Kerja: dari Klik Iklan sampai Purchase - adsbook.id",
     description: "Lima langkah satu pesanan di adsbook.id: iklan, form COD, pesanan masuk, kirim lewat kurir, lalu konversi tercatat dari server.",
   },
   harga: {
     path: "/harga",
     nav: "Harga",
-    title: "Harga: Mulai Rp149.000 per Bulan per Toko - adsbook.id",
+    title: "Harga: Gratis Sampai Siap Beriklan, Mulai Rp149.000 - adsbook.id",
     description: "Coba buat toko gratis di Mode Preview, lalu berlangganan saat siap beriklan: Rp149.000 per bulan atau Rp1.490.000 per tahun, tanpa potongan transaksi.",
   },
   faq: {

@@ -67,15 +67,31 @@ const year = new Date().getFullYear();
       <slot />
     </main>
     <footer class="site-footer">
-      <div class="wrap footer-row">
-        <p class="footer-brand"><img src="/platform/brand/adsbook-id-wordmark-on-dark.svg" alt="adsbook.id" width="126" height="20" loading="lazy" decoding="async" /><span>&copy; {year} {SITE_NAME}</span></p>
-        <nav aria-label="Informasi">
-          <a href="/daftar?masuk=1">Masuk Toko</a>
+      <div class="wrap footer-grid">
+        <div class="footer-brand">
+          <img src="/platform/brand/adsbook-id-wordmark-on-dark.svg" alt="adsbook.id" width="151" height="24" loading="lazy" decoding="async" />
+          <p>Toko COD yang presisi untuk seller iklan: satu pesanan, satu Purchase.</p>
+        </div>
+        <nav aria-label="Produk" class="footer-col">
+          <p class="footer-head">Produk</p>
+          <a href="/fitur">Fitur</a>
+          <a href="/cara-kerja">Cara kerja</a>
+          <a href="/harga">Harga</a>
+          <a href="/coba">Mengapa adsbook.id</a>
+        </nav>
+        <nav aria-label="Bantuan" class="footer-col">
+          <p class="footer-head">Bantuan</p>
+          <a href="/faq">FAQ</a>
+          <a href="/kontak">Kontak</a>
+          <a href="/daftar?masuk=1">Masuk toko</a>
+        </nav>
+        <nav aria-label="Legal" class="footer-col">
+          <p class="footer-head">Legal</p>
           <a href="/syarat">Syarat Layanan</a>
           <a href="/privasi">Kebijakan Privasi</a>
-          <a href="/kontak">Kontak</a>
         </nav>
       </div>
+      <div class="wrap footer-base"><p>&copy; {year} {SITE_NAME}</p></div>
     </footer>
   </body>
 </html>
@@ -151,19 +167,32 @@ const year = new Date().getFullYear();
   }
 
   /* The footer is chrome, not a section: dark, so it never merges with the last band (C4). */
-  .site-footer { padding: 2.5rem 0; background: var(--ink); color: #cbd5e1; font-size: 0.95rem; }
-  .footer-row { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; align-items: center; }
-  .footer-row nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
-  .footer-row a { color: #f8fafc; }
-  .footer-brand { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-  .footer-brand img { height: 20px; width: auto; }
-  .footer-row a:hover { color: #bfdbfe; }
+  .site-footer { padding: 4rem 0 2rem; background: var(--ink); color: #cbd5e1; font-size: 0.95rem; }
+  .footer-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 2.5rem; }
+  .footer-brand { display: grid; gap: 1rem; align-content: start; max-width: 30ch; }
+  .footer-brand img { height: 24px; width: auto; }
+  .footer-col { display: grid; gap: 0.6rem; align-content: start; }
+  .footer-head { color: #f8fafc; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 0.2rem; }
+  .footer-col a { color: #cbd5e1; text-decoration: none; min-height: 28px; display: inline-flex; align-items: center; }
+  .footer-col a:hover { color: #f8fafc; text-decoration: underline; }
+  .footer-base { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #1e293b; color: #94a3b8; font-size: 0.875rem; }
+  @media (max-width: 760px) { .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .footer-brand { grid-column: 1 / -1; } }
   .site-footer :focus-visible { outline-color: #93c5fd; }
 
+  /* The brand's square dot ends every page title: the one recurring mark (logo, 1 module = 0.15em). */
+  .dot-end::after { content: ""; display: inline-block; width: 0.15em; height: 0.15em; margin-left: 0.06em; background: var(--accent); vertical-align: baseline; }
+  .text-link { font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; min-height: 32px; }
+  .text-link::after { content: "→"; transition: transform 150ms ease-out; }
+  .text-link:hover::after { transform: translateX(3px); }
+  @media (prefers-reduced-motion: reduce) { .text-link::after { transition: none; } }
+  .section-head { display: grid; gap: 0.9rem; margin-bottom: 3rem; max-width: 64ch; }
+  @media (max-width: 760px) { .section-head { margin-bottom: 2rem; } }
   .section { padding-block: var(--section); }
   /* Inner pages: one head, on the same left edge as the content below it. */
-  .page-head { padding: 2.5rem 0 3.5rem; }
-  .page-head .head { display: grid; gap: 1rem; max-width: 64ch; }
+  .page-head { padding: 3rem 0 4rem; }
+  .page-head .head { display: grid; gap: 1.1rem; max-width: 64ch; }
+  .page-head h1 { font-size: clamp(2.2rem, 1.5rem + 2.6vw, 3.4rem); }
+  @media (max-width: 760px) { .page-head { padding: 1.5rem 0 2.5rem; } }
   .section-title { margin-bottom: 1.5rem; }
   .section-white { background: var(--surface); }
   .lead { font-size: 1.15rem; color: var(--ink-muted); }

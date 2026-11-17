@@ -1,30 +1,40 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import PageHead from '../../../platform/site/PageHead.astro';
 import FaqList from '../../../platform/site/FaqList.astro';
-import { FAQ_MORE, FAQ_SHORT } from '../../../platform/site/content.ts';
-import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from '../../../platform/site/site.ts';
+import ClosingCta from '../../../platform/site/ClosingCta.astro';
+import { FAQ_GROUPS } from '../../../platform/site/content.ts';
+import { SITE_PAGES } from '../../../platform/site/site.ts';
 
 export const prerender = false;
+const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 ---
 
 <SiteLayout page={SITE_PAGES.faq}>
-  <section class="page-head">
-    <div class="wrap"><div class="head">
-      <h1>Pertanyaan umum</h1>
-      <p class="lead">Soal Mode Preview dan langganan, sinyal iklan 1:1, akun kurir dan pembayaran, domain sendiri, data pembeli, serta cara berhenti.</p>
-    </div></div>
-  </section>
+  <PageHead title="Pertanyaan umum" lead="Jawaban singkat, dikelompokkan menurut yang biasa ditanyakan seller sebelum membuka toko.">
+    <nav class="faq-index" aria-label="Kelompok pertanyaan">
+      {FAQ_GROUPS.map((group) => <a href={`#${slug(group.title)}`}>{group.title}</a>)}
+    </nav>
+  </PageHead>
   <section class="section section-white">
-    <div class="wrap"><FaqList items={[...FAQ_SHORT, ...FAQ_MORE]} /></div>
-  </section>
-  <section class="section">
-    <div class="wrap end">
-      <h2>Siap mencoba?</h2>
-      <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
+    <div class="wrap groups">
+      {FAQ_GROUPS.map((group) => (
+        <section class="group" id={slug(group.title)} aria-labelledby={`${slug(group.title)}-title`}>
+          <h2 id={`${slug(group.title)}-title`}>{group.title}</h2>
+          <FaqList items={group.items} />
+        </section>
+      ))}
     </div>
   </section>
+  <ClosingCta withShot={false} />
 </SiteLayout>
 
 <style>
-  .end { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; }
+  .faq-index { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 0.5rem; }
+  .faq-index a { font-weight: 600; text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
+  .faq-index a:hover { text-decoration: underline; }
+  .groups { display: grid; gap: 4rem; }
+  .group { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 2.5rem; align-items: start; scroll-margin-top: 1.5rem; }
+  .group h2 { font-size: 1.35rem; }
+  @media (max-width: 760px) { .group { grid-template-columns: 1fr; gap: 1rem; } .groups { gap: 2.5rem; } }
 </style>

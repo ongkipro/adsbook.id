@@ -1,7 +1,9 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
+import PageHead from '../../../platform/site/PageHead.astro';
+import ClosingCta from '../../../platform/site/ClosingCta.astro';
 import { getRuntimeEnv } from '../../../lib/env';
-import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from '../../../platform/site/site.ts';
+import { SITE_PAGES } from '../../../platform/site/site.ts';
 
 export const prerender = false;
 // The contact addresses are set by the operator (PLATFORM_SUPPORT_EMAIL,
@@ -12,43 +14,37 @@ const whatsapp = typeof env.PLATFORM_SUPPORT_WHATSAPP === 'string' && /^62\d{8,1
 ---
 
 <SiteLayout page={SITE_PAGES.kontak}>
-  <section class="page-head">
-    <div class="wrap"><div class="head">
-      <h1>Kontak</h1>
-      <p class="lead">Untuk pertanyaan akun, toko, atau privasi.</p>
-    </div></div>
-  </section>
+  <PageHead title="Kontak" lead="Untuk pertanyaan akun, toko, atau privasi. Pembeli di salah satu toko: lihat kolom kanan." />
   <section class="section section-white">
     <div class="wrap contact">
-      <div>
-        <h2>Tim adsbook.id</h2>
+      <section aria-labelledby="tim-title">
+        <h2 id="tim-title">Seller dan calon seller</h2>
         {email || whatsapp ? (
-          <ul class="channels">
-            {email && <li>Email: <a href={`mailto:${email}`}>{email}</a></li>}
-            {whatsapp && <li>WhatsApp: <a href={`https://wa.me/${whatsapp}`} rel="noopener">+{whatsapp}</a></li>}
-          </ul>
+          <dl class="channels">
+            {email && <div><dt>Email</dt><dd><a href={`mailto:${email}`}>{email}</a></dd></div>}
+            {whatsapp && <div><dt>WhatsApp</dt><dd><a href={`https://wa.me/${whatsapp}`} rel="noopener">+{whatsapp}</a></dd></div>}
+          </dl>
         ) : (
           <p class="muted">Alamat kontak resmi sedang disiapkan dan diumumkan di halaman ini sebelum peluncuran.</p>
         )}
-      </div>
-      <div>
-        <h2>Anda pembeli di salah satu toko?</h2>
+        <p class="muted">Sudah punya toko? <a href="/daftar?masuk=1">Masuk ke admin toko</a>; bantuan juga tersedia dari menu admin.</p>
+      </section>
+      <section aria-labelledby="pembeli-title">
+        <h2 id="pembeli-title">Pembeli di salah satu toko</h2>
         <p class="muted">Toko tempat Anda berbelanja adalah pengelola data pesanan Anda. Hubungi toko itu lewat kontak di halaman Kebijakan Privasi toko tersebut. Permintaan yang sampai ke kami, kami teruskan ke toko tersebut dalam 3 hari kerja.</p>
-      </div>
+      </section>
     </div>
   </section>
-  <section class="section">
-    <div class="wrap end">
-      <h2>Mau membuka toko?</h2>
-      <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
-    </div>
-  </section>
+  <ClosingCta withShot={false} />
 </SiteLayout>
 
 <style>
   .contact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; }
-  .contact > div { display: grid; gap: 0.9rem; align-content: start; }
-  .channels { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; }
-  .end { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; }
+  .contact > section { display: grid; gap: 1rem; align-content: start; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  .contact h2 { font-size: 1.35rem; }
+  .channels { margin: 0; display: grid; gap: 0.6rem; }
+  .channels div { display: grid; grid-template-columns: 6rem 1fr; gap: 0.75rem; }
+  .channels dt { font-weight: 700; }
+  .channels dd { margin: 0; }
   @media (max-width: 760px) { .contact { grid-template-columns: 1fr; gap: 2rem; } }
 </style>
