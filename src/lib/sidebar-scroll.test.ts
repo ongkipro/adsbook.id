@@ -11,7 +11,7 @@ test("a stored sidebar place is only ever an in-site href and two numbers", () =
 });
 
 test("the clicked item comes back under the pointer, even when a submenu above it changed", () => {
-  const view = { scrollHeight: 996, clientHeight: 720 };
+  const view = { scrollHeight: 996, clientHeight: 720, bottomInset: 112 };
   const place = { href: "/admin/settings/access", y: 534, scroll: 276 };
   // Same menu: the link is where it was, so is the scroll.
   assert.equal(sidebarScrollTarget(place, view, { top: 810 }, { top: 810, bottom: 842 }), 276);
@@ -23,11 +23,11 @@ test("the clicked item comes back under the pointer, even when a submenu above i
   assert.equal(sidebarScrollTarget({ ...place, scroll: 900 }, view, null, null), 276);
 });
 
-test("the current page's item is always inside the menu viewport", () => {
-  const view = { scrollHeight: 996, clientHeight: 720 };
-  // Opened from search or a bookmark: scroll just enough to show it.
-  assert.equal(sidebarScrollTarget(null, view, null, { top: 830, bottom: 866 }), 154);
-  // A stored place that would hide it above the fold.
+test("a direct load keeps the current page's item clear of the floating footer card", () => {
+  const view = { scrollHeight: 996, clientHeight: 656, bottomInset: 112 };
+  // /admin/settings/access opened straight from the address bar: would sit behind the 112px footer card without bottomInset.
+  assert.equal(sidebarScrollTarget(null, view, null, { top: 620, bottom: 652 }), 108);
+  // A stored place without a matching link that would hide the active item above the fold.
   assert.equal(sidebarScrollTarget({ href: "/x", y: 0, scroll: 276 }, view, null, { top: 100, bottom: 136 }), 92);
   // Nothing to do at the top.
   assert.equal(sidebarScrollTarget(null, view, null, { top: 40, bottom: 76 }), null);

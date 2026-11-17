@@ -8,8 +8,10 @@
  * menu viewport are kept in sessionStorage (this tab only). The next page puts
  * that same link back at that same distance — before the first paint, from an
  * inline script in the sidebar (`SIDEBAR_SCROLL_RESTORE`) — even when a
- * submenu above it opened or closed. The current page's item is then kept
- * inside the viewport. Nothing about the store or the account is stored.
+ * submenu above it opened or closed. On a direct load (bookmark, search,
+ * address bar) the current page's item is scrolled above the floating product
+ * card at the foot of the sidebar (`bottomInset`, the menu's bottom padding).
+ * Nothing about the store or the account is stored.
  */
 export const SIDEBAR_SCROLL_KEY = "adsbook:sidebar-place";
 
@@ -32,13 +34,16 @@ export function parseSidebarPlace(raw: string | null | undefined): SidebarPlace 
  * The scroll offset to apply (null: leave it at 0). Offsets are measured from
  * the top of the menu's content, independent of scrolling.
  *
- * - `clicked`: where the clicked link now sits; it goes back to `place.y`.
+ * - `clicked`: where the clicked link now sits; it goes back to `place.y` so
+ *   nothing moves under the pointer.
  * - otherwise the stored scroll offset, clamped to this menu's height.
- * - `active`: the current page's item, always kept inside the viewport.
+ * - `active`: the current page's item, kept inside the clear area above the
+ *   floating footer (`clientHeight - bottomInset`) whenever the click itself
+ *   did not place it.
  */
 export function sidebarScrollTarget(
   place: SidebarPlace | null,
-  view: { scrollHeight: number; clientHeight: number },
+  view: { scrollHeight: number; clientHeight: number; bottomInset?: number },
   clicked: { top: number } | null,
   active: { top: number; bottom: number } | null,
   margin = 8,
@@ -46,9 +51,10 @@ export function sidebarScrollTarget(
   const max = Math.max(0, view.scrollHeight - view.clientHeight);
   let target = place ? (clicked ? clicked.top - place.y : place.scroll) : 0;
   target = Math.min(Math.max(0, target), max);
-  if (active) {
+  if (active && !clicked) {
+    const clearBottom = Math.max(margin * 2, view.clientHeight - Math.max(margin, view.bottomInset ?? 0));
     if (active.top - target < margin) target = Math.max(0, active.top - margin);
-    else if (active.bottom - target > view.clientHeight - margin) target = Math.min(max, active.bottom - view.clientHeight + margin);
+    else if (active.bottom - target > clearBottom) target = Math.min(max, active.bottom - clearBottom);
   }
   return target > 0 ? Math.round(target) : null;
 }
@@ -78,10 +84,12 @@ export const SIDEBAR_SCROLL_RESTORE = `(() => {
   const max = Math.max(0, content.scrollHeight - content.clientHeight);
   let target = place ? (link ? offset(link).top - place.y : place.scroll) : 0;
   target = Math.min(Math.max(0, target), max);
-  if (current) {
+  if (current && !link) {
     const item = offset(current);
+    const inset = parseFloat(getComputedStyle(content).paddingBottom) || 0;
+    const clearBottom = Math.max(16, content.clientHeight - Math.max(8, inset));
     if (item.top - target < 8) target = Math.max(0, item.top - 8);
-    else if (item.bottom - target > content.clientHeight - 8) target = Math.min(max, item.bottom - content.clientHeight + 8);
+    else if (item.bottom - target > clearBottom) target = Math.min(max, item.bottom - clearBottom);
   }
   if (target > 0) content.scrollTop = Math.round(target);
   content.addEventListener('click', (event) => {
