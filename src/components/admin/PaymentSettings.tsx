@@ -216,7 +216,7 @@ export default function PaymentSettings({ channels }: { channels: PaymentChannel
     try {
       const [settingsResponse, methodsResponse] = await Promise.all([
         fetch("/api/admin/settings", { headers: { Accept: "application/json" } }),
-        fetch("/api/payment-methods", { headers: { Accept: "application/json" } }),
+        fetch("/api/admin/payment-methods", { headers: { Accept: "application/json" } }),
       ]);
       const settings = (await settingsResponse.json().catch(() => ({}))) as SettingsResponse;
       const methods = await methodsResponse.json().catch(() => ({}));

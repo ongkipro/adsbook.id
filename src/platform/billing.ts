@@ -64,6 +64,9 @@ export const BILLING_MESSAGES = {
   expired: "Langganan toko sudah berakhir. Perpanjang di Admin → Langganan untuk membuka kembali pesanan; semua data toko tetap aman.",
 } as const;
 
+/** What a buyer reads in the order form of a store that is not live: no admin talk, no blame. */
+export const BUYER_CLOSED_MESSAGE = "Toko ini belum menerima pesanan. Silakan hubungi penjual atau coba lagi nanti.";
+
 /**
  * Buyer order entry points (ADR-041 §3.2) and the anonymous shipping quotes in
  * front of them. Every other public page keeps rendering, with a banner.
@@ -88,6 +91,8 @@ export function subscriptionRefusalBody(state: BillingState) {
     success: false,
     error: expired ? BILLING_MESSAGES.expired : BILLING_MESSAGES.preview,
     code: expired ? "SUBSCRIPTION_EXPIRED" : "SUBSCRIPTION_REQUIRED",
+    // The order forms show this one to the buyer; `error` stays for the seller and API clients.
+    buyer_message: BUYER_CLOSED_MESSAGE,
   };
 }
 

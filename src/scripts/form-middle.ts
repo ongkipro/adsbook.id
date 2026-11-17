@@ -5,6 +5,7 @@ import { formatIdr } from "../lib/format-idr";
 import { pushGtmEcomEvent } from "../lib/gtm";
 import { isValidWa62, missingCheckoutContact } from "../lib/validation";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
+import { isStoreClosed, storeClosedMessage } from "../lib/store-closed";
 import {
   AbandonedLeadCaptureGate,
   createAbandonedLeadFingerprint,
@@ -761,6 +762,12 @@ function initMiddleOrderFormInstance(
       });
       const payload = (await response.json().catch(() => ({}))) as any;
       if (!response.ok || payload?.success === false) {
+        if (isStoreClosed(payload)) {
+          errorEl.textContent = storeClosedMessage(payload);
+          errorEl.hidden = false;
+          setSubmitting(false);
+          return;
+        }
         if (
           payload?.code === "AREA_REQUIRES_HYBRID" ||
           payload?.code === "AREA_REQUIRES_FULL" ||

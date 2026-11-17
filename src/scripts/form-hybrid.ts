@@ -10,6 +10,7 @@ import { pushGtmEcomEvent } from "../lib/gtm";
 import { isValidWa62, missingCheckoutContact } from "../lib/validation";
 import { normalizeProvinceCode } from "../lib/province";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
+import { isStoreClosed, StoreClosedError, storeClosedMessage } from "../lib/store-closed";
 import {
   AbandonedLeadCaptureGate,
   createAbandonedLeadFingerprint,
@@ -1128,6 +1129,7 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
             signal: controller.signal,
           });
           const data = (await resp.json().catch(() => ({}))) as any;
+          if (isStoreClosed(data)) throw new StoreClosedError(storeClosedMessage(data));
           if (!resp.ok || data?.success === false)
             throw new Error(data?.error || data?.message || "Fallback");
           return data;
@@ -1139,7 +1141,8 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
       let data;
       try {
         data = await fetchShippingOnce();
-      } catch {
+      } catch (error) {
+        if (error instanceof StoreClosedError) throw error;
         await new Promise((resolve) => setTimeout(resolve, 250));
         data = await fetchShippingOnce();
       }
@@ -1161,10 +1164,12 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
         source: "api",
       });
       applyShippingOptions(sortedItems);
-    } catch {
+    } catch (error) {
       applyShippingOptions([]);
       setDistrictHelp(
-        "Ongkir belum berhasil dihitung. Coba pilih kecamatan ulang atau ulangi beberapa saat lagi.",
+        error instanceof StoreClosedError
+          ? error.message
+          : "Ongkir belum berhasil dihitung. Coba pilih kecamatan ulang atau ulangi beberapa saat lagi.",
         "error",
       );
     } finally {
@@ -2010,6 +2015,12 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
       });
       const data = (await resp.json().catch(() => ({}))) as SubmitOrderResponse;
       if (!resp.ok || data.success === false) {
+        if (isStoreClosed(data)) {
+          errorEl.textContent = storeClosedMessage(data);
+          errorEl.hidden = false;
+          setSubmitting(false);
+          return;
+        }
         const apiMessage = String(data.error || data.message || "").trim();
         if (resp.status === 422 && /COD/i.test(apiMessage)) {
           errorEl.textContent = apiMessage;

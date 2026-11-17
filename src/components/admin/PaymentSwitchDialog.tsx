@@ -38,7 +38,7 @@ export function PaymentSwitchDialog({
 
   useEffect(() => {
     if (!open || methods) return;
-    void fetch("/api/payment-methods", { cache: "no-store" })
+    void fetch("/api/admin/payment-methods", { cache: "no-store" })
       .then((response) => response.json())
       .then((body: { data?: PaymentMethod[] }) =>
         setMethods((body.data || []).filter((method) => method.is_active && method.payment_method !== "cod")))

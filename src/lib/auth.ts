@@ -116,6 +116,8 @@ const ADMIN_API_ROUTES = [
   '/api/admin/upload-r2',
   '/api/admin/seller-bank-accounts',
   '/api/admin/payment-reconciliation',
+  // Pembayaran and an order's payment switch read the checkout's method list here.
+  '/api/admin/payment-methods',
   '/api/admin/notifications',
   '/api/admin/whatsapp-numbers',
   '/api/admin/warehouses',
@@ -163,6 +165,8 @@ const ROLE_API_ROUTES: Record<Exclude<AdminRole, 'owner' | 'admin'>, readonly st
     '/api/admin/analytics',
     '/api/admin/abandoned-orders',
     '/api/admin/orders',
+    // Read-only: the order page's payment switch lists the checkout's methods.
+    '/api/admin/payment-methods',
     '/api/admin/shipping',
     '/api/admin/check',
     '/api/admin/ongkir',
