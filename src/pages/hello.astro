@@ -1,4 +1,5 @@
 ---
+import { BRAND_MARK, BRAND_WORDMARK, BRAND_WORDMARK_ON_DARK, FAVICON_PNG, FAVICON_192 } from '../lib/brand-assets';
 import { tenantDatabase } from '../lib/tenant-database.ts';
 import '../styles/admin.css';
 import {
@@ -133,10 +134,9 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Masuk - {Astro.locals.tenant.adminName}</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
-    <link rel="icon" type="image/svg+xml" href="/images/logo.svg" />
-    <link rel="apple-touch-icon" href="/favicon-192.png" />
+    <link rel="icon" type="image/svg+xml" href={BRAND_MARK} />
+    <link rel="icon" type="image/png" sizes="32x32" href={FAVICON_PNG} />
+    <link rel="apple-touch-icon" href={FAVICON_192} />
     <!-- LOGIN-18: no third-party asset. This page loaded a Google Fonts
          stylesheet for a family it never applied, which told Google the address
          of every operator opening the admin and bought nothing back. -->
@@ -150,7 +150,7 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
         <!-- T-29: the platform's name and one line about the admin; the
              inherited tip-jar panel is gone (PR-18). -->
         <section class="relative max-w-md" aria-labelledby="loginBrandTitle">
-          <img src="/images/adsbook-wordmark-on-dark.svg" alt="adsbook.id" width="126" height="20" loading="eager" class="h-5 w-auto opacity-90" />
+          <img src={BRAND_WORDMARK_ON_DARK} alt="adsbook.id" width="126" height="20" loading="eager" class="h-5 w-auto opacity-90" />
           <h2 id="loginBrandTitle" class="mt-4 text-3xl font-semibold leading-tight">Pesanan, pengiriman, dan iklan {Astro.locals.tenant.name} di satu admin.</h2>
         </section>
       </div>
@@ -167,7 +167,7 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
                  or who wants to see the shop, has one obvious way out. -->
             <h1 id="loginTitle" class="login-wordmark">
               <a href="/" class="login-wordmark-link" aria-label={`adsbook.id, kembali ke beranda ${Astro.locals.tenant.name}`} title={`Ke beranda ${Astro.locals.tenant.name}`}>
-                <img src="/images/adsbook-wordmark.svg" alt="" width="138" height="22" loading="eager" class="h-[22px] w-auto shrink-0" />
+                <img src={BRAND_WORDMARK} alt="" width="138" height="22" loading="eager" class="h-[22px] w-auto shrink-0" />
               </a>
             </h1>
           </div>

@@ -23,6 +23,7 @@ import {
 } from "./admin-navigation";
 import { CMS_VERSION } from "@/lib/version";
 import { SIDEBAR_SCROLL_RESTORE } from "@/lib/sidebar-scroll";
+import { BRAND_MARK, BRAND_WORDMARK } from "@/lib/brand-assets";
 
 
 export function AppSidebar({
@@ -218,7 +219,7 @@ export function AppSidebar({
                 tooltip={`What's new · adsbook.id v${CMS_VERSION.version}`}
                 className="h-10 bg-white/55 ring-1 ring-slate-900/5 backdrop-blur-md hover:bg-white/75"
               >
-                <img src="/images/adsbook-icon.svg" alt="" width="20" height="20" className="size-5 shrink-0 rounded-[5px]" />
+                <img src={BRAND_MARK} alt="" width="20" height="20" className="size-5 shrink-0 rounded-[5px]" />
                 <span>v{CMS_VERSION.version}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -226,7 +227,7 @@ export function AppSidebar({
         </SidebarMenu>
         <div className="rounded-xl border border-white/70 bg-white/55 p-1.5 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-md backdrop-saturate-150 group-data-[collapsible=icon]:hidden">
           <div className="flex items-center justify-between gap-2.5 px-1.5 pb-1.5 pt-1">
-            <img src="/images/adsbook-wordmark.svg" alt="adsbook.id" width="94" height="15" className="h-[15px] w-auto shrink-0" />
+            <img src={BRAND_WORDMARK} alt="adsbook.id" width="94" height="15" className="h-[15px] w-auto shrink-0" />
             <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-mono text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/15">
               v{CMS_VERSION.version}
             </span>

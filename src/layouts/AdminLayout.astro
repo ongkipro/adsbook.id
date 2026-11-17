@@ -1,4 +1,5 @@
 ---
+import { BRAND_MARK, FAVICON_PNG, FAVICON_192 } from '../lib/brand-assets';
 import '../styles/admin.css';
 import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
 import inter500 from '@fontsource/inter/files/inter-latin-500-normal.woff2?url';
@@ -52,10 +53,9 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
     <meta property="og:title" content={`${title} - ${Astro.locals.tenant.adminName}`} />
     <meta property="twitter:card" content="summary_large_image" />
     <title>{title} - {Astro.locals.tenant.adminName}</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
-    <link rel="icon" type="image/svg+xml" href="/images/logo.svg" />
-    <link rel="apple-touch-icon" href="/favicon-192.png" />
+    <link rel="icon" type="image/svg+xml" href={BRAND_MARK} />
+    <link rel="icon" type="image/png" sizes="32x32" href={FAVICON_PNG} />
+    <link rel="apple-touch-icon" href={FAVICON_192} />
     {/* The faces admin.css declares `optional`: preloaded so the first paint has them. */}
     {[inter400, inter500, inter600, inter700].map((href) => (
       <link rel="preload" as="font" type="font/woff2" href={href} crossorigin />

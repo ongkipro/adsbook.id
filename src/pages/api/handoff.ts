@@ -7,6 +7,7 @@ import { getRuntimeEnv } from "../../lib/env.ts";
 import { tenantDatabase } from "../../lib/tenant-database.ts";
 import { consumeHandoff, HANDOFF_FETCH_SITE_HEADER, HANDOFF_ORIGIN_HEADER, isPlatformHandoffOrigin } from "../../platform/handoff.ts";
 import { platformHosts } from "../../platform/host.ts";
+import { BRAND_MARK, BRAND_WORDMARK } from "../../lib/brand-assets.ts";
 
 export const prerender = false;
 
@@ -23,11 +24,11 @@ export function resolveHandoffTarget(raw: unknown): string {
 /** Any failure: 401 with a clear way forward on the seller's login page, and no session. */
 function refused() {
   return new Response(
-    `<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><link rel="icon" type="image/svg+xml" href="/images/logo.svg">
+    `<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><link rel="icon" type="image/svg+xml" href="${BRAND_MARK}">
 <title>Sesi masuk otomatis sudah berakhir - adsbook.id</title>
 <body style="font-family:ui-sans-serif,system-ui,sans-serif;background:#f8fafc;margin:0;padding:12vh 1rem;color:#0f172a">
 <main style="max-width:30rem;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.75rem">
-<img src="/images/adsbook-wordmark.svg" alt="adsbook.id" width="126" height="20" style="display:block;height:20px;width:auto">
+<img src="${BRAND_WORDMARK}" alt="adsbook.id" width="126" height="20" style="display:block;height:20px;width:auto">
 <h1 style="margin:0.9rem 0 0;font-size:1.3rem;line-height:1.25">Tautan masuk otomatis sudah dipakai</h1>
 <p style="margin:0.75rem 0 1.25rem;color:#475569;line-height:1.55">Toko Anda sudah siap. Masuk menggunakan email dan password yang baru Anda daftarkan.</p>
 <a href="/hello" style="display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0.6rem 1.2rem;border-radius:8px;background:#2563eb;color:#fff;font-weight:700;text-decoration:none">Masuk ke Admin Toko</a>

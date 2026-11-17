@@ -89,10 +89,23 @@ test("the legacy open-book icon is replaced by the precision mark and wordmark e
   for (const asset of [
     "public/images/adsbook-icon.svg",
     "public/images/logo.svg",
-    "public/images/adsbook-wordmark.svg",
-    "public/images/adsbook-wordmark-on-dark.svg",
+    "public/images/brand/adsbook-mark.svg",
+    "public/images/brand/adsbook-wordmark.svg",
+    "public/images/brand/adsbook-wordmark-on-dark.svg",
   ]) {
     assert.equal(existsSync(join(ROOT, asset)), true, `${asset} exists`);
     assert.doesNotMatch(readFileSync(join(ROOT, asset), "utf8"), /M184 306/, `${asset} has no open-book path`);
   }
 });
+
+test("the product mark is addressed through brand-assets, never the cached legacy URLs", () => {
+  // /images/* is cached a day plus a week stale (public/_headers): a browser
+  // kept the open-book icon at /images/adsbook-icon.svg after the file changed.
+  const offenders = SOURCES.filter(({ path, text }) => path !== "src/lib/brand-assets.ts" && /\/images\/(?:adsbook-icon|logo)\.svg|["'`]\/favicon(?:-192)?\.png["'`]|["'`]\/favicon\.ico["'`]/.test(text)).map(({ path }) => path);
+  assert.deepEqual(offenders, []);
+  // The admin's store tile falls back to the adsbook.id mark, never a letter tile.
+  const mark = readFileSync(join(SRC, "components/admin/StoreMark.tsx"), "utf8");
+  assert.match(mark, /BRAND_MARK/);
+  assert.doesNotMatch(mark, /toUpperCase\(\)/);
+});
+

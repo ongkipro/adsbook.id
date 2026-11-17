@@ -1,4 +1,5 @@
 ---
+import { FAVICON_192 } from '../lib/brand-assets';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import MetaThanksTracker from '../components/storefront/tracking/MetaThanksTracker.astro';
 import { getStorefrontProducts } from '../lib/catalog';
@@ -26,7 +27,7 @@ const { phones: csPhones, autoRedirect: thanksWhatsappRedirect } = await getThan
 // merchant's brand at the moment the customer trusts it most.
 // The image slot's first paint until the script sets the product photo; an
 // empty src would request this page again.
-const storeLogo = Astro.locals.tenant.logo || '/favicon-192.png';
+const storeLogo = Astro.locals.tenant.logo || FAVICON_192;
 // The inline script cannot import, so it gets the buyer-facing words as data:
 // every channel this store can hand out, and the two status vocabularies.
 const channelLabels = Object.fromEntries([

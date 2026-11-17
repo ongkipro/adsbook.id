@@ -1,4 +1,5 @@
 ---
+import { BRAND_WORDMARK, BRAND_WORDMARK_ON_DARK } from '../../lib/brand-assets';
 import PlatformLayout from '../../components/platform/PlatformLayout.astro';
 import { CMS_VERSION } from '../../lib/version';
 export const prerender = false;
@@ -13,7 +14,7 @@ if (Astro.locals.platformUser) return Astro.redirect('/platform');
       <div class="login-brand-grid" aria-hidden="true"></div>
       <section class="relative max-w-md" aria-labelledby="loginBrandTitle">
         <div class="flex items-center gap-2.5">
-          <img src="/images/adsbook-wordmark-on-dark.svg" alt="adsbook.id" width="126" height="20" loading="eager" class="h-5 w-auto opacity-90" />
+          <img src={BRAND_WORDMARK_ON_DARK} alt="adsbook.id" width="126" height="20" loading="eager" class="h-5 w-auto opacity-90" />
           <span class="rounded-md bg-white/10 px-2 py-0.5 text-xs font-medium tracking-wide text-slate-300">platform</span>
         </div>
         <h2 id="loginBrandTitle" class="mt-4 text-3xl font-semibold leading-tight">Semua toko, langganan, dan kesehatan platform di satu console.</h2>
@@ -25,7 +26,7 @@ if (Astro.locals.platformUser) return Astro.redirect('/platform');
         <div class="admin-login-header text-center lg:text-left">
           <h1 id="loginTitle" class="login-wordmark">
             <a href="https://adsbook.id" class="login-wordmark-link" aria-label="adsbook.id, ke situs utama">
-              <img src="/images/adsbook-wordmark.svg" alt="" width="138" height="22" loading="eager" class="h-[22px] w-auto shrink-0" />
+              <img src={BRAND_WORDMARK} alt="" width="138" height="22" loading="eager" class="h-[22px] w-auto shrink-0" />
             </a>
           </h1>
           <p class="mt-2 text-sm text-slate-500">Console platform · khusus tim adsbook.id</p>
