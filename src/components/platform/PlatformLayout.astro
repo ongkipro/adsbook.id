@@ -1,5 +1,9 @@
 ---
 import '../../styles/admin.css';
+import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
+import inter500 from '@fontsource/inter/files/inter-latin-500-normal.woff2?url';
+import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?url';
+import inter700 from '@fontsource/inter/files/inter-latin-700-normal.woff2?url';
 import { ADMIN_ACCENT } from '../admin/admin-navigation';
 import { PlatformShell } from './PlatformShell.tsx';
 import type { PlatformMenu } from './platform-navigation';
@@ -23,6 +27,10 @@ const sidebarDefaultOpen = Astro.cookies.get('sidebar_state')?.value !== 'false'
     <meta name="theme-color" content={ADMIN_ACCENT} />
     <title>{title} - adsbook.id platform</title>
     <link rel="icon" type="image/svg+xml" href="/images/adsbook-icon.svg" />
+    {/* The faces admin.css declares `optional`: preloaded so the first paint has them. */}
+    {[inter400, inter500, inter600, inter700].map((href) => (
+      <link rel="preload" as="font" type="font/woff2" href={href} crossorigin />
+    ))}
   </head>
   {user ? (
     <body class="admin-shell flex h-dvh overflow-hidden bg-[#f6f7f9] text-slate-900 antialiased" style={`--admin-accent:${ADMIN_ACCENT}`}>

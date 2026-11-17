@@ -40,7 +40,7 @@ try {
     />
     {catalogueUnavailable
       ? <p role="alert" class="text-sm">Daftar halaman belum dapat dimuat. Muat ulang halaman untuk mencoba lagi.</p>
-      : <UtmLinkBuilder client:only="react" pages={pages} />}
+      : <UtmLinkBuilder client:load pages={pages} />}
     <p class="text-sm"><a class="underline underline-offset-4" href="/admin/analytics/utm">Lihat hasil per kampanye di Analitik › UTM</a></p>
   </div>
 </AdminLayout>

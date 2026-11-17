@@ -38,9 +38,9 @@ const links = [
         <CardDescription>Kunci API tersimpan di database toko dan tidak pernah ditampilkan utuh.</CardDescription>
       </CardHeader>
       <CardContent className="px-0">
-        <p id="settingsLoading" class="px-4 py-3 text-sm text-muted-foreground" role="status" aria-busy="true">Memuat status integrasi…</p>
+        <p id="settingsLoading" class="sr-only" role="status" aria-busy="true">Memuat status integrasi…</p>
         <p id="settingsError" class="hidden px-4 py-3 text-sm text-destructive" role="alert"></p>
-        <div id="credentialCards" class="hidden divide-y">
+        <div id="credentialCards" inert data-pending class="divide-y">
           <div class="flex flex-wrap items-start gap-3 px-4 py-4 sm:flex-nowrap sm:items-center">
             <span class="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true"><Truck className="size-4" /></span>
             <div class="min-w-0 flex-1 basis-[calc(100%-3rem)] space-y-0.5 sm:basis-auto">
@@ -128,7 +128,8 @@ const links = [
         text('autolarisKey', data.autolaris.api_key_masked || 'belum diatur');
         loading?.setAttribute('aria-busy', 'false');
         loading?.classList.add('hidden');
-        document.getElementById('credentialCards')?.classList.remove('hidden');
+        document.getElementById('credentialCards')?.removeAttribute('inert');
+        document.getElementById('credentialCards')?.removeAttribute('data-pending');
       })
       .catch((error) => {
         loading?.setAttribute('aria-busy', 'false');
@@ -137,6 +138,8 @@ const links = [
         if (box) {
           box.textContent = error instanceof Error ? error.message : 'Gagal memuat pengaturan.';
           box.classList.remove('hidden');
+          // Nothing loaded: the inert, empty form is not shown under the error.
+          document.querySelectorAll('[data-pending]').forEach((el) => el.classList.add('hidden'));
         }
       });
     const run = async (action: string, buttonId: string, statusId: string) => {

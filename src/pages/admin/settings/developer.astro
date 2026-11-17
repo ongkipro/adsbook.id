@@ -15,13 +15,13 @@ export const prerender = false;
     />
 
     <!-- Allowlist Form -->
-    <div id="devLoading" class="h-60 animate-pulse rounded-xl bg-slate-100" role="status" aria-live="polite" aria-busy="true" aria-atomic="true">
+    <div id="devLoading" class="sr-only" role="status" aria-live="polite" aria-busy="true" aria-atomic="true">
       <span class="sr-only">Memuat pengaturan Headless API.</span>
     </div>
     
     <div id="devError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
 
-    <form id="headlessOriginsForm" class="hidden rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
+    <form id="headlessOriginsForm" inert data-pending class="rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
       <div class="p-5 md:p-6">
         <div class="flex items-center justify-between">
           <div>
@@ -118,7 +118,8 @@ export const prerender = false;
         }
         loading?.setAttribute('aria-busy', 'false');
         loading?.classList.add('hidden');
-        form?.classList.remove('hidden');
+        form?.removeAttribute('inert');
+        form?.removeAttribute('data-pending');
       })
       .catch((error) => {
         loading?.setAttribute('aria-busy', 'false');
@@ -127,6 +128,8 @@ export const prerender = false;
         if (box) {
           box.textContent = error instanceof Error ? error.message : 'Gagal memuat profil store.';
           box.classList.remove('hidden');
+          // Nothing loaded: the inert, empty form is not shown under the error.
+          document.querySelectorAll('[data-pending]').forEach((el) => el.classList.add('hidden'));
         }
       });
 

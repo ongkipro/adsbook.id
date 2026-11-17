@@ -44,10 +44,16 @@ async function call(url: string, init?: RequestInit) {
  * the store's own domains. Every rule lives in the API; this only shows state
  * and asks before a removal or a primary change.
  */
-export function DomainManager() {
-  const [domains, setDomains] = useState<Domain[] | null>(null);
-  const [enabled, setEnabled] = useState(false);
+export function DomainManager({ initial }: { initial?: { domains: Domain[]; enabled: boolean } } = {}) {
+  // The page renders the first list on the server, so the card is there from
+  // the first paint instead of a 160px skeleton swapped for a taller list.
+  const [domains, setDomains] = useState<Domain[] | null>(initial?.domains ?? null);
+  const [enabled, setEnabled] = useState(initial?.enabled ?? false);
   const [loadError, setLoadError] = useState("");
+  // Disabled on the server render and enabled on mount, so no input is typed
+  // into before React attaches its onChange (a pre-hydration fill left `host`
+  // empty and the submit button disabled).
+  const [hydrated, setHydrated] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [host, setHost] = useState("");
   const [mode, setMode] = useState<Mode>("root");
@@ -62,8 +68,10 @@ export function DomainManager() {
   }, []);
 
   useEffect(() => {
+    setHydrated(true);
+    if (initial) return;
     load().catch((error) => setLoadError(error instanceof Error ? error.message : "Gagal memuat domain."));
-  }, [load]);
+  }, [load, initial]);
 
   const run = async (key: string, task: () => Promise<{ message?: string } | void>) => {
     setBusy(key);
@@ -210,18 +218,18 @@ export function DomainManager() {
               {(pending || (domain.status === "active" && !domain.isPrimary) || domain.kind === "custom") && (
                 <div className="flex flex-wrap gap-2">
                   {pending && (
-                    <Button variant="outline" disabled={busy !== null} onClick={() => void run(domain.host, () => call(`${path(domain)}/recheck`, { method: "POST", body: "{}" }))}>
+                    <Button variant="outline" disabled={!hydrated || busy !== null} onClick={() => void run(domain.host, () => call(`${path(domain)}/recheck`, { method: "POST", body: "{}" }))}>
                       {busy === domain.host ? "Memeriksa…" : "Cek lagi"}
                     </Button>
                   )}
                   {domain.status === "active" && !domain.isPrimary && (
-                    <Button variant="outline" disabled={busy !== null} onClick={() => void makePrimary(domain)}>Jadikan domain utama</Button>
+                    <Button variant="outline" disabled={!hydrated || busy !== null} onClick={() => void makePrimary(domain)}>Jadikan domain utama</Button>
                   )}
                   {/* T-43: switch a root claim to `www` only — keeps the `www` hostname as it is. */}
                   {domain.kind === "custom" && domain.host === domain.group && domains.some((other) => other.group === domain.group && other.host === `www.${domain.group}`) && (
                     <Button
                       variant="outline"
-                      disabled={busy !== null}
+                      disabled={!hydrated || busy !== null}
                       onClick={() => void switchToWww(domain)}
                     >
                       Pindah ke www saja
@@ -230,7 +238,7 @@ export function DomainManager() {
                   {domain.kind === "custom" && domain.host === domain.group && (
                     <Button
                       variant="outline"
-                      disabled={busy !== null || !enabled}
+                      disabled={!hydrated || busy !== null || !enabled}
                       onClick={() => {
                         hostInput.current?.focus();
                         hostInput.current?.scrollIntoView({ block: "center" });
@@ -240,7 +248,7 @@ export function DomainManager() {
                     </Button>
                   )}
                   {domain.kind === "custom" && (
-                    <Button variant="outline" className="text-rose-700" disabled={busy !== null} onClick={() => void remove(domain)}>Hapus</Button>
+                    <Button variant="outline" className="text-rose-700" disabled={!hydrated || busy !== null} onClick={() => void remove(domain)}>Hapus</Button>
                   )}
                 </div>
               )}
@@ -261,6 +269,7 @@ export function DomainManager() {
           <Input
             ref={hostInput}
             id="domainHost"
+            disabled={!hydrated}
             className="mt-2 font-mono"
             value={host}
             onChange={(event) => setHost(event.target.value)}
@@ -287,7 +296,7 @@ export function DomainManager() {
           </fieldset>
           <div className="mt-5 flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className={`min-h-5 text-xs font-semibold ${addError ? "text-rose-700" : "text-slate-500"}`} role={addError ? "alert" : "status"}>{addError}</p>
-            <Button type="submit" disabled={busy !== null || !host.trim()}>{busy === "add" ? (current ? "Mengganti…" : "Menambahkan…") : current ? "Ganti domain" : "Tambah domain"}</Button>
+            <Button type="submit" disabled={!hydrated || busy !== null || !host.trim()}>{busy === "add" ? (current ? "Mengganti…" : "Menambahkan…") : current ? "Ganti domain" : "Tambah domain"}</Button>
           </div>
         </form>
       ) : (

@@ -404,6 +404,16 @@ export function AdminShell({
           <SheetContent
             side="bottom"
             className="max-h-[86dvh] gap-0 overflow-hidden rounded-t-[1.25rem] border-slate-200 bg-white p-0 md:hidden"
+            onOpenAutoFocus={(event) => {
+              // Open on the page the operator is on: its row in view, not the top of a long list.
+              const sheet = event.currentTarget as HTMLElement | null;
+              const current = sheet?.querySelector<HTMLElement>('[aria-current="page"]');
+              const list = current?.closest<HTMLElement>("[data-menu-scroll]");
+              if (current && list) {
+                const top = current.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+                list.scrollTop = Math.max(0, top - list.clientHeight / 3);
+              }
+            }}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               document.getElementById("admin-mobile-menu-trigger")?.focus();
@@ -413,7 +423,7 @@ export function AdminShell({
               <SheetTitle className="text-base font-semibold tracking-tight text-slate-950">{mustChangePassword ? "Keamanan akun" : "Semua menu"}</SheetTitle>
               <SheetDescription className="text-xs">{mustChangePassword ? "Ganti password bawaan atau akhiri sesi ini." : "Pilih workspace yang ingin dikelola."}</SheetDescription>
             </SheetHeader>
-            <div className="overflow-y-auto overscroll-contain px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
+            <div data-menu-scroll className="overflow-y-auto overscroll-contain px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
               {groups.map((group) => (
                 <section key={group.label} className="mb-3">
                   <h2 className="px-2 pb-1.5 text-xs font-medium uppercase tracking-wider text-slate-400">{group.label}</h2>
