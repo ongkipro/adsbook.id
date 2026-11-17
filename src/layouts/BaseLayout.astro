@@ -1,4 +1,5 @@
 ---
+import { BRAND_MARK, FAVICON_PNG, FAVICON_192 } from '../lib/brand-assets';
 import type { ComponentProps } from 'astro/types';
 import { SEO } from 'astro-seo';
 import { escapeHtmlText } from '../lib/html-escape';
@@ -105,7 +106,7 @@ if (!productForSchema) {
 }
 // A store with no logo and a page with no image share the store's own icon,
 // never the page itself (an empty URL resolves to the page).
-const imageUrl = new URL(image || Astro.locals.tenant.logo || '/favicon-192.png', publicSiteUrl).toString();
+const imageUrl = new URL(image || Astro.locals.tenant.logo || FAVICON_192, publicSiteUrl).toString();
 const preloadImageUrls =
   typeof preloadImages === 'string' || (typeof preloadImages === 'object' && preloadImages !== null && !Array.isArray(preloadImages))
     ? [preloadImages as PreloadImageItem]
@@ -196,10 +197,10 @@ const preloadImageUrls =
           ...(Astro.locals.tenant.logo
             ? [{ rel: 'icon', href: Astro.locals.tenant.logo }]
             : [
-                { rel: 'icon', href: '/images/logo.svg', type: 'image/svg+xml' },
-                { rel: 'icon', href: '/favicon.png', type: 'image/png' },
+                { rel: 'icon', href: BRAND_MARK, type: 'image/svg+xml' },
+                { rel: 'icon', href: FAVICON_PNG, type: 'image/png' },
               ]),
-          { rel: 'apple-touch-icon', href: Astro.locals.tenant.logo || '/favicon-192.png' },
+          { rel: 'apple-touch-icon', href: Astro.locals.tenant.logo || FAVICON_192 },
         ],
       }}
     />

@@ -1,16 +1,22 @@
 import { cn } from "@/lib/utils";
+import { BRAND_MARK } from "@/lib/brand-assets";
 
-// A store without its own logo shows its initial. The deleted placeholder
+// The store's own logo when it uploaded one (Pengaturan › Toko & CS, a square
+// WebP); until then the adsbook.id mark (Paduka, 2026-11-17: "default pakai icon
+// adsbook aja"). Admin only: the storefront never shows the platform mark for a
+// store (UI-1), it falls back to the store name. The deleted placeholder
 // wordmark still counts as no logo, should an old store row name it.
 const LEGACY_PLACEHOLDER_LOGO = "/images/adsbook-mark.webp";
 
 export function StoreMark({ logo, name, className }: { logo?: string; name: string; className?: string }) {
-  if (logo && logo !== LEGACY_PLACEHOLDER_LOGO) {
-    return <img src={logo} alt={name} className={cn("shrink-0 object-contain", className)} />;
-  }
+  const own = logo && logo !== LEGACY_PLACEHOLDER_LOGO ? logo : "";
   return (
-    <span aria-hidden="true" className={cn("grid shrink-0 place-items-center rounded-lg bg-slate-900 text-sm font-semibold text-white", className)}>
-      {(name.trim()[0] || "A").toUpperCase()}
-    </span>
+    <img
+      src={own || BRAND_MARK}
+      alt={own ? name : ""}
+      width={36}
+      height={36}
+      className={cn("shrink-0 rounded-lg bg-white object-cover", className)}
+    />
   );
 }

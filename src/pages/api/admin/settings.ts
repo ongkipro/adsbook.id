@@ -11,6 +11,7 @@ import {
 } from "../../../lib/embed-security.ts";
 import { parseHeadlessAllowedOrigins } from "../../../lib/headless-api.ts";
 import { LOCALE_PATTERN, SUPPORT_EMAIL_PATTERN, THEME_COLOR_PATTERN } from "../../../lib/tenant.ts";
+import { isAllowedLogoUrl } from "../../../lib/store-logo.ts";
 import { getRuntimeEnv, maskSecretValue } from "../../../lib/env.ts";
 import { issueWebhookToken, webhookTokenIssuedAt, webhookUrl } from "../../../platform/webhook-secrets.ts";
 import {
@@ -813,7 +814,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       const themeColorValue = clean(body.theme_color, 7);
       if (themeColorValue && !THEME_COLOR_PATTERN.test(themeColorValue)) {
         return jsonError(
-          "Warna tema harus berformat heksadesimal enam digit, contoh: #111111.",
+          "Warna tema harus berformat heksadesimal enam digit, contoh: #2563EB.",
           400,
         );
       }
@@ -832,6 +833,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         return jsonError("Email customer service tidak valid. Contoh: cs@tokosaya.com", 400);
       }
       const businessAddress = clean(body.business_address, 300);
+      // The logo is drawn in <img src> and <link rel="icon"> on every page of
+      // the store: an empty value, a same-site path or https only.
+      const storeLogo = clean(body.store_logo, 300);
+      if (!isAllowedLogoUrl(storeLogo)) {
+        return jsonError("Alamat logo tidak valid. Unggah logo dari halaman ini.", 400);
+      }
 
       await db
         .prepare(
@@ -846,7 +853,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           storeName,
           clean(body.store_description, 300) || null,
           clean(body.store_tagline, 120) || null,
-          clean(body.store_logo, 300) || null,
+          storeLogo || null,
           storefrontTemplate || null,
           themeColorValue || null,
           localeValue || null,

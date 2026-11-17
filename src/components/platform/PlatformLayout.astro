@@ -1,4 +1,5 @@
 ---
+import { BRAND_MARK, FAVICON_PNG } from '../../lib/brand-assets';
 import '../../styles/admin.css';
 import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
 import inter500 from '@fontsource/inter/files/inter-latin-500-normal.woff2?url';
@@ -26,7 +27,8 @@ const sidebarDefaultOpen = Astro.cookies.get('sidebar_state')?.value !== 'false'
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content={ADMIN_ACCENT} />
     <title>{title} - adsbook.id platform</title>
-    <link rel="icon" type="image/svg+xml" href="/images/adsbook-icon.svg" />
+    <link rel="icon" type="image/svg+xml" href={BRAND_MARK} />
+    <link rel="icon" type="image/png" sizes="32x32" href={FAVICON_PNG} />
     {/* The faces admin.css declares `optional`: preloaded so the first paint has them. */}
     {[inter400, inter500, inter600, inter700].map((href) => (
       <link rel="preload" as="font" type="font/woff2" href={href} crossorigin />

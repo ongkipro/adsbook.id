@@ -1,4 +1,5 @@
 ---
+import { FAVICON_PNG, FAVICON_192 } from '../../lib/brand-assets';
 /**
  * The adsbook.id marketing site's frame (T-40, PR-25; direction B in
  * adsbook.id-docs/docs/design/platform-site/DESIGN.md): head and SEO, the
@@ -41,7 +42,8 @@ const year = new Date().getFullYear();
     <meta name="twitter:card" content="summary" />
     <meta name="theme-color" content="#F8FAFC" />
     <link rel="icon" type="image/svg+xml" href="/platform/brand/adsbook-id-mark-on-accent.svg" />
-    <link rel="icon" href="/favicon.png" sizes="32x32" />
+    <link rel="icon" href={FAVICON_PNG} sizes="32x32" />
+    <link rel="apple-touch-icon" href={FAVICON_192} />
     <link rel="preload" href="/platform/fonts/plus-jakarta-sans-800.woff2" as="font" type="font/woff2" crossorigin />
     <script type="application/ld+json" set:html={siteJsonLd(env)} />
     <PlatformPixel />

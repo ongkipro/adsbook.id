@@ -3,6 +3,7 @@ import { jsonError, jsonOk } from "../../../lib/api";
 import { getRuntimeEnv } from "../../../lib/env";
 import { tenantR2 } from "../../../platform/keys.ts";
 import { checkPlanCap, recordUsage } from "../../../platform/plans.ts";
+import { LOGO_MAX_OUTPUT_BYTES } from "../../../lib/store-logo.ts";
 
 export const prerender = false;
 
@@ -83,6 +84,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
     if (file.size > MAX_FILE_SIZE) {
       return jsonError("Ukuran file maksimal 2 MB.", 413);
+    }
+    // A store logo (`purpose=logo`) arrives already squared and encoded by
+    // `prepareStoreLogo`: a WebP under 200 KB. Anything else was not made by
+    // that path, so it is refused rather than stored as a 2 MB "logo".
+    const purpose = String(formData.get("purpose") || "");
+    if (purpose === "logo" && (file.type !== "image/webp" || file.size > LOGO_MAX_OUTPUT_BYTES)) {
+      return jsonError("Logo harus WebP maksimal 200 KB. Unggah ulang dari Pengaturan › Toko.", 413);
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());

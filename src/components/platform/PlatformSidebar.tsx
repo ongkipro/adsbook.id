@@ -14,6 +14,7 @@ import { CMS_VERSION } from "@/lib/version";
 import type { PlatformRole } from "../../platform/admin/session";
 import { getVisiblePlatformGroups, type PlatformMenu } from "./platform-navigation";
 import { SIDEBAR_SCROLL_RESTORE } from "@/lib/sidebar-scroll";
+import { BRAND_MARK, BRAND_WORDMARK } from "@/lib/brand-assets";
 
 /**
  * The console's sidebar: the seller admin's AppSidebar look (same primitives,
@@ -29,9 +30,9 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" tooltip="adsbook.id platform" className="h-14 rounded-xl px-2 hover:bg-sidebar-accent">
               <a href="/platform" aria-label="Buka ringkasan platform">
-                <img src="/images/adsbook-icon.svg" alt="" width="36" height="36" className="size-9 shrink-0 rounded-xl" />
+                <img src={BRAND_MARK} alt="" width="36" height="36" className="size-9 shrink-0 rounded-xl" />
                 <span className="grid min-w-0 flex-1 grid-cols-1 gap-0.5 text-left leading-tight">
-                  <img src="/images/adsbook-wordmark.svg" alt="" width="94" height="15" className="h-[15px] w-auto" />
+                  <img src={BRAND_WORDMARK} alt="" width="94" height="15" className="h-[15px] w-auto" />
                   <span className="sr-only">adsbook.id</span>
                   <span className="truncate text-xs text-slate-500">Console platform</span>
                 </span>
@@ -75,7 +76,7 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
 
       <SidebarFooter className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-2 *:pointer-events-auto">
         <div className="flex items-center justify-between gap-2.5 rounded-xl border border-white/70 bg-white/55 px-2.5 py-2 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-md backdrop-saturate-150 group-data-[collapsible=icon]:hidden">
-          <img src="/images/adsbook-wordmark.svg" alt="adsbook.id" width="94" height="15" className="h-[15px] w-auto shrink-0" />
+          <img src={BRAND_WORDMARK} alt="adsbook.id" width="94" height="15" className="h-[15px] w-auto shrink-0" />
           <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-mono text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/15">v{CMS_VERSION.version}</span>
         </div>
       </SidebarFooter>
