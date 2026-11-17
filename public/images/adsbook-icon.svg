@@ -1,10 +1,2 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- adsbook.id product icon, flat: an open book (the store's order book)
-       whose right page carries an up-right arrow (an ad turning into a sale).
-       The login tile and sidebar card; never replaced by a store. The tab
-       icons are the merchant-replaceable copies (images/logo.svg, favicon.*). -->
-  <rect width="1024" height="1024" rx="232" fill="#2563EB"/>
-  <path fill="#FFFFFF" d="M184 306c0-24 20-44 44-44h160c58 0 92 28 104 64v446c-22-28-58-44-104-44H228c-24 0-44-20-44-44z"/>
-  <path fill="#FFFFFF" d="M840 306c0-24-20-44-44-44H636c-58 0-92 28-104 64v446c22-28 58-44 104-44h160c24 0 44-20 44-44z"/>
-  <path fill="none" stroke="#2563EB" stroke-width="60" stroke-linecap="round" stroke-linejoin="round" d="M606 624 746 484M636 480h114v114"/>
-</svg>
+<!-- adsbook.id product mark: lowercase "a" + the 1-module precision signal dot on brand blue (#2563eb). -->
+<svg xmlns="http://www.w3.org/2000/svg" aria-label="adsbook.id" viewBox="0 0 944 944"><title>adsbook.id</title><rect width="944" height="944" fill="#2563eb" rx="208"/><path fill="#fff" d="M344 757q-59 0-102-19t-66-54.5-23-84.5q0-46 21-81.5t64.5-59.5T347 424l167-27v110l-140 25q-32 6-49 20.5T308 594q0 25 19 39t47 14q37 0 65-16t43.5-43.5T498 527V385q0-31-24.5-52T407 312q-40 0-70.5 22T292 392l-120-57q16-46 51-79t84-51 107-18q69 0 122 25t82.5 69.5T648 385v360H508v-88l34-6q-24 36-53 59.5t-65 35-80 11.5"/><path fill="#bfdbfe" d="M674 595h150v150H674z"/></svg>

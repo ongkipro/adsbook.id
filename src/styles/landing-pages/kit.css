@@ -13,11 +13,11 @@
  */
 
 .lk-root {
-  --lk-accent: #c5a880;
-  --lk-accent-soft: #f8f7f4;
+  --lk-accent: #2563eb;
+  --lk-accent-soft: #eff6ff;
   /* The accent on a dark section. A page whose accent is dark sets this too,
      or its eyebrow and active step vanish into the background. */
-  --lk-accent-on-dark: #e7d3b0;
+  --lk-accent-on-dark: #93c5fd;
   --lk-ink: #111111;
   --lk-muted: #52525b;
   --lk-line: #e4e4e7;

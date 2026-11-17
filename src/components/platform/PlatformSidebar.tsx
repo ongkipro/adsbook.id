@@ -29,11 +29,10 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" tooltip="adsbook.id platform" className="h-14 rounded-xl px-2 hover:bg-sidebar-accent">
               <a href="/platform" aria-label="Buka ringkasan platform">
-                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-950">
-                  <img src="/images/adsbook-icon.svg" alt="" width="20" height="20" className="size-5" />
-                </span>
-                <span className="grid min-w-0 flex-1 grid-cols-1 text-left leading-tight">
-                  <span className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">adsbook<span className="text-blue-600">.id</span></span>
+                <img src="/images/adsbook-icon.svg" alt="" width="36" height="36" className="size-9 shrink-0 rounded-xl" />
+                <span className="grid min-w-0 flex-1 grid-cols-1 gap-0.5 text-left leading-tight">
+                  <img src="/images/adsbook-wordmark.svg" alt="" width="94" height="15" className="h-[15px] w-auto" />
+                  <span className="sr-only">adsbook.id</span>
                   <span className="truncate text-xs text-slate-500">Console platform</span>
                 </span>
               </a>
@@ -75,9 +74,8 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
       <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCROLL_RESTORE }} />
 
       <SidebarFooter className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-2 *:pointer-events-auto">
-        <div className="flex items-center gap-2.5 rounded-xl border border-white/70 bg-white/55 px-2.5 py-2 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-md backdrop-saturate-150 group-data-[collapsible=icon]:hidden">
-          <img src="/images/adsbook-icon.svg" alt="" width="24" height="24" className="shrink-0" />
-          <span className="min-w-0 flex-1 text-[13px] font-semibold leading-4 text-slate-900">adsbook.id</span>
+        <div className="flex items-center justify-between gap-2.5 rounded-xl border border-white/70 bg-white/55 px-2.5 py-2 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-md backdrop-saturate-150 group-data-[collapsible=icon]:hidden">
+          <img src="/images/adsbook-wordmark.svg" alt="adsbook.id" width="94" height="15" className="h-[15px] w-auto shrink-0" />
           <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-mono text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/15">v{CMS_VERSION.version}</span>
         </div>
       </SidebarFooter>

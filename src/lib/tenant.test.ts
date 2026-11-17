@@ -69,7 +69,7 @@ test("an invalid stored value degrades instead of taking the storefront down", (
   });
 
   assert.equal(tenant.siteUrl, "https://example.com", "non-https URL rejected");
-  assert.equal(tenant.themeColor, "#111111", "invalid colour rejected");
+  assert.equal(tenant.themeColor, "#2563EB", "invalid colour rejected");
   assert.equal(tenant.locale, "id-ID", "invalid locale rejected");
   assert.equal(
     tenant.storefrontTemplate,
