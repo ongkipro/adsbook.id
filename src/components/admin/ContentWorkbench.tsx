@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { canConvertToWebP, convertImageToWebP } from "../../lib/client-image";
+import { processImageUpload } from "../../lib/client-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -150,15 +150,11 @@ export function ContentWorkbench() {
     const form = new FormData(event.currentTarget);
     setUploading(true);
     try {
-      // This is the path hero and content images arrive through, and it used
-      // to store the raw file — up to 5MB, unresized. Convert with the same
-      // shared rules the product uploader applies; GIF and AVIF pass by
-      // because a canvas re-encode would flatten the one and inflate the
-      // other.
+      // Hero and content images: the same pipeline as product photos
+      // (src/lib/image-rules.ts): max 2 MB in, a WebP at most 480 px wide out.
       const original = form.get("file");
-      if (original instanceof File && canConvertToWebP(original.type)) {
-        form.set("file", await convertImageToWebP(original));
-      }
+      if (!(original instanceof File)) throw new Error("File gambar wajib dipilih.");
+      form.set("file", (await processImageUpload(original)).display);
       const response = await fetch("/api/admin/media", {
         method: "POST",
         body: form,
@@ -254,7 +250,7 @@ export function ContentWorkbench() {
           <CardHeader>
             <CardTitle as="h3" className="text-sm font-semibold">Media Tenant</CardTitle>
             <p className="text-xs leading-5 text-slate-500">
-              Upload gambar ke R2 tenant, lalu gunakan URL hasilnya pada field image di draft JSON.
+              Upload gambar ke R2 tenant, lalu gunakan URL hasilnya pada field image di draft JSON. JPG, PNG, atau WebP maksimal 2 MB; otomatis jadi WebP lebar maksimal 480 px.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -263,7 +259,7 @@ export function ContentWorkbench() {
                 name="file"
                 type="file"
                 aria-label="Pilih gambar untuk diunggah"
-                accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                accept="image/jpeg,image/png,image/webp"
                 required
                 className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-semibold"
               />

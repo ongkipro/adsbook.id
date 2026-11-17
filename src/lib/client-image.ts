@@ -1,133 +1,90 @@
 /**
- * The one set of rules for what an image upload may weigh. Browser-only for
- * the canvas work; the decision logic is pure so it can be tested under node.
+ * The admin's image pipeline (browser side). Every upload path calls
+ * `processImageUpload`; the rules live in src/lib/image-rules.ts and the
+ * server re-checks them.
  *
- * Two upload paths used to disagree. ProductForm converted and resized, but
- * its "already-small WebP" pass-through measured smallness as "under 2 MB", so
- * a 1254px WebP saved at high quality sailed through untouched — one such file
- * is a 132KB homepage hero PSI scores at ~44KB. ContentWorkbench, the path
- * hero and content media actually arrive through, converted nothing at all: a
- * raw 5MB PNG was stored as-is. Both now route through this module.
+ * In: JPG, PNG or WebP up to 2 MB. Out: a WebP at most 480 px wide (height
+ * follows the source, never upscaled) for the store, and, for a product photo,
+ * a JPEG at most 1024 px wide for the Meta and Google catalog feeds.
  *
- * Existing files in R2 are deliberately left alone — the rule governs uploads
- * from here on, there is no backfill.
+ * Existing files in R2 are left alone; the rule governs uploads from here on.
  */
+import { checkUploadSource, fitWidth, IMAGE_QUALITIES, IMAGE_VARIANTS, type ImageVariant } from "./image-rules.ts";
 
-/** Longest edge stored. The product detail column is 480 CSS px at DPR 2.625
- *  = 1260 device pixels; 1280 keeps a hair of headroom. */
-export const MAX_IMAGE_EDGE = 1280;
-/** The catalogue-card derivative: 182 CSS px is 478 device pixels on the
- *  phone Lighthouse emulates. */
-export const CARD_IMAGE_EDGE = 480;
-/** Canvas WebP quality. The canvas encoder is noticeably less efficient than
- *  libwebp at the same setting, so 0.8 here lands near the quality PSI's
- *  byte estimates assume. */
-export const WEBP_QUALITY = 0.8;
-/** The "already small" the old 2MB check meant. Set below the case that
- *  motivated it — a 132KB hero PSI scored at ~44KB — because bytes alone
- *  cannot tell a fair large photo from an over-saved one; under this bar a
- *  re-encode could not win back enough to be worth the generational loss,
- *  above it one is always worth trying. */
-export const LEAN_WEBP_BYTES = 100 * 1024;
-/** Hard ceiling on what an encode may produce. */
-export const MAX_ENCODED_BYTES = 2 * 1024 * 1024;
+/** Re-exported for callers that only need the limit. */
+export { MAX_UPLOAD_BYTES } from "./image-rules.ts";
 
-/** Formats the canvas can re-encode without losing something it cannot keep.
- *  GIF animation and AVIF would be flattened or inflated, so they pass by. */
-export function canConvertToWebP(mimeType: string): boolean {
-  return ["image/jpeg", "image/png", "image/webp"].includes(
-    mimeType.toLowerCase(),
-  );
+async function encodeVariant(bitmap: ImageBitmap, variant: ImageVariant, name: string): Promise<File> {
+  const rule = IMAGE_VARIANTS[variant];
+  const size = fitWidth(bitmap.width, bitmap.height, rule.maxWidth);
+  const canvas = document.createElement("canvas");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Browser ini tidak bisa mengolah gambar.");
+  if (rule.type === "image/jpeg") {
+    // JPEG has no transparency: a transparent PNG would turn black. White, like a packshot.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, size.width, size.height);
+  }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bitmap, 0, 0, size.width, size.height);
+  const extension = rule.type === "image/webp" ? "webp" : "jpg";
+  for (const quality of IMAGE_QUALITIES) {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, rule.type, quality));
+    // A browser that cannot encode WebP from a canvas hands back PNG instead of failing.
+    if (!blob || blob.type !== rule.type) {
+      throw new Error("Browser ini tidak bisa mengonversi gambar. Gunakan Chrome, Edge, atau Firefox terbaru.");
+    }
+    if (blob.size <= rule.maxBytes) return new File([blob], `${name}.${extension}`, { type: rule.type });
+  }
+  throw new Error("Gambar terlalu detail untuk dikompres. Coba foto dengan latar yang lebih polos.");
 }
 
-/** Pure decision: reuse the uploaded bytes only when they are a WebP that is
- *  both within the edge budget and genuinely lean. */
-export function shouldReuseWebP(
-  file: { type: string; size: number },
-  dimensions: { width: number; height: number },
-  maxEdge: number = MAX_IMAGE_EDGE,
-): boolean {
-  return (
-    file.type === "image/webp" &&
-    file.size <= LEAN_WEBP_BYTES &&
-    Math.max(dimensions.width, dimensions.height) <= maxEdge
-  );
-}
+export type ProcessedImage = { display: File; feed: File | null; width: number; height: number };
 
-/** Scale to maxEdge and encode as WebP. Browser-only. */
-export function convertImageToWebP(
-  file: File,
-  maxEdge: number = MAX_IMAGE_EDGE,
-): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const sourceWidth = img.naturalWidth || img.width;
-      const sourceHeight = img.naturalHeight || img.height;
-      if (
-        shouldReuseWebP(file, { width: sourceWidth, height: sourceHeight }, maxEdge)
-      ) {
-        return resolve(file);
-      }
-      const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight || 1));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(sourceWidth * scale);
-      canvas.height = Math.round(sourceHeight * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return reject(new Error("Gagal mengolah canvas gambar."));
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) return reject(new Error("Gagal konversi gambar ke WebP."));
-          // A browser that cannot encode WebP from a canvas hands back PNG
-          // instead of failing; labelling that `image/webp` only earned a 415
-          // from the server's signature check with no hint why.
-          if (blob.type !== "image/webp") {
-            return reject(
-              new Error(
-                "Browser ini tidak bisa mengonversi gambar ke WebP. Unggah file .webp, atau gunakan Chrome/Firefox.",
-              ),
-            );
-          }
-          if (blob.size > MAX_ENCODED_BYTES) {
-            return reject(new Error("Ukuran file terkompresi masih melebihi 2 MB."));
-          }
-          resolve(
-            new File([blob], file.name.replace(/\.[^.]+$/, "") + ".webp", {
-              type: "image/webp",
-            }),
-          );
-        },
-        "image/webp",
-        WEBP_QUALITY,
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("File gambar tidak dapat dibaca."));
-    };
-    img.src = url;
+/**
+ * Check, scale and encode one picked file. `feed: true` (product photos) also
+ * makes the catalog copy. Rejects with a message meant for the seller.
+ */
+export async function processImageUpload(file: File, options: { feed?: boolean } = {}): Promise<ProcessedImage> {
+  const check = checkUploadSource(file);
+  if (!check.ok) throw new Error(check.error);
+  const bitmap = await createImageBitmap(file).catch(() => {
+    throw new Error("File gambar tidak dapat dibaca.");
   });
+  try {
+    const base = file.name.replace(/\.[^.]+$/, "") || "image";
+    const display = await encodeVariant(bitmap, "display", base);
+    const feed = options.feed ? await encodeVariant(bitmap, "feed", base) : null;
+    const size = fitWidth(bitmap.width, bitmap.height, IMAGE_VARIANTS.display.maxWidth);
+    return { display, feed, width: size.width, height: size.height };
+  } finally {
+    bitmap.close();
+  }
 }
 
 /**
- * Store the card-sized `-sm` twin of an upload beside it (480 px, served by
- * `cardImageSrc`). Resolves false, never throws, when it could not be stored:
- * the original upload already succeeded, and the asset route falls back to the
- * full image, so the caller tells the operator instead of failing the upload.
- * Every admin path that stores an image a card may show calls this.
+ * Upload a processed image to the store's R2 (`/api/admin/upload-r2`), then
+ * its catalog copy beside it. Resolves the stored URL and whether the feed
+ * copy was stored; a missing feed copy is reported, never fatal: the feed
+ * then names the 480 px photo.
  */
-export async function uploadCardDerivative(source: File, fileName: string): Promise<boolean> {
-  try {
-    const card = await convertImageToWebP(source, CARD_IMAGE_EDGE);
-    const form = new FormData();
-    form.set("file", card);
-    form.set("derivative_of", fileName);
-    const response = await fetch("/api/admin/upload-r2", { method: "POST", body: form });
-    return response.ok;
-  } catch {
-    return false;
+export async function uploadProcessedImage(image: ProcessedImage): Promise<{ url: string; fileName: string; feedStored: boolean }> {
+  const form = new FormData();
+  form.set("file", image.display);
+  const response = await fetch("/api/admin/upload-r2", { method: "POST", body: form });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.success || !payload.url) throw new Error(payload.error || "Gambar gagal diunggah.");
+  let feedStored = false;
+  if (image.feed) {
+    const feedForm = new FormData();
+    feedForm.set("file", image.feed);
+    feedForm.set("variant_of", String(payload.fileName || ""));
+    feedForm.set("variant", "feed");
+    const feedResponse = await fetch("/api/admin/upload-r2", { method: "POST", body: feedForm }).catch(() => null);
+    feedStored = Boolean(feedResponse?.ok);
   }
+  return { url: String(payload.url), fileName: String(payload.fileName || ""), feedStored };
 }

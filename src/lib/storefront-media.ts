@@ -1,12 +1,8 @@
-const MEDIA_TYPES = new Map([
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["image/webp", "webp"],
-  ["image/gif", "gif"],
-  ["image/avif", "avif"],
-]);
+// Content media (hero, sections) goes through the admin's image pipeline
+// first (src/lib/image-rules.ts): a WebP at most 480 px wide. Only that is stored.
+const MEDIA_TYPES = new Map([["image/webp", "webp"]]);
 
-export const MAX_STOREFRONT_MEDIA_BYTES = 5 * 1024 * 1024;
+export const MAX_STOREFRONT_MEDIA_BYTES = 2 * 1024 * 1024;
 
 export function validateStorefrontMedia(file: {
   name: string;
@@ -15,13 +11,13 @@ export function validateStorefrontMedia(file: {
 }) {
   const extension = MEDIA_TYPES.get(file.type.toLowerCase());
   if (!extension) {
-    throw new Error("Format gambar harus JPEG, PNG, WebP, GIF, atau AVIF.");
+    throw new Error("Format gambar harus WebP hasil konversi admin.");
   }
   if (!Number.isFinite(file.size) || file.size < 1) {
     throw new Error("File gambar kosong.");
   }
   if (file.size > MAX_STOREFRONT_MEDIA_BYTES) {
-    throw new Error("Ukuran gambar maksimal 5 MB.");
+    throw new Error("Ukuran gambar maksimal 2 MB.");
   }
   const base = file.name
     .replace(/\.[^.]+$/, "")

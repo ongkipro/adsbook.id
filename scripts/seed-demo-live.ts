@@ -23,6 +23,7 @@
  * Env: ADSBOOK_DEMO_OWNER_PASSWORD (required), ADSBOOK_DEMO_OWNER_EMAIL (default demo@adsbook.id).
  */
 import { existsSync, readFileSync } from "node:fs";
+import { prepareImage } from "./prepare-image.ts";
 import { homedir } from "node:os";
 
 const arg = (name: string) => process.argv.slice(2).find((value) => value.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -212,18 +213,20 @@ async function main() {
     }
     const full = image(product.slug);
     if (!full) throw new Error(`missing image ${imageDir}/${product.slug}.webp`);
+    // The admin's rules (scripts/prepare-image.ts): WebP 480 px + JPEG 1024 px for the feeds.
+    const prepared = await prepareImage(new Uint8Array(await full.arrayBuffer()), product.slug, { feed: true });
     const form = new FormData();
-    form.set("file", full);
+    form.set("file", prepared.display);
     const upload = ok(`upload ${product.slug}`, await call("/api/admin/upload-r2", { method: "POST", body: form }));
     const imageUrl = upload?.data?.url ?? upload?.url;
     const fileName = upload?.data?.fileName ?? upload?.fileName;
-    const card = image(product.slug, "-sm");
-    if (fileName && card) {
-      const cardForm = new FormData();
-      cardForm.set("file", card);
-      cardForm.set("derivative_of", fileName);
-      const cardResult = await call("/api/admin/upload-r2", { method: "POST", body: cardForm });
-      if (cardResult.status >= 400) console.warn(`[seed:demo-live] card copy for ${product.slug} → HTTP ${cardResult.status}`);
+    if (fileName && prepared.feed) {
+      const feedForm = new FormData();
+      feedForm.set("file", prepared.feed);
+      feedForm.set("variant", "feed");
+      feedForm.set("variant_of", fileName);
+      const feedResult = await call("/api/admin/upload-r2", { method: "POST", body: feedForm });
+      if (feedResult.status >= 400) console.warn(`[seed:demo-live] catalog copy for ${product.slug} → HTTP ${feedResult.status}`);
     }
     ok(
       `create ${product.slug}`,

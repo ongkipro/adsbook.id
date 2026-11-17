@@ -24,9 +24,9 @@
  *                                 in Preview Mode: no subscription, no orders.
  *   --orders=12                   how many checkout orders to place
  *   --store-name="Toko Dummy Lokal"  the store name given at signup
- *   --images=<dir>                product photos: <dir>/<slug>.webp|.jpg|.png, and an
- *                                 optional <dir>/<slug>-sm.webp card copy
- *                                 replaces the flat colour for that product.
+ *   --images=<dir>                product photos: <dir>/<slug>.webp|.jpg|.png
+ *                                 replace the flat colour for that product;
+ *                                 they go through the admin's image rules.
  *                                 Keep the folder outside the repository —
  *                                 another merchant's photos must never be
  *                                 committed here (AGENTS.md §3, Content).
@@ -36,6 +36,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
+import { prepareImage } from "./prepare-image.ts";
 
 const argValue = (name: string) =>
   process.argv.slice(2).find((arg) => arg.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -162,11 +163,6 @@ function productImage(slug: string, color: [number, number, number]) {
   return new File([solidPng(color)], `${slug}.png`, { type: "image/png" });
 }
 
-/** `<dir>/<slug>-sm.webp`, the 480px card copy; null when the folder has none. */
-function productCard(slug: string) {
-  const path = `${imageDir!.replace(/\/$/, "")}/${slug}-sm.webp`;
-  return existsSync(path) ? new File([readFileSync(path)], `${slug}-sm.webp`, { type: "image/webp" }) : null;
-}
 
 // ── Invented catalogue ──────────────────────────────────────────────────────
 const PRODUCTS = [
@@ -376,20 +372,21 @@ async function products() {
       console.log(`[dev:seed] product ${product.slug} exists — skipping`);
       continue;
     }
+    // Through the same rules as the admin (scripts/prepare-image.ts): WebP 480 px + JPEG 1024 px for the feeds.
+    const source = productImage(product.slug, product.color);
+    const prepared = await prepareImage(new Uint8Array(await source.arrayBuffer()), product.slug, { feed: true });
     const form = new FormData();
-    form.set("file", productImage(product.slug, product.color));
+    form.set("file", prepared.display);
     const upload = ok(`upload ${product.slug}`, await call("/api/admin/upload-r2", { method: "POST", body: form }));
     const imageUrl = upload?.data?.url ?? upload?.url;
-    // The card-sized sibling, as the admin form uploads it. Optional: a missing
-    // `-sm` falls back to the full image, so a miss is reported, not fatal.
     const fileName = upload?.data?.fileName ?? upload?.fileName;
-    const cardFile = imageDir ? productCard(product.slug) : null;
-    if (fileName && cardFile) {
-      const cardForm = new FormData();
-      cardForm.set("file", cardFile);
-      cardForm.set("derivative_of", fileName);
-      const card = await call("/api/admin/upload-r2", { method: "POST", body: cardForm });
-      if (card.status >= 400) console.warn(`[dev:seed] card derivative for ${product.slug} → HTTP ${card.status}`);
+    if (fileName && prepared.feed) {
+      const feedForm = new FormData();
+      feedForm.set("file", prepared.feed);
+      feedForm.set("variant", "feed");
+      feedForm.set("variant_of", fileName);
+      const feed = await call("/api/admin/upload-r2", { method: "POST", body: feedForm });
+      if (feed.status >= 400) console.warn(`[dev:seed] catalog copy for ${product.slug} → HTTP ${feed.status}`);
     }
     ok(
       `create ${product.slug}`,
