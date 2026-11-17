@@ -75,7 +75,7 @@ const defaults = {
   // brand — /images/logo.webp belongs to whichever store supplied it.
   logo: DEFAULT_TENANT_LOGO,
   tagline: "",
-  themeColor: "#111111",
+  themeColor: "#2563EB",
   locale: "id-ID",
   storefrontTemplate: "compact-market" as StorefrontTemplateId,
   adminName: "Admin Toko",
@@ -125,7 +125,7 @@ function siteOrigin(value: string): string {
 /**
  * The shapes resolution accepts, exported so the settings editor rejects a
  * value here instead of storing one this module will silently fall back for.
- * An operator who saves `#fff` and is shown `#111111` has been told nothing
+ * An operator who saves `#fff` and is shown `#2563EB` has been told nothing
  * about why.
  */
 export const THEME_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;

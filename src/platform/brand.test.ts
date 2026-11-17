@@ -84,3 +84,15 @@ test("the inherited sample route and the QRIS tip panel are gone", () => {
   assert.equal(existsSync(join(ROOT, "public/images/login-bg-mobile.webp")), false);
   assert.doesNotMatch(readFileSync(join(SRC, "styles/admin.css"), "utf8"), /login-bg-mobile|qris/i);
 });
+
+test("the legacy open-book icon is replaced by the precision mark and wordmark everywhere", () => {
+  for (const asset of [
+    "public/images/adsbook-icon.svg",
+    "public/images/logo.svg",
+    "public/images/adsbook-wordmark.svg",
+    "public/images/adsbook-wordmark-on-dark.svg",
+  ]) {
+    assert.equal(existsSync(join(ROOT, asset)), true, `${asset} exists`);
+    assert.doesNotMatch(readFileSync(join(ROOT, asset), "utf8"), /M184 306/, `${asset} has no open-book path`);
+  }
+});

@@ -3,17 +3,16 @@
 [data-hybrid-form-root],
 [data-middle-form-root] {
   color: #1a1a1a;
-  /* Ink for text, orange for the one action (ADR-019, amended 2026-11-02):
+  /* Ink for text, brand blue for the one action (ADR-019, amended 2026-11-17):
      --sf-accent carries every selected / focused / primary control, a pale
-     tint of it marks what is filled or chosen, and empty fields are plain
-     white with a hairline. #c2410c is 5.18:1 under white text, #9a3412 on
-     hover 7.31:1; brighter oranges fail AA (#f97316 is 2.8:1) and red is
-     the checkout error colour, so it is not the call to action. A
+     tint of it marks what is chosen, and empty fields are plain white with a
+     hairline. #2563eb is 5.17:1 under white text, #1d4ed8 on hover 6.70:1
+     (and 6.16:1 over --sf-accent-soft #eff6ff, where #555555 is 6.85:1). A
      store re-brands by overriding these tokens (ADR-019), never a call site. */
-  --sf-accent: #c2410c;
-  --sf-accent-strong: #9a3412;
-  --sf-accent-soft: #fff7ed;
-  --sf-accent-ring: rgba(194, 65, 12, 0.28);
+  --sf-accent: #2563eb;
+  --sf-accent-strong: #1d4ed8;
+  --sf-accent-soft: #eff6ff;
+  --sf-accent-ring: rgba(37, 99, 235, 0.28);
   --sf-field: #ffffff;
   /* An empty input is white; a filled one takes --sf-accent-soft, so a buyer
      can still see at a glance which fields are waiting. */
@@ -1000,7 +999,7 @@
   border-radius: 0.65rem;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 8px 16px -4px rgba(44, 110, 203, 0.35);
+  box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.32);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1011,7 +1010,7 @@
   border-color: var(--sf-accent-strong);
   background: var(--sf-accent-strong) !important;
   color: #ffffff !important;
-  box-shadow: 0 10px 20px -4px rgba(44, 110, 203, 0.3);
+  box-shadow: 0 10px 20px -4px rgba(37, 99, 235, 0.28);
 }
 .submit-main:active {
   transform: scale(0.98);
@@ -1038,7 +1037,7 @@
 }
 .submit-main[data-state='ready'] {
   background: var(--sf-accent) !important;
-  box-shadow: 0 8px 16px -4px rgba(44, 110, 203, 0.35);
+  box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.32);
 }
 .submit-main[data-state='ready']:hover {
   /* This set the label to ink on an ink fill, which made it vanish on hover.

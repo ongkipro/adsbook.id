@@ -105,7 +105,7 @@ if (!productForSchema) {
 }
 // A store with no logo and a page with no image share the store's own icon,
 // never the page itself (an empty URL resolves to the page).
-const imageUrl = new URL(image || '/favicon-192.png', publicSiteUrl).toString();
+const imageUrl = new URL(image || Astro.locals.tenant.logo || '/favicon-192.png', publicSiteUrl).toString();
 const preloadImageUrls =
   typeof preloadImages === 'string' || (typeof preloadImages === 'object' && preloadImages !== null && !Array.isArray(preloadImages))
     ? [preloadImages as PreloadImageItem]
@@ -193,8 +193,13 @@ const preloadImageUrls =
           { name: 'publisher', content: Astro.locals.tenant.name },
         ],
         link: [
-          { rel: 'icon', href: '/favicon.png', type: 'image/png' },
-          { rel: 'apple-touch-icon', href: '/favicon-192.png' },
+          ...(Astro.locals.tenant.logo
+            ? [{ rel: 'icon', href: Astro.locals.tenant.logo }]
+            : [
+                { rel: 'icon', href: '/images/logo.svg', type: 'image/svg+xml' },
+                { rel: 'icon', href: '/favicon.png', type: 'image/png' },
+              ]),
+          { rel: 'apple-touch-icon', href: Astro.locals.tenant.logo || '/favicon-192.png' },
         ],
       }}
     />
