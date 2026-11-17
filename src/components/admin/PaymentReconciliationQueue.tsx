@@ -594,7 +594,7 @@ export default function PaymentReconciliationQueue() {
                 onClick={() => setViewStatus("pending")}
               >
                 Menunggu
-                {!loading && <Badge variant="secondary">{summary.pendingCount.toLocaleString("id-ID")}</Badge>}
+                <Badge variant="secondary" className="min-w-6 justify-center tabular-nums">{loading ? "·" : summary.pendingCount.toLocaleString("id-ID")}</Badge>
               </Button>
               <Button
                 type="button"

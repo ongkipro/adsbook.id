@@ -621,9 +621,12 @@ function BuyerArea({ order, className = "" }: { order: OrderItem; className?: st
 
 export function OrdersTable({
   initialOrders,
+  initialStatusCounts,
   initialQuery = "",
 }: {
   initialOrders?: OrderItem[];
+  /** The list API's `status_counts` for the same first request (server-rendered chips). */
+  initialStatusCounts?: Partial<Record<QuickStatus, number>>;
   // The page's own query string, from `Astro.url.search`. Filters start from
   // it rather than `window.location`, so the server-rendered first paint and
   // the hydrating client agree (a mismatch is React error #418).
@@ -668,12 +671,12 @@ export function OrdersTable({
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [bulkStatusTarget, setBulkStatusTarget] = useState("");
   const [statusCounts, setStatusCounts] = useState<StatusCounts>({
-    all: 0,
-    pending: 0,
-    processing: 0,
-    shipped: 0,
-    delivered: 0,
-    cancelled: 0,
+    all: Number(initialStatusCounts?.all) || 0,
+    pending: Number(initialStatusCounts?.pending) || 0,
+    processing: Number(initialStatusCounts?.processing) || 0,
+    shipped: Number(initialStatusCounts?.shipped) || 0,
+    delivered: Number(initialStatusCounts?.delivered) || 0,
+    cancelled: Number(initialStatusCounts?.cancelled) || 0,
   });
 
 
@@ -1222,7 +1225,7 @@ export function OrdersTable({
               )}
               {filter.label}
               <span
-                className={`min-w-5 rounded-full px-1.5 py-0.5 text-xs ${
+                className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs tabular-nums ${
                   active
                     ? "bg-white/20 text-white"
                     : "bg-slate-100 text-slate-600"

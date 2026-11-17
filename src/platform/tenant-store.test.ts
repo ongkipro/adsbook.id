@@ -360,6 +360,30 @@ test("openTenantDb reaches the tenant's store by its id with the APAC hint, and 
   await assert.rejects(openTenantDb({ PLATFORM_DB: db }, ref("t-a"), CHAIN.length), TenantUnavailableError);
 });
 
+test("a store being reset (a deploy) is retried once on a fresh stub; an overloaded or protocol failure is not", async () => {
+  const db = await platform("t-a");
+  const good = objectFor(storeAt(CHAIN.length)).stub;
+  const failing = (error: Error): TenantStoreStub => ({ ...good, schemaState: async () => { throw error; } });
+  const reset = Object.assign(new Error("Durable Object reset because its code was updated."), { retryable: true });
+  const overloaded = Object.assign(new Error("Durable Object is overloaded."), { retryable: true, overloaded: true });
+  const mismatch = new Error(`TENANT_STORE_PROTOCOL_MISMATCH: worker ${TENANT_STORE_PROTOCOL}, store ${TENANT_STORE_PROTOCOL + 1}`);
+  const namespace = (first: TenantStoreStub) => {
+    let calls = 0;
+    return { calls: () => calls, getByName: () => (calls++ === 0 ? first : good) };
+  };
+
+  const afterReset = namespace(failing(reset));
+  const tenantDb = await openTenantDb({ PLATFORM_DB: db, TENANT_STORE: afterReset }, ref("t-a"), CHAIN.length, { ready: new Map() });
+  assert.equal(afterReset.calls(), 2, "a fresh stub for the second try");
+  assert.equal(await tenantDb.prepare("SELECT COUNT(*) AS n FROM stores").first("n"), 0);
+
+  for (const error of [overloaded, mismatch]) {
+    const ns = namespace(failing(error));
+    await assert.rejects(openTenantDb({ PLATFORM_DB: db, TENANT_STORE: ns }, ref("t-a"), CHAIN.length, { ready: new Map() }), TenantUnavailableError);
+    assert.equal(ns.calls(), 1, `${error.message} is not retried`);
+  }
+});
+
 // ── The adapter against the real code (SPIKE-1 items 2 and 5, kept as tests) ──
 
 test("the full chain replays to the schema the D1 test doubles build", () => {

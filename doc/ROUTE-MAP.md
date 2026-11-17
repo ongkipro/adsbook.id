@@ -170,7 +170,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/docs` | GET | admin session | owner, admin | `src/pages/admin/docs/index.astro` | — | — | — | — |
 | `/admin/docs/[chapter]` | GET | admin session | owner, admin | `src/pages/admin/docs/[chapter].astro` | — | — | — | — |
 | `/admin/expeditions` | GET | admin session | owner, admin | `src/pages/admin/expeditions.astro` | — | — | — | — |
-| `/admin/landing-pages` | GET | admin session | owner, admin, advertiser | `src/pages/admin/landing-pages/index.astro` | — | — | — | — |
+| `/admin/landing-pages` | GET | admin session | owner, admin, advertiser | `src/pages/admin/landing-pages/index.astro` | `landing-pages` | `landing_pages` `landing_sections` `products` | — | `lib/landing-pages.test.ts` `lib/system-precision.test.ts` |
 | `/admin/landing-pages/[id]/edit` | GET | admin session | owner, admin, advertiser | `src/pages/admin/landing-pages/[id]/edit.astro` | — | — | — | — |
 | `/admin/landing-pages/new` | GET | admin session | owner, admin, advertiser | `src/pages/admin/landing-pages/new.astro` | — | — | — | — |
 | `/admin/orders` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/index.astro` | `admin-orders-initial` | — | — | `lib/admin-orders-initial.test.ts` |
@@ -185,7 +185,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/settings/access` | GET | admin session | owner | `src/pages/admin/settings/access.astro` | — | — | — | — |
 | `/admin/settings/crm` | GET | admin session | owner, admin | `src/pages/admin/settings/crm.astro` | — | — | — | — |
 | `/admin/settings/developer` | GET | admin session | owner, admin | `src/pages/admin/settings/developer.astro` | — | — | — | — |
-| `/admin/settings/domains` | GET | admin session | owner, admin | `src/pages/admin/settings/domains.astro` | `platform/hostnames` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/settings/domains` | GET | admin session | owner, admin | `src/pages/admin/settings/domains.astro` | `env` `platform/hostnames` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/settings/plugins` | GET | admin session | owner, admin | `src/pages/admin/settings/plugins/index.astro` | — | — | — | — |
 | `/admin/settings/plugins/kelola` | GET | admin session | owner, admin | `src/pages/admin/settings/plugins/kelola.astro` | `env` `tenant-database` | — | — | `lib/env.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/settings/privacy` | GET | admin session | owner, admin | `src/pages/admin/settings/privacy.astro` | `platform/legal` `tenant-database` | `plugins` `stores` | — | `platform/legal.test.ts` `platform/two-tenants.test.ts` |
@@ -294,7 +294,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-183 modules under `src/lib` and `src/platform`; 9 that no test imports.
+184 modules under `src/lib` and `src/platform`; 9 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -339,7 +339,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `edge-cache` | 11 | — | — | 1 | `/assets/[...key]` |
 | `embed-markup` | 5 | — | — | 1 | `/embed/form` |
 | `embed-security` | 6 | — | — | 1 | `/api/admin/settings` |
-| `env` | 3 | — | — | 2 | `/assets/[...key]` `/media/[...key]` `/api/handoff` `/api/owner-recovery` `/api/form-config` `/api/webhooks/autolaris/[token]` `/admin/settings/plugins/kelola` `/api/admin/ads` `/api/admin/billing` `/api/admin/content` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/media` `/api/admin/orders/[id]` `/api/admin/plugins/kelola` `/api/admin/settings` `/api/admin/store-removal` `/api/admin/upload-r2` `/platform/signup` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/platform/[...section]` `/api/platform/health` `/api/platform/invoices/[id]/check` `/api/platform/login` `/api/platform/logout` `/api/platform/signup` `/api/platform/slug` `/api/platform/team` `/api/platform/team/[id]` `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` `/api/platform/webhooks/autolaris/[token]` |
+| `env` | 3 | — | — | 2 | `/assets/[...key]` `/media/[...key]` `/api/handoff` `/api/owner-recovery` `/api/form-config` `/api/webhooks/autolaris/[token]` `/admin/settings/domains` `/admin/settings/plugins/kelola` `/api/admin/ads` `/api/admin/billing` `/api/admin/content` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/media` `/api/admin/orders/[id]` `/api/admin/plugins/kelola` `/api/admin/settings` `/api/admin/store-removal` `/api/admin/upload-r2` `/platform/signup` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/platform/[...section]` `/api/platform/health` `/api/platform/invoices/[id]/check` `/api/platform/login` `/api/platform/logout` `/api/platform/signup` `/api/platform/slug` `/api/platform/team` `/api/platform/team/[id]` `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` `/api/platform/webhooks/autolaris/[token]` |
 | `excluded-area` | 1 | — | — | 1 | `/api/submit-middle-order` |
 | `form-config` | 7 | — | — | 1 | `/embed/form` `/full-form` `/hybrid-form` `/middle-form` `/api/form-config` |
 | `form-mode` | 8 | `stores` | — | 1 | `/produk/[slug]` `/geoipform` `/hybrid-form` `/api/form-config` `/api/geo-province` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/v1/storefront` `/api/admin/abandoned-orders` |
@@ -364,7 +364,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `install` | 6 | `admin_credentials` `courier_rules` `stores` `whatsapp_numbers` | — | 2 | — |
 | `json-ld` | 14 | — | — | 2 | `/produk/[slug]` `/[slug]` |
 | `json-script` | 1 | — | — | 1 | — |
-| `landing-pages` | 35 | `landing_pages` `landing_sections` `products` | — | 2 | `/produk/[slug]` `/sitemap` `/[slug]` `/landing-page` `/sitemap.xml` `/admin/ads/utm` `/api/admin/landing-pages` `/api/admin/landing-pages/[id]` |
+| `landing-pages` | 35 | `landing_pages` `landing_sections` `products` | — | 2 | `/produk/[slug]` `/sitemap` `/[slug]` `/landing-page` `/sitemap.xml` `/admin/ads/utm` `/admin/landing-pages` `/api/admin/landing-pages` `/api/admin/landing-pages/[id]` |
 | `legal-links` | 2 | — | — | 1 | — |
 | `llms-txt` | 2 | — | — | 1 | `/llms.txt` |
 | `location-search` | 19 | — | — | 2 | `/api/locations` `/api/v1/geo/districts` |
@@ -419,6 +419,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `shipping-queue` | 3 | — | — | 1 | `/api/admin/shipping` |
 | `shipping-quote` | 6 | `courier_rules` `product_variants` `products` `warehouses` | — | 3 | `/api/shipping-rates` `/api/submit-order` `/api/v1/checkout` `/api/v1/geo/shipping-rates` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` |
 | `shipping-status` | 2 | — | — | **none** | `/api/admin/orders` |
+| `sidebar-scroll` | 5 | — | — | 1 | — |
 | `sitemap` | 2 | — | — | 1 | `/sitemap.xml` |
 | `social-proof-visibility` | 2 | — | — | 1 | — |
 | `social-proof` | 3 | `orders` | — | 1 | `/produk/[slug]` `/[slug]` |
@@ -479,7 +480,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/store-core` | 20 | — | — | 3 | — |
 | `platform/tenant-alarm` | 7 | — | `tenant_health` `tenant_hosts` `tenants` | 1 | — |
 | `platform/tenant-db.conformance` | 1 | — | — | **none** | — |
-| `platform/tenant-db` | 13 | — | `migration_bookmarks` `tenant_events` `tenants` | 3 | — |
+| `platform/tenant-db` | 14 | — | `migration_bookmarks` `tenant_events` `tenants` | 3 | — |
 | `platform/tenant-maintenance` | 1 | — | — | 3 | — |
 | `platform/tenant-store` | 1 | `capi_event_outbox` | — | 1 | — |
 | `platform/trust-watch` | 4 | — | — | 1 | — |

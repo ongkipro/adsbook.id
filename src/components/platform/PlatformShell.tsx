@@ -63,7 +63,12 @@ export function PlatformShell({
     const media = window.matchMedia("(min-width: 768px)");
     const wide = window.matchMedia("(min-width: 1024px)");
     const updateViewport = () => setIsDesktop(media.matches);
-    const updateSidebar = () => setSidebarOpen(wide.matches);
+    // Remembered like the seller admin's, so the server renders the rail or the
+    // full menu this width needs and the sidebar does not resize after load.
+    const updateSidebar = () => {
+      setSidebarOpen(wide.matches);
+      document.cookie = `sidebar_state=${wide.matches}; path=/; max-age=604800; samesite=lax`;
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();

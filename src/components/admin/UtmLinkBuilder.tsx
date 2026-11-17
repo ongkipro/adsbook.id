@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ const pageTitle = (page: UtmLinkPage) => page.label.split(" · ")[0];
  * wide screens); the page picker is searchable because a catalogue grows.
  */
 export function UtmLinkBuilder({ pages }: { pages: UtmLinkPage[] }) {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => { setHydrated(true); }, []);
   const [page, setPage] = useState<UtmLinkPage | null>(null);
   const [source, setSource] = useState<string>(UTM_SOURCES[0].value);
   const [medium, setMedium] = useState<string>(UTM_SOURCES[0].medium);
@@ -76,7 +78,7 @@ export function UtmLinkBuilder({ pages }: { pages: UtmLinkPage[] }) {
           isItemEqualToValue={(item: UtmLinkPage, current: UtmLinkPage) => item.url === current.url}
           autoHighlight
         >
-          <ComboboxInput id="utm-page" className="w-full" placeholder="Cari landing page atau produk…" showClear={Boolean(page)} autoComplete="off" />
+          <ComboboxInput id="utm-page" disabled={!hydrated} className="w-full" placeholder="Cari landing page atau produk…" showClear={Boolean(page)} autoComplete="off" />
           <ComboboxContent>
             <ComboboxEmpty>Halaman tidak ditemukan.</ComboboxEmpty>
             <ComboboxList>
@@ -121,14 +123,14 @@ export function UtmLinkBuilder({ pages }: { pages: UtmLinkPage[] }) {
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
           <label htmlFor="utm-campaign" className={labelClass}>Nama kampanye</label>
-          <Input id="utm-campaign" value={campaign} onChange={(event) => setCampaign(event.target.value)} placeholder="Promo Oktober Kopi" autoComplete="off" aria-describedby="utm-campaign-hint" />
+          <Input id="utm-campaign" disabled={!hydrated} value={campaign} onChange={(event) => setCampaign(event.target.value)} placeholder="Promo Oktober Kopi" autoComplete="off" aria-describedby="utm-campaign-hint" />
           <p id="utm-campaign-hint" className={cn(hintClass, "truncate")}>Tercatat sebagai <code>{normalizeUtmTag(campaign) || "…"}</code></p>
         </div>
       </div>
 
       <div className="flex min-w-0 flex-col gap-1.5">
         <label htmlFor="utm-content" className={labelClass}>Konten iklan <span className="font-normal text-muted-foreground">(opsional)</span></label>
-        <Input id="utm-content" value={content} onChange={(event) => setContent(event.target.value)} placeholder="Video A" autoComplete="off" aria-describedby="utm-content-hint" />
+        <Input id="utm-content" disabled={!hydrated} value={content} onChange={(event) => setContent(event.target.value)} placeholder="Video A" autoComplete="off" aria-describedby="utm-content-hint" />
         <p id="utm-content-hint" className={hintClass}>Untuk membedakan materi iklan di Analitik › UTM.</p>
       </div>
     </section>

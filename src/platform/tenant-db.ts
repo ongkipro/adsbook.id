@@ -140,8 +140,8 @@ export interface TenantStoreStub extends TenantStoreRpc {
 export class TenantUnavailableError extends Error {
   readonly reason: "recovery" | "bookmark" | "migration" | "history" | "protocol";
 
-  constructor(reason: TenantUnavailableError["reason"], detail: string) {
-    super(`TENANT_UNAVAILABLE (${reason}): ${detail}`);
+  constructor(reason: TenantUnavailableError["reason"], detail: string, cause?: unknown) {
+    super(`TENANT_UNAVAILABLE (${reason}): ${detail}`, cause === undefined ? undefined : { cause });
     this.name = "TenantUnavailableError";
     this.reason = reason;
   }
@@ -244,8 +244,9 @@ async function migrateTenant(
   try {
     first = await stub.schemaState(TENANT_STORE_PROTOCOL);
   } catch (error) {
-    // Most often an object still on the previous release's protocol (§4.1 item 8).
-    throw new TenantUnavailableError("protocol", (error as Error).message);
+    // Most often an object still on the previous release's protocol (§4.1 item 8),
+    // or an object being reset (a deploy): `openTenantDb` retries the latter once.
+    throw new TenantUnavailableError("protocol", (error as Error).message, error);
   }
   const state = await acceptState(platformDb, tenantId, first, target, now);
   if (state.applied >= target) return state;
@@ -291,6 +292,19 @@ async function migrateTenant(
     .bind(migrated.applied, tenantId, migrated.applied)
     .run();
   return migrated;
+}
+
+/**
+ * Only the first, read-only `schemaState` call is retried: it carries the
+ * runtime's error as its cause. `.retryable` is the runtime's own mark for a
+ * transient failure; `.overloaded` must never be retried (it adds load).
+ * https://developers.cloudflare.com/durable-objects/best-practices/error-handling/
+ */
+export function transientStoreFailure(error: unknown): boolean {
+  if (!(error instanceof TenantUnavailableError) || error.reason !== "protocol") return false;
+  const cause = error.cause as { retryable?: unknown; overloaded?: unknown; message?: unknown } | undefined;
+  if (!cause || cause.overloaded === true) return false;
+  return cause.retryable === true || /reset because its code was updated|Network connection lost|storage caused object to be reset/i.test(String(cause.message ?? ""));
 }
 
 /**
@@ -400,8 +414,19 @@ export async function openTenantDb(
     throw new TenantUnavailableError("protocol", "PLATFORM_DB or TENANT_STORE is not bound");
   }
   // The stub's RPC methods return the structured clone of the store's results.
-  const stub = namespace.getByName(tenant.tenantId, { locationHint: "apac-se" }) as TenantStoreStub;
-  await ensureTenantSchema(platformDb, stub, tenant, target, options);
+  const open = () => namespace.getByName(tenant.tenantId, { locationHint: "apac-se" }) as TenantStoreStub;
+  let stub = open();
+  try {
+    await ensureTenantSchema(platformDb, stub, tenant, target, options);
+  } catch (error) {
+    // A store being reset (a deploy restarts every object) fails its first,
+    // read-only call; the runtime does not retry a call that already reached
+    // the object. One more try on a fresh stub — a failed call can leave the
+    // old one broken — instead of a "Layanan sedang tidak tersedia" page.
+    if (!transientStoreFailure(error)) throw error;
+    stub = open();
+    await ensureTenantSchema(platformDb, stub, tenant, target, options);
+  }
   // ADR-040: the handle carries this tenant's credential cipher.
   return bindCredentials(createTenantDb(stub), tenant.tenantId, env as Record<string, unknown>);
 }

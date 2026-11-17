@@ -22,6 +22,7 @@ import {
   type AdminRole,
 } from "./admin-navigation";
 import { CMS_VERSION } from "@/lib/version";
+import { SIDEBAR_SCROLL_RESTORE } from "@/lib/sidebar-scroll";
 
 
 export function AppSidebar({
@@ -184,6 +185,8 @@ export function AppSidebar({
           </SidebarGroup>
         ))}
       </SidebarContent>
+      {/* Before the first paint: the menu stays where the operator left it (src/lib/sidebar-scroll.ts). */}
+      <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCROLL_RESTORE }} />
 
       {/* The product card: what this admin is, its docs and what changed.
           Keluar lives in the account menu in the top bar. It floats over the

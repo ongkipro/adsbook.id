@@ -13,6 +13,7 @@ import { ADMIN_ACCENT } from "../admin/admin-navigation";
 import { CMS_VERSION } from "@/lib/version";
 import type { PlatformRole } from "../../platform/admin/session";
 import { getVisiblePlatformGroups, type PlatformMenu } from "./platform-navigation";
+import { SIDEBAR_SCROLL_RESTORE } from "@/lib/sidebar-scroll";
 
 /**
  * The console's sidebar: the seller admin's AppSidebar look (same primitives,
@@ -70,6 +71,8 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
           </SidebarGroup>
         ))}
       </SidebarContent>
+      {/* Before the first paint: the menu stays where the operator left it (src/lib/sidebar-scroll.ts). */}
+      <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCROLL_RESTORE }} />
 
       <SidebarFooter className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-2 *:pointer-events-auto">
         <div className="flex items-center gap-2.5 rounded-xl border border-white/70 bg-white/55 px-2.5 py-2 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-md backdrop-saturate-150 group-data-[collapsible=icon]:hidden">

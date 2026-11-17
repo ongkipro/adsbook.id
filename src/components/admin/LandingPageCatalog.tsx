@@ -71,9 +71,12 @@ function LandingThumb({ src, title }: { src?: string | null; title: string }) {
   );
 }
 
-export default function LandingPageCatalog() {
-  const [pages, setPages] = useState<LandingPageRow[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function LandingPageCatalog({ initialPages }: { initialPages?: LandingPageRow[] } = {}) {
+  // Server-rendered first list: the catalogue does not open on a spinner
+  // that the list (or its empty state) then replaces.
+  const [pages, setPages] = useState<LandingPageRow[]>(initialPages ?? []);
+  const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(!initialPages);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft" | "product_page">("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | "native" | "static" | "manual" | "ai" | "injected">("all");
@@ -88,7 +91,8 @@ export default function LandingPageCatalog() {
   );
 
   useEffect(() => {
-    fetchPages();
+    setHydrated(true);
+    if (!initialPages) fetchPages();
   }, []);
 
   async function fetchPages() {
@@ -312,7 +316,7 @@ export default function LandingPageCatalog() {
       <div className="flex flex-col gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 w-full">
           {/* Search Input */}
-          <SearchInput className="w-full sm:w-80" placeholder="Cari judul, slug, atau produk" aria-label="Cari landing page" value={search} onValueChange={setSearch} />
+          <SearchInput disabled={!hydrated} className="w-full sm:w-80" placeholder="Cari judul, slug, atau produk" aria-label="Cari landing page" value={search} onValueChange={setSearch} />
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">

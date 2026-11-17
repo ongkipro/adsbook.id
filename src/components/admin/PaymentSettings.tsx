@@ -175,24 +175,38 @@ function FeeChoice({
   );
 }
 
-export default function PaymentSettings({ channels }: { channels: PaymentChannel[] }) {
-  const [loading, setLoading] = useState(true);
+export type PaymentSettingsInitial = {
+  codEnabled: boolean;
+  autolarisEnabled: boolean;
+  apiReady: boolean;
+  apiMasked: string;
+  disabledChannels: string[];
+  paymentFeeBearer: FeeBearer;
+  codFeeBearer: FeeBearer;
+  manualActiveCount: number;
+};
+
+export default function PaymentSettings({ channels, initial }: { channels: PaymentChannel[]; initial?: PaymentSettingsInitial }) {
+  // Server-rendered first state: switches start at their real positions instead
+  // of sliding from off to on after the page paints.
+  const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(!initial);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState<Notice>(null);
-  const [codEnabled, setCodEnabled] = useState(false);
-  const [autolarisEnabled, setAutolarisEnabled] = useState(false);
-  const [apiReady, setApiReady] = useState(false);
-  const [apiMasked, setApiMasked] = useState("Belum dikonfigurasi");
-  const [disabledChannels, setDisabledChannels] = useState<string[]>([]);
-  const [paymentFeeBearer, setPaymentFeeBearer] = useState<FeeBearer>("buyer");
-  const [codFeeBearer, setCodFeeBearer] = useState<FeeBearer>("buyer");
+  const [codEnabled, setCodEnabled] = useState(initial?.codEnabled ?? false);
+  const [autolarisEnabled, setAutolarisEnabled] = useState(initial?.autolarisEnabled ?? false);
+  const [apiReady, setApiReady] = useState(initial?.apiReady ?? false);
+  const [apiMasked, setApiMasked] = useState(initial?.apiMasked ?? "Belum dikonfigurasi");
+  const [disabledChannels, setDisabledChannels] = useState<string[]>(initial?.disabledChannels ?? []);
+  const [paymentFeeBearer, setPaymentFeeBearer] = useState<FeeBearer>(initial?.paymentFeeBearer ?? "buyer");
+  const [codFeeBearer, setCodFeeBearer] = useState<FeeBearer>(initial?.codFeeBearer ?? "buyer");
   const [savedFee, setSavedFee] = useState<{ payment: FeeBearer; cod: FeeBearer }>({
-    payment: "buyer",
-    cod: "buyer",
+    payment: initial?.paymentFeeBearer ?? "buyer",
+    cod: initial?.codFeeBearer ?? "buyer",
   });
-  const [manualActiveCount, setManualActiveCount] = useState(0);
-  const [credentialsOpen, setCredentialsOpen] = useState(true);
+  const [manualActiveCount, setManualActiveCount] = useState(initial?.manualActiveCount ?? 0);
+  const [credentialsOpen, setCredentialsOpen] = useState(initial ? !initial.apiReady : true);
   const [banksOpen, setBanksOpen] = useState(false);
   const channelSaveSequence = useRef(0);
 
@@ -250,7 +264,8 @@ export default function PaymentSettings({ channels }: { channels: PaymentChannel
   };
 
   useEffect(() => {
-    void load();
+    setHydrated(true);
+    if (!initial) void load();
   }, []);
 
   const usableChannels = useMemo(() => channels.filter((channel) => !channel.lockReason), [channels]);
@@ -259,7 +274,7 @@ export default function PaymentSettings({ channels }: { channels: PaymentChannel
     : 0;
   const providerCount = Number(codEnabled) + Number(autolarisEnabled && apiReady);
   const feeDirty = paymentFeeBearer !== savedFee.payment || codFeeBearer !== savedFee.cod;
-  const mutationsDisabled = loading || Boolean(loadError) || Boolean(busy);
+  const mutationsDisabled = !hydrated || loading || Boolean(loadError) || Boolean(busy);
 
   const saveMaster = async (kind: "cod" | "autolaris", nextValue: boolean) => {
     const previousCod = codEnabled;

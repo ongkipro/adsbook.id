@@ -2,8 +2,19 @@
 import LandingPageCatalog from '../../../components/admin/LandingPageCatalog';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import { listLandingPages } from '../../../lib/landing-pages';
 
 export const prerender = false;
+
+// The list GET /api/admin/landing-pages answers, drawn on the server so the
+// catalogue does not open on a spinner. JSON round trip: the island receives
+// exactly what the API would send. A failure leaves the island to fetch it.
+let initialPages: unknown[] | undefined;
+try {
+  initialPages = JSON.parse(JSON.stringify(await listLandingPages(Astro.locals)));
+} catch (error) {
+  console.error('admin-landing-pages-initial-load', error);
+}
 ---
 
 <AdminLayout title="Landing page" activeMenu="products">
@@ -12,6 +23,6 @@ export const prerender = false;
       title="Landing page"
       description="Builder native landing page untuk marketing dan promosi."
     />
-    <LandingPageCatalog client:load />
+    <LandingPageCatalog initialPages={initialPages as never} client:load />
   </div>
 </AdminLayout>

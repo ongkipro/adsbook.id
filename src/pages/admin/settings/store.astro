@@ -15,9 +15,9 @@ const isOwner = Astro.locals.admin?.role === 'owner';
       backHref="/admin/settings"
       backLabel="Pengaturan"
     />
-    <div id="storeLoading" class="h-60 animate-pulse rounded-xl bg-slate-100" role="status" aria-live="polite" aria-busy="true" aria-atomic="true"><span class="sr-only">Memuat profil store.</span></div>
+    <div id="storeLoading" class="sr-only" role="status" aria-live="polite" aria-busy="true" aria-atomic="true"><span class="sr-only">Memuat profil store.</span></div>
     <div id="storeError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
-    <form id="storeForm" class="hidden rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
+    <form id="storeForm" inert data-pending class="rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
       <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2 md:p-6">
         <label class="block">
           <span class="mb-1.5 block text-xs font-semibold text-slate-700">Nama store</span>
@@ -107,7 +107,7 @@ const isOwner = Astro.locals.admin?.role === 'owner';
         <button id="saveStore" type="submit" class="btn-blue w-full sm:w-auto">Simpan profil store</button>
       </div>
     </form>
-    <form id="templateDefinitionForm" class="hidden rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
+    <form id="templateDefinitionForm" inert data-pending class="rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
       <div class="p-5 md:p-6">
         <h2 class="text-base font-semibold text-slate-950">Tambah template storefront</h2>
         <p class="mt-1 text-xs leading-5 text-slate-500">Susun template dari bagian yang tersedia. Konfigurasi tersimpan tidak dapat menjalankan HTML atau JavaScript.</p>
@@ -142,7 +142,7 @@ const isOwner = Astro.locals.admin?.role === 'owner';
         <button id="saveTemplateDefinition" type="submit" class="btn-blue w-full sm:w-auto">Tambah template</button>
       </div>
     </form>
-    <form id="embedOriginsForm" class="hidden rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
+    <form id="embedOriginsForm" inert data-pending class="rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
       <div class="p-5 md:p-6">
         <h2 class="text-base font-semibold text-slate-950">Domain untuk embed checkout</h2>
         <p class="mt-1 text-xs leading-5 text-slate-500">Tentukan situs eksternal yang boleh menampilkan checkout toko ini di dalam iframe.</p>
@@ -280,7 +280,8 @@ const isOwner = Astro.locals.admin?.role === 'owner';
       if (adminName) adminName.value = data.admin_name || '';
       populateTemplateOptions(data.storefront_templates, data.storefront_template || 'compact-market');
       if (embedOrigins) embedOrigins.value = Array.isArray(data.embed_allowed_origins) ? data.embed_allowed_origins.join('\n') : '';
-      templateDefinitionForm?.classList.remove('hidden');
+      templateDefinitionForm?.removeAttribute('inert');
+      templateDefinitionForm?.removeAttribute('data-pending');
       runtimeTemplatesAvailable = data.storefront_templates_available !== false;
       if (data.storefront_templates_available === false) {
         if (saveTemplateDefinition) saveTemplateDefinition.disabled = true;
@@ -288,8 +289,10 @@ const isOwner = Astro.locals.admin?.role === 'owner';
       }
       loading?.setAttribute('aria-busy', 'false');
       loading?.classList.add('hidden');
-      form?.classList.remove('hidden');
-      embedForm?.classList.remove('hidden');
+      for (const ready of [form, embedForm]) {
+        ready?.removeAttribute('inert');
+        ready?.removeAttribute('data-pending');
+      }
     }).catch(error => {
       loading?.setAttribute('aria-busy', 'false');
       loading?.classList.add('hidden');
@@ -297,6 +300,8 @@ const isOwner = Astro.locals.admin?.role === 'owner';
       if (box) {
         box.textContent = error instanceof Error ? error.message : 'Gagal memuat profil store.';
         box.classList.remove('hidden');
+        // Nothing loaded: the inert, empty form is not shown under the error.
+        document.querySelectorAll('[data-pending]').forEach((el) => el.classList.add('hidden'));
       }
     });
 

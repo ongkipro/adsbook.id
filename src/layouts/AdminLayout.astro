@@ -1,5 +1,9 @@
 ---
 import '../styles/admin.css';
+import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
+import inter500 from '@fontsource/inter/files/inter-latin-500-normal.woff2?url';
+import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?url';
+import inter700 from '@fontsource/inter/files/inter-latin-700-normal.woff2?url';
 import { AdminShell } from '../components/admin/AdminShell.tsx';
 import { ADMIN_ACCENT } from '../components/admin/admin-navigation';
 import { BROWSER_UNSUPPORTED_MESSAGE, lacksFetchMetadata } from '../lib/auth';
@@ -52,6 +56,10 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
     <link rel="icon" type="image/svg+xml" href="/images/logo.svg" />
     <link rel="apple-touch-icon" href="/favicon-192.png" />
+    {/* The faces admin.css declares `optional`: preloaded so the first paint has them. */}
+    {[inter400, inter500, inter600, inter700].map((href) => (
+      <link rel="preload" as="font" type="font/woff2" href={href} crossorigin />
+    ))}
   </head>
   <body
     class="admin-shell flex h-dvh overflow-hidden bg-[#f6f7f9] text-slate-900 antialiased"
