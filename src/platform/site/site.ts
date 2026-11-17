@@ -29,26 +29,26 @@ export const SIGNUP_PAGE: SitePage = {
 export const SITE_PAGES: Record<"home" | "coba" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
   home: {
     path: "/",
-    title: "Toko COD Presisi: Satu Pesanan, Satu Purchase - adsbook.id",
-    description: "Toko online COD untuk seller iklan: Pixel dan Conversions API Meta dengan satu event_id, konversi offline Google Ads, dan 0% potongan per transaksi.",
+    title: "Toko COD Presisi untuk Iklan Semua Kanal - adsbook.id",
+    description: "Toko COD untuk seller iklan Meta, Google, TikTok, dan lainnya: setiap pesanan tercatat ke kanalnya, konversi 1:1 ke Meta dan Google, 0% potongan.",
   },
   // The long-form sales page for ad traffic (content/adsbook-id-sales-lp/features.md, 2026-11-17).
   coba: {
     path: "/coba",
-    title: "Toko COD Presisi untuk Seller Iklan Meta dan Google - adsbook.id",
-    description: "Satu pesanan, satu Purchase: sinyal iklan dari browser dan server, form COD cepat di HP, cek RTS sebelum kirim, dan uang langsung ke akun Anda.",
+    title: "Berhenti Menebak Hasil Iklan COD di Semua Kanal - adsbook.id",
+    description: "Satu pesanan, satu konversi: semua kanal iklan tercatat, sinyal 1:1 ke Meta dan Google, form COD cepat di HP, cek RTS, dan uang ke akun Anda.",
   },
   fitur: {
     path: "/fitur",
     nav: "Fitur",
-    title: "Fitur: Sinyal Iklan 1:1, Form COD, Kontrol RTS - adsbook.id",
-    description: "Enam pilar toko COD yang presisi: sinyal iklan 1:1, form cepat di HP, kontrol RTS, uang ke akun sendiri, mulai gratis, dan infrastruktur cepat.",
+    title: "Fitur: Semua Kanal Iklan, Form COD, Kontrol RTS - adsbook.id",
+    description: "Enam pilar toko COD yang presisi: semua kanal iklan tercatat, form cepat di HP, kontrol RTS, uang ke akun sendiri, mulai gratis, infrastruktur cepat.",
   },
   caraKerja: {
     path: "/cara-kerja",
     nav: "Cara kerja",
-    title: "Cara Kerja: dari Klik Iklan sampai Purchase - adsbook.id",
-    description: "Lima langkah satu pesanan di adsbook.id: iklan, form COD, pesanan masuk, kirim lewat kurir, lalu konversi tercatat dari server.",
+    title: "Cara Kerja: dari Klik Iklan sampai Konversi - adsbook.id",
+    description: "Lima langkah satu pesanan di adsbook.id, dari kanal iklan mana pun: iklan, form COD, pesanan masuk, kirim kurir, lalu konversi tercatat dari server.",
   },
   harga: {
     path: "/harga",

@@ -13,16 +13,16 @@ const { id = 'signal-title' } = Astro.props;
     <div class="signal-mark">
       <img class="signal-logo" src="/platform/brand/adsbook-id-wordmark.svg" data-animated="/platform/brand/adsbook-id-wordmark-animated.svg" alt="" width="530" height="85" loading="lazy" decoding="async" />
       <ol class="signal-legend" aria-label="Arti titik pada logo">
-        <li><span class="tick tick-v" aria-hidden="true"></span>Pixel dari browser pembeli</li>
-        <li><span class="tick tick-h" aria-hidden="true"></span>Conversions API dari server toko</li>
-        <li><span class="tick tick-dot" aria-hidden="true"></span>Satu event_id: dihitung satu Purchase</li>
+        <li><span class="tick tick-v" aria-hidden="true"></span>Sinyal dari browser pembeli</li>
+        <li><span class="tick tick-h" aria-hidden="true"></span>Sinyal dari server toko</li>
+        <li><span class="tick tick-dot" aria-hidden="true"></span>Satu ID pesanan: dihitung satu konversi</li>
       </ol>
     </div>
     <div class="signal-text">
       <h2 id={id}>Titik di logo kami adalah janji kami</h2>
       <p class="lead">Dua sinyal untuk pesanan yang sama bertemu di satu titik. Tidak dobel, tidak hilang.</p>
-      <p>Penjualan yang terhitung dua kali membuat iklan terlihat lebih untung dari kenyataannya. Penjualan yang tidak sampai membuat iklan yang menjual terlihat rugi. adsbook.id mengirim keduanya dengan event_id yang sama, jadi iklan belajar dari pesanan yang benar-benar terjadi.</p>
-      <a class="text-link" href="/fitur#sinyal">Cara kerja sinyal 1:1</a>
+      <p>Penjualan yang terhitung dua kali membuat iklan terlihat lebih untung dari kenyataannya. Penjualan yang tidak sampai membuat iklan yang menjual terlihat rugi. adsbook.id mencatat setiap pesanan ke kanal iklannya, dan mengirimnya ke Meta dan Google dari browser dan server dengan ID yang sama, jadi iklan belajar dari pesanan yang benar-benar terjadi.</p>
+      <a class="text-link" href="/fitur#sinyal">Cara kerja sinyal semua kanal</a>
     </div>
   </div>
 </section>
