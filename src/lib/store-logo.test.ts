@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { checkLogoDimensions, checkLogoFile, fitInSquare, isAllowedLogoUrl, LOGO_EDGE, LOGO_MAX_INPUT_BYTES } from "./store-logo.ts";
 
-test("a logo file is JPG, PNG or WebP up to 5 MB", () => {
+test("a logo file is JPG, PNG or WebP up to 2 MB", () => {
   for (const type of ["image/jpeg", "image/png", "image/webp"]) assert.equal(checkLogoFile({ type, size: 1000 }).ok, true, type);
   for (const type of ["image/gif", "image/svg+xml", "image/avif", "application/pdf", ""]) assert.equal(checkLogoFile({ type, size: 1000 }).ok, false, type);
   assert.equal(checkLogoFile({ type: "image/png", size: LOGO_MAX_INPUT_BYTES }).ok, true);
@@ -43,5 +43,6 @@ test("the store settings page uploads the logo through the shared rules and the 
   const api = readFileSync("src/pages/api/admin/settings.ts", "utf8");
   assert.match(api, /isAllowedLogoUrl\(/);
   const upload = readFileSync("src/pages/api/admin/upload-r2.ts", "utf8");
-  assert.match(upload, /purpose === "logo" && \(file\.type !== "image\/webp" \|\| file\.size > LOGO_MAX_OUTPUT_BYTES\)/);
+  assert.match(upload, /purpose === "logo"/);
+  assert.match(upload, /dimensions\.width !== LOGO_EDGE \|\| dimensions\.height !== LOGO_EDGE/);
 });

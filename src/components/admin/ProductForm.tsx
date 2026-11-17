@@ -9,11 +9,7 @@ import { DistrictCombobox, type DistrictOption } from "./DistrictCombobox";
 import { searchTaxonomy, suggestGoogleCategories, taxonomyLeaf, type TaxonomyRow } from "../../lib/google-taxonomy";
 import { catalogProductIdOrNull } from "../../lib/catalog-feed";
 import { formatKg } from "../../lib/weight";
-import {
-  MAX_ENCODED_BYTES,
-  convertImageToWebP,
-  uploadCardDerivative,
-} from "../../lib/client-image";
+import { processImageUpload, uploadProcessedImage } from "../../lib/client-image";
 type Variant = {
   key: string;
   id?: number | string;
@@ -235,46 +231,22 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
     setSlug(slugify(formatted));
   };
 
-  // The conversion rules live in src/lib/client-image.ts, shared with the
-  // content workbench so the two upload paths cannot disagree again. The old
-  // local copy passed any WebP under 2MB through untouched — which is how a
-  // high-quality 132KB hero reached R2 unrecompressed.
-  const MAX_IMAGE_SIZE = MAX_ENCODED_BYTES;
-
+  // One pipeline for every admin image (src/lib/image-rules.ts): max 2 MB in;
+  // out a WebP at most 480 px wide for the store and a JPEG at most 1024 px
+  // wide for the Meta and Google catalog feeds. Height follows the photo.
   const uploadImage = async (file: File) => {
-    if (file.size > MAX_IMAGE_SIZE) {
-      setStatusTone("error");
-      setStatus("Ukuran file maksimal 2 MB.");
-      return;
-    }
     setUploading(true);
     setStatusTone("idle");
-    setStatus("Mengonversi & mengunggah gambar WebP…");
+    setStatus("Mengolah foto (WebP 480 px + salinan katalog 1024 px)…");
     try {
-      const webpFile = await convertImageToWebP(file);
-      const formData = new FormData();
-      formData.set("file", webpFile);
-      const response = await fetch("/api/admin/upload-r2", {
-        method: "POST",
-        body: formData,
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.success || !result.url) {
-        throw new Error(result.error || "Gambar gagal diunggah.");
-      }
-      setImageUrl(String(result.url));
-
-      // The card-sized sibling. Its absence is not an error: the asset route
-      // falls back to the full image, so a failure here costs bytes on the
-      // catalogue grid rather than a broken tile, and must not lose an upload
-      // the operator already completed - but it is reported, not swallowed.
-      const cardMissing = !(await uploadCardDerivative(webpFile, String(result.fileName || "")));
-
-      setStatusTone(cardMissing ? "idle" : "success");
+      const stored = await uploadProcessedImage(await processImageUpload(file, { feed: true }));
+      setImageUrl(stored.url);
+      // The catalog copy's absence is not fatal: the feed then names the 480 px photo.
+      setStatusTone(stored.feedStored ? "success" : "idle");
       setStatus(
-        cardMissing
-          ? "Gambar berhasil diunggah, tetapi versi kartu katalog gagal dibuat. Katalog memakai gambar penuh sampai diunggah ulang."
-          : "Gambar berhasil diunggah dalam format WebP.",
+        stored.feedStored
+          ? "Foto tersimpan: WebP 480 px untuk toko, 1024 px untuk katalog iklan."
+          : "Foto tersimpan, tetapi salinan katalog 1024 px gagal dibuat. Katalog memakai foto 480 px sampai diunggah ulang.",
       );
     } catch (reason) {
       setStatusTone("error");
@@ -585,9 +557,9 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
                     id="product-image-hint"
                     className="mt-1 text-xs leading-5 text-slate-500"
                   >
-                    JPG, PNG, WebP, AVIF atau GIF, maksimal 2 MB. Otomatis dikonversi ke WebP.
-                    Disarankan persegi 1:1, minimal 800×800 px, latar polos — dipakai juga oleh
-                    feed Google dan Meta.
+                    JPG, PNG, atau WebP, maksimal 2 MB. Sistem mengubahnya otomatis menjadi WebP
+                    lebar 480 px untuk toko (tinggi mengikuti foto) dan salinan 1024 px untuk
+                    katalog Meta dan Google. Disarankan persegi 1:1, minimal 1024 × 1024 px, latar polos.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
@@ -618,7 +590,7 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
                     aria-labelledby="product-image-label"
                     aria-describedby="product-image-hint"
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                    accept="image/jpeg,image/png,image/webp"
                     disabled={uploading}
                     onChange={(event) => {
                       const file = event.target.files?.[0];

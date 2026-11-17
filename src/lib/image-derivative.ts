@@ -11,6 +11,11 @@ import { CARD_DERIVATIVES } from '../data/card-derivatives.ts';
  * absent, so calling this on an image that has none is safe — it costs the old
  * number of bytes rather than breaking the tile.
  */
+// lazy: since 2026-11-18 every upload is already 480 px wide (image-rules.ts),
+// so new uploads store no `-sm` twin and a card's `-sm` request falls back to
+// the 480 px original (one extra R2 lookup, 10-minute stand-in cache). Older
+// uploads keep their twins. Upgrade path: drop the swap for uploads dated
+// 2026-11-18 or later once their share of traffic makes the lookup matter.
 export function cardImageSrc(
   url: string,
   derivatives: ReadonlySet<string> = CARD_DERIVATIVES,

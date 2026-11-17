@@ -2,7 +2,8 @@
  * A store's logo (Pengaturan › Toko & CS, Paduka 2026-11-17): one square WebP.
  *
  * Rules, enforced in the browser before upload and re-checked by the server:
- * - in: JPG, PNG or WebP, at most 5 MB, shortest edge at least 256 px;
+ * - in: JPG, PNG or WebP, at most 2 MB (MAX_UPLOAD_BYTES, the same as every
+ *   upload), shortest edge at least 256 px;
  * - out: 512 × 512 WebP. A logo that is not square is never cropped (a wide
  *   wordmark would lose letters); it is scaled to fit and centred on a
  *   transparent square, so the result is always 1:1;
@@ -12,8 +13,10 @@
  * storefront header (32 px high), the tab and home-screen icon (192 px) and the
  * Organization logo in JSON-LD (Google asks for at least 112 × 112).
  */
+import { MAX_UPLOAD_BYTES } from "./image-rules.ts";
+
 export const LOGO_INPUT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const LOGO_MAX_INPUT_BYTES = 5 * 1024 * 1024;
+export const LOGO_MAX_INPUT_BYTES = MAX_UPLOAD_BYTES;
 export const LOGO_MIN_EDGE = 256;
 export const LOGO_EDGE = 512;
 export const LOGO_MAX_OUTPUT_BYTES = 200 * 1024;
@@ -27,7 +30,7 @@ export function checkLogoFile(file: { type: string; size: number }): LogoCheck {
     return { ok: false, error: "Logo harus berupa file JPG, PNG, atau WebP." };
   }
   if (file.size > LOGO_MAX_INPUT_BYTES) {
-    return { ok: false, error: "Ukuran file logo maksimal 5 MB." };
+    return { ok: false, error: "Ukuran file logo maksimal 2 MB." };
   }
   return { ok: true };
 }

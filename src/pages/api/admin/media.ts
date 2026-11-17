@@ -4,6 +4,7 @@ import { getRuntimeEnv } from "../../../lib/env";
 import { tenantR2 } from "../../../platform/keys.ts";
 import { checkPlanCap, recordUsage } from "../../../platform/plans.ts";
 import { buildStorefrontMediaKey } from "../../../lib/storefront-media";
+import { checkStoredVariant, IMAGE_VARIANTS, webpDimensions } from "../../../lib/image-rules.ts";
 
 export const prerender = false;
 
@@ -22,6 +23,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // validation (buildStorefrontMediaKey above) and before the object is stored.
     const platformDb = (getRuntimeEnv(locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database | undefined;
     const bytes = await file.arrayBuffer();
+    // The same rule as product photos: a WebP the admin made, ≤ 480 px wide.
+    const variantCheck = checkStoredVariant("display", file);
+    if (!variantCheck.ok) return jsonError(variantCheck.error, 422);
+    const dimensions = webpDimensions(new Uint8Array(bytes));
+    if (!dimensions) return jsonError("Format gambar harus WebP hasil konversi admin.", 422);
+    if (dimensions.width > IMAGE_VARIANTS.display.maxWidth) {
+      return jsonError(`Lebar gambar maksimal ${IMAGE_VARIANTS.display.maxWidth} px.`, 422);
+    }
     const cap = await checkPlanCap(platformDb, tenantId, "media", true);
     if (!cap.allowed) return jsonError(cap.error, 429);
     await bucket.put(key, bytes, {
