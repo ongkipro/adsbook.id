@@ -19,6 +19,7 @@ export const SIGNAL_TITLES: Record<HealthSignalId, string> = {
   "receiver-score": "Skor penerima (RTS) Mengantar",
   autolaris: "AutoLaris Create Order & verifikasi",
   "google-ads-outbox": "Antrean Google Ads offline",
+  "tiktok-outbox": "Antrean TikTok Events API",
   alerting: "Saluran peringatan",
   scheduler: "Tugas terjadwal (cron per jam)",
 };
@@ -86,6 +87,7 @@ export type HealthAction =
 
 const META: HealthAction = { kind: "link", href: "/admin/ads/meta", label: "Buka Meta Ads" };
 const GOOGLE: HealthAction = { kind: "link", href: "/admin/ads/google", label: "Buka Google Ads" };
+const TIKTOK: HealthAction = { kind: "link", href: "/admin/ads/tiktok", label: "Buka TikTok Ads" };
 const MENGANTAR_KEY: HealthAction = {
   kind: "link",
   href: "/admin/profile",
@@ -159,6 +161,15 @@ export const HEALTH_ACTIONS: Record<HealthSignalId, Record<string, HealthAction 
     "terminal-failures": GOOGLE,
     "stalled-with-terminal-failures": GOOGLE,
     "earlier-failures": GOOGLE,
+  },
+  "tiktok-outbox": {
+    unreadable: null,
+    empty: null,
+    draining: null,
+    stalled: TIKTOK,
+    "terminal-failures": TIKTOK,
+    "stalled-with-terminal-failures": TIKTOK,
+    "earlier-failures": TIKTOK,
   },
   alerting: {
     configured: null,

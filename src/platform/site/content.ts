@@ -36,11 +36,11 @@ export const STEPS: Step[] = [
     text: [
       "Arahkan iklan ke halaman produk atau landing page toko. Toko langsung aktif di alamat nama-toko.adsbook.my.id, atau di domain Anda sendiri.",
       // middleware.ts: click-id cookie, Max-Age 90 days.
-      "Click ID Meta dan Google serta UTM dari platform iklan mana pun (TikTok dan lainnya) disimpan 90 hari, jadi pesanan yang datang belakangan tetap tersambung ke campaign-nya.",
+      "Click ID Meta, Google, dan TikTok serta UTM dari platform iklan mana pun disimpan 90 hari, jadi pesanan yang datang belakangan tetap tersambung ke campaign-nya.",
     ],
     shot: SHOTS.product,
     buyer: "Mengklik iklan dan membuka halaman produk atau landing page Anda.",
-    seller: "Memasang link halaman di iklan (Link UTM untuk platform mana pun), lalu Pixel Meta dan tag Google di admin.",
+    seller: "Memasang link halaman di iklan (Link UTM untuk platform mana pun), lalu Pixel Meta, tag Google, dan TikTok Pixel di admin.",
   },
   {
     id: "form",
@@ -85,11 +85,11 @@ export const STEPS: Step[] = [
     text: [
       // ADR-036: every Purchase-qualifying order is sent from the server.
       "Setiap pesanan COD mengirim event Purchase dari server ke Conversions API, dengan event_id yang sama seperti Pixel di browser, jadi tidak terhitung ganda dan tidak hilang.",
-      "Offline conversion Google Ads dari pesanan yang benar-benar terjadi. Data pembeli di-hash SHA-256 sebelum dikirim, dan setiap pesanan tercatat ke platform asalnya di Analitik.",
+      "Offline conversion Google Ads dan CompletePayment ke TikTok Events API dari pesanan yang benar-benar terjadi. Data pembeli di-hash SHA-256 sebelum dikirim, dan setiap pesanan tercatat ke platform asalnya di Analitik.",
     ],
     shot: SHOTS.meta,
     buyer: "Tidak melihat apa-apa: semuanya terjadi di server.",
-    seller: "Melihat penjualan di Meta Ads Manager dan Google Ads, dan semua platform di Analitik: COD saat pesanan dibuat, QRIS dan VA saat lunas.",
+    seller: "Melihat penjualan di Meta Ads Manager, Google Ads, dan TikTok Ads Manager, dan semua platform di Analitik: COD saat pesanan dibuat, QRIS dan VA saat lunas.",
   },
 ];
 
@@ -108,7 +108,7 @@ export const PLANS = [
 export const PLAN_POINTS = [
   "1 toko di nama-toko.adsbook.my.id, plus 1 domain sendiri",
   "Semua platform iklan tercatat per source dan campaign: Meta, Google, TikTok, dan lainnya",
-  "Konversi 1:1 ke Meta (Pixel + Conversions API) dan Google Ads (tag + offline conversion)",
+  "Konversi 1:1 ke Meta (Pixel + Conversions API), Google Ads (tag + offline conversion), dan TikTok (Pixel + Events API)",
   "0% potongan per transaksi: uang pembeli langsung ke akun Anda",
   "Produk dan pesanan tanpa batas; 60 unggahan foto dan 20 draf AI per jam",
 ];
@@ -125,14 +125,14 @@ export type Faq = { q: string; a: string };
 
 export const FAQ_SHORT: Faq[] = [
   { q: "Bagaimana Hybrid Form menangani klik dari provinsi di luar area COD?", a: "Saat Hybrid Form aktif, pembeli di provinsi tempat COD tersedia mendapat form COD singkat. Pengunjung dari provinsi yang Anda kecualikan (bawaannya antara lain Papua, Maluku, dan NTT; daftarnya bisa Anda ubah) mendapat form lengkap non-COD dengan QRIS atau Virtual Account dan ongkir per kecamatan, dan COD ke provinsi itu juga ditolak di server. Dari area tersebut, event Purchase hanya terkirim untuk pesanan yang sudah lunas." },
-  { q: "Apa bedanya tracking 1:1 di sini dengan memasang Pixel atau CAPI biasa?", a: "Pixel di browser sering terhalang ad blocker, privasi iOS, atau pembeli yang langsung menutup halaman. CAPI tanpa event_id yang sama dengan Pixel bisa membuat satu pesanan terhitung dua konversi. Di adsbook.id, click ID disimpan 90 hari sebagai data first-party (tidak terhapus oleh link follow-up WhatsApp dari CS), setiap pesanan membawa 8 kunci pencocokan yang di-hash SHA-256, dan event dari browser serta server memakai satu ID pesanan ke Meta Ads dan Google Ads. Tidak perlu server GTM atau aplikasi tracker tambahan." },
+  { q: "Apa bedanya tracking 1:1 di sini dengan memasang Pixel atau CAPI biasa?", a: "Pixel di browser sering terhalang ad blocker, privasi iOS, atau pembeli yang langsung menutup halaman. CAPI tanpa event_id yang sama dengan Pixel bisa membuat satu pesanan terhitung dua konversi. Di adsbook.id, click ID disimpan 90 hari sebagai data first-party (tidak terhapus oleh link follow-up WhatsApp dari CS), setiap pesanan membawa 8 kunci pencocokan yang di-hash SHA-256, dan event dari browser serta server memakai satu ID pesanan ke Meta Ads, Google Ads, dan TikTok Ads. Tidak perlu server GTM atau aplikasi tracker tambahan." },
   { q: "Benarkah 0% potongan transaksi QRIS/VA dan tanpa kuota order bulanan?", a: "Benar. COD dicairkan oleh Mengantar, sedangkan QRIS dan Virtual Account oleh AutoLaris, langsung ke akun milik Anda sendiri. adsbook.id tidak memegang dana penjualan, tidak memotong persentase per transaksi, dan tidak membatasi jumlah order maupun produk." },
   { q: "Bisa menyiapkan dan review tampilan toko gratis sebelum bayar?", a: "Bisa, tanpa kartu, di Mode Preview. Setelah toko siap menerima pesanan dari iklan, aktifkan langganan mulai Rp149.000 per bulan atau Rp1.490.000 per tahun (bayar 10 bulan, gratis 2 bulan)." },
-  { q: "Apakah satu toko dapat domain sendiri, dan bagaimana tracking TikTok Ads?", a: "Setiap langganan mencakup satu toko dan satu domain sendiri dengan SSL otomatis. Untuk TikTok Ads dan platform iklan lain, buat link campaign di menu Link UTM agar setiap pesanan dan revenue tercatat per campaign di dashboard Analitik toko." },
+  { q: "Apakah satu toko dapat domain sendiri, dan bagaimana tracking TikTok Ads?", a: "Setiap langganan mencakup satu toko dan satu domain sendiri dengan SSL otomatis. Untuk TikTok Ads, isi Pixel ID dan Events API Access Token di admin: ttclid disimpan 90 hari, dan CompletePayment dikirim dari browser dan server dengan event_id yang sama, yaitu nomor pesanan. Untuk platform iklan lain, buat link campaign di menu Link UTM." },
 ];
 
 export const FAQ_MORE: Faq[] = [
-  { q: "Bagaimana ini membantu ROAS, dan amankah untuk akun iklan saya?", a: "Algoritma platform iklan mengoptimasi campaign dari konversi yang ia terima. Saat event yang bocor tertutup dan konversi ganda berhenti, budget tidak lagi mengalir ke campaign yang hanya tampak menjual, dan Anda bisa menaikkan budget campaign yang terbukti menghasilkan pesanan. Hasil ROAS tetap ditentukan produk, iklan, dan pasar Anda. Event dikirim ke Pixel dan akun iklan milik Anda sendiri, lewat API resmi Meta dan Google." },
+  { q: "Bagaimana ini membantu ROAS, dan amankah untuk akun iklan saya?", a: "Algoritma platform iklan mengoptimasi campaign dari konversi yang ia terima. Saat event yang bocor tertutup dan konversi ganda berhenti, budget tidak lagi mengalir ke campaign yang hanya tampak menjual, dan Anda bisa menaikkan budget campaign yang terbukti menghasilkan pesanan. Hasil ROAS tetap ditentukan produk, iklan, dan pasar Anda. Event dikirim ke Pixel dan akun iklan milik Anda sendiri, lewat API resmi Meta, Google, dan TikTok." },
   { q: "Apa saja yang perlu disiapkan?", a: "Satu produk dengan harga dan berat, gudang utama dengan alamat pickup, dan API key Mengantar. Sampai semua langkah wajib selesai, pembeli melihat halaman \"Toko belum siap\" dan belum bisa memesan." },
   { q: "Apa yang terjadi kalau langganan habis?", a: "Toko tetap jalan 48 jam setelah jatuh tempo. Setelah itu pesanan, iklan, dan AI dijeda, data toko tetap utuh, dan Anda tetap bisa masuk ke admin untuk memperpanjang; toko langsung aktif lagi begitu pembayaran masuk." },
   { q: "Bayar langganan pakai apa?", a: "QRIS atau Virtual Account BCA, Mandiri, BNI, BRI, dan Permata, langsung dari menu Langganan di admin toko." },
@@ -140,7 +140,7 @@ export const FAQ_MORE: Faq[] = [
   { q: "Apakah ada aplikasi yang harus dipasang?", a: "Tidak. Toko dan admin berjalan di browser, termasuk di HP." },
   { q: "Bisa dipakai bersama tim?", a: "Bisa. Tambahkan akun untuk admin, advertiser, dan customer service; tiap peran hanya melihat menu yang ia perlukan." },
   { q: "Kalau pembeli tidak membuka halaman terima kasih, apakah konversinya hilang?", a: "Tidak. Purchase dikirim dari server saat pesanan COD dibuat atau saat pembayaran lunas, jadi tidak bergantung pada halaman terima kasih." },
-  { q: "Saya beriklan di TikTok atau platform lain. Apakah tercatat?", a: "Ya. Buat link iklan dengan Link UTM di admin, lalu setiap pesanan tercatat per source dan campaign di Analitik, sama seperti Meta dan Google. Event konversi dari server saat ini dikirim ke Meta dan Google Ads." },
+  { q: "Saya beriklan di TikTok atau platform lain. Apakah tercatat?", a: "Ya. TikTok Ads punya halaman sendiri di admin: Pixel dan Events API mengirim ViewContent, AddToCart, InitiateCheckout, dan CompletePayment dengan event_id yang sama dari browser dan server. Platform lain tercatat lewat Link UTM per source dan campaign di Analitik. Event konversi dari server dikirim ke Meta, Google Ads, dan TikTok." },
   { q: "Bagaimana kalau saya ingin berhenti?", a: "Minta penghapusan toko dari admin. Data toko dihapus 30 hari setelah permintaan; selama itu Anda masih bisa membatalkannya." },
   { q: "Di mana data toko disimpan?", a: "Setiap toko punya database sendiri, diutamakan berada di Asia-Pasifik, dengan backup harian; pemrosesan dapat berlangsung di jaringan edge global penyedia infrastruktur kami. Nama penyedia dan rinciannya ada di Kebijakan Privasi." },
 ];
@@ -173,13 +173,13 @@ export const PILLARS: Pillar[] = [
     id: "sinyal",
     label: "Server tracking 1:1",
     title: "Data konversi yang utuh di Ads Manager, tanpa event bocor dan tanpa konversi ganda",
-    summary: "TikTok dan platform lain tercatat 90 hari di Analitik lewat UTM. Meta dan Google menerima satu event_id dari browser dan server.",
+    summary: "Meta, Google, dan TikTok menerima satu event_id dari browser dan server. Platform lain tercatat 90 hari di Analitik lewat UTM.",
     points: [
       // src/lib/click-ids.ts: a later UTM-only visit (a WhatsApp follow-up link) keeps the stored click id.
-      "First-party click ID 90 hari: Meta dan Google, plus UTM TikTok dan platform lain; link follow-up WhatsApp dari CS tidak menghapusnya",
+      "First-party click ID 90 hari: Meta, Google, dan TikTok (ttclid), plus UTM platform lain; link follow-up WhatsApp dari CS tidak menghapusnya",
       // src/lib/meta-identity.ts: ph (08 → 628), fn, ln, ct, st, zp, country, external_id.
       "8 data pembeli di-hash SHA-256 sebelum dikirim: nomor WhatsApp dinormalkan ke 628, nama, kota, provinsi, kode pos, negara, dan ID pengunjung",
-      "Deduplikasi 1:1: Meta Pixel dan Conversions API dengan event_id yang sama; Google Ads menerima conversion tag dan offline conversion dari pesanan nyata",
+      "Deduplikasi 1:1: Meta Pixel dan Conversions API, TikTok Pixel dan Events API, dengan event_id yang sama; Google Ads menerima conversion tag dan offline conversion dari pesanan nyata",
       "Dari server saat pesanan COD dibuat atau lunas, walau pembeli langsung menutup halaman; tanpa server GTM atau aplikasi tracker terpisah",
     ],
     shot: SHOTS.meta,

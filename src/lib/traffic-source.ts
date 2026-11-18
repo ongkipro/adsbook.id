@@ -1,4 +1,4 @@
-export type TrafficSourceType = 'meta' | 'google' | 'organic' | 'custom';
+export type TrafficSourceType = 'meta' | 'google' | 'tiktok' | 'organic' | 'custom';
 
 export type TrafficSourceInfo = {
   type: TrafficSourceType;
@@ -38,6 +38,7 @@ export function parseTrafficSource(rawClickIds?: string | null): TrafficSourceIn
   const fbclid = typeof parsed.fbclid === 'string' ? parsed.fbclid : undefined;
   const fbc = typeof parsed._fbc === 'string' ? parsed._fbc : undefined;
   const fbp = typeof parsed._fbp === 'string' ? parsed._fbp : undefined;
+  const ttclid = typeof parsed.ttclid === 'string' ? parsed.ttclid : undefined;
 
   const utmSource = typeof parsed.utm_source === 'string' ? parsed.utm_source.toLowerCase().trim() : undefined;
   const utmMedium = typeof parsed.utm_medium === 'string' ? parsed.utm_medium.trim() : undefined;
@@ -51,13 +52,21 @@ export function parseTrafficSource(rawClickIds?: string | null): TrafficSourceIn
     utm_campaign: utmCampaign,
   };
 
-  // 1. Meta Ads (fbclid, _fbc, _fbp, or utm_source contains meta/facebook/instagram/fb/ig)
-  const isMeta = Boolean(
-    fbclid ||
-      fbc ||
-      fbp ||
-      (utmSource && (utmSource.includes('meta') || utmSource.includes('facebook') || utmSource.includes('fb') || utmSource.includes('instagram') || utmSource.includes('ig'))),
+  // Precedence (tracking chapter 11 review): an explicit click id or a
+  // platform's own utm_source beats a passive browser cookie. `_fbp` is minted
+  // by MetaPixelBase on every first visit to a store with a Meta pixel, so on a
+  // store running Meta and TikTok (or Google) it rides along with a ttclid or
+  // gclid and used to turn that paid click into "Meta". It now decides only when
+  // nothing explicit says otherwise.
+  const utmMeta = Boolean(
+    utmSource && (utmSource.includes('meta') || utmSource.includes('facebook') || utmSource.includes('fb') || utmSource.includes('instagram') || utmSource.includes('ig')),
   );
+  const utmGoogle = Boolean(utmSource && (utmSource.includes('google') || utmSource.includes('gads') || utmSource.includes('cpc')));
+  const explicitGoogle = Boolean(gclid || gbraid || wbraid || utmGoogle);
+  const explicitTikTok = Boolean(ttclid || (utmSource && utmSource.includes('tiktok')));
+
+  // 1. Meta Ads (fbclid, _fbc, or a Meta utm_source; or `_fbp` alone)
+  const isMeta = Boolean(fbclid || fbc || utmMeta || (fbp && !explicitGoogle && !explicitTikTok));
 
   if (isMeta) {
     let label = 'Meta Ads';
@@ -77,12 +86,7 @@ export function parseTrafficSource(rawClickIds?: string | null): TrafficSourceIn
   }
 
   // 2. Google Ads (gclid, gbraid, wbraid, or utm_source contains google/gads/cpc)
-  const isGoogle = Boolean(
-    gclid ||
-      gbraid ||
-      wbraid ||
-      (utmSource && (utmSource.includes('google') || utmSource.includes('gads') || utmSource.includes('cpc'))),
-  );
+  const isGoogle = explicitGoogle;
 
   if (isGoogle) {
     return {
@@ -94,7 +98,19 @@ export function parseTrafficSource(rawClickIds?: string | null): TrafficSourceIn
     };
   }
 
-  // 3. Custom UTM Referral
+  // 3. TikTok Ads (ttclid, or utm_source contains tiktok): first-party since
+  //    tracking chapter 11 Phase 1 restored ttclid capture.
+  if (explicitTikTok) {
+    return {
+      type: 'tiktok',
+      label: 'TikTok Ads',
+      badgeClass: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200/70',
+      textClass: 'text-slate-800 font-semibold',
+      details,
+    };
+  }
+
+  // 4. Custom UTM Referral
   if (utmSource && utmSource !== 'organic' && utmSource !== 'direct') {
     const formattedSource = utmSource.charAt(0).toUpperCase() + utmSource.slice(1);
     return {
@@ -106,7 +122,7 @@ export function parseTrafficSource(rawClickIds?: string | null): TrafficSourceIn
     };
   }
 
-  // 4. Organic / Direct
+  // 5. Organic / Direct
   return {
     type: 'organic',
     label: 'Organic / Direct',

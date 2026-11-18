@@ -16,6 +16,14 @@ const CASES: Array<[string | null, AdChannel]> = [
   [serializeClickIds({ utm_source: "tiktok", utm_medium: "paid" }), "tiktok"],
   [serializeClickIds({ utm_source: "TikTok" }), "tiktok"],
   ['{"ttclid":"E.C.P.legacy"}', "tiktok"],
+  // Tracking chapter 11 review: an explicit click beats the passive _fbp a Meta
+  // pixel mints on every visit to a store running two or three platforms.
+  [serializeClickIds({ ttclid: "E.C.P.123", _fbp: "fb.1.1730000000000.123" }), "tiktok"],
+  [serializeClickIds({ gclid: "Cj0KCQ", _fbp: "fb.1.1730000000000.123" }), "google"],
+  [serializeClickIds({ utm_source: "tiktok", _fbp: "fb.1.1730000000000.123" }), "tiktok"],
+  [serializeClickIds({ utm_source: "whatsapp", _fbp: "fb.1.1730000000000.123" }), "meta"],
+  [serializeClickIds({ ttclid: "E.C.P.123", _ttp: "AbCdEfGhIjKlMnOpQrStUvWxYz0" }), "tiktok"],
+  [serializeClickIds({ _ttp: "AbCdEfGhIjKlMnOpQrStUvWxYz0" }), "direct"],
   [serializeClickIds({ utm_source: "snack", utm_medium: "CPM" }), "other_paid"],
   [serializeClickIds({ utm_source: "whatsapp", utm_medium: "broadcast" }), "organic"],
   [serializeClickIds({ utm_source: "newsletter" }), "organic"],

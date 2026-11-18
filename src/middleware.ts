@@ -104,8 +104,8 @@ function operatorNotice(context: APIContext, notice: Notice) {
 
 export const STOREFRONT_CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://connect.facebook.net",
-  "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.google.com https://www.google.co.id https://*.g.doubleclick.net https://ad.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://www.facebook.com https://connect.facebook.net",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://connect.facebook.net https://analytics.tiktok.com",
+  "connect-src 'self' https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.google.com https://www.google.co.id https://*.g.doubleclick.net https://ad.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://www.facebook.com https://connect.facebook.net https://analytics.tiktok.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
   "style-src 'self' 'unsafe-inline'",
@@ -290,7 +290,7 @@ export function createMiddleware(
     return Boolean(tenant && tenant.hostKind === 'subdomain' && tenant.primaryHost && tenant.primaryHost !== tenant.host);
   })();
 
-  // Persist ad attribution click ids (Google, Meta, UTMs) from landing/embed URL.
+  // Persist ad attribution click ids (Google, Meta, TikTok, UTMs) from landing/embed URL.
   // A function, because a page served from the edge cache needs it too: the
   // cookie is written from the request's URL, never from the cached HTML.
   const persistClickIds = (response: Response) => {
@@ -317,6 +317,13 @@ export function createMiddleware(
       response.headers.append(
         'Set-Cookie',
         `_fbc=${encodeURIComponent(clickIds._fbc)}; Path=/; Max-Age=${90 * 24 * 60 * 60};${sameSiteAttr}`,
+      );
+    }
+    // The embed widget carries the host page's `_ttp` the same way as `_fbp`.
+    if (clickIds._ttp) {
+      response.headers.append(
+        'Set-Cookie',
+        `_ttp=${encodeURIComponent(clickIds._ttp)}; Path=/; Max-Age=${365 * 24 * 60 * 60};${sameSiteAttr}`,
       );
     }
   };

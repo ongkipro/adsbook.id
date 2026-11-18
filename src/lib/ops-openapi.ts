@@ -227,7 +227,7 @@ export const opsOpenApiDocument = {
             type: "object",
             properties: {
               source_slug: nullableString,
-              traffic_source: { type: "string", enum: ["meta", "google", "organic", "custom"] },
+              traffic_source: { type: "string", enum: ["meta", "google", "tiktok", "organic", "custom"] },
               utm: {
                 type: "object",
                 properties: Object.fromEntries(

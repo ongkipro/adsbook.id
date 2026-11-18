@@ -182,6 +182,14 @@ test("health and schema failures map only to bounded redacted alert state", () =
         metrics: { pending: 0, failed: 2, overdue: 0 },
       },
       {
+        id: "tiktok-outbox",
+        state: "degraded",
+        reason: "terminal-failures",
+        lastAt: "2026-08-17T10:00:00.000Z",
+        ageMinutes: 120,
+        metrics: { pending: 0, failed: 1, overdue: 0 },
+      },
+      {
         id: "meta-purchase-coverage",
         state: "degraded",
         reason: "orders-without-purchase",
@@ -204,6 +212,8 @@ test("health and schema failures map only to bounded redacted alert state", () =
     { id: "capi-outbox", state: "firing", reason: "stalled" },
     // A-227: a stuck Google queue pages the operator, not only the panel.
     { id: "google-ads-outbox", state: "firing", reason: "terminal-failures" },
+    // Tracking chapter 11: the TikTok Events API queue pages the same way.
+    { id: "tiktok-outbox", state: "firing", reason: "terminal-failures" },
     // Audit 2026-11-10: an order that never became an event is in no queue.
     { id: "meta-purchase-coverage", state: "firing", reason: "orders-without-purchase" },
   ]);

@@ -3,7 +3,8 @@
  * Copied verbatim from `adsbook.id-docs/docs/product/legal-drafts/` (v0.1,
  * 2026-11-14; seller terms v0.2, 2026-11-16, for the seller zone adsbook.cc;
  * seller terms v0.3, 2026-11-16: paid subscription per store with a free Preview
- * Mode (ADR-041), seller zone adsbook.my.id;
+ * Mode (ADR-041), seller zone adsbook.my.id; store privacy v0.2, 2026-11-18:
+ * TikTok named when the store enables it, tracking chapter 11;
  * DRAFT pending the Q-4 legal review).
  *
  * A published version is immutable: sellers accepted exactly this text, and
@@ -38,6 +39,10 @@ export const LEGAL_TEXTS: Record<LegalDocId, Record<string, { date: string; text
       date: "2026-11-14",
       text: "# Template Kebijakan Privasi Toko\n\n> DRAFT v0.1 — 2026-11-14. Ditampilkan di `/kebijakan-privasi` setiap toko; Seller boleh\n> mengubah teks. Baris dalam `[jika ...]` muncul hanya bila penyedia itu aktif di toko.\n\n# Kebijakan Privasi {nama_toko}\n\n{nama_toko} (\"Kami\") memproses data Anda untuk melayani pesanan Anda. Toko ini berjalan di\nplatform adsbook.id, yang menyimpan data atas nama Kami.\n\n## Data yang Kami kumpulkan\n\nNama, nomor HP, alamat pengiriman, isi pesanan, dan data teknis (alamat IP, perangkat, ID klik\niklan) saat Anda memesan.\n\n## Untuk apa\n\n- memproses dan mengirim pesanan Anda;\n- menghubungi Anda terkait pesanan;\n- mencegah pesanan palsu;\n- [jika Meta aktif] mengukur iklan Kami di Meta (data identitas dikirim dalam bentuk hash);\n- [jika Google Ads aktif] mengukur iklan Kami di Google (data identitas dikirim dalam bentuk hash).\n\n## Dibagikan kepada\n\n- [jika Mengantar aktif] Mengantar dan kurirnya — nama, nomor HP dan alamat untuk pengiriman;\n- [jika AutoLaris aktif] AutoLaris — data pembayaran QRIS/VA;\n- [jika Kelola aktif] Kelola — nama, nomor HP, alamat dan isi pesanan untuk pengelolaan pelanggan (CRM) Kami;\n- adsbook.id dan Cloudflare — penyimpanan dan hosting; penyimpanan diutamakan di Asia-Pasifik, sementara pemrosesan dapat berlangsung di jaringan global Cloudflare.\n\n## Penyimpanan\n\nData pesanan disimpan selama diperlukan untuk layanan dan pembukuan Kami.\n\n## Hak Anda\n\nUntuk meminta salinan, perbaikan, atau penghapusan data Anda, hubungi Kami di\n{whatsapp_toko} atau {email_toko}.\n",
     },
+    "0.2": {
+      date: "2026-11-18",
+      text: "# Template Kebijakan Privasi Toko\n\n> DRAFT v0.2 — 2026-11-18 (v0.1 + TikTok sebagai penyedia iklan). Ditampilkan di `/kebijakan-privasi` setiap toko; Seller boleh\n> mengubah teks. Baris dalam `[jika ...]` muncul hanya bila penyedia itu aktif di toko.\n\n# Kebijakan Privasi {nama_toko}\n\n{nama_toko} (\"Kami\") memproses data Anda untuk melayani pesanan Anda. Toko ini berjalan di\nplatform adsbook.id, yang menyimpan data atas nama Kami.\n\n## Data yang Kami kumpulkan\n\nNama, nomor HP, alamat pengiriman, isi pesanan, dan data teknis (alamat IP, perangkat, ID klik\niklan) saat Anda memesan.\n\n## Untuk apa\n\n- memproses dan mengirim pesanan Anda;\n- menghubungi Anda terkait pesanan;\n- mencegah pesanan palsu;\n- [jika Meta aktif] mengukur iklan Kami di Meta (data identitas dikirim dalam bentuk hash);\n- [jika Google Ads aktif] mengukur iklan Kami di Google (data identitas dikirim dalam bentuk hash);\n- [jika TikTok aktif] mengukur iklan Kami di TikTok (data identitas dikirim dalam bentuk hash).\n\n## Dibagikan kepada\n\n- [jika Mengantar aktif] Mengantar dan kurirnya — nama, nomor HP dan alamat untuk pengiriman;\n- [jika AutoLaris aktif] AutoLaris — data pembayaran QRIS/VA;\n- [jika Kelola aktif] Kelola — nama, nomor HP, alamat dan isi pesanan untuk pengelolaan pelanggan (CRM) Kami;\n- adsbook.id dan Cloudflare — penyimpanan dan hosting; penyimpanan diutamakan di Asia-Pasifik, sementara pemrosesan dapat berlangsung di jaringan global Cloudflare.\n\n## Penyimpanan\n\nData pesanan disimpan selama diperlukan untuk layanan dan pembukuan Kami.\n\n## Hak Anda\n\nUntuk meminta salinan, perbaikan, atau penghapusan data Anda, hubungi Kami di\n{whatsapp_toko} atau {email_toko}.\n",
+    },
   },
 };
 
@@ -45,5 +50,5 @@ export const LEGAL_TEXTS: Record<LegalDocId, Record<string, { date: string; text
 export const CURRENT_LEGAL_VERSION: Record<LegalDocId, string> = {
   "seller-terms": "0.3",
   "platform-privacy": "0.1",
-  "store-privacy": "0.1",
+  "store-privacy": "0.2",
 };

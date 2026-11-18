@@ -1,7 +1,9 @@
 import {
   isValidMetaBrowserId,
   isValidMetaExternalId,
+  isValidTikTokTtp,
   readMetaBrowserIds,
+  readTikTokBrowserIds,
 } from "./click-ids.ts";
 import { getClientIp } from "./rate-limit.ts";
 
@@ -12,6 +14,8 @@ export type MetaOrderContext = {
   fbc?: string;
   clientIp?: string;
   userAgent?: string;
+  /** TikTok's first-party `_ttp` cookie, for a CompletePayment sent after the buyer left. */
+  ttp?: string;
 };
 
 const MAX_IP_LENGTH = 64;
@@ -40,7 +44,13 @@ export function captureMetaOrderContext(request: Request): MetaOrderContext {
     fbc: browserIds.fbc,
     clientIp: cleanClientIp(getClientIp(request.headers)),
     userAgent: cleanUserAgent(request.headers.get("user-agent")),
+    ...withTtp(readTikTokBrowserIds(request).ttp),
   };
+}
+
+/** Present only when there is one, so a context without TikTok keeps its exact shape. */
+function withTtp(ttp: string | undefined): { ttp?: string } {
+  return ttp ? { ttp } : {};
 }
 
 export function serializeMetaOrderContext(
@@ -70,5 +80,6 @@ function normalizeMetaOrderContext(context: MetaOrderContext): MetaOrderContext 
   if (clientIp) normalized.clientIp = clientIp;
   const userAgent = cleanUserAgent(context?.userAgent);
   if (userAgent) normalized.userAgent = userAgent;
+  if (isValidTikTokTtp(context?.ttp)) normalized.ttp = context.ttp;
   return normalized;
 }

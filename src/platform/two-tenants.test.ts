@@ -1839,14 +1839,19 @@ test("T-39/PR-24: signup without the terms is refused; an accepted signup stores
 
 test("T-39/PRIV-2: the store notice's providers come from the store's saved credentials", async () => {
   const store = await readinessHarness("notice-provider");
-  assert.deepEqual(await readStoreProviders(store.database), { meta: false, google: false, mengantar: false, autolaris: false, kelola: false });
+  assert.deepEqual(await readStoreProviders(store.database), { meta: false, google: false, tiktok: false, mengantar: false, autolaris: false, kelola: false });
   store.sql.exec("UPDATE stores SET meta_pixel_id = '123456789012345'");
   store.mengantar();
   const providers = await readStoreProviders(store.database);
-  assert.deepEqual(providers, { meta: true, google: false, mengantar: true, autolaris: false, kelola: false });
+  assert.deepEqual(providers, { meta: true, google: false, tiktok: false, mengantar: true, autolaris: false, kelola: false });
   const notice = storePrivacyMarkdown(legalText("store-privacy")!.text, providers, "");
   assert.match(notice, /Meta/);
-  assert.doesNotMatch(notice, /Google/);
+  assert.doesNotMatch(notice, /Google|TikTok/);
+  // Tracking chapter 11: a store that saves a TikTok pixel names TikTok (store privacy v0.2).
+  store.sql.exec("UPDATE stores SET tiktok_pixel_id = 'C4ABCDEFGHIJ1234'");
+  const withTikTok = await readStoreProviders(store.database);
+  assert.equal(withTikTok.tiktok, true);
+  assert.match(storePrivacyMarkdown(legalText("store-privacy")!.text, withTikTok, ""), /iklan Kami di TikTok/);
   store.sql.exec("UPDATE stores SET is_autolaris_enabled = 1, autolaris_api_key = 'k'");
   assert.equal((await readStoreProviders(store.database)).autolaris, true);
   store.sql.exec("UPDATE stores SET is_autolaris_enabled = 0");
@@ -1886,7 +1891,7 @@ test("T-41/PR-26: the demo store browses without readiness, refuses every provid
     }
     // Both order submits, abandoned leads, browser events, headless checkout, admin writes.
     // ...and a subscription invoice: the demo store never pays (it has no billing to pay).
-    for (const path of ["/api/submit-order", "/api/submit-middle-order", "/api/record-abandoned-order", "/api/meta-event", "/api/v1/checkout", "/api/admin/settings", "/api/admin/domains", "/api/admin/products", "/api/admin/billing"]) {
+    for (const path of ["/api/submit-order", "/api/submit-middle-order", "/api/record-abandoned-order", "/api/meta-event", "/api/tiktok-event", "/api/v1/checkout", "/api/admin/settings", "/api/admin/domains", "/api/admin/products", "/api/admin/billing"]) {
       const response = await store.open(path, "POST");
       assert.equal(response.status, 403, path);
       assert.equal(response.reached, false, `${path} reached its route`);
@@ -2174,7 +2179,7 @@ test("T-48: the tenant maintenance run seals every legacy plaintext credential, 
   const store = await readinessHarness("kunci-lama");
   store.sql.exec(`UPDATE stores SET mengantar_api_key = 'legacy-mengantar', autolaris_api_key = 'legacy-autolaris',
     meta_capi_token = 'legacy-meta', google_ads_developer_token = 'legacy-dev', google_ads_client_secret = 'legacy-client',
-    google_ads_refresh_token = 'legacy-refresh'`);
+    google_ads_refresh_token = 'legacy-refresh', tiktok_access_token = 'legacy-tiktok'`);
   assert.equal((await getProviderConfig(store.database)).mengantar.apiKey, "legacy-mengantar", "legacy plaintext still reads while a key is present");
   const originalFetch = globalThis.fetch;
   const quiet = { log: console.log, info: console.info, warn: console.warn, error: console.error };
@@ -2234,6 +2239,7 @@ test("T-48: every credential saved through its own admin route is stored sealed,
     clientSecret: "google-client-rahasia-semua-005",
     refresh: "google-refresh-rahasia-semua-006",
     kelola: "kelola-rahasia-semua-0123456789",
+    tiktok: "tiktok-rahasia-semua-0123456789abcdef",
   };
   const originalFetch = globalThis.fetch;
   const quiet = { log: console.log, warn: console.warn, error: console.error, info: console.info };
@@ -2251,6 +2257,7 @@ test("T-48: every credential saved through its own admin route is stored sealed,
         customer_id: "123-456-7890", conversion_action_id: "987654", developer_token: secrets.developer,
         client_id: "client-id.apps.googleusercontent.com", client_secret: secrets.clientSecret, refresh_token: secrets.refresh } }),
       await call(kelolaAdminRoute, "/api/admin/plugins/kelola", { action: "save", webhook_url: "https://kelola.test/api/public/toko/order/twh_semua123", webhook_secret: secrets.kelola }),
+      await call(adminAdsRoute, "/api/admin/ads", { action: "save-tiktok", tiktok_pixel_id: "C4ABCDEFGHIJ1234", tiktok_access_token: secrets.tiktok }),
     ];
     for (const save of saves) assert.equal(save.status, 200, save.text);
     responses.push(...saves.map((save) => save.text));
@@ -2266,6 +2273,8 @@ test("T-48: every credential saved through its own admin route is stored sealed,
     assert.equal(ads.meta_capi_token_masked, maskSecretValue(secrets.meta));
     assert.equal(ads.google_offline.developer_token_masked, maskSecretValue(secrets.developer));
     assert.equal(ads.google_offline.configured, true);
+    assert.equal(ads.tiktok.access_token_masked, maskSecretValue(secrets.tiktok));
+    assert.equal(ads.tiktok.access_token_configured, true);
     assert.equal(JSON.parse(reads[2].text).data.kelola.configured, true);
   } finally {
     globalThis.fetch = originalFetch;
@@ -2285,6 +2294,7 @@ test("T-48: every credential saved through its own admin route is stored sealed,
   assert.equal((await getProviderConfig(store.database)).autolaris.apiKey, secrets.autolaris);
   assert.equal((await getStoreAdsConfig({ tenantDb: store.database } as never)).metaCapiToken, secrets.meta);
   assert.equal((await loadGoogleAdsOfflineConfig(store.database))?.refreshToken, secrets.refresh);
+  assert.equal((await getStoreAdsConfig({ tenantDb: store.database } as never)).tiktokAccessToken, secrets.tiktok);
 });
 
 test("T-48: the real TenantStore.alarm binds the cipher and seals legacy plaintext, plugin secrets included (T-48 review)", async () => {

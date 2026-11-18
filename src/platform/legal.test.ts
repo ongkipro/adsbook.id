@@ -17,6 +17,7 @@ const PUBLISHED: Record<string, string> = {
   "seller-terms@0.3": "60aaf8d5344f57ad083dbb0c42a1017816148035d5bbbe471a46a6202d82c0f9",
   "platform-privacy@0.1": "f4849347f4b174a7374af09732997cde447d3bf91bb674ba6565b5cd36979e4b",
   "store-privacy@0.1": "db557f2aa4be2e0a22345460c04961c25ca8c2d84f1a07841711b259763e827e",
+  "store-privacy@0.2": "7b56891efde31eb618d09ec5ae726820daca3df4704d0ac95423479b853697ea",
 };
 
 test("a published legal version never changes, and none disappears", () => {
@@ -58,13 +59,14 @@ test("the renderer escapes everything, renders the drafts' subset, and marks unf
   assert.doesNotMatch(table, /\| ---/);
 });
 
-const NONE: StoreProviders = { meta: false, google: false, mengantar: false, autolaris: false, kelola: false };
-const template = LEGAL_TEXTS["store-privacy"]["0.1"].text;
+const NONE: StoreProviders = { meta: false, google: false, tiktok: false, mengantar: false, autolaris: false, kelola: false };
+// The current template: v0.2 names TikTok (tracking chapter 11).
+const template = LEGAL_TEXTS["store-privacy"]["0.2"].text;
 
 test("PRIV-2 / PR-24: a store with only Meta enabled names Meta and not Google Ads", () => {
   const notice = storePrivacyMarkdown(template, { ...NONE, meta: true }, "");
   assert.match(notice, /iklan Kami di Meta/);
-  assert.doesNotMatch(notice, /Google/);
+  assert.doesNotMatch(notice, /Google|TikTok/);
   assert.doesNotMatch(notice, /\[jika|Mengantar|AutoLaris|Kelola/);
   assert.match(notice, /adsbook\.id dan Cloudflare/, "hosting is always named");
   assert.match(notice, /^# Kebijakan Privasi \{nama_toko\}/, "the template's own instructions are not shown");
@@ -72,7 +74,7 @@ test("PRIV-2 / PR-24: a store with only Meta enabled names Meta and not Google A
 
 test("PRIV-2: each provider line appears exactly when that provider is on", () => {
   const lines: Record<keyof StoreProviders, RegExp> = {
-    meta: /di Meta/, google: /di Google/, mengantar: /Mengantar dan kurirnya/, autolaris: /AutoLaris — data pembayaran/, kelola: /Kelola — nama/,
+    meta: /di Meta/, google: /di Google/, tiktok: /di TikTok/, mengantar: /Mengantar dan kurirnya/, autolaris: /AutoLaris — data pembayaran/, kelola: /Kelola — nama/,
   };
   for (const key of Object.keys(lines) as Array<keyof StoreProviders>) {
     const notice = storePrivacyMarkdown(template, { ...NONE, [key]: true }, "");

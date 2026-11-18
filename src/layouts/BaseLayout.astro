@@ -9,6 +9,7 @@ import { escapeHtmlText } from '../lib/html-escape';
 import GoogleAdsBase from '../components/storefront/tracking/GoogleAdsBase.astro';
 import MetaPageViewTracker from '../components/storefront/tracking/MetaPageViewTracker.astro';
 import MetaPixelBase from '../components/storefront/tracking/MetaPixelBase.astro';
+import TikTokPixelBase from '../components/storefront/tracking/TikTokPixelBase.astro';
 import GtmBase from '../components/storefront/tracking/GtmBase.astro';
 import MetaDebugTracker from '../components/storefront/tracking/MetaDebugTracker.astro';
 import JsonLdSchema from '../components/storefront/seo/JsonLdSchema.astro';
@@ -252,6 +253,7 @@ const preloadImageUrls =
       googleAdsLabel={adsConfig.googleAdsConversionLabel}
     />
     <MetaPixelBase pixelId={adsConfig.metaPixelId} />
+    <TikTokPixelBase pixelId={adsConfig.tiktokPixelId} />
     {hasMetaPixel && <MetaPageViewTracker />}
     <MetaDebugTracker />
   </head>

@@ -1,3 +1,4 @@
+import { trackTikTokFunnel } from "../lib/tiktok-browser.ts";
 import { buildMetaAdvancedMatching } from "../lib/meta-identity.ts";
 import { META_EXTERNAL_ID_COOKIE } from "../lib/click-ids.ts";
 import { normalizePhone } from "../lib/validation";
@@ -174,6 +175,13 @@ function initMiddleOrderFormInstance(
         { eventID: eventId },
       );
     }
+    // Same `event_id` as the Meta pair; TikTok's own browser + server legs.
+    trackTikTokFunnel(
+      eventName,
+      { contentId, contentName, value },
+      eventId,
+      typeof extraUserData?.customer_phone === "string" ? extraUserData.customer_phone : undefined,
+    );
     postMetaEvent({
       event_name: eventName,
       event_id: eventId,

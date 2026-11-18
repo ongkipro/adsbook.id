@@ -30,6 +30,7 @@ export const STORE_CREDENTIAL_COLUMNS = [
   "google_ads_developer_token",
   "google_ads_client_secret",
   "google_ads_refresh_token",
+  "tiktok_access_token",
 ] as const;
 export type StoreCredentialColumn = (typeof STORE_CREDENTIAL_COLUMNS)[number];
 

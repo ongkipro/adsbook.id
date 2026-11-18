@@ -21,6 +21,8 @@
     "_fbp",
     "_fbc",
     "fbclid",
+    "ttclid",
+    "_ttp",
     "utm_source",
     "utm_medium",
     "utm_campaign",
@@ -43,6 +45,10 @@
       if (!params._fbc) {
         const mFbc = document.cookie.match(/(?:^|;\s*)_fbc=([^;]+)/);
         if (mFbc) params._fbc = decodeURIComponent(mFbc[1]);
+      }
+      if (!params._ttp) {
+        const mTtp = document.cookie.match(/(?:^|;\s*)_ttp=([^;]+)/);
+        if (mTtp) params._ttp = decodeURIComponent(mTtp[1]);
       }
     } catch {}
     return params;

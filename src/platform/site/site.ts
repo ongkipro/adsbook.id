@@ -30,13 +30,13 @@ export const SITE_PAGES: Record<"home" | "coba" | "fitur" | "caraKerja" | "harga
   home: {
     path: "/",
     title: "Toko COD Presisi untuk Iklan di Semua Platform - adsbook.id",
-    description: "Toko COD untuk pengiklan Meta, Google, TikTok, dan lainnya: setiap pesanan tercatat ke campaign asalnya, konversi 1:1 ke Meta dan Google, 0% potongan.",
+    description: "Toko COD untuk pengiklan Meta, Google, TikTok, dan lainnya: setiap pesanan tercatat ke campaign asalnya, konversi 1:1 ke tiga platform, 0% potongan.",
   },
   // The long-form sales page for ad traffic (content/adsbook-id-sales-lp/features.md, 2026-11-17).
   coba: {
     path: "/coba",
     title: "Berhenti Menebak Hasil Iklan COD di Semua Platform - adsbook.id",
-    description: "Satu pesanan, satu konversi: semua platform iklan tercatat, event 1:1 ke Meta dan Google, form COD cepat di HP, cek RTS, dan uang ke akun Anda.",
+    description: "Satu pesanan, satu konversi: event 1:1 ke Meta, Google, dan TikTok, form COD cepat di HP, cek RTS sebelum kirim, dan uang langsung ke akun Anda.",
   },
   fitur: {
     path: "/fitur",

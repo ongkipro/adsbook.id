@@ -17,6 +17,7 @@ import { parseMetaOrderContext } from "./meta-order-context.ts";
 import { parseClickIds } from "./click-ids.ts";
 import { matchableCustomerEmail } from "./autolaris-payment.ts";
 import { isVoidOrder } from "./order-lifecycle.ts";
+import { enqueueTikTokCompletePayment } from "./tiktok-outbox.ts";
 
 type PaidOrderRow = {
   order_number: string;
@@ -63,18 +64,43 @@ export function manualTransferBecamePaid(
   );
 }
 
+type PurchaseOptions = {
+  /**
+   * Unix seconds the conversion happened. Omitted, the event is stamped now,
+   * which is right for a confirmation; the COD sweep passes the order's own
+   * creation time, because that is when the buyer purchased.
+   */
+  eventTime?: number;
+};
+
+/**
+ * Every path that makes an order Purchase-qualifying calls this (ADR-036), so
+ * TikTok's CompletePayment rides the same call: one hook, every order path.
+ * The two platforms run side by side and neither's failure reaches the other.
+ * TikTok applies its own COD trigger (`tiktokOrderQualifies`); the result
+ * returned is Meta's, which every existing caller reads.
+ */
 export async function enqueuePurchaseForPaidOrder(
   database: D1Database,
   locals: App.Locals,
   orderId: number,
-  options: {
-    /**
-     * Unix seconds the conversion happened. Omitted, the event is stamped now,
-     * which is right for a confirmation; the COD sweep passes the order's own
-     * creation time, because that is when the buyer purchased.
-     */
-    eventTime?: number;
-  } = {},
+  options: PurchaseOptions = {},
+): Promise<PaidOrderPurchaseResult> {
+  const tiktok = enqueueTikTokCompletePayment(database, locals, orderId, options).catch((error) => {
+    console.error("tiktok-complete-payment-failed", { orderId, error });
+  });
+  try {
+    return await enqueueMetaPurchaseForPaidOrder(database, locals, orderId, options);
+  } finally {
+    await tiktok;
+  }
+}
+
+async function enqueueMetaPurchaseForPaidOrder(
+  database: D1Database,
+  locals: App.Locals,
+  orderId: number,
+  options: PurchaseOptions,
 ): Promise<PaidOrderPurchaseResult> {
   const ads = await getStoreAdsConfig(locals);
   if (!ads.metaPixelId || !ads.metaCapiToken) {
