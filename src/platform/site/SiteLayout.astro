@@ -14,13 +14,17 @@ import { SITE_NAME, canonicalUrl, ogImageFor, siteJsonLd, type SitePage } from '
 
 interface Props {
   page: SitePage;
-  /** The header shows the wordmark only (the page is the signup itself). */
-  quietHeader?: boolean;
+  /**
+   * /masuk and /daftar (AUTH-MINIMALIST-STEP-UX-SPEC): no header and no footer;
+   * the page is one 100dvh studio (AuthSplit) that carries its own wordmark,
+   * home link and legal line.
+   */
+  authStage?: boolean;
   /** The page's first section brings its own header (the home's 100dvh hero): no second one above it. */
   heroHeader?: boolean;
 }
 
-const { page, quietHeader = false, heroHeader = false } = Astro.props;
+const { page, authStage = false, heroHeader = false } = Astro.props;
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 const canonical = canonicalUrl(env, page.path);
 const og = ogImageFor(env, page);
@@ -64,11 +68,11 @@ const year = new Date().getFullYear();
   <body>
     <a class="skip" href="#isi">Langsung ke isi</a>
     {/* The header logo (/platform/brand/adsbook-id-wordmark.svg) is rendered by SiteHeader.astro, the one header of every page. */}
-    {!heroHeader && <SiteHeader variant="page" currentPath={page.path} suffix={tenantHostSuffix(env)} quiet={quietHeader} />}
+    {!heroHeader && !authStage && <SiteHeader variant="page" currentPath={page.path} suffix={tenantHostSuffix(env)} />}
     <main id="isi">
       <slot />
     </main>
-    <footer class="site-footer">
+    {!authStage && <footer class="site-footer">
       <div class="wrap footer-grid">
         <div class="footer-brand">
           <img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="151" height="24" loading="lazy" decoding="async" />
@@ -93,7 +97,7 @@ const year = new Date().getFullYear();
         </nav>
       </div>
       <div class="wrap footer-base"><p>&copy; {year} {SITE_NAME}</p></div>
-    </footer>
+    </footer>}
     <script>
       // Constraint validation speaks Indonesian on every page, whatever the browser's language.
       import { installIndonesianValidation } from '../../lib/form-validation-id.ts';
