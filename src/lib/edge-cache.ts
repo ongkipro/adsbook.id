@@ -43,7 +43,6 @@ export const EDGE_CACHE_SECONDS = 120;
 /** Parameters that identify an ad click, not a different page, plus the internal province key. */
 const TRACKING_PARAMS = new Set<string>([
   ...CLICK_ID_KEYS,
-  "ttclid",
   "msclkid",
   "gad_source",
   "gad_campaignid",

@@ -6,7 +6,18 @@ import { countRecoverableEvents, drainCapiOutbox, requeueRecoverableEvents } fro
 import {
   GOOGLE_ADS_CONVERSION_ID_PATTERN,
   GOOGLE_ADS_CONVERSION_LABEL_PATTERN,
+  TIKTOK_COD_TRIGGERS,
+  TIKTOK_PIXEL_ID_PATTERN,
+  TIKTOK_TEST_CODE_PATTERN,
+  normalizeTikTokCodTrigger,
 } from '../../../lib/store-ads';
+import { describeTikTokResult, sendTikTokEvents, tikTokProperties } from '../../../lib/tiktok-events.ts';
+import {
+  countRecoverableTikTokEvents,
+  drainTikTokOutbox,
+  readTikTokOutboxDepth,
+  requeueRecoverableTikTokEvents,
+} from '../../../lib/tiktok-outbox.ts';
 import {
   planGoogleAdsOfflineSave,
   readGoogleAdsOfflineConfig,
@@ -24,13 +35,19 @@ const GTM_ID_PATTERN = /^GTM-[A-Z0-9]{4,20}$/;
 const META_TEST_CODE_PATTERN = /^TEST\d{3,20}$/;
 
 type AdsConfigPayload = {
-  action?: 'save-meta' | 'save-google' | 'save-google-offline' | 'test-capi' | 'requeue-capi';
+  action?: 'save-meta' | 'save-google' | 'save-google-offline' | 'test-capi' | 'requeue-capi' | 'save-tiktok' | 'test-tiktok' | 'requeue-tiktok';
   meta_pixel_id?: string;
   meta_capi_token?: string;
   meta_test_event_code?: string;
   google_ads_conversion_id?: string;
   google_tag_manager_id?: string;
   google_ads_conversion_label?: string;
+  tiktok_pixel_id?: string;
+  tiktok_access_token?: string;
+  tiktok_test_event_code?: string;
+  tiktok_cod_trigger?: string;
+  /** Removes the pixel, the token and the test code together. */
+  tiktok_clear?: boolean;
   google_offline?: {
     clear?: boolean;
     customer_id?: string;
@@ -49,6 +66,10 @@ type AdsRow = GoogleAdsOfflineRow & {
   google_tag_manager_id: string | null;
   google_ads_conversion_id: string | null;
   google_ads_conversion_label: string | null;
+  tiktok_pixel_id: string | null;
+  tiktok_access_token: string | null;
+  tiktok_test_event_code: string | null;
+  tiktok_cod_trigger: string | null;
 };
 
 function json(body: unknown, status = 200) {
@@ -69,7 +90,11 @@ async function getAdsRow(database: D1Database) {
   const row = await readAdsRow(database);
   if (!row) return null;
   const opened = await openGoogleAdsOfflineSecrets(database, row);
-  return { ...opened!, meta_capi_token: await openCredential(database, 'meta_capi_token', row.meta_capi_token) };
+  return {
+    ...opened!,
+    meta_capi_token: await openCredential(database, 'meta_capi_token', row.meta_capi_token),
+    tiktok_access_token: await openCredential(database, 'tiktok_access_token', row.tiktok_access_token),
+  };
 }
 
 async function readAdsRow(database: D1Database) {
@@ -77,7 +102,8 @@ async function readAdsRow(database: D1Database) {
     SELECT meta_pixel_id, meta_capi_token, google_tag_manager_id, google_ads_conversion_id, google_ads_conversion_label,
       google_ads_customer_id, google_ads_offline_conversion_action_id, google_ads_login_customer_id,
       google_ads_offline_start_at, google_ads_developer_token, google_ads_client_id, google_ads_client_secret,
-      google_ads_refresh_token
+      google_ads_refresh_token,
+      tiktok_pixel_id, tiktok_access_token, tiktok_test_event_code, tiktok_cod_trigger
     FROM stores
     ORDER BY id
     LIMIT 1
@@ -106,7 +132,40 @@ function publicConfig(row: AdsRow) {
       client_secret_set: Boolean(row.google_ads_client_secret?.trim()),
       refresh_token_set: Boolean(row.google_ads_refresh_token?.trim()),
     },
+    // ADR-040: the token leaves as a flag and a mask, never in full.
+    tiktok: {
+      pixel_id: row.tiktok_pixel_id ?? '',
+      access_token_configured: Boolean(row.tiktok_access_token),
+      access_token_masked: maskSecretValue(row.tiktok_access_token ?? ''),
+      test_event_code: row.tiktok_test_event_code ?? '',
+      cod_trigger: normalizeTikTokCodTrigger(row.tiktok_cod_trigger),
+    },
   };
+}
+
+/**
+ * One TikTok test event, carrying the seller's Test Event Code so it lands in
+ * Events Manager → Test Events and never counts as a conversion.
+ */
+async function sendTikTokTestEvent(pixelId: string, token: string, testCode: string, request: Request) {
+  return sendTikTokEvents(
+    pixelId,
+    token,
+    [
+      {
+        event: 'ViewContent',
+        event_time: Math.floor(Date.now() / 1000),
+        event_id: `settings_test_${Date.now()}`,
+        user: {
+          ip: request.headers.get('cf-connecting-ip') || undefined,
+          user_agent: request.headers.get('user-agent') || undefined,
+        },
+        properties: tikTokProperties({ value: 0 }),
+        page: { url: new URL(request.url).origin },
+      },
+    ],
+    testCode,
+  );
 }
 
 export const GET: APIRoute = async ({ locals }) => {
@@ -123,6 +182,8 @@ export const GET: APIRoute = async ({ locals }) => {
         // Surfaced so the operator is told the outage is recoverable rather
         // than having to know to ask. Zero on a healthy store.
         capi_recoverable_events: await countRecoverableEvents(database).catch(() => 0),
+        tiktok_outbox: await readTikTokOutboxDepth(database),
+        tiktok_recoverable_events: await countRecoverableTikTokEvents(database).catch(() => 0),
       },
     });
   } catch (error) {
@@ -146,6 +207,10 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     const submittedToken = clean(body.meta_capi_token, 4096);
     const testEventCode = clean(body.meta_test_event_code, 24).toUpperCase();
     const storedToken = submittedToken || current.meta_capi_token || '';
+
+    if (body.action === 'save-tiktok' || body.action === 'test-tiktok' || body.action === 'requeue-tiktok') {
+      return await handleTikTok(database, body, current, request);
+    }
 
     if (body.action === 'requeue-capi') {
       const pixelId = submittedPixelId || current.meta_pixel_id || '';
@@ -300,3 +365,83 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     return json({ success: false, error: 'Gagal memperbarui konfigurasi iklan & tracking.' }, 500);
   }
 };
+
+type CurrentAdsRow = NonNullable<Awaited<ReturnType<typeof getAdsRow>>>;
+
+/** `/admin/ads/tiktok` (tracking chapter 11 §2.5). Every refusal names the field to fix. */
+async function handleTikTok(database: D1Database, body: AdsConfigPayload, current: CurrentAdsRow, request: Request) {
+  const submittedPixelId = clean(body.tiktok_pixel_id, 32).toUpperCase();
+  const submittedToken = clean(body.tiktok_access_token, 4096);
+  const submittedTestCode = clean(body.tiktok_test_event_code, 40);
+  const pixelId = submittedPixelId || current.tiktok_pixel_id || '';
+  const token = submittedToken || current.tiktok_access_token || '';
+  const testCode = submittedTestCode || current.tiktok_test_event_code || '';
+
+  if (body.action === 'test-tiktok' || body.action === 'requeue-tiktok') {
+    if (!TIKTOK_PIXEL_ID_PATTERN.test(pixelId) || !token) {
+      return json({ success: false, error: 'Simpan TikTok Pixel ID dan Access Token yang valid dulu.' }, 400);
+    }
+    // A test always carries the Test Event Code, so it never becomes a
+    // billable conversion; the requeue proves the token with the same test.
+    if (!TIKTOK_TEST_CODE_PATTERN.test(testCode)) {
+      return json({ success: false, error: 'Isi Test Event Code dari TikTok Events Manager (contoh: TEST12345).' }, 400);
+    }
+    const result = await sendTikTokTestEvent(pixelId, token, testCode, request);
+    const accepted = result.httpStatus >= 200 && result.httpStatus < 300 && result.code === 0;
+    if (!accepted) {
+      return json({ success: false, error: `TikTok menolak test event (${describeTikTokResult(result)}).` }, 400);
+    }
+    if (body.action === 'test-tiktok') {
+      return json({ success: true, message: 'Test event diterima TikTok. Cek Events Manager → Test Events.' });
+    }
+    const requeued = await requeueRecoverableTikTokEvents(database);
+    const delivered = requeued ? await drainTikTokOutbox(database, { pixelId, accessToken: token }) : 0;
+    return json({
+      success: true,
+      message: requeued
+        ? `${requeued} event dikirim ulang, ${delivered} sudah diterima TikTok. Sisanya menunggu antrean.`
+        : 'Tidak ada event gagal yang bisa dikirim ulang.',
+      data: { requeued, delivered },
+    });
+  }
+
+  if (body.tiktok_clear === true) {
+    await database.prepare(`
+      UPDATE stores
+      SET tiktok_pixel_id = NULL, tiktok_access_token = NULL, tiktok_test_event_code = NULL
+      WHERE id = (SELECT id FROM stores ORDER BY id LIMIT 1)
+    `).run();
+  } else {
+    if (submittedPixelId && !TIKTOK_PIXEL_ID_PATTERN.test(submittedPixelId)) {
+      return json({ success: false, error: 'TikTok Pixel ID hanya berisi huruf kapital dan angka, 10–32 karakter.' }, 400);
+    }
+    if (submittedTestCode && !TIKTOK_TEST_CODE_PATTERN.test(submittedTestCode)) {
+      return json({ success: false, error: 'Test Event Code harus diawali TEST (contoh: TEST12345).' }, 400);
+    }
+    const trigger = clean(body.tiktok_cod_trigger, 20);
+    if (trigger && !(TIKTOK_COD_TRIGGERS as readonly string[]).includes(trigger)) {
+      return json({ success: false, error: 'Pilihan waktu konversi COD tidak dikenal.' }, 400);
+    }
+    // A blank token keeps the sealed one (ADR-040); a new one is sealed here.
+    await database.prepare(`
+      UPDATE stores
+      SET tiktok_pixel_id = ?,
+          tiktok_access_token = CASE WHEN ? = '' THEN tiktok_access_token ELSE ? END,
+          tiktok_test_event_code = ?,
+          tiktok_cod_trigger = ?
+      WHERE id = (SELECT id FROM stores ORDER BY id LIMIT 1)
+    `).bind(
+      submittedPixelId || null,
+      submittedToken,
+      submittedToken && await sealCredential(database, 'tiktok_access_token', submittedToken),
+      submittedTestCode || null,
+      normalizeTikTokCodTrigger(trigger || current.tiktok_cod_trigger),
+    ).run();
+  }
+  const updated = await getAdsRow(database);
+  return json({
+    success: true,
+    message: 'Konfigurasi TikTok berhasil disimpan.',
+    data: updated ? publicConfig(updated) : undefined,
+  });
+}

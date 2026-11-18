@@ -12,11 +12,11 @@ interface Props { id?: string; tone?: 'canvas' | 'white' }
 const { id = 'jalur-sinyal-title', tone = 'white' } = Astro.props;
 
 const STOPS = [
-  { title: 'Ad click', text: 'Click ID Meta dan Google, plus UTM untuk TikTok dan platform lain' },
+  { title: 'Ad click', text: 'Click ID Meta, Google, dan TikTok, plus UTM untuk platform lain' },
   { title: 'Atribusi 90 hari', text: 'Disimpan sebagai data first-party di toko Anda; link follow-up WhatsApp tidak menghapusnya' },
   { title: 'Order dan 8 kunci', text: 'Nama, WhatsApp, kota, provinsi, dan kode pos di-hash SHA-256' },
   { title: 'Deduplikasi 1:1', text: 'Browser dan server memakai satu event_id; jalur server tidak terhalang ad blocker' },
-  { title: 'Ads Manager', text: 'Purchase sampai ke Meta (Conversions API) dan Google Ads (offline conversion)' },
+  { title: 'Ads Manager', text: 'Konversi sampai ke Meta (Conversions API), Google Ads (offline conversion), dan TikTok (Events API)' },
 ];
 ---
 

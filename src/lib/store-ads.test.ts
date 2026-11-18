@@ -67,6 +67,14 @@ const CONFIGURED_ROW = {
   google_ads_conversion_label: "db-label",
 };
 
+/** A store that has not set TikTok up: every field empty, the default COD trigger. */
+const NO_TIKTOK = {
+  tiktokPixelId: "",
+  tiktokAccessToken: "",
+  tiktokTestEventCode: "",
+  tiktokCodTrigger: "order_created",
+};
+
 const UNCONFIGURED = {
   metaPixelId: "",
   metaCapiToken: "",
@@ -77,6 +85,7 @@ const UNCONFIGURED = {
   metaCapiSource: "none",
   googleTagManagerSource: "none",
   googleAdsConversionSource: "none",
+  ...NO_TIKTOK,
 };
 
 test("a configured tenant resolves exactly its own row", async (context) => {
@@ -95,6 +104,7 @@ test("a configured tenant resolves exactly its own row", async (context) => {
     metaCapiSource: "database",
     googleTagManagerSource: "database",
     googleAdsConversionSource: "database",
+    ...NO_TIKTOK,
   });
 });
 

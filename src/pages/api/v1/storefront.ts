@@ -53,6 +53,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
           google_ads_conversion_id: adsConfig.googleAdsConversionId || null,
           google_ads_conversion_label: adsConfig.googleAdsConversionLabel || null,
           google_tag_manager_id: adsConfig.googleTagManagerId || null,
+          tiktok_pixel_id: adsConfig.tiktokPixelId || null,
         },
         payment: {
           cod_enabled: true,

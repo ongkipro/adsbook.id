@@ -98,11 +98,12 @@ export function renderLegalMarkdown(text: string, values: Record<string, string>
   return html.join("\n");
 }
 
-export type StoreProviders = { meta: boolean; google: boolean; mengantar: boolean; autolaris: boolean; kelola: boolean };
+export type StoreProviders = { meta: boolean; google: boolean; tiktok: boolean; mengantar: boolean; autolaris: boolean; kelola: boolean };
 
 const PROVIDER_MARKERS: Record<string, keyof StoreProviders> = {
   Meta: "meta",
   "Google Ads": "google",
+  TikTok: "tiktok",
   Mengantar: "mengantar",
   AutoLaris: "autolaris",
   Kelola: "kelola",
@@ -116,6 +117,7 @@ export async function readStoreProviders(database: D1Database): Promise<StorePro
          TRIM(COALESCE(meta_pixel_id, '')) <> '' OR TRIM(COALESCE(meta_capi_token, '')) <> '' AS meta,
          TRIM(COALESCE(google_ads_conversion_id, '')) <> '' OR TRIM(COALESCE(google_tag_manager_id, '')) <> ''
            OR TRIM(COALESCE(google_ads_customer_id, '')) <> '' AS google,
+         TRIM(COALESCE(tiktok_pixel_id, '')) <> '' OR TRIM(COALESCE(tiktok_access_token, '')) <> '' AS tiktok,
          TRIM(COALESCE(mengantar_api_key, '')) <> '' AS mengantar,
          -- A saved key, whatever the checkout toggle: reconciliation still talks to it.
          TRIM(COALESCE(autolaris_api_key, '')) <> '' AS autolaris,
@@ -126,6 +128,7 @@ export async function readStoreProviders(database: D1Database): Promise<StorePro
   return {
     meta: Boolean(row?.meta),
     google: Boolean(row?.google),
+    tiktok: Boolean(row?.tiktok),
     mengantar: Boolean(row?.mengantar),
     autolaris: Boolean(row?.autolaris),
     kelola: Boolean(row?.kelola),

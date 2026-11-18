@@ -15,7 +15,7 @@ import { PILLARS } from './content.ts';
           <div class="vis-signal">
             <div class="vsig-row"><span class="vsig-pf">Meta Ads</span><span class="vsig-how">Pixel + Conversions API</span><b class="vsig-ok">1:1</b></div>
             <div class="vsig-row"><span class="vsig-pf">Google Ads</span><span class="vsig-how">Tag + offline conversion</span><b class="vsig-ok">1:1</b></div>
-            <div class="vsig-row"><span class="vsig-pf">TikTok Ads</span><span class="vsig-how">UTM di Analitik</span><b class="vsig-utm">UTM</b></div>
+            <div class="vsig-row"><span class="vsig-pf">TikTok Ads</span><span class="vsig-how">Pixel + Events API</span><b class="vsig-ok">1:1</b></div>
           </div>
         )}
 
@@ -112,9 +112,8 @@ import { PILLARS } from './content.ts';
   .vsig-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.35rem 0.55rem; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; font-size: 0.74rem; }
   .vsig-pf { font-weight: 700; color: var(--ink); }
   .vsig-how { color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vsig-ok, .vsig-utm { font-size: 0.66rem; padding: 0.05rem 0.4rem; border-radius: 999px; }
+  .vsig-ok { font-size: 0.66rem; padding: 0.05rem 0.4rem; border-radius: 999px; }
   .vsig-ok { background: #eff6ff; color: var(--accent); }
-  .vsig-utm { background: #f1f5f9; color: #475569; }
   .bento-grid.is-playing .bento-sinyal .vsig-row { animation: vsig-in 0.5s ease-out both; }
   .bento-grid.is-playing .bento-sinyal .vsig-row:nth-child(2) { animation-delay: 0.12s; }
   .bento-grid.is-playing .bento-sinyal .vsig-row:nth-child(3) { animation-delay: 0.24s; }

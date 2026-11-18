@@ -1,0 +1,326 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import { buttonVariants } from '../../../components/ui/button';
+export const prerender = false;
+
+// TikTok Pixel + Events API (tracking chapter 11 §2.5). Same shape as
+// /admin/ads/meta; the store's own name and feed URL, never a reference store's.
+const storeName = Astro.locals.tenant.name;
+const origin = Astro.locals.tenant.siteUrl.replace(/\/$/, '');
+const feedUrl = `${origin}/feed/tiktok-catalog.xml`;
+const outline = buttonVariants({ variant: 'outline' });
+---
+
+<AdminLayout title="TikTok Ads" activeMenu="ads">
+  <div class="space-y-6">
+    <AdminPageHeader
+      title="TikTok Ads"
+      description="Kelola TikTok Pixel, Events API, waktu konversi COD, dan deduplikasi event_id dengan pesanan."
+      backHref="/admin/ads"
+      backLabel="Ads & tracking"
+    >
+      <div slot="actions" class="flex items-center gap-2">
+        <a href="/feed/tiktok-catalog.xml" target="_blank" rel="noopener noreferrer" class="btn-secondary">Lihat Catalog XML</a>
+        <span id="tiktokBadge" class="inline-flex min-h-9 min-w-40 items-center justify-center rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-600">Memuat…</span>
+      </div>
+    </AdminPageHeader>
+
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">TikTok Pixel</span>
+          <span id="kpiPixelStatus" class="h-2 w-2 rounded-full bg-slate-300"></span>
+        </div>
+        <div id="kpiPixelVal" class="mt-2 break-all font-mono text-sm font-semibold text-slate-900">--</div>
+        <p class="mt-1 text-xs text-slate-500">Browser (ttq)</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Events API 2.0</span>
+          <span id="kpiTokenStatus" class="h-2 w-2 rounded-full bg-slate-300"></span>
+        </div>
+        <div id="kpiTokenVal" class="mt-2 font-mono text-sm font-semibold text-slate-900">--</div>
+        <p class="mt-1 text-xs text-slate-500">Server, token terenkripsi</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Advanced Matching</span>
+          <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+        </div>
+        <div class="mt-2 text-sm font-semibold text-emerald-700">+62 SHA-256</div>
+        <p class="mt-1 text-xs text-slate-500">Nomor HP, ttclid, _ttp</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Deduplikasi 1:1</span>
+          <span id="kpiOutboxStatus" class="h-2 w-2 rounded-full bg-slate-300"></span>
+        </div>
+        <div id="kpiOutboxVal" class="mt-2 text-sm font-semibold text-sky-700">--</div>
+        <p class="mt-1 text-xs text-slate-500">event_id = nomor pesanan</p>
+      </div>
+    </div>
+
+    <div class="flex overflow-x-auto border-b border-slate-200 text-sm font-semibold [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+      <button type="button" class="tab-btn border-b-2 border-sky-600 px-4 py-2.5 text-sky-600 focus:outline-none" data-target="tabConfig">Konfigurasi</button>
+      <button type="button" class="tab-btn border-b-2 border-transparent px-4 py-2.5 text-slate-500 hover:text-slate-900 focus:outline-none" data-target="tabDiagnostics">Diagnostik & antrean</button>
+      <button type="button" class="tab-btn border-b-2 border-transparent px-4 py-2.5 text-slate-500 hover:text-slate-900 focus:outline-none" data-target="tabTutorial">Panduan setup</button>
+    </div>
+
+    <div id="tabConfig" class="tab-content space-y-6">
+      <div id="tiktokLoading" class="sr-only" role="status" aria-live="polite" aria-busy="true" aria-atomic="true">
+        <span class="sr-only">Memuat konfigurasi TikTok.</span>
+      </div>
+      <div id="tiktokError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
+
+      <form id="tiktokForm" inert data-pending class="rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm" novalidate aria-busy="false">
+        <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2 md:p-6">
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-semibold text-slate-700">TikTok Pixel ID</span>
+            <input id="tiktokPixelId" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="C4ABCDEFGHIJ1234567" pattern="[A-Z0-9]{10,32}" class="admin-input-flat font-mono uppercase" />
+            <span class="mt-1.5 block text-xs text-slate-500">Kode pixel di TikTok Events Manager, huruf kapital dan angka.</span>
+          </label>
+
+          <label class="block">
+            <span class="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold text-slate-700">
+              <span>Events API Access Token</span>
+              <span id="tokenHint" class="text-xs font-semibold text-slate-400">Belum tersimpan</span>
+            </span>
+            <span class="relative block">
+              <input id="tiktokToken" type="password" maxlength="4096" autocomplete="new-password" placeholder="Masukkan token baru" class="admin-input-flat pr-24 font-mono" />
+              <button id="toggleToken" type="button" class="absolute inset-y-1 right-1 min-w-20 rounded-lg bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300" aria-controls="tiktokToken" aria-label="Tampilkan access token TikTok" aria-pressed="false">Lihat</button>
+            </span>
+            <span class="mt-1.5 block text-xs text-slate-500">Disimpan terenkripsi dan tidak pernah dikirim ke browser. Kosongkan untuk tetap memakai token yang tersimpan.</span>
+          </label>
+
+          <fieldset class="md:col-span-2">
+            <legend class="mb-1.5 block text-xs font-semibold text-slate-700">Waktu konversi COD</legend>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label class="flex cursor-pointer gap-3 rounded-xl border border-slate-200 p-4 has-[:checked]:border-sky-600 has-[:checked]:bg-sky-50/60">
+                <input type="radio" name="tiktokCodTrigger" value="order_created" class="mt-0.5 h-4 w-4 accent-sky-600" checked />
+                <span>
+                  <span class="block text-sm font-semibold text-slate-900">Saat pesanan dibuat (rekomendasi)</span>
+                  <span class="mt-1 block text-xs text-slate-500">Sama seperti Meta. Konversi cepat masuk, sehingga ad group lebih cepat keluar dari learning phase.</span>
+                </span>
+              </label>
+              <label class="flex cursor-pointer gap-3 rounded-xl border border-slate-200 p-4 has-[:checked]:border-sky-600 has-[:checked]:bg-sky-50/60">
+                <input type="radio" name="tiktokCodTrigger" value="delivered" class="mt-0.5 h-4 w-4 accent-sky-600" />
+                <span>
+                  <span class="block text-sm font-semibold text-slate-900">Saat paket terkirim (delivered)</span>
+                  <span class="mt-1 block text-xs text-slate-500">Hanya COD yang sampai ke pembeli yang dihitung. Lebih bersih, tetapi lebih lambat dan lebih sedikit.</span>
+                </span>
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">QRIS, Virtual Account, dan transfer manual selalu dihitung saat pembayaran lunas.</p>
+          </fieldset>
+        </div>
+
+        <div class="space-y-2 border-t border-slate-200 bg-slate-50/70 p-5 md:px-6">
+          <label for="tiktokTestCode" class="block text-sm font-medium text-slate-900">Test Event Code</label>
+          <div class="flex flex-col gap-2 sm:flex-row">
+            <input id="tiktokTestCode" type="text" maxlength="36" autocomplete="off" placeholder="TEST12345" aria-describedby="tiktokTestHint testTikTokStatus" class="admin-input-flat min-w-0 flex-1 font-mono sm:max-w-sm" />
+            <button id="testTikTok" type="button" class={outline}>Kirim test event</button>
+          </div>
+          <p id="tiktokTestHint" class="text-xs text-slate-500">Dari Events Manager → Test Events. Event uji tidak dihitung sebagai konversi dan hanya dipakai tombol ini.</p>
+          <p id="testTikTokStatus" class="text-xs empty:hidden" role="status" aria-live="polite"></p>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button id="requeueTikTok" type="button" class={outline}>Kirim ulang event gagal</button>
+            <p id="requeueTikTokStatus" class="text-xs empty:hidden" role="status" aria-live="polite"></p>
+          </div>
+          <p class="text-xs text-slate-500">Setelah token diperbaiki: token diuji dulu dengan Test Event Code, lalu event yang gagal dalam 7 hari terakhir dikirim ulang.</p>
+        </div>
+
+        <div class="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p id="tiktokStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true">Perubahan belum ada.</p>
+          <button id="saveTikTok" type="submit" class="btn-blue w-full sm:w-auto">Simpan TikTok</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="tabDiagnostics" class="tab-content hidden space-y-6">
+      <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 class="text-sm font-semibold text-slate-900">Antrean Events API</h3>
+        <p class="mt-1 text-xs text-slate-500">Setiap event disimpan dulu di database toko, lalu dikirim. Yang gagal dicoba ulang otomatis setiap jam.</p>
+        <dl class="mt-5 grid grid-cols-1 gap-3 text-xs sm:grid-cols-4">
+          <div class="rounded-xl bg-slate-50 p-3"><dt class="font-semibold text-slate-500">Terkirim (30 hari)</dt><dd id="outboxSent" class="mt-1 text-sm font-semibold text-slate-900">--</dd></div>
+          <div class="rounded-xl bg-slate-50 p-3"><dt class="font-semibold text-slate-500">Menunggu retry</dt><dd id="outboxPending" class="mt-1 text-sm font-semibold text-slate-900">--</dd></div>
+          <div class="rounded-xl bg-slate-50 p-3"><dt class="font-semibold text-slate-500">Gagal</dt><dd id="outboxFailed" class="mt-1 text-sm font-semibold text-slate-900">--</dd></div>
+          <div class="rounded-xl bg-slate-50 p-3"><dt class="font-semibold text-slate-500">Terakhir terkirim</dt><dd id="outboxLastSent" class="mt-1 text-sm font-semibold text-slate-900">--</dd></div>
+        </dl>
+        <p id="outboxLastError" class="mt-4 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-xs text-amber-900"></p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 class="text-sm font-semibold text-slate-900">Feed katalog untuk TikTok Catalog Manager</h3>
+        <p class="mt-1 text-xs text-slate-500">ID produk di feed sama dengan <code>content_id</code> di setiap event, sehingga katalog dan konversi cocok 1:1.</p>
+        <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-slate-700">
+          <p class="font-semibold text-slate-900">URL feed katalog:</p>
+          <code class="mt-1 block select-all break-all font-semibold text-sky-800">{feedUrl}</code>
+        </div>
+      </div>
+    </div>
+
+    <div id="tabTutorial" class="tab-content hidden space-y-6">
+      <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 class="text-base font-semibold text-slate-900">Panduan setup TikTok Pixel dan Events API</h3>
+        <p class="mt-1 text-xs text-slate-500">Empat langkah untuk menghubungkan {storeName} ke TikTok Ads Manager. Nama menu di TikTok bisa sedikit berbeda sesuai versi akun Anda.</p>
+        <ol class="mt-6 space-y-5 text-xs leading-relaxed text-slate-600">
+          <li class="flex gap-4">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 font-semibold text-sky-800">1</span>
+            <span><strong class="block text-sm font-semibold text-slate-900">Ambil Pixel ID</strong>TikTok Ads Manager → Tools → Events → Web Events. Pilih atau buat pixel dengan metode manual, lalu salin kode pixel (huruf kapital dan angka) ke kolom TikTok Pixel ID.</span>
+          </li>
+          <li class="flex gap-4 border-t border-slate-100 pt-5">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 font-semibold text-sky-800">2</span>
+            <span><strong class="block text-sm font-semibold text-slate-900">Buat Events API Access Token</strong>Di halaman pixel yang sama → Settings → Events API → Generate Access Token. Tempel token ke kolom Events API Access Token, lalu simpan.</span>
+          </li>
+          <li class="flex gap-4 border-t border-slate-100 pt-5">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 font-semibold text-sky-800">3</span>
+            <span><strong class="block text-sm font-semibold text-slate-900">Uji dengan Test Event Code</strong>Buka tab Test Events di pixel Anda, salin kodenya (contoh TEST12345), tempel di kolom Test Event Code, lalu klik Kirim test event. Event uji muncul di TikTok dalam beberapa detik.</span>
+          </li>
+          <li class="flex gap-4 border-t border-slate-100 pt-5">
+            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 font-semibold text-sky-800">4</span>
+            <span><strong class="block text-sm font-semibold text-slate-900">Pilih event optimasi CompletePayment</strong>Saat membuat campaign Website Conversions, pilih event CompletePayment. Browser dan server mengirim event itu dengan <code>event_id</code> sama (nomor pesanan), jadi TikTok menghitungnya satu kali.</span>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tabButtons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
+    const tabContents = document.querySelectorAll<HTMLElement>('.tab-content');
+    tabButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        tabButtons.forEach((other) => {
+          other.classList.remove('border-sky-600', 'text-sky-600');
+          other.classList.add('border-transparent', 'text-slate-500');
+        });
+        button.classList.remove('border-transparent', 'text-slate-500');
+        button.classList.add('border-sky-600', 'text-sky-600');
+        tabContents.forEach((content) => content.classList.toggle('hidden', content.id !== button.dataset.target));
+      });
+    });
+
+    const form = document.getElementById('tiktokForm') as HTMLFormElement | null;
+    const loading = document.getElementById('tiktokLoading');
+    const errorBox = document.getElementById('tiktokError');
+    const badge = document.getElementById('tiktokBadge');
+    const statusText = document.getElementById('tiktokStatus');
+    const pixelInput = document.getElementById('tiktokPixelId') as HTMLInputElement;
+    const tokenInput = document.getElementById('tiktokToken') as HTMLInputElement;
+    const testCodeInput = document.getElementById('tiktokTestCode') as HTMLInputElement;
+    const tokenHint = document.getElementById('tokenHint');
+    const toggleToken = document.getElementById('toggleToken');
+    const setText = (id: string, value: string) => { const node = document.getElementById(id); if (node) node.textContent = value; };
+    const dot = (id: string, on: boolean) => { const node = document.getElementById(id); if (node) node.className = `h-2 w-2 rounded-full ${on ? 'bg-emerald-500' : 'bg-slate-300'}`; };
+    const selectedTrigger = () => (document.querySelector<HTMLInputElement>('input[name="tiktokCodTrigger"]:checked')?.value ?? 'order_created');
+
+    type TikTokConfig = { pixel_id: string; access_token_configured: boolean; test_event_code: string; cod_trigger: string };
+    type Outbox = { pending: number; failed: number; sent: number; lastSentAt: string | null; lastError: string | null } | null;
+
+    const render = (tiktok: TikTokConfig, outbox?: Outbox) => {
+      const ready = Boolean(tiktok.pixel_id && tiktok.access_token_configured);
+      if (badge) {
+        badge.textContent = ready ? 'Terhubung' : 'Belum lengkap';
+        badge.className = `inline-flex min-h-9 min-w-40 items-center justify-center rounded-full px-3 text-xs font-semibold ${ready ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`;
+      }
+      setText('kpiPixelVal', tiktok.pixel_id || 'Belum diisi');
+      dot('kpiPixelStatus', Boolean(tiktok.pixel_id));
+      setText('kpiTokenVal', tiktok.access_token_configured ? 'Tersimpan' : 'Belum diisi');
+      dot('kpiTokenStatus', tiktok.access_token_configured);
+      if (tokenHint) tokenHint.textContent = tiktok.access_token_configured ? 'Tersimpan di server' : 'Belum diisi';
+      if (outbox !== undefined) {
+        setText('kpiOutboxVal', outbox ? (outbox.failed ? `${outbox.failed} gagal` : outbox.pending ? `${outbox.pending} menunggu` : 'Lancar') : 'Tidak terbaca');
+        dot('kpiOutboxStatus', Boolean(outbox && !outbox.failed));
+        setText('outboxSent', outbox ? String(outbox.sent) : '--');
+        setText('outboxPending', outbox ? String(outbox.pending) : '--');
+        setText('outboxFailed', outbox ? String(outbox.failed) : '--');
+        setText('outboxLastSent', outbox?.lastSentAt ? new Date(outbox.lastSentAt).toLocaleString('id-ID') : 'Belum ada');
+        const lastError = document.getElementById('outboxLastError');
+        if (lastError) {
+          lastError.textContent = outbox?.lastError ? `Kegagalan terakhir: ${outbox.lastError}` : '';
+          lastError.classList.toggle('hidden', !outbox?.lastError);
+        }
+      }
+    };
+
+    toggleToken?.addEventListener('click', () => {
+      const show = tokenInput.type === 'password';
+      tokenInput.type = show ? 'text' : 'password';
+      toggleToken.textContent = show ? 'Sembunyikan' : 'Lihat';
+      toggleToken.setAttribute('aria-pressed', String(show));
+    });
+
+    fetch('/api/admin/ads', { headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Gagal memuat status TikTok Ads.');
+        return payload.data;
+      })
+      .then((data) => {
+        const tiktok = data.tiktok as TikTokConfig;
+        pixelInput.value = tiktok.pixel_id || '';
+        testCodeInput.value = tiktok.test_event_code || '';
+        const radio = document.querySelector<HTMLInputElement>(`input[name="tiktokCodTrigger"][value="${tiktok.cod_trigger === 'delivered' ? 'delivered' : 'order_created'}"]`);
+        if (radio) radio.checked = true;
+        render(tiktok, data.tiktok_outbox as Outbox);
+        loading?.setAttribute('aria-busy', 'false');
+        form?.removeAttribute('inert');
+        form?.removeAttribute('data-pending');
+      })
+      .catch((error) => {
+        loading?.setAttribute('aria-busy', 'false');
+        document.querySelectorAll('[data-pending]').forEach((node) => node.classList.add('hidden'));
+        if (errorBox) {
+          errorBox.textContent = error instanceof Error ? error.message : 'Gagal memuat status TikTok Ads.';
+          errorBox.classList.remove('hidden');
+        }
+      });
+
+    const put = async (body: Record<string, unknown>) => {
+      const response = await fetch('/api/admin/ads', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) throw new Error(payload.error || 'Permintaan ditolak.');
+      return payload;
+    };
+    const current = () => ({
+      tiktok_pixel_id: pixelInput.value.trim().toUpperCase(),
+      tiktok_access_token: tokenInput.value.trim() || undefined,
+      tiktok_test_event_code: testCodeInput.value.trim() || undefined,
+    });
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (statusText) statusText.textContent = 'Menyimpan konfigurasi TikTok...';
+      try {
+        const payload = await put({ action: 'save-tiktok', ...current(), tiktok_cod_trigger: selectedTrigger() });
+        tokenInput.value = '';
+        if (payload.data?.tiktok) render(payload.data.tiktok as TikTokConfig);
+        if (statusText) statusText.textContent = payload.message || 'Konfigurasi TikTok berhasil disimpan.';
+      } catch (error) {
+        if (statusText) statusText.textContent = error instanceof Error ? error.message : 'Gagal menyimpan.';
+      }
+    });
+
+    const runAction = (buttonId: string, statusId: string, action: string, busyLabel: string) => {
+      const button = document.getElementById(buttonId);
+      const status = document.getElementById(statusId);
+      button?.addEventListener('click', async () => {
+        const label = button.textContent;
+        button.setAttribute('disabled', 'true');
+        button.textContent = busyLabel;
+        if (status) status.textContent = '';
+        try {
+          const payload = await put({ action, ...current() });
+          if (status) { status.textContent = payload.message || 'Selesai.'; status.className = 'text-xs empty:hidden text-emerald-700'; }
+        } catch (error) {
+          if (status) { status.textContent = `Gagal: ${error instanceof Error ? error.message : 'kesalahan tidak dikenal'}`; status.className = 'text-xs empty:hidden text-rose-700'; }
+        } finally {
+          button.removeAttribute('disabled');
+          button.textContent = label;
+        }
+      });
+    };
+    runAction('testTikTok', 'testTikTokStatus', 'test-tiktok', 'Mengirim...');
+    runAction('requeueTikTok', 'requeueTikTokStatus', 'requeue-tiktok', 'Mengirim ulang...');
+  </script>
+</AdminLayout>

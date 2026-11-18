@@ -124,6 +124,7 @@ const { tenantName } = Astro.props;
       // still holds the track until MetaPixelBase's single init is issued.
       window.__PS_LOAD_META_PIXEL__?.();
       let finalEventId = '';
+      let tiktokEligible = false;
       try {
         const resp = await fetch('/api/order-status', {
           method: 'POST',
@@ -138,6 +139,9 @@ const { tenantName } = Astro.props;
         // firing a browser-minted id here would be an undeduplicatable double count.
         finalEventId = String(statusData.order_number || '').trim();
         if (!finalEventId) return;
+        // The server's own TikTok rule, the seller's COD trigger included.
+        tiktokEligible = statusData.tiktok_complete_payment === true;
+        if (tiktokEligible) window.__PS_LOAD_TIKTOK_PIXEL__?.();
         verifiedPaymentStatus = String(statusData.payment_status || verifiedPaymentStatus).toLowerCase();
         // The order's own method and state, never this tab's storage: opened
         // in a fresh tab the storage is empty and used to default to COD, so
@@ -296,6 +300,30 @@ const { tenantName } = Astro.props;
         }
       } catch (error) {
         console.error('google-ads-purchase', error);
+      }
+
+      try {
+        // TikTokPixelBase defines this only for a store with TikTok and live ad
+        // signals. Browser leg only: the server CompletePayment is enqueued
+        // from the order itself, on the same order-number event_id.
+        if (tiktokEligible && typeof window.__PS_TIKTOK_TRACK__ === 'function') {
+          window.__PS_TIKTOK_TRACK__(
+            'CompletePayment',
+            {
+              contents: contentId
+                ? [{ content_id: contentId, content_name: productName, price: Number(conversionValue || 1) / quantity, quantity }]
+                : undefined,
+              content_type: 'product',
+              value: Number(conversionValue || 1),
+              currency: 'IDR',
+              order_id: finalEventId,
+            },
+            finalEventId,
+            phone ? { phone } : undefined,
+          );
+        }
+      } catch (error) {
+        console.error('tiktok-browser-complete-payment', error);
       }
 
       postMeta({

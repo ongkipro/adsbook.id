@@ -10,13 +10,14 @@ import { parseTrafficSource } from "./traffic-source.ts";
  *
  * **Stored shape.** `orders.ad_click_ids` is NULL, or the JSON object
  * `serializeClickIds` writes: a subset of `CLICK_ID_KEYS` (`gclid`, `gbraid`,
- * `wbraid`, `_fbp`, `_fbc`, `fbclid`, `utm_source`, `utm_medium`,
- * `utm_campaign`, `utm_content`, `utm_term`), each a string matching
- * `[A-Za-z0-9._-]{1,256}`, e.g.
+ * `wbraid`, `_fbp`, `_fbc`, `fbclid`, `ttclid`, `_ttp`, `utm_source`,
+ * `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`), each a string
+ * matching `[A-Za-z0-9._-]{1,256}`, e.g.
  * `{"fbclid":"IwAR1","_fbc":"fb.1.1730000000000.IwAR1","utm_source":"facebook"}`.
- * It is written only when at least one key is present. Rows from before TikTok
- * was dropped from `CLICK_ID_KEYS` may also hold `ttclid`, which is still read
- * as TikTok so those orders do not turn organic.
+ * It is written only when at least one key is present. A non-empty `ttclid`
+ * reads as TikTok with or without a `utm_source` (tracking chapter 11 §2.1);
+ * a fresh `ttclid` replaces the stored set at landing, so it never sits beside
+ * an older Meta or Google click. `_ttp` alone is a cookie, not a click.
  *
  * Note what `parseTrafficSource` decides and this inherits: a `_fbp` cookie
  * alone reads as Meta, and a `utm_source` containing `ig` or `fb` does too.
@@ -39,7 +40,7 @@ export const AD_CHANNEL_LABELS: Record<AdChannel, string> = {
 /** `utm_medium` values that mean a bought placement, compared lower-cased. */
 const PAID_MEDIUMS = ["cpc", "ppc", "cpm", "cpv", "paid", "paid_social", "paidsocial", "paid-social", "display", "ads", "ad", "banner"] as const;
 
-function legacyTtclid(raw: string | null | undefined): boolean {
+function hasTtclid(raw: string | null | undefined): boolean {
   if (!raw) return false;
   try {
     const parsed = JSON.parse(raw);
@@ -54,7 +55,7 @@ export function adChannelFromClickIds(raw: string | null | undefined): AdChannel
   if (source.type === "meta") return "meta";
   if (source.type === "google") return "google";
   const utmSource = source.details.utm_source || "";
-  if (legacyTtclid(raw) || utmSource.includes("tiktok")) return "tiktok";
+  if (hasTtclid(raw) || utmSource.includes("tiktok")) return "tiktok";
   if (source.type === "custom") {
     const medium = (source.details.utm_medium || "").toLowerCase();
     return (PAID_MEDIUMS as readonly string[]).includes(medium) ? "other_paid" : "organic";

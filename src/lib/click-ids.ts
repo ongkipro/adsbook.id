@@ -24,7 +24,7 @@ export const META_EXTERNAL_ID_COOKIE = "adsbook_meta_external_id";
  */
 export const LEGACY_CLICK_ID_COOKIE = "zanoby_click_ids";
 
-/** Click identifiers and attribution tags across Google, Meta, and UTMs. */
+/** Click identifiers and attribution tags across Google, Meta, TikTok, and UTMs. */
 export const CLICK_ID_KEYS = [
   "gclid",
   "gbraid",
@@ -32,6 +32,10 @@ export const CLICK_ID_KEYS = [
   "_fbp",
   "_fbc",
   "fbclid",
+  // TikTok (tracking chapter 11 §2.1): `ttclid` is the ad click; `_ttp` is the
+  // browser cookie the embed widget copies onto the iframe URL, like `_fbp`.
+  "ttclid",
+  "_ttp",
   "utm_source",
   "utm_medium",
   "utm_campaign",
@@ -56,6 +60,8 @@ export const AD_CLICK_KEYS = [
   "fbclid",
   "_fbc",
   "_fbp",
+  "ttclid",
+  "_ttp",
 ] as const satisfies readonly ClickIdKey[];
 
 /** True when this set carries a real ad click, not merely campaign tags. */
@@ -68,7 +74,7 @@ export function hasAdClickId(ids: ClickIds): boolean {
  * are browser cookies the embed widget copies onto every iframe URL, so their
  * mere arrival is not a new click and must not erase a stored `gclid`.
  */
-const FRESH_CLICK_KEYS = ["gclid", "gbraid", "wbraid", "fbclid"] as const satisfies readonly ClickIdKey[];
+const FRESH_CLICK_KEYS = ["gclid", "gbraid", "wbraid", "fbclid", "ttclid"] as const satisfies readonly ClickIdKey[];
 
 /**
  * What the cookie should hold after a landing, given what it already held.
@@ -230,5 +236,29 @@ export function readMetaBrowserIds(
       directFbc && FB_BROWSER_ID_PATTERN.test(directFbc)
         ? directFbc
         : clickIds._fbc,
+  };
+}
+
+/** The first-party `_ttp` shape this module accepts: TikTok's own cookie or the one `TikTokPixelBase` mints. */
+const TIKTOK_TTP_PATTERN = /^[A-Za-z0-9._-]{10,128}$/;
+
+export function isValidTikTokTtp(value: unknown): value is string {
+  return typeof value === "string" && TIKTOK_TTP_PATTERN.test(value);
+}
+
+/**
+ * TikTok's browser identifiers, read server-side like `readMetaBrowserIds`.
+ * `_ttp` is minted by `TikTokPixelBase` before the deferred `events.js` loads
+ * (which adopts it); `ttclid` lives in the 90-day click-id cookie the
+ * middleware writes at landing, so an order placed days later still carries it.
+ */
+export function readTikTokBrowserIds(request: Request): { ttp?: string; ttclid?: string } {
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) return {};
+  const clickIds = readClickIdCookie(request);
+  const ttp = readCookieValue(cookieHeader, "_ttp");
+  return {
+    ttp: isValidTikTokTtp(ttp) ? ttp : isValidTikTokTtp(clickIds._ttp) ? clickIds._ttp : undefined,
+    ttclid: clickIds.ttclid,
   };
 }

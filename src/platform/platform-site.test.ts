@@ -277,7 +277,14 @@ test("tracking proof (pagecopy v3): simulations are captioned illustrations of m
   assert.doesNotMatch(copy, /\bROAS (naik|meningkat|dijamin)\s*\d|\bdijamin\b|\d+\s*%\s*lebih (untung|tinggi)/i, "no promised result");
   assert.doesNotMatch(copy, /Cloudflare|\bAstro\b|Durable Object|AdsBookCMS/);
   assert.doesNotMatch(copy, /\b[a-z0-9-]+\.(io|co)\b/i, "no other product's domain");
-  assert.doesNotMatch(copy, /server[^.]{0,80}TikTok|TikTok[^.]{0,40}(Conversions API|Events API|konversi offline)/, "TikTok is tracked by UTM, not sent from the server");
+  // TikTok Pixel + Events API is real code since tracking chapter 11 Phase 1
+  // (src/lib/tiktok-events.ts, tiktok-outbox.ts): the copy now states all
+  // three server legs, each by the API that actually carries it.
+  assert.match(copy, /Conversions API/, "Meta's server leg is named");
+  assert.match(copy, /offline conversion|konversi offline/i, "Google's server leg is named");
+  assert.match(copy, /TikTok[^.]{0,80}Events API|Events API[^.]{0,80}TikTok/, "TikTok's server leg is named");
+  assert.doesNotMatch(copy, /TikTok[^.]{0,40}(Conversions API|konversi offline|offline conversion)/, "each platform keeps its own API name");
+  assert.doesNotMatch(copy, /TikTok[^.]{0,30}(hanya|cuma) (lewat )?UTM/i, "no stale UTM-only claim for TikTok");
   assert.match(readFileSync("src/layouts/BaseLayout.astro", "utf8"), /Mode Review Pemilik/);
 });
 

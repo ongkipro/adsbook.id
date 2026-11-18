@@ -14,6 +14,7 @@ import {
 import { getSchemaVersionStatus } from "./schema-version.ts";
 import { getStoreAdsConfig } from "./store-ads.ts";
 import { CMS_VERSION } from "./version.ts";
+import { readTikTokOutboxDepth, TIKTOK_MAX_BACKOFF_MS } from "./tiktok-outbox.ts";
 
 /**
  * Operational health for `/admin`.
@@ -46,6 +47,7 @@ export type HealthSignalId =
   | "receiver-score"
   | "autolaris"
   | "google-ads-outbox"
+  | "tiktok-outbox"
   | "alerting"
   | "scheduler";
 
@@ -217,6 +219,47 @@ export function classifyGoogleAdsOutbox(
     return signal("google-ads-outbox", "healthy", "earlier-failures", oldest, now, metrics);
   }
   return signal("google-ads-outbox", "healthy", "draining", oldest, now, metrics);
+}
+
+/**
+ * The TikTok Events API queue (tracking chapter 11 §2.4), read exactly like
+ * Google's. Spelled out rather than shared: `health-actions.test.ts` reads
+ * every signal's reasons from these literal calls.
+ */
+export function classifyTikTokOutbox(depth: GoogleAdsOutboxDepth | null, now: number): HealthSignal {
+  if (!depth) return signal("tiktok-outbox", "unknown", "unreadable", null, now);
+
+  const metrics = {
+    pending: depth.pending,
+    failed: depth.failed,
+    overdue: depth.overdue,
+  };
+  const oldest = depth.oldestCreatedAt;
+  if (depth.pending + depth.failed === 0) {
+    return signal("tiktok-outbox", "healthy", "empty", null, now, metrics);
+  }
+  const oldestAge = oldest ? now - Date.parse(oldest) : 0;
+  const stalled = depth.overdue > 0 && oldestAge > TIKTOK_MAX_BACKOFF_MS;
+  // Only failures inside the alert window degrade the queue (A-283). Older
+  // ones stay visible in the metrics but no longer hold the alert open.
+  const alertingFailures = depth.recentFailed ?? depth.failed;
+  if (alertingFailures > 0) {
+    return signal(
+      "tiktok-outbox",
+      "degraded",
+      stalled ? "stalled-with-terminal-failures" : "terminal-failures",
+      oldest,
+      now,
+      metrics,
+    );
+  }
+  if (stalled) {
+    return signal("tiktok-outbox", "degraded", "stalled", oldest, now, metrics);
+  }
+  if (depth.pending === 0) {
+    return signal("tiktok-outbox", "healthy", "earlier-failures", oldest, now, metrics);
+  }
+  return signal("tiktok-outbox", "healthy", "draining", oldest, now, metrics);
 }
 
 /**
@@ -647,13 +690,14 @@ export async function collectOperationalHealth(
   database: D1Database,
   locals?: App.Locals,
 ): Promise<OperationalHealth> {
-  const [depth, delivery, mengantar, receiverScore, autolaris, googleAdsDepth, schema, schedulerRunAt, coverage, metaConfigured] = await Promise.all([
+  const [depth, delivery, mengantar, receiverScore, autolaris, googleAdsDepth, tiktokDepth, schema, schedulerRunAt, coverage, metaConfigured] = await Promise.all([
     readCapiOutboxDepth(database),
     readCapiDeliveryWindow(database),
     readMengantarWindow(database),
     readReceiverScoreWindow(database),
     readAutoLarisWindow(database),
     readGoogleAdsOutboxDepth(database),
+    readTikTokOutboxDepth(database),
     getSchemaVersionStatus(locals),
     readSchedulerHeartbeat(database),
     readPurchaseCoverage(database),
@@ -669,6 +713,7 @@ export async function collectOperationalHealth(
     classifyReceiverScore(receiverScore, now),
     classifyAutoLaris(autolaris, now),
     classifyGoogleAdsOutbox(googleAdsDepth, now),
+    classifyTikTokOutbox(tiktokDepth, now),
     classifyAlerting(
       // The platform's alert channel (a Worker secret), not a tenant value.
       Boolean(String(getRuntimeEnv(locals)?.OPS_ALERT_WEBHOOK_URL ?? "").trim()),

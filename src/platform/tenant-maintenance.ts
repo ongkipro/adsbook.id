@@ -22,6 +22,11 @@ import { enqueuePurchaseForPaidOrder, sweepMissedCodPurchases } from "../lib/pai
 import { readStoreIdentity, resolveTenantConfig } from "../lib/tenant.ts";
 import { drainCapiOutboxBacklog, purgeExpiredCapiOutboxEvents } from "../lib/capi-outbox.ts";
 import { getStoreAdsConfig } from "../lib/store-ads.ts";
+import {
+  drainTikTokOutboxBacklog,
+  purgeExpiredTikTokOutboxEvents,
+  sweepTikTokCompletePayments,
+} from "../lib/tiktok-outbox.ts";
 import { runPluginCron, sealPluginSecrets } from "../plugins/registry.ts";
 import {
   drainGoogleAdsConversionOutbox,
@@ -97,6 +102,10 @@ export async function runTenantMaintenance(
     "scheduled-capi-outbox-purge-failed",
     () => purgeExpiredCapiOutboxEvents(database, new Date(scheduledTime)),
   );
+  const purgedTikTokOutboxEvents = await housekeeping(
+    "scheduled-tiktok-outbox-purge-failed",
+    () => purgeExpiredTikTokOutboxEvents(database, new Date(scheduledTime)),
+  );
   const purgedGoogleAdsConversions = await housekeeping(
     "scheduled-google-ads-purge-failed",
     () => purgeExpiredGoogleAdsConversions(database, new Date(scheduledTime)),
@@ -171,6 +180,23 @@ export async function runTenantMaintenance(
       ? drainCapiOutboxBacklog(database, ads.metaPixelId, ads.metaCapiToken, new Date(scheduledTime))
       : 0;
   });
+  // TikTok (tracking chapter 11 §2.4): COD CompletePayments the buyer's page
+  // never sent, or, with the delivered trigger, packages delivered since the
+  // last run; then the retry backlog. Both read `getStoreAdsConfig`, which is
+  // empty while ad signals are paused (ADR-041).
+  const sweptTikTokCompletePayments = await housekeeping("scheduled-tiktok-sweep-failed", () =>
+    sweepTikTokCompletePayments(database, scheduledLocals, new Date(scheduledTime)),
+  );
+  const drainedTikTokEvents = await housekeeping("scheduled-tiktok-drain-failed", async () => {
+    const ads = await getStoreAdsConfig(scheduledLocals);
+    return ads.tiktokPixelId && ads.tiktokAccessToken
+      ? drainTikTokOutboxBacklog(
+          database,
+          { pixelId: ads.tiktokPixelId, accessToken: ads.tiktokAccessToken },
+          new Date(scheduledTime),
+        )
+      : 0;
+  });
   // The tenant's own upload settings (T-45); an unreadable row uploads nothing.
   const googleAdsOffline = adSignalsPaused ? null : await loadGoogleAdsOfflineConfig(database).catch((error) => {
     console.error("scheduled-google-ads-config-failed", { tenant_id: tenantId, error: String(error) });
@@ -224,6 +250,7 @@ export async function runTenantMaintenance(
     purgedNotifications,
     purgedCapiOutboxEvents,
     purgedGoogleAdsConversions,
+    purgedTikTokOutboxEvents,
     backfilledReceiverScores,
     autoLarisReconciliation: {
       checked: autoLarisReconciliation.checked,
@@ -237,6 +264,8 @@ export async function runTenantMaintenance(
     },
     sweptCodPurchases,
     drainedCapiEvents,
+    sweptTikTokCompletePayments,
+    drainedTikTokEvents,
     queuedGoogleAdsConversions,
     drainedGoogleAdsConversions,
     pluginCron,

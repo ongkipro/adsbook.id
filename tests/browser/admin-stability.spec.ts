@@ -10,7 +10,8 @@
 //   2. On mobile, opening "Semua menu" on /admin/settings/access scrolls the
 //      sheet so "Akses Pengguna" is in view.
 //   3. Cold-loading the pages that used to shift (domains, developer, profile,
-//      landing-pages, settings, ads/utm, payments, orders) produces CLS <= 0.005.
+//      landing-pages, settings, ads/utm, ads, ads/tiktok, payments, orders)
+//      produces CLS <= 0.005.
 import { expect, test, type Page } from "@playwright/test";
 import { origin, owner, TENANTS } from "./tenants.ts";
 
@@ -81,6 +82,9 @@ test("the sidebar stays where the operator clicked, and admin pages load without
     "/admin/landing-pages",
     "/admin/settings",
     "/admin/ads/utm",
+    // Tracking chapter 11: the three-card overview and the TikTok page fill after a fetch.
+    "/admin/ads",
+    "/admin/ads/tiktok",
     "/admin/payments",
     "/admin/orders",
   ]) {

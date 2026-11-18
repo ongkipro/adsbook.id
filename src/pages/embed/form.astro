@@ -76,7 +76,7 @@ const title = product
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const trackingKeys = [
-          'gclid', 'gbraid', 'wbraid', '_fbp', '_fbc', 'fbclid',
+          'gclid', 'gbraid', 'wbraid', '_fbp', '_fbc', 'fbclid', 'ttclid', '_ttp',
           'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'
         ];
         const tracking = {};
@@ -100,6 +100,9 @@ const title = product
           }
           if (tracking._fbc) {
             document.cookie = `_fbc=${encodeURIComponent(tracking._fbc)}; expires=${expires}; path=/${secure}`;
+          }
+          if (tracking._ttp) {
+            document.cookie = `_ttp=${encodeURIComponent(tracking._ttp)}; expires=${expires}; path=/${secure}`;
           }
         }
       } catch (e) {}

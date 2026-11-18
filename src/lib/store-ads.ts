@@ -20,6 +20,17 @@ export function hasValidGoogleAdsConversion(
     && GOOGLE_ADS_CONVERSION_LABEL_PATTERN.test(conversionLabel);
 }
 
+/** TikTok pixel code, as Events Manager shows it (tracking chapter 11 §2.4). */
+export const TIKTOK_PIXEL_ID_PATTERN = /^[A-Z0-9]{10,32}$/;
+/** A Test Events code from TikTok Events Manager: events carrying it are not billable conversions. */
+export const TIKTOK_TEST_CODE_PATTERN = /^TEST[A-Za-z0-9_-]{2,32}$/;
+export const TIKTOK_COD_TRIGGERS = ['order_created', 'delivered'] as const;
+export type TikTokCodTrigger = (typeof TIKTOK_COD_TRIGGERS)[number];
+
+export function normalizeTikTokCodTrigger(value: unknown): TikTokCodTrigger {
+  return value === 'delivered' ? 'delivered' : 'order_created';
+}
+
 export type StoreAdsConfig = {
   metaPixelId: string;
   metaCapiToken: string;
@@ -30,6 +41,11 @@ export type StoreAdsConfig = {
   metaCapiSource: AdsConfigSource;
   googleTagManagerSource: AdsConfigSource;
   googleAdsConversionSource: AdsConfigSource;
+  /** Empty unless it matches `TIKTOK_PIXEL_ID_PATTERN`: a malformed id renders no pixel. */
+  tiktokPixelId: string;
+  tiktokAccessToken: string;
+  tiktokTestEventCode: string;
+  tiktokCodTrigger: TikTokCodTrigger;
 };
 
 /**
@@ -49,6 +65,10 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
   let dbGoogleId = '';
   let dbGoogleTagManagerId = '';
   let dbGoogleLabel = '';
+  let dbTikTokPixelId = '';
+  let dbTikTokToken = '';
+  let dbTikTokTestCode = '';
+  let dbTikTokTrigger: TikTokCodTrigger = 'order_created';
 
   const database = tenantDatabase(locals);
   if (database && typeof database === 'object' && 'prepare' in database) {
@@ -56,7 +76,8 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
       const row = (await database
         .prepare(
           `
-        SELECT meta_pixel_id, meta_capi_token, google_tag_manager_id, google_ads_conversion_id, google_ads_conversion_label
+        SELECT meta_pixel_id, meta_capi_token, google_tag_manager_id, google_ads_conversion_id, google_ads_conversion_label,
+               tiktok_pixel_id, tiktok_access_token, tiktok_test_event_code, tiktok_cod_trigger
         FROM stores
         ORDER BY id
         LIMIT 1
@@ -68,6 +89,10 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
         google_tag_manager_id?: string | null;
         google_ads_conversion_id?: string | null;
         google_ads_conversion_label?: string | null;
+        tiktok_pixel_id?: string | null;
+        tiktok_access_token?: string | null;
+        tiktok_test_event_code?: string | null;
+        tiktok_cod_trigger?: string | null;
       } | null;
 
       if (row) {
@@ -77,6 +102,12 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
         dbGoogleTagManagerId = row.google_tag_manager_id ?? '';
         dbGoogleId = row.google_ads_conversion_id ?? '';
         dbGoogleLabel = row.google_ads_conversion_label ?? '';
+        const tiktokPixelId = String(row.tiktok_pixel_id ?? '').trim();
+        dbTikTokPixelId = TIKTOK_PIXEL_ID_PATTERN.test(tiktokPixelId) ? tiktokPixelId : '';
+        dbTikTokToken = (await openCredential(database, 'tiktok_access_token', row.tiktok_access_token)) ?? '';
+        const testCode = String(row.tiktok_test_event_code ?? '').trim();
+        dbTikTokTestCode = TIKTOK_TEST_CODE_PATTERN.test(testCode) ? testCode : '';
+        dbTikTokTrigger = normalizeTikTokCodTrigger(row.tiktok_cod_trigger);
       }
     } catch {
       // An unreadable row is an unconfigured store: nothing is sent.
@@ -96,5 +127,9 @@ export async function getStoreAdsConfig(locals?: App.Locals): Promise<StoreAdsCo
     metaCapiSource: source(dbCapiToken),
     googleTagManagerSource: source(dbGoogleTagManagerId),
     googleAdsConversionSource: hasGoogleAdsConversion ? 'database' : 'none',
+    tiktokPixelId: dbTikTokPixelId,
+    tiktokAccessToken: dbTikTokToken,
+    tiktokTestEventCode: dbTikTokTestCode,
+    tiktokCodTrigger: dbTikTokTrigger,
   };
 }

@@ -39,6 +39,19 @@ const { slug, contentId, contentName, price } = Astro.props;
       // MetaPixelBase's single init has been issued, and fbevents discards a
       // track it replays ahead of the init.
       window.__PS_META_TRACK__?.(eventName, data, { eventID: eventId });
+      // TikTokPixelBase (when the store has TikTok): same event_id, browser + server.
+      window.__PS_TIKTOK_TRACK__?.(
+        eventName,
+        {
+          contents: contentId
+            ? [{ content_id: contentId, content_name: contentName, price: Number(price || 1), quantity: 1 }]
+            : undefined,
+          content_type: 'product',
+          value: Number(price || 1),
+          currency: 'IDR',
+        },
+        eventId,
+      );
       postMeta({
         event_name: eventName,
         event_id: eventId,

@@ -7,6 +7,7 @@ import { isAutoLarisCheckoutChannel } from "../../lib/autolaris-client.ts";
 import { loadPublicOrderStatus, resolvePublicOrderId } from "../../lib/order-status.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../../lib/rate-limit.ts";
 import { tenantDatabase } from "../../lib/tenant-database.ts";
+import { readTikTokCodTrigger, tiktokOrderQualifies } from "../../lib/tiktok-outbox.ts";
 
 export const prerender = false;
 
@@ -103,7 +104,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
       orderStatus = (await loadPublicOrderStatus(database, orderIdentity, statusToken)) ?? orderStatus;
     }
-    return json({ success: true, ...orderStatus });
+    // `/thanks` fires the browser CompletePayment only when the server would
+    // send one now (the seller's COD trigger included), so the two legs of
+    // TikTok's dedup pair always follow one rule (tracking chapter 11 §2.3).
+    const tiktokCompletePayment = tiktokOrderQualifies(
+      {
+        payment_method: orderStatus.payment_method,
+        payment_status: orderStatus.payment_status,
+        shipping_status: orderStatus.status,
+      },
+      await readTikTokCodTrigger(database),
+    );
+    return json({ success: true, ...orderStatus, tiktok_complete_payment: tiktokCompletePayment });
   } catch (error) {
     console.error("public-order-status-failed", error);
     return json({ success: false, error: "Failed to fetch order status" }, 500);
