@@ -85,6 +85,7 @@ test("the sidebar stays where the operator clicked, and admin pages load without
     // Tracking chapter 11: the three-card overview and the TikTok page fill after a fetch.
     "/admin/ads",
     "/admin/ads/tiktok",
+    "/admin/ads/google",
     "/admin/payments",
     "/admin/orders",
   ]) {

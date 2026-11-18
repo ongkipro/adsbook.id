@@ -102,7 +102,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // The headless caller's own request carries the buyer's Meta cookies when
     // the storefront forwards them; capture here so an API-placed order is not
     // a second-class conversion.
-    const metaRequestContext = serializeMetaOrderContext(captureMetaOrderContext(request));
+    // Server-to-server from a headless storefront: the caller's country is not the buyer's.
+    const metaRequestContext = serializeMetaOrderContext(captureMetaOrderContext(request, { buyerDirect: false }));
 
     const order = await persistOrder(database, {
       submitToken: data.submit_token,
