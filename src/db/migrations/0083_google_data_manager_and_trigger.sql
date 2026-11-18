@@ -32,6 +32,16 @@ INSERT INTO `google_ads_conversion_outbox_new`
   (`id`, `order_id`, `order_number`, `qualification`, `payload`, `status`, `attempts`, `max_attempts`, `last_error`, `next_retry_at`, `created_at`, `updated_at`)
   SELECT `id`, `order_id`, `order_number`, `qualification`, `payload`, `status`, `attempts`, `max_attempts`, `last_error`, `next_retry_at`, `created_at`, `updated_at`
   FROM `google_ads_conversion_outbox`;--> statement-breakpoint
+-- AUTOINCREMENT ids are never reused: the 30-day purge can leave the table empty
+-- or below its high-water mark, and DROP TABLE deletes that mark. So the new
+-- table's counter is raised to the old one's first (the row the rename then
+-- carries over). Review 2026-11-18; checked on node:sqlite and workerd DO SQLite.
+INSERT INTO sqlite_sequence (`name`, `seq`)
+  SELECT 'google_ads_conversion_outbox_new', 0
+  WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE `name` = 'google_ads_conversion_outbox_new');--> statement-breakpoint
+UPDATE sqlite_sequence
+  SET `seq` = MAX(`seq`, COALESCE((SELECT `seq` FROM sqlite_sequence WHERE `name` = 'google_ads_conversion_outbox'), 0))
+  WHERE `name` = 'google_ads_conversion_outbox_new';--> statement-breakpoint
 DROP TABLE `google_ads_conversion_outbox`;--> statement-breakpoint
 ALTER TABLE `google_ads_conversion_outbox_new` RENAME TO `google_ads_conversion_outbox`;--> statement-breakpoint
 CREATE UNIQUE INDEX `google_ads_conversion_outbox_order_unique`

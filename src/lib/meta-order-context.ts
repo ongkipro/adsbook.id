@@ -47,7 +47,15 @@ function cleanUserAgent(value: unknown): string | undefined {
   return cleaned && cleaned.length <= MAX_USER_AGENT_LENGTH ? cleaned : undefined;
 }
 
-export function captureMetaOrderContext(request: Request): MetaOrderContext {
+/**
+ * `buyerDirect` (default true): the request came from the buyer's own browser, so
+ * `CF-IPCountry` is the buyer's country. A headless checkout (`/api/v1/checkout`) is
+ * usually called by the merchant's server, whose country says nothing about the buyer
+ * or their consent: it passes `false`, the country stays unknown, and the Google server
+ * conversion then carries no user data (review 2026-11-18).
+ */
+export function captureMetaOrderContext(request: Request, options: { buyerDirect?: boolean } = {}): MetaOrderContext {
+  const buyerDirect = options.buyerDirect !== false;
   const browserIds = readMetaBrowserIds(request);
   return {
     externalId: browserIds.externalId,
@@ -56,7 +64,7 @@ export function captureMetaOrderContext(request: Request): MetaOrderContext {
     clientIp: cleanClientIp(getClientIp(request.headers)),
     userAgent: cleanUserAgent(request.headers.get("user-agent")),
     ...withTtp(readTikTokBrowserIds(request).ttp),
-    ...withCountry(cleanCountry(request.headers.get("cf-ipcountry"))),
+    ...withCountry(buyerDirect ? cleanCountry(request.headers.get("cf-ipcountry")) : undefined),
   };
 }
 

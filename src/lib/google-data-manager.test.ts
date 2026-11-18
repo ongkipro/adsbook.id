@@ -21,6 +21,7 @@ import {
   type GoogleAdsOfflineConfig,
 } from "./google-ads-offline.ts";
 import { splitMigrationStatements } from "./schema-version.ts";
+import { captureMetaOrderContext, serializeMetaOrderContext } from "./meta-order-context.ts";
 
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 const MINUTE = 60_000;
@@ -312,3 +313,55 @@ test("Uji koneksi: validateOnly on the Data Manager API, token refresh only on t
   assert.match(refused.message, /OAuth gagal/);
   assert.doesNotMatch(refused.message, /client-secret|refresh-token/, "never a credential in the message");
 });
+
+// ---- Review 2026-11-18 ----
+
+test("review finding 1: a headless checkout's server country is not the buyer's, so no user data or consent is sent", async () => {
+  const request = new Request("https://toko.adsbook.my.id/api/v1/checkout", { method: "POST", headers: { "cf-ipcountry": "ID" } });
+  assert.equal(captureMetaOrderContext(request).country, "ID", "the buyer's own browser: the country is theirs");
+  const headless = captureMetaOrderContext(request, { buyerDirect: false });
+  assert.equal(headless.country, undefined, "a server-to-server call records no country");
+  const checkout = readFileSync("src/pages/api/v1/checkout.ts", "utf8");
+  assert.match(checkout, /captureMetaOrderContext\(request, \{ buyerDirect: false \}\)/, "/api/v1/checkout passes buyerDirect: false");
+  const built = await buildGoogleConversionRecord({
+    id: 1, order_number: "INV-1", payment_method: "cod", payment_status: "unpaid", shipping_status: "delivered",
+    created_at: "2026-11-10T08:00:00.000Z", ad_click_ids: JSON.stringify({ gclid: "Cj0KCQ_click" }), product_value: 149000,
+    customer_phone: "081234567890", customer_name: "Rina Lestari", postal_code: "40135",
+    meta_request_context: serializeMetaOrderContext(headless) ?? null,
+  }, "delivered", new Date("2026-11-18T12:00:00.000Z"));
+  assert.equal(built?.record.consentGranted, false);
+  assert.equal(built?.record.userIdentifiers, undefined);
+  const body = buildDataManagerRequest(built!.record, DM_CONFIG);
+  assert.equal("consent" in body.events[0], false);
+  assert.equal("userData" in body.events[0], false);
+  assert.equal("encoding" in body, false);
+});
+
+test("review finding 2: the outbox rebuild keeps the AUTOINCREMENT high-water mark, so a purged id is never reused", () => {
+  const nextId = (database: SqliteD1) => {
+    database.sqlite.exec(`INSERT INTO orders (id, order_number, payment_method, payment_status, shipping_status, created_at) VALUES (900, 'INV-900', 'cod', 'unpaid', 'delivered', 't')`);
+    database.sqlite.exec(`INSERT INTO google_ads_conversion_outbox (order_id, order_number, qualification, payload, next_retry_at, created_at, updated_at) VALUES (900, 'INV-900', 'cod_delivered', '{}', 'n', 'c', 'u')`);
+    return (database.sqlite.prepare("SELECT MAX(id) AS id FROM google_ads_conversion_outbox").get() as { id: number }).id;
+  };
+  // Row 50 issued, then purged: the table is empty but 50 was handed out.
+  const purged = storeWithOutbox(null);
+  purged.sqlite.exec(`INSERT INTO orders (id, order_number, payment_method, payment_status, shipping_status, created_at) VALUES (1, 'INV-1', 'cod', 'unpaid', 'delivered', 't')`);
+  purged.sqlite.exec(`INSERT INTO google_ads_conversion_outbox (id, order_id, order_number, qualification, payload, next_retry_at, created_at, updated_at) VALUES (50, 1, 'INV-1', 'cod_delivered', '{}', 'n', 'c', 'u')`);
+  purged.sqlite.exec("DELETE FROM google_ads_conversion_outbox");
+  applyGoogleDataManagerMigration(purged);
+  assert.equal(nextId(purged), 51);
+  // Rows kept below a higher purged mark: still above the mark.
+  const partial = storeWithOutbox(null);
+  for (const id of [1, 2]) partial.sqlite.exec(`INSERT INTO orders (id, order_number, payment_method, payment_status, shipping_status, created_at) VALUES (${id}, 'INV-${id}', 'cod', 'unpaid', 'delivered', 't')`);
+  partial.sqlite.exec(`INSERT INTO google_ads_conversion_outbox (id, order_id, order_number, qualification, payload, next_retry_at, created_at, updated_at) VALUES (7, 1, 'INV-1', 'cod_delivered', '{}', 'n', 'c', 'u'), (80, 2, 'INV-2', 'cod_delivered', '{}', 'n', 'c', 'u')`);
+  partial.sqlite.exec("DELETE FROM google_ads_conversion_outbox WHERE id = 80");
+  applyGoogleDataManagerMigration(partial);
+  assert.equal(nextId(partial), 81);
+  // A table that never issued an id starts at 1, as before.
+  const fresh = storeWithOutbox(null);
+  applyGoogleDataManagerMigration(fresh);
+  assert.equal(nextId(fresh), 1);
+  const names = fresh.sqlite.prepare("SELECT name FROM sqlite_sequence ORDER BY name").all() as Array<{ name: string }>;
+  assert.equal(names.some((row) => row.name.endsWith("_new")), false, "no stray counter left behind");
+});
+
