@@ -40,11 +40,13 @@ const whatsapp = typeof env.PLATFORM_SUPPORT_WHATSAPP === 'string' && /^62\d{8,1
 
 <style>
   .contact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; }
-  .contact > section { display: grid; gap: 1rem; align-content: start; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  /* Two borderless porcelain panels (HOMEPAGE-DESIGN-SYSTEM v2 §5.2). */
+  .contact { gap: 1.5rem; }
+  .contact > section { display: grid; gap: 1rem; align-content: start; padding: 2.25rem; border-radius: 24px; background: var(--tile); }
   .contact h2 { font-size: 1.35rem; }
   .channels { margin: 0; display: grid; gap: 0.6rem; }
   .channels div { display: grid; grid-template-columns: 6rem 1fr; gap: 0.75rem; }
   .channels dt { font-weight: 700; }
   .channels dd { margin: 0; }
-  @media (max-width: 760px) { .contact { grid-template-columns: 1fr; gap: 2rem; } }
+  @media (max-width: 760px) { .contact { grid-template-columns: 1fr; } .contact > section { padding: 1.5rem; border-radius: 20px; } }
 </style>

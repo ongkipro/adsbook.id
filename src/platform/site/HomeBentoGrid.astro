@@ -1,90 +1,75 @@
 ---
 /**
- * Scannable 6-card visual Bento Grid for Homepage (Paduka, 2026-11-18:
- * minimal text, simulation/visual-first, zero external animation libraries).
- * Every card maps 1:1 to PILLARS in content.ts and links to /fitur#<id>.
+ * The six pillars on the home as borderless porcelain tiles (HOMEPAGE-DESIGN-SYSTEM v2 §3.4):
+ * each tile holds one floating white widget, then a quiet mono index, the pillar's title and its
+ * one-line summary. No per-tile "Detail" link: the header already leads to /fitur. Every tile
+ * maps 1:1 to PILLARS in content.ts; the widgets show mechanisms the code has, no result figures.
  */
 import { PILLARS } from './content.ts';
+
+const SPAN: Record<string, string> = { sinyal: 'span-7', form: 'span-5', kirim: 'span-4', uang: 'span-4', mulai: 'span-4', infra: 'span-12' };
 ---
 
 <div class="bento-grid" data-home-bento>
   {PILLARS.map((pillar, index) => (
-    <article class={`bento-card bento-${pillar.id} ${index < 2 ? 'bento-wide' : ''}`}>
-      <div class="bento-visual" aria-hidden="true">
-        {pillar.id === 'sinyal' && (
-          <div class="vis-signal">
-            <div class="vsig-row"><span class="vsig-pf">Meta Ads</span><span class="vsig-how">Pixel + Conversions API</span><b class="vsig-ok">1:1</b></div>
-            <div class="vsig-row"><span class="vsig-pf">Google Ads</span><span class="vsig-how">Tag + offline conversion</span><b class="vsig-ok">1:1</b></div>
-            <div class="vsig-row"><span class="vsig-pf">TikTok Ads</span><span class="vsig-how">Pixel + Events API</span><b class="vsig-ok">1:1</b></div>
-          </div>
-        )}
-
-        {pillar.id === 'form' && (
-          <div class="vis-form">
-            <div class="vf-search">
-              <span class="vf-typed">Sukajadi, Bandung</span>
-              <b class="vf-ms">Instan</b>
+    <article class={`tile bento-${pillar.id} ${SPAN[pillar.id] ?? 'span-4'}`} id={`bento-${pillar.id}`}>
+      {pillar.id !== 'infra' && (
+        <div class="widget" aria-hidden="true">
+          {pillar.id === 'sinyal' && (
+            <ul class="w-sync">
+              <li><span class="w-pf">Meta Ads</span><span class="w-how">Pixel + Conversions API</span><b>1:1</b></li>
+              <li><span class="w-pf">Google Ads</span><span class="w-how">Tag + offline conversion</span><b>1:1</b></li>
+              <li><span class="w-pf">TikTok Ads</span><span class="w-how">Pixel + Events API</span><b>1:1</b></li>
+            </ul>
+          )}
+          {pillar.id === 'form' && (
+            <div class="w-form">
+              <div class="w-input"><span>Sukajadi, Bandung</span><i class="w-caret"></i></div>
+              <ul class="w-results">
+                <li class="is-pick">Sukajadi, Kota Bandung, Jawa Barat</li>
+                <li>Sukajadi, Kota Pekanbaru, Riau</li>
+              </ul>
+              <p class="w-lead">Form tidak selesai → <b>Pesanan Tertinggal</b> · rotator 10 WA CS</p>
             </div>
-            <div class="vf-lead">
-              <span class="sq-blue"></span>
-              <span>Batal isi → <b>Pesanan Tertinggal</b> (Rotator 10 WA CS)</span>
+          )}
+          {pillar.id === 'kirim' && (
+            <div class="w-rts">
+              <div class="w-row"><b>#INV-8421</b><span>Menunggu rilis</span></div>
+              <div class="w-meter"><span></span></div>
+              <div class="w-row"><span>Risiko RTS penerima</span><b class="w-accent">Rendah</b></div>
             </div>
-          </div>
-        )}
-
-        {pillar.id === 'kirim' && (
-          <div class="vis-rts">
-            <div class="rts-row">
-              <span class="rts-order">#INV-8421 · Menunggu</span>
-              <span class="rts-safe">Skor RTS Aman</span>
+          )}
+          {pillar.id === 'uang' && (
+            <dl class="w-money">
+              <div><dt>Potongan adsbook.id</dt><dd class="w-accent">0%</dd></div>
+              <div><dt>COD</dt><dd>Akun Mengantar Anda</dd></div>
+              <div><dt>QRIS dan VA</dt><dd>Akun AutoLaris Anda</dd></div>
+            </dl>
+          )}
+          {pillar.id === 'mulai' && (
+            <div class="w-start">
+              <p class="w-mode">Mode Review Pemilik</p>
+              <ul class="w-steps">
+                <li class="is-done">Produk pertama</li>
+                <li class="is-done">Gudang pickup</li>
+                <li>API key kurir</li>
+              </ul>
             </div>
-            <div class="rts-bar"><span></span></div>
-            <p class="rts-meta">Gudang di provinsi pembeli dipakai lebih dulu</p>
-          </div>
-        )}
+          )}
+        </div>
+      )}
 
-        {pillar.id === 'uang' && (
-          <div class="vis-money">
-            <div class="vm-compare">
-              <span class="vm-strike">Potongan per transaksi</span>
-              <strong class="vm-zero">0% Komisi Platform</strong>
-            </div>
-            <p class="vm-flow">Mengantar COD &amp; AutoLaris QRIS/VA → Langsung ke Akun Anda</p>
-          </div>
-        )}
-
-        {pillar.id === 'mulai' && (
-          <div class="vis-start">
-            <div class="vs-pills">
-              <span class="vs-on">Mode Review Pemilik</span>
-              <span class="vs-shield">+48 Jam Masa Tenggang</span>
-            </div>
-            <div class="vs-steps">
-              <i class="done"></i><i class="done"></i><i class="done"></i>
-              <span>3 langkah siap buka</span>
-            </div>
-          </div>
-        )}
-
-        {pillar.id === 'infra' && (
-          <div class="vis-infra">
-            <div><strong>348</strong><small>Kota Edge</small></div>
-            <div><strong>50 ms</strong><small>Respons</small></div>
-            <div><strong>10 GB</strong><small>DB Mandiri</small></div>
-            <div><strong>1.000/dtk</strong><small>Kapasitas</small></div>
-          </div>
-        )}
-      </div>
-
-      <div class="bento-body">
-        <p class="bento-kicker">
-          <span class="bento-num">{String(index + 1).padStart(2, '0')}</span>
-          <span>{pillar.label}</span>
-        </p>
+      <div class="tile-body">
+        <span class="idx">{String(index + 1).padStart(2, '0')}</span>
         <h3>{pillar.title}</h3>
-        <p class="bento-copy">{pillar.summary}</p>
-        <a class="text-link bento-link" href={`/fitur#${pillar.id}`} aria-label={`Detail ${pillar.label}`}>Detail</a>
+        <p>{pillar.summary}</p>
       </div>
+
+      {pillar.id === 'infra' && pillar.specs && (
+        <dl class="metrics">
+          {pillar.specs.map((spec) => <div><dt>{spec.label}</dt><dd>{spec.value}</dd></div>)}
+        </dl>
+      )}
     </article>
   ))}
 </div>
@@ -96,84 +81,85 @@ import { PILLARS } from './content.ts';
     const io = new IntersectionObserver((entries) => {
       for (const entry of entries) (entry.target as HTMLElement).classList.toggle('is-playing', entry.isIntersecting);
     }, { threshold: 0.2 });
-    grids.forEach((g) => io.observe(g));
+    grids.forEach((grid) => io.observe(grid));
   }
 </script>
 
 <style>
   .bento-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1.25rem; }
-  .bento-card { grid-column: span 4; background: #ffffff; border: 1px solid var(--line); border-radius: 18px; padding: 1.35rem; display: flex; flex-direction: column; justify-content: space-between; gap: 1.15rem; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-  .bento-card:hover { border-color: #93c5fd; box-shadow: 0 16px 34px -16px rgb(15 23 42 / 0.1); }
-  .bento-wide { grid-column: span 6; }
+  .tile { display: flex; flex-direction: column; justify-content: space-between; gap: 2rem; padding: 2rem; border-radius: 24px; background: var(--tile); }
+  .span-7 { grid-column: span 7; }
+  .span-5 { grid-column: span 5; }
+  .span-4 { grid-column: span 4; }
+  .span-12 { grid-column: span 12; flex-direction: row; align-items: center; }
 
-  .bento-visual { min-height: 108px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.95rem 1rem; display: flex; flex-direction: column; justify-content: center; }
-  /* Signal card: a mini status table per platform, no connector lines. */
-  .vis-signal { display: grid; gap: 0.35rem; }
-  .vsig-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.35rem 0.55rem; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; font-size: 0.74rem; }
-  .vsig-pf { font-weight: 700; color: var(--ink); }
-  .vsig-how { color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vsig-ok { font-size: 0.66rem; padding: 0.05rem 0.4rem; border-radius: 999px; }
-  .vsig-ok { background: #eff6ff; color: var(--accent); }
-  .bento-grid.is-playing .bento-sinyal .vsig-row { animation: vsig-in 0.5s ease-out both; }
-  .bento-grid.is-playing .bento-sinyal .vsig-row:nth-child(2) { animation-delay: 0.12s; }
-  .bento-grid.is-playing .bento-sinyal .vsig-row:nth-child(3) { animation-delay: 0.24s; }
-  @keyframes vsig-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  /* The one floating artifact of each tile. */
+  .widget { display: grid; gap: 0.6rem; padding: 1.1rem 1.2rem; border-radius: 14px; background: #fff; box-shadow: var(--shadow-float); font-size: 0.8rem; color: var(--ink-muted); }
+  .w-accent { color: var(--accent); }
 
-  /* 1. Sinyal Hub */
+  .w-sync { list-style: none; margin: 0; padding: 0; display: grid; }
+  .w-sync li { display: grid; grid-template-columns: 5.75rem minmax(0, 1fr) auto; gap: 0.6rem; align-items: center; padding: 0.55rem 0; border-bottom: var(--hairline); }
+  .w-sync li:last-child { border-bottom: 0; }
+  .w-pf { font-weight: 700; color: var(--ink); }
+  .w-how { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--slate); }
+  .w-sync b { padding: 0.1rem 0.45rem; border-radius: 999px; background: #eff6ff; color: var(--accent); font-size: 0.7rem; }
 
-  /* 2. Instant Form + Rescued Lead */
-  .vis-form { display: grid; gap: 0.55rem; }
-  .vf-search { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.7rem; border-radius: 8px; background: #ffffff; border: 1px solid #bfdbfe; font-size: 0.8rem; }
-  .vf-typed { font-weight: 700; color: var(--ink); }
-  .vf-ms { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; padding: 0.12rem 0.42rem; border-radius: 5px; background: #eff6ff; color: var(--accent); }
-  .vf-lead { display: flex; align-items: center; gap: 0.45rem; font-size: 0.76rem; color: var(--ink-muted); }
-  .vf-lead b { color: var(--ink); }
-  .sq-blue { width: 6px; height: 6px; background: var(--accent); flex-shrink: 0; }
+  .w-form { display: grid; gap: 0.55rem; }
+  .w-input { display: flex; align-items: center; gap: 0.15rem; padding: 0.55rem 0.7rem; border-radius: 10px; background: #f8fafc; box-shadow: inset 0 0 0 1.5px var(--accent); font-weight: 700; color: var(--ink); }
+  .w-caret { width: 1.5px; height: 1em; background: var(--accent); }
+  .w-results { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+  .w-results li { padding: 0.35rem 0.7rem; border-radius: 8px; }
+  .w-results .is-pick { background: #eff6ff; color: var(--ink); font-weight: 600; }
+  .w-lead { padding-top: 0.5rem; border-top: var(--hairline); font-size: 0.76rem; }
+  .w-lead b { color: var(--ink); }
 
-  /* 3. RTS Guard */
-  .vis-rts { display: grid; gap: 0.45rem; }
-  .rts-row { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; font-size: 0.76rem; }
-  .rts-order { font-weight: 700; color: var(--ink); }
-  .rts-safe { font-size: 0.7rem; font-weight: 700; padding: 0.14rem 0.46rem; border-radius: 5px; background: #dcfce7; color: #166534; }
-  .rts-bar { height: 6px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
-  .rts-bar span { display: block; width: 88%; height: 100%; background: var(--accent); }
-  .rts-meta { font-size: 0.74rem; color: var(--ink-muted); }
+  .w-rts { display: grid; gap: 0.6rem; }
+  .w-row { display: flex; justify-content: space-between; gap: 0.5rem; }
+  .w-row b { color: var(--ink); }
+  .w-meter { height: 6px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+  .w-meter span { display: block; width: 22%; height: 100%; border-radius: 999px; background: var(--accent); }
 
-  /* 4. Zero Fee */
-  .vis-money { display: grid; gap: 0.45rem; }
-  .vm-compare { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-  .vm-strike { font-size: 0.75rem; color: #94a3b8; text-decoration: line-through; }
-  .vm-zero { font-family: var(--display); font-weight: 800; font-size: 0.95rem; color: var(--accent); }
-  .vm-flow { font-size: 0.74rem; color: var(--ink-muted); line-height: 1.4; }
+  .w-money { margin: 0; display: grid; }
+  .w-money div { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.45rem 0; border-bottom: var(--hairline); }
+  .w-money div:last-child { border-bottom: 0; }
+  .w-money dt { color: var(--slate); }
+  .w-money dd { margin: 0; font-weight: 700; color: var(--ink); text-align: right; }
+  .w-money dd.w-accent { font: 800 1.05rem/1 var(--display); color: var(--accent); }
 
-  /* 5. Start Free + 48h Shield */
-  .vis-start { display: grid; gap: 0.55rem; }
-  .vs-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-  .vs-on { font-size: 0.71rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px; background: var(--ink); color: #ffffff; }
-  .vs-shield { font-size: 0.71rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px; background: #eff6ff; color: var(--accent); border: 1px solid #bfdbfe; }
-  .vs-steps { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; font-weight: 600; color: var(--ink-muted); }
-  .vs-steps i.done { width: 14px; height: 5px; background: var(--accent); display: inline-block; }
+  .w-start { display: grid; gap: 0.6rem; }
+  .w-mode { justify-self: start; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.15rem 0.55rem; border-radius: 6px; background: #eff6ff; color: var(--accent); font-size: 0.72rem; font-weight: 700; }
+  .w-mode::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
+  .w-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+  .w-steps li { display: flex; align-items: center; gap: 0.5rem; }
+  .w-steps li::before { content: ""; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px #cbd5e1; }
+  .w-steps .is-done { color: var(--ink); }
+  .w-steps .is-done::before { background: var(--accent); box-shadow: none; }
 
-  /* 6. Infra Metrics */
-  .vis-infra { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.75rem; }
-  .vis-infra strong { display: block; font-family: var(--display); font-weight: 800; font-size: 0.95rem; color: var(--ink); line-height: 1.1; }
-  .vis-infra small { font-size: 0.71rem; color: var(--ink-muted); }
+  .tile-body { display: grid; gap: 0.5rem; align-content: end; }
+  .idx { font: 600 0.78rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.08em; color: var(--slate-soft); }
+  .tile-body h3 { font-size: 1.15rem; line-height: 1.28; }
+  .tile-body p { font-size: 0.93rem; line-height: 1.55; color: var(--ink-muted); }
+  .span-12 .tile-body { flex: 1; max-width: 46ch; }
 
-  /* Body */
-  .bento-body { display: grid; gap: 0.45rem; align-content: start; }
-  .bento-kicker { display: flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; font-weight: 700; color: var(--accent); }
-  .bento-num { font-family: var(--display); color: #94a3b8; font-variant-numeric: tabular-nums; }
-  .bento-body h3 { font-size: 1.14rem; line-height: 1.25; }
-  .bento-copy { font-size: 0.9rem; line-height: 1.5; color: var(--ink-muted); }
-  .bento-link { font-size: 0.88rem; margin-top: 0.2rem; }
+  /* The infra tile: numbers set as type, no boxes around them. */
+  .metrics { flex: 1.2; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.5rem; }
+  .metrics div { display: grid; gap: 0.25rem; align-content: start; }
+  .metrics dd { order: -1; margin: 0; font: 800 clamp(1.4rem, 1.1rem + 1vw, 1.9rem)/1.1 var(--display); color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .metrics dt { font-size: 0.8rem; line-height: 1.4; color: var(--slate); }
+
+  .bento-grid.is-playing .widget { animation: float-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes float-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
   @media (max-width: 960px) {
-    .bento-card, .bento-wide { grid-column: span 6; }
+    .span-7, .span-5, .span-4 { grid-column: span 6; }
+    .span-12 { flex-direction: column; align-items: stretch; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 640px) {
-    .bento-card, .bento-wide { grid-column: span 12; }
+    .span-7, .span-5, .span-4, .span-12 { grid-column: span 12; }
+    .tile { padding: 1.4rem; border-radius: 20px; gap: 1.5rem; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .bento-card, .bento-grid.is-playing .bento-sinyal .vsig-row { transition: none; animation: none; }
+    .bento-grid.is-playing .widget { animation: none; }
   }
 </style>

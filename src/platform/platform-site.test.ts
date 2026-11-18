@@ -148,7 +148,10 @@ test("brand: the site uses the blue wordmark files and blue tokens; the animated
     assert.ok(existsSync(`public/platform/brand/${file}`), file);
   }
   assert.match(layout, /\/platform\/brand\/adsbook-id-wordmark\.svg/, "header logo");
-  assert.match(layout, /\/platform\/brand\/adsbook-id-wordmark-on-dark\.svg/, "footer logo");
+  // The footer is light porcelain since the borderless gallery (2026-11-18): the ink wordmark, not the on-dark one.
+  assert.equal((layout.match(/\/platform\/brand\/adsbook-id-wordmark\.svg/g) ?? []).length >= 1, true, "footer logo");
+  assert.doesNotMatch(layout, /adsbook-id-wordmark-on-dark\.svg/, "no on-dark logo on a light footer");
+  assert.match(layout, /\.site-footer \{[^}]*background: var\(--tile\)/, "a light porcelain footer");
   assert.match(layout, /--accent: #2563eb;/i, "blue accent");
   assert.doesNotMatch(layout + readFileSync("src/pages/platform/signup.astro", "utf8"), /#c2410c|#9a3412|#fed7aa|#faf7f2/i, "no orange brand left");
   const animated = readFileSync("public/platform/brand/adsbook-id-wordmark-animated.svg", "utf8");
@@ -297,4 +300,27 @@ test("one clean header everywhere: the inner pages carry the home's header, no e
   const head = readFileSync("src/platform/site/PageHead.astro", "utf8");
   assert.match(head, /eyebrow\?: string/);
   assert.match(head, /mask-image/, "the dot grid fades out instead of ending on a line");
+});
+
+test("borderless gallery (HOMEPAGE-DESIGN-SYSTEM v2): no phone bezel, no eyebrow pills or detail links below the hero, one pricing showcase", () => {
+  const site = (name: string) => readFileSync(`src/platform/site/${name}`, "utf8");
+  const page = (name: string) => readFileSync(`src/pages/platform/site/${name}.astro`, "utf8");
+  // The 8px black phone bezel is retired everywhere; screenshots stand on the ShotFrame pedestal.
+  const all = readdirSync("src/platform/site").filter((name) => name.endsWith(".astro")).map(site).join("\n")
+    + ["index", "coba", "fitur", "cara-kerja", "harga", "faq", "kontak"].map(page).join("\n");
+  assert.doesNotMatch(all, /border:\s*8px solid/, "no heavy bezel");
+  assert.match(site("ShotFrame.astro"), /class="shot-stage"/);
+  // Sections below the hero open on their H2: no eyebrow pills, no per-section detail links.
+  for (const name of ["TopCampaignsShowcase.astro", "SignalBand.astro", "HybridGeoSim.astro", "HomeBentoGrid.astro"]) {
+    assert.doesNotMatch(site(name), /pill-eyebrow|sec-kicker|signal-more|>Detail</, name);
+  }
+  assert.doesNotMatch(page("index"), /sec-kicker/, "the home has no kicker labels");
+  assert.match(page("index"), /<ClosingCta withShot=\{false\} \/>/, "the home ends on the band, not a second screenshot");
+  // One showcase: every plan stays real markup with its own signup link; 1 Tahun is chosen first.
+  const pricing = site("Pricing.astro");
+  assert.match(pricing, /type="radio" name="pricing-plan" value=\{plan\.code\} checked=\{plan\.code === best\}/);
+  assert.match(pricing, /href=\{`\$\{SIGNUP_PATH\}\?paket=\$\{plan\.code\}`\}/);
+  assert.match(pricing, /Server tracking 1:1 untuk Meta, Google, dan TikTok/, "the three server legs, as built");
+  // The comparison is an open table: no outer card, no dark header.
+  assert.doesNotMatch(site("CompetitorCompare.astro"), /compare-card|background: var\(--ink\)/);
 });

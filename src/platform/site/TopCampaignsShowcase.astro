@@ -23,7 +23,6 @@ const ROWS = [
 <section class={`section campaigns ${tone === 'white' ? 'section-white' : ''}`} aria-labelledby={id} data-campaigns>
   <div class="wrap camp-grid">
     <div class="camp-copy">
-      <p class="pill-eyebrow"><span class="sq" aria-hidden="true"></span>Campaign &amp; creative analytics</p>
       <h2 id={id}>Lihat jelas campaign mana yang benar-benar menghasilkan pesanan</h2>
       <p class="lead">Setiap pesanan tercatat kembali ke ad platform dan campaign asalnya, dari transaksi toko, bukan estimasi. Anda tahu ad set mana yang layak ditambah budget-nya, dan campaign mana yang belum menghasilkan satu pesanan pun.</p>
       <ul class="checks">
@@ -99,8 +98,6 @@ const ROWS = [
 <style>
   .camp-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 3.5rem; align-items: center; }
   .camp-copy { display: grid; gap: 1.1rem; justify-items: start; }
-  .pill-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.8rem; border-radius: 999px; background: #eff6ff; border: 1px solid #dbeafe; font: 600 0.72rem/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
-  .sq { width: 6px; height: 6px; background: var(--accent); flex-shrink: 0; }
   .checks { list-style: none; margin: 0.25rem 0 0; padding: 0; display: grid; gap: 0.55rem; font-weight: 600; font-size: 0.97rem; }
   .checks li { position: relative; padding-left: 1.75rem; }
   .checks li::before { content: ""; position: absolute; left: 0; top: 0.2rem; width: 18px; height: 18px; border-radius: 6px; background: #eff6ff; }
@@ -109,40 +106,41 @@ const ROWS = [
   .camp-visual { position: relative; margin: 0; padding: 1rem 0 0; min-height: 430px; }
   /* The back layer: a dashboard surface that fades into the page on the right and at the bottom. */
   .layer-back {
-    position: absolute; top: 0; left: 14%; right: 0; display: grid; gap: 1rem; padding: 1.25rem; border-radius: 18px;
-    background: var(--canvas); border: 1px solid #e2e8f0; box-shadow: 0 24px 60px -15px rgb(15 23 42 / 0.08);
+    position: absolute; top: 0; left: 14%; right: 0; display: grid; gap: 1rem; padding: 1.5rem; border-radius: 24px;
+    background: var(--tile);
     mask-image: linear-gradient(to right, #000 55%, transparent 100%), linear-gradient(to bottom, #000 60%, transparent 100%);
     mask-composite: intersect; -webkit-mask-image: linear-gradient(to right, #000 55%, transparent 100%), linear-gradient(to bottom, #000 60%, transparent 100%); -webkit-mask-composite: source-in;
   }
   .toolbar { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; font-size: 0.75rem; font-weight: 600; color: #475569; }
+  .chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; border-radius: 8px; background: #fff; font-size: 0.75rem; font-weight: 600; color: #475569; }
   .chip i { font-style: normal; color: #94a3b8; }
-  .chip-soft { background: #eff6ff; border-color: #dbeafe; color: var(--accent); }
+  .chip-soft { background: #eff6ff; color: var(--accent); }
   .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; }
-  .tile { display: grid; gap: 0.2rem; align-content: start; padding: 0.75rem; border-radius: 12px; background: #fff; border: 1px solid #e2e8f0; }
+  .tile { display: grid; gap: 0.2rem; align-content: start; padding: 0.75rem; border-radius: 12px; background: #fff; }
   .t-label { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; }
   .tile b { font: 800 1.05rem/1.2 var(--display); color: var(--ink); font-variant-numeric: tabular-nums; }
-  .t-pill { justify-self: start; padding: 0.05rem 0.4rem; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 0.66rem; font-weight: 700; }
+  .t-pill { justify-self: start; padding: 0.05rem 0.4rem; border-radius: 999px; background: #eff6ff; color: var(--accent); font-size: 0.66rem; font-weight: 700; }
   .t-sub { font-size: 0.7rem; color: #64748b; }
   .spark { display: flex; align-items: flex-end; gap: 0.4rem; height: 96px; padding: 0.5rem 0.25rem 0; }
-  .spark span { flex: 1; height: var(--h); border-radius: 6px 6px 2px 2px; background: linear-gradient(#93c5fd, #dbeafe); }
+  .spark span { flex: 1; height: var(--h); border-radius: 6px 6px 2px 2px; background: #cbd5e1; }
+  .spark span:last-child { background: var(--accent); }
 
   /* The front layer: the card people read. */
   .layer-front {
-    position: relative; z-index: 1; margin-top: 7.5rem; width: min(100%, 470px); display: grid; border-radius: 18px; background: #fff; border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 12px 24px -10px rgb(15 23 42 / 0.12), 0 32px 64px -24px rgb(15 23 42 / 0.18);
+    position: relative; z-index: 1; margin-top: 7.5rem; width: min(100%, 470px); display: grid; border-radius: 18px; background: #fff; border: 1px solid rgb(15 23 42 / 0.05);
+    box-shadow: var(--shadow-float);
     transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .front-head, .front-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.5rem 7.5rem; gap: 0.75rem; align-items: center; padding: 0.75rem 1rem; }
-  .front-head { border-bottom: 1px solid #f1f5f9; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; }
+  .front-head { border-bottom: var(--hairline); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; }
   .fh-title { color: var(--ink); }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .front-row { border-bottom: 1px solid #f1f5f9; }
+  .front-row { border-bottom: var(--hairline); }
   .front-row:last-child { border-bottom: 0; }
   .front-row.is-win { background: #eff6ff; box-shadow: inset 3px 0 0 var(--accent); }
-  .front-row.is-cut { opacity: 0.72; }
+  .front-row.is-cut .fr-title, .front-row.is-cut .fr-orders, .front-row.is-cut .fr-rev { color: var(--slate); }
   .fr-name { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
-  .pf { flex-shrink: 0; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: #fff; border: 1px solid #e2e8f0; }
+  .pf { flex-shrink: 0; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--tile); }
   .pf svg { width: 18px; height: 18px; }
   .fr-text { display: grid; min-width: 0; }
   .fr-title { font-weight: 700; font-size: 0.86rem; line-height: 1.3; color: var(--ink); }
@@ -150,9 +148,10 @@ const ROWS = [
   .fr-orders { font: 800 0.95rem/1 var(--display); color: var(--ink); }
   .fr-rev { display: grid; justify-items: end; gap: 0.2rem; font-weight: 700; font-size: 0.85rem; color: var(--ink); }
   .fr-note { max-width: 100%; font-size: 0.66rem; font-weight: 700; line-height: 1.35; padding: 0.05rem 0.4rem; border-radius: 999px; text-align: right; }
-  .note-win { background: #ecfdf5; color: #047857; }
-  .note-ok { background: #f1f5f9; color: #475569; }
-  .note-cut { background: #fff1f2; color: #be123c; }
+  /* Monochrome plus one cobalt: only the winning row speaks in colour. */
+  .note-win { background: #eff6ff; color: var(--accent); }
+  .note-ok { background: transparent; color: var(--slate); }
+  .note-cut { background: transparent; color: var(--slate-soft); }
   .camp-caption { position: relative; z-index: 1; margin-top: 1rem; max-width: 470px; font-size: 0.8rem; line-height: 1.5; color: #64748b; }
   .campaigns.is-playing .layer-front { transform: translateY(-6px); }
 

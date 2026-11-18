@@ -30,9 +30,10 @@ const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').
 </SiteLayout>
 
 <style>
-  .faq-index { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin-top: 0.5rem; }
-  .faq-index a { font-weight: 600; text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
-  .faq-index a:hover { text-decoration: underline; }
+  .faq-index { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; }
+  .faq-index a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 1rem; border-radius: 999px; background: var(--tile); color: var(--ink); font-size: 0.92rem; font-weight: 600; text-decoration: none; transition: background-color 150ms ease-out, color 150ms ease-out; }
+  .faq-index a:hover { background: #eff6ff; color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { .faq-index a { transition: none; } }
   .groups { display: grid; gap: 4rem; }
   .group { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 2.5rem; align-items: start; scroll-margin-top: 1.5rem; }
   .group h2 { font-size: 1.35rem; }

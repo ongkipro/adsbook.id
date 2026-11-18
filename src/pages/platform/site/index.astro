@@ -16,10 +16,11 @@ import { getRuntimeEnv } from '../../../lib/env';
 import { tenantHostSuffix } from '../../../platform/hostnames';
 
 export const prerender = false;
-// Homepage (Paduka, 2026-11-18, white gallery): the 100dvh 3D hero (unchanged)
-// -> campaign analytics showcase -> 1:1 tracking proof -> Hybrid Form by
-// province -> six-pillar bento -> comparison and pricing -> the real phone
-// checkout -> FAQ -> close. White and porcelain surfaces only; no dark band.
+// Homepage (Paduka, 2026-11-18, borderless gallery, HOMEPAGE-DESIGN-SYSTEM v2): the 100dvh 3D
+// hero (unchanged) -> campaign analytics -> 1:1 tracking proof -> Hybrid Form by province ->
+// six-pillar bento -> pricing, then the open comparison -> the real phone checkout -> FAQ ->
+// one closing band without a second screenshot. Sections open on their H2: no eyebrow pills
+// and no per-section "detail" links below the hero.
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 ---
 
@@ -37,7 +38,6 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
   <section class="section" aria-labelledby="bento-title">
     <div class="wrap">
       <div class="section-head">
-        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Enam keunggulan inti</p>
         <h2 id="bento-title">Dirancang untuk seller yang beriklan di semua platform iklan</h2>
         <p class="lead">Ringan di HP pembeli, ketat terhadap paket berisiko retur, dan rapi mengirim konversi ke Ads Manager Anda.</p>
       </div>
@@ -48,20 +48,21 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
   <section class="section section-white" aria-labelledby="harga-title">
     <div class="wrap">
       <div class="section-head">
-        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Perbandingan &amp; biaya langganan</p>
-        <h2 id="harga-title">Satu biaya flat per toko: 0% potongan QRIS/VA, tanpa kuota order</h2>
-        <p class="lead">Tidak ada persentase yang ikut naik saat penjualan naik, dan tidak perlu menyewa aplikasi tracker terpisah.</p>
+        <h2 id="harga-title">Satu harga flat per toko, semua fitur terbuka</h2>
+        <p class="lead">Siapkan dan review toko gratis tanpa kartu di Mode Preview. Aktifkan langganan saat siap menjalankan iklan.</p>
+      </div>
+      <Pricing compact />
+      <div class="compare-head">
+        <h3>Dibanding form biasa dan aplikasi tracker terpisah</h3>
+        <p class="muted">Tidak ada persentase yang ikut naik saat penjualan naik, dan tidak perlu menyewa aplikasi kedua.</p>
       </div>
       <CompetitorCompare />
-      <Pricing compact />
-      <p class="more"><a class="text-link" href="/harga">Rincian paket &amp; masa tenggang 48 jam</a></p>
     </div>
   </section>
 
   <section class="section" aria-labelledby="bukti-produk-title">
     <div class="wrap proof-grid">
       <div class="proof-text">
-        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Tampilan nyata di HP pembeli</p>
         <h2 id="bukti-produk-title">Form checkout yang bersih dan cepat dibuka</h2>
         <p class="lead">Pilih varian, ketik kecamatan dan hasilnya langsung muncul, lalu pesanan masuk ke antrean verifikasi tim CS Anda.</p>
         <ul class="proof-facts" aria-label="Ringkasan">
@@ -69,10 +70,7 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
           <li>Review toko dulu tanpa biaya</li>
           <li>0% potongan per transaksi</li>
         </ul>
-        <div class="proof-actions">
-          <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
-          <a class="text-link" href="/cara-kerja">Lihat 5 langkah pesanan</a>
-        </div>
+        <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
       </div>
       <div class="proof-shot"><ShotFrame shot={SHOTS.form} caption /></div>
     </div>
@@ -86,22 +84,20 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
     </div>
   </section>
 
-  <ClosingCta />
+  <ClosingCta withShot={false} />
 </SiteLayout>
 
 <style>
-  .sec-kicker { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.84rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
-  .sq { display: inline-block; width: 7px; height: 7px; background: var(--accent); flex-shrink: 0; }
   .proof-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
   .proof-text { display: grid; gap: 1.2rem; justify-items: start; }
-  .proof-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; margin-top: 0.25rem; }
   .proof-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; color: var(--ink-muted); font-size: 0.94rem; font-weight: 600; }
   .proof-facts li { display: flex; align-items: center; gap: 0.5rem; }
   .proof-facts li::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
-  .proof-shot :global(.frame-phone) { max-width: 280px; }
+  .compare-head { display: grid; gap: 0.5rem; margin: 5rem 0 1.25rem; max-width: 60ch; }
+  .compare-head h3 { font-size: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem); font-weight: 800; }
   .more { margin-top: 1.75rem; }
   @media (max-width: 760px) {
     .proof-grid { grid-template-columns: 1fr; gap: 2.25rem; }
-    .proof-shot :global(.frame-phone) { max-width: 255px; }
+    .compare-head { margin-top: 3.5rem; }
   }
 </style>
