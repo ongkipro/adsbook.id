@@ -107,6 +107,11 @@
     {
       "binding": "ASSET_BUCKET",
       "bucket_name": "adsbook-platform-media"
+    },
+    {
+      // Private, operator-only: the daily PLATFORM_DB snapshot (src/platform/backup.ts), 30-day expiry rule on the bucket.
+      "binding": "BACKUP_BUCKET",
+      "bucket_name": "adsbook-platform-backup"
     }
   ],
   "ai": {

@@ -10,6 +10,7 @@ import { pollOpenInvoices, subscriptionCalendar } from "./billing.ts";
 import { resolveAuthSecret } from "../lib/auth-secret.ts";
 import { runPurges } from "./purge.ts";
 import { deleteHostnameRef, hostnameApiFromEnv, probeHost } from "./hostnames.ts";
+import { runDailyPlatformBackup } from "./backup.ts";
 
 /** MIG-1: tenants migrated by the cron per run, oldest schema first. */
 export const CRON_MIGRATION_BATCH = 50;
@@ -28,7 +29,8 @@ export const CRON_ARM_BATCH = 200;
  *    behind this release and that received no request, each through the T-18
  *    protocol (bookmark first; `openTenantDb` records the new version);
  * 2. arms the hourly alarm of every active tenant that has none;
- * 3. runs the platform's own retention job (`src/platform/jobs.ts`).
+ * 3. runs the platform's own retention job (`src/platform/jobs.ts`);
+ * 4. writes the day's `PLATFORM_DB` backup to R2 once (`src/platform/backup.ts`).
  * One tenant's failure is logged with its id and the next tenant runs.
  */
 export async function runPlatformCron(
@@ -139,6 +141,13 @@ export async function runPlatformCron(
     }
   } catch (error) {
     console.error("scheduled-platform-jobs-failed", String(error));
+  }
+  // T-30: its own try, so a failing job above never costs the day's backup.
+  try {
+    const backup = await runDailyPlatformBackup(env.BACKUP_BUCKET, platformDb, new Date(scheduledTime));
+    if (backup.status !== "exists") console.info("scheduled-platform-backup", backup);
+  } catch (error) {
+    console.error("scheduled-platform-backup-failed", String(error));
   }
   return { migrated, armed, failed };
 }

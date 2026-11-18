@@ -324,7 +324,7 @@ test("payment-only profile: a store with no saved area pair still sends /submit 
   let body: Record<string, unknown> | null = null;
   globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
     body = JSON.parse(String(init?.body));
-    return Response.json({ rc: "00", data: { transaction_id: "874546", total: 118_400, biaya_admin: 0, payment_info: { qr: "00020101021226", expired: "2026-11-18 10:00:00" } } });
+    return Response.json({ rc: "00", data: { transaction_id: "874546", total: 118_400, biaya_admin: 0, payment_info: { qr: "00020101021226", expired: "2099-12-31 10:00:00" } } });
   }) as typeof fetch;
   // Env area ids are never read (T-45): only the tenant's saved pair or the default pair.
   const locals = {

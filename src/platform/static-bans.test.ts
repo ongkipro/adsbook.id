@@ -62,10 +62,11 @@ test("T-45: no code outside src/platform reads a tenant value from the environme
   );
 });
 
-test("T-20: no code outside src/platform names the shared ASSET_BUCKET or SESSION binding", () => {
+test("T-20: no code outside src/platform names the shared ASSET_BUCKET, BACKUP_BUCKET or SESSION binding", () => {
   // TEN-3: an unprefixed key is a key another tenant can read or overwrite.
   // keys.ts is the one place that adds the tenant (and lives in src/platform/).
-  assert.deepEqual(offenders(/\b(?:ASSET_BUCKET|SESSION)\b/), [], "use tenantR2 / tenantKv from src/platform/keys.ts");
+  // BACKUP_BUCKET holds every tenant's control-plane rows: platform cron only (T-30).
+  assert.deepEqual(offenders(/\b(?:ASSET_BUCKET|BACKUP_BUCKET|SESSION)\b/), [], "use tenantR2 / tenantKv from src/platform/keys.ts");
 });
 
 test("the scan itself covers the code it guards", () => {
@@ -86,5 +87,6 @@ test("wrangler.jsonc names the platform's own Worker and bucket, never an AdsBoo
   const config = readFileSync(join(ROOT, "wrangler.jsonc"), "utf8");
   assert.match(config, /"name":\s*"adsbook-platform"/);
   assert.match(config, /"bucket_name":\s*"adsbook-platform-media"/);
+  assert.match(config, /"binding":\s*"BACKUP_BUCKET",\s*"bucket_name":\s*"adsbook-platform-backup"/);
   assert.doesNotMatch(config, /"[^"\n]*adsbookcms[^"\n]*"/i, "no quoted value may name the old product");
 });
