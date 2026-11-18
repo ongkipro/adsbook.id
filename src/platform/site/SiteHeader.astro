@@ -63,9 +63,10 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
     <div id="mobile-nav-backdrop" class="sh-backdrop" aria-hidden="true"></div>
     <nav id="mobile-nav-dropdown" class="sh-dropdown" aria-label="Menu navigasi" inert>
       <ul>
-        {nav.map((entry) => (
+        {nav.map((entry, index) => (
           <li>
             <a href={entry.path} aria-current={current(entry.path)}>
+              <span class="row-idx" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
               <span class="row-text"><span class="row-label">{entry.nav}</span><span class="row-hint">{NAV_HINTS[entry.path] ?? ''}</span></span>
               <span class="row-mark" aria-hidden="true"></span>
             </a>
@@ -74,7 +75,7 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
       </ul>
       <div class="sh-dropdown-foot">
         <a class="sh-pill" href={SIGNUP_PATH}>{SIGNUP_LABEL} →</a>
-        <a class="sh-secondary" href="/masuk" data-auth-open="masuk">Sudah punya toko? Masuk ke admin</a>
+        <a class="sh-secondary" href="/masuk" data-auth-open="masuk">Sudah punya toko? <b>Masuk ke admin</b></a>
       </div>
     </nav>
 
@@ -121,21 +122,45 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
   const dialog = document.getElementById('auth-dialog') as HTMLDialogElement | null;
 
   // --- The phone menu: [account] [menu ⇄ ×], a panel aligned to the screen edges.
+  // Paduka (2026-11-18): the header and its × stay sharp and clickable while the menu is
+  // open, and the page behind it does not scroll. The header sits above the scrim
+  // (z-index 65 over 59/60, one stacking context on every page), the scrim starts at the
+  // header's bottom edge (--sh-bottom), and the page is locked until any close path runs.
   const desktop = window.matchMedia('(min-width: 901px)');
+  const lockScroll = (locked: boolean) => {
+    document.documentElement.style.overflow = locked ? 'hidden' : '';
+    document.body.style.overflow = locked ? 'hidden' : '';
+  };
   const setMenu = (open: boolean, returnFocus = false) => {
     if (!menuButton || !dropdown || !backdrop || !header) return;
-    if (open) dropdown.style.top = `${Math.round(header.getBoundingClientRect().bottom) + 6}px`;
+    if (open) {
+      const bottom = Math.max(0, Math.round(header.getBoundingClientRect().bottom));
+      document.documentElement.style.setProperty('--sh-bottom', `${bottom}px`);
+    }
+    header.toggleAttribute('data-menu-open', open);
     menuButton.setAttribute('aria-expanded', String(open));
     menuButton.setAttribute('aria-label', open ? 'Tutup menu navigasi' : 'Buka menu navigasi');
     dropdown.toggleAttribute('inert', !open);
     dropdown.classList.toggle('is-open', open);
     backdrop.classList.toggle('is-open', open);
-    if (open) dropdown.querySelector<HTMLElement>('a')?.focus({ preventScroll: true });
+    lockScroll(open);
+    if (open) {
+      dropdown.scrollTop = 0; // a reopened short-screen menu starts at its first row
+      dropdown.querySelector<HTMLElement>('a')?.focus({ preventScroll: true });
+    }
     else if (returnFocus) menuButton.focus();
   };
   const isOpen = () => menuButton?.getAttribute('aria-expanded') === 'true';
   menuButton?.addEventListener('click', () => setMenu(!isOpen()));
   backdrop?.addEventListener('click', () => setMenu(false));
+  // A swipe on the scrim must not scroll the page under it (iOS ignores overflow alone).
+  backdrop?.addEventListener('touchmove', (event) => event.preventDefault(), { passive: false });
+  // Leaving through a menu link closes it first, so a page restored from the back-forward
+  // cache never comes back locked; pageshow covers any other way out.
+  dropdown?.addEventListener('click', (event) => {
+    if ((event.target as HTMLElement).closest('a')) setMenu(false);
+  });
+  window.addEventListener('pageshow', () => { if (isOpen()) setMenu(false); });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && isOpen()) setMenu(false, true);
   });
@@ -212,7 +237,11 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
 </script>
 
 <style>
-  .site-header { --sh-ease: cubic-bezier(0.22, 1, 0.36, 1); color: var(--ink); }
+  /* Above the menu's scrim (59) and panel (60): the wordmark and × stay sharp and clickable.
+     On the home the header, scrim and panel share .layer-ui's stacking context; elsewhere, the root. */
+  .site-header { --sh-ease: cubic-bezier(0.22, 1, 0.36, 1); position: relative; z-index: 65; color: var(--ink); }
+  /* Open: a solid white bar that also takes its own taps (the home's hero header is click-through). */
+  .site-header[data-menu-open] { background: #fff; pointer-events: auto; }
   /* One header, one look (Paduka, 2026-11-18): the inner pages get the home's clean header,
      transparent on the page's own surface, no rule under it, no second action. */
   .sh-row { width: min(1120px, 100% - 2rem); margin-inline: auto; min-height: 56px; display: flex; align-items: center; gap: 1rem; }
@@ -232,66 +261,75 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
 
   .sh-round {
     width: 40px; height: 40px; padding: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; cursor: pointer;
-    background: rgb(255 255 255 / 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border: 1px solid var(--line); color: var(--ink); transition: border-color 0.2s var(--sh-ease), color 0.2s var(--sh-ease), background-color 0.2s var(--sh-ease), transform 0.2s var(--sh-ease), box-shadow 0.2s var(--sh-ease);
+    background: #fff; border: 1px solid rgb(15 23 42 / 0.08); color: var(--ink); transition: border-color 0.2s var(--sh-ease), color 0.2s var(--sh-ease), background-color 0.2s var(--sh-ease), transform 0.2s var(--sh-ease), box-shadow 0.2s var(--sh-ease);
   }
   .sh-round:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; transform: translateY(-1px); box-shadow: 0 8px 20px -6px rgb(37 99 235 / 0.22); }
   .sh-round svg { width: 18px; height: 18px; overflow: visible; }
   /* = → ×: the two bars meet in the middle and turn. */
   .sh-burger .bar { transform-box: view-box; transform-origin: 10px 10px; transition: transform 0.2s var(--sh-ease); }
-  .sh-burger[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+  /* Open: the × reads unmistakably — cobalt on a soft cobalt tile. */
+  .sh-burger[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); background: #eff6ff; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12); }
   .sh-burger[aria-expanded="true"] .bar-top { transform: translateY(3px) rotate(45deg); }
   .sh-burger[aria-expanded="true"] .bar-bottom { transform: translateY(-3px) rotate(-45deg); }
 
-  .sh-backdrop { position: fixed; inset: 0; z-index: 59; pointer-events: none; background: rgb(15 23 42 / 0.16); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); opacity: 0; transition: opacity 0.18s ease-out; }
+  /* The scrim starts under the header bar, so it can never blur the header or its ×. */
+  .sh-backdrop { position: fixed; top: var(--sh-bottom, 64px); right: 0; bottom: 0; left: 0; z-index: 59; pointer-events: none; background: rgb(15 23 42 / 0.12); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.18s ease-out; }
   .sh-backdrop.is-open { opacity: 1; pointer-events: auto; }
+  /* Borderless gallery v2: a white card, a faint edge, the float shadow, no accent stripe. */
   .sh-dropdown {
-    position: fixed; top: 4.25rem; left: 1rem; right: 1rem; max-width: 440px; margin-inline: auto; z-index: 60; pointer-events: auto;
-    padding: 0.5rem; overflow: hidden; border-radius: 18px; background: rgb(255 255 255 / 0.98); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border: 1px solid #e2e8f0; box-shadow: 0 24px 48px -12px rgb(15 23 42 / 0.18);
+    position: fixed; top: calc(var(--sh-bottom, 64px) + 6px); left: 1rem; right: 1rem; max-width: 440px; margin-inline: auto; z-index: 60; pointer-events: auto;
+    max-height: calc(100dvh - var(--sh-bottom, 64px) - 1rem); overflow-y: auto; overscroll-behavior: contain;
+    padding: 0.625rem; border-radius: 22px; background: #fff;
+    border: 1px solid rgb(15 23 42 / 0.06); box-shadow: 0 24px 56px -12px rgb(15 23 42 / 0.14), 0 2px 8px -2px rgb(15 23 42 / 0.05);
     opacity: 0; visibility: hidden; transform: translateY(-8px) scale(0.985); transform-origin: top center;
     transition: opacity 0.19s var(--sh-ease), transform 0.19s var(--sh-ease), visibility 0s linear 0.19s;
   }
-  .sh-dropdown::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent); }
   .sh-dropdown.is-open { opacity: 1; visibility: visible; transform: none; transition: opacity 0.19s var(--sh-ease), transform 0.19s var(--sh-ease), visibility 0s; }
-  .sh-dropdown ul { list-style: none; margin: 0; padding: 0.25rem 0 0; display: grid; }
-  .sh-dropdown li a { display: flex; align-items: center; gap: 0.75rem; min-height: 52px; padding: 0.5rem 0.75rem; border-radius: 12px; color: var(--ink); text-decoration: none; }
-  .sh-dropdown li a:hover { background: #eff6ff; }
-  .row-text { flex: 1; display: grid; gap: 0.1rem; }
+  .sh-dropdown ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .sh-dropdown li a { display: flex; align-items: center; gap: 0.75rem; min-height: 54px; padding: 0.7rem 0.875rem; border-radius: 14px; color: var(--ink); text-decoration: none; transition: background-color 0.15s ease-out; }
+  .sh-dropdown li a:hover, .sh-dropdown li a:focus-visible { background: var(--tile); }
+  .row-idx { align-self: flex-start; margin-top: 0.2rem; font: 600 0.72rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.06em; color: var(--slate-soft); font-variant-numeric: tabular-nums; }
+  .row-text { flex: 1; display: grid; gap: 0.15rem; min-width: 0; }
   /* The display face's word space is narrow: the site's +0.06em keeps "Cara kerja" two words. */
-  .row-label { font: 800 0.98rem/1.25 var(--display); letter-spacing: -0.01em; word-spacing: 0.06em; }
-  .row-hint { font-size: 12px; line-height: 1.35; color: #64748b; }
-  .row-mark { width: 7px; height: 7px; border-top: 2px solid #94a3b8; border-right: 2px solid #94a3b8; transform: rotate(45deg); margin-right: 0.25rem; }
+  .row-label { font: 800 0.975rem/1.25 var(--display); letter-spacing: -0.01em; word-spacing: 0.06em; color: var(--ink); }
+  .row-hint { font-size: 0.8rem; line-height: 1.4; color: var(--slate); }
+  .row-mark { flex-shrink: 0; width: 7px; height: 7px; border-top: 2px solid var(--slate-soft); border-right: 2px solid var(--slate-soft); transform: rotate(45deg); margin-right: 0.25rem; transition: transform 0.15s ease-out; }
+  .sh-dropdown li a:hover .row-mark, .sh-dropdown li a:focus-visible .row-mark { transform: translateX(2px) rotate(45deg); }
+  /* The current page: a porcelain row, cobalt label, the brand's square dot. */
+  .sh-dropdown li a[aria-current="page"] { background: var(--tile); }
   .sh-dropdown li a[aria-current="page"] .row-label { color: var(--accent); }
-  .sh-dropdown li a[aria-current="page"] .row-mark { border: 0; transform: none; width: 7px; height: 7px; background: var(--accent); }
-  .sh-dropdown-foot { display: grid; gap: 0.25rem; margin-top: 0.5rem; padding: 0.75rem 0.25rem 0.25rem; border-top: 1px solid #e2e8f0; }
-  .sh-secondary { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 999px; color: var(--accent); font-weight: 700; font-size: 0.9rem; text-decoration: none; }
-  .sh-secondary:hover { background: #eff6ff; }
+  .sh-dropdown li a[aria-current="page"] .row-idx { color: var(--accent); }
+  .sh-dropdown li a[aria-current="page"] .row-mark { border: 0; transform: none; width: 6px; height: 6px; background: var(--accent); }
+  .sh-dropdown-foot { display: grid; gap: 0.5rem; margin-top: 0.625rem; padding: 0.75rem 0.375rem 0.375rem; border-top: var(--hairline); }
+  .sh-secondary { display: flex; align-items: center; justify-content: center; gap: 0.3rem; min-height: 46px; padding: 0 1rem; border-radius: 999px; background: var(--tile); color: var(--ink); font-weight: 600; font-size: 0.9rem; text-decoration: none; transition: background-color 0.15s ease-out; }
+  .sh-secondary b { color: var(--accent); font-weight: 700; }
+  .sh-secondary:hover { background: #eef1f6; color: var(--ink); }
 
   .sh-pill {
     display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 1.25rem; border: 0; border-radius: 999px; cursor: pointer;
     font: 700 0.875rem/1 var(--display); letter-spacing: -0.01em; word-spacing: 0.06em; color: #fff; text-decoration: none; background: var(--accent);
-    box-shadow: 0 10px 26px -8px rgb(37 99 235 / 0.46), inset 0 1px 0 rgb(255 255 255 / 0.22); transition: background-color 0.2s ease;
+    box-shadow: 0 8px 20px -10px rgb(37 99 235 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.2); transition: background-color 0.2s ease;
   }
   .sh-pill:hover { color: #fff; background: var(--accent-hover); }
 
-  .auth-dialog { width: min(360px, 100% - 2rem); padding: 1.5rem; pointer-events: auto; border: 1px solid var(--line); border-radius: 16px; background: #fff; color: var(--ink); box-shadow: 0 24px 48px -12px rgb(23 37 84 / 0.18); }
-  .auth-dialog::backdrop { background: rgb(15 23 42 / 0.2); backdrop-filter: blur(4px); }
+  .auth-dialog { width: min(360px, 100% - 2rem); padding: 1.5rem; pointer-events: auto; border: 1px solid rgb(15 23 42 / 0.08); border-radius: 22px; background: #fff; color: var(--ink); box-shadow: 0 24px 56px -12px rgb(15 23 42 / 0.16), 0 2px 8px -2px rgb(15 23 42 / 0.05); }
+  .auth-dialog::backdrop { background: rgb(15 23 42 / 0.14); backdrop-filter: blur(4px); }
   .auth-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
   .auth-head img { height: 20px; width: auto; }
-  .auth-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid var(--line); background: var(--canvas); color: #64748b; cursor: pointer; }
+  .auth-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 999px; border: 0; background: var(--tile); color: #64748b; cursor: pointer; }
   .auth-close:hover { background: #eff6ff; color: var(--accent); }
   .auth-close svg { width: 14px; height: 14px; }
-  .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; margin-bottom: 1rem; border-radius: 999px; background: var(--canvas); border: 1px solid var(--line); }
+  .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; margin-bottom: 1rem; border-radius: 999px; background: var(--tile); }
   .auth-tabs button { min-height: 36px; border: 0; border-radius: 999px; background: transparent; color: #64748b; font: 700 0.8125rem/1 var(--display); cursor: pointer; }
   .auth-tabs button:hover { color: var(--ink); }
-  .auth-tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
+  /* The chosen tab: a white chip on the porcelain track, cobalt text. */
+  .auth-tabs button[aria-selected="true"] { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 4px 10px -4px rgb(15 23 42 / 0.12); }
   .auth-title { font-size: 1rem; letter-spacing: -0.02em; }
   .auth-desc { margin-top: 0.25rem; font-size: 0.8125rem; line-height: 1.5; color: #64748b; }
   .auth-form { margin-top: 1rem; display: grid; gap: 0.5rem; }
   .auth-form[hidden] { display: none; }
   .auth-form label { font-size: 0.8125rem; font-weight: 600; color: #475569; }
-  .auth-form input { width: 100%; min-height: 44px; padding: 0 0.875rem; border-radius: 12px; border: 1px solid var(--line); background: var(--canvas); color: var(--ink); font: inherit; font-size: 1rem; }
+  .auth-form input { width: 100%; min-height: 44px; padding: 0 0.875rem; border-radius: 12px; border: 1px solid rgb(15 23 42 / 0.1); background: #f8fafc; color: var(--ink); font: inherit; font-size: 1rem; }
   .auth-form input:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15); }
   .auth-form input[aria-invalid="true"] { border-color: #e11d48; background: #fff; box-shadow: 0 0 0 3px rgb(225 29 72 / 0.14); }
   .auth-form .sh-pill { width: 100%; margin-top: 0.25rem; }
@@ -310,7 +348,7 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
     .sh-burger, .sh-backdrop, .sh-dropdown { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .sh-round, .sh-burger .bar, .sh-backdrop, .sh-dropdown, .sh-dropdown.is-open, .sh-pill { transition: none; }
+    .sh-round, .sh-burger .bar, .sh-backdrop, .sh-dropdown, .sh-dropdown.is-open, .sh-pill, .sh-dropdown li a, .row-mark, .sh-secondary { transition: none; }
     .sh-round:hover { transform: none; }
   }
 </style>
