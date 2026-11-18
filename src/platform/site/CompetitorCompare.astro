@@ -7,33 +7,33 @@
 const ROWS = [
   {
     feature: 'Potongan transaksi QRIS & VA',
-    typical: 'Dipotong 1% – 5% per transaksi',
-    tracker: 'Bayar aplikasi kedua tiap bulan',
-    ours: '0% komisi platform (cair langsung)',
+    typical: 'Persentase dipotong per transaksi',
+    tracker: 'Biaya langganan aplikasi kedua',
+    ours: '0% biaya per transaksi, dana cair langsung',
   },
   {
-    feature: 'Batas kuota order & jumlah produk',
-    typical: 'Dibatasi kuota bulanan per paket',
-    tracker: 'Tagihan naik sesuai trafik order',
-    ours: 'Tanpa kuota order & produk',
+    feature: 'Kuota order dan jumlah produk',
+    typical: 'Sering dibatasi per paket',
+    tracker: 'Biaya bisa naik mengikuti volume event',
+    ours: 'Tanpa kuota order dan produk',
   },
   {
-    feature: 'Filter iklan bocor ke provinsi jauh',
-    typical: 'Tetap masuk jadi COD rawan retur',
-    tracker: 'Tidak bisa mengunci metode bayar',
-    ours: 'Hybrid Form Geo-IP otomatis',
+    feature: 'Metode bayar per provinsi',
+    typical: 'COD terbuka untuk semua wilayah',
+    tracker: 'Tidak mengatur metode bayar',
+    ours: 'Hybrid Form per provinsi, COD dikunci di server',
   },
   {
-    feature: 'Sinyal Server 1:1 & 8 Hash SHA-256',
-    typical: 'Pixel dasar / sewa server GTM lagi',
-    tracker: 'Terpisah dari form & status COD',
-    ours: 'Menyatu langsung di inti toko',
+    feature: 'Server tracking 1:1 dan 8 hash SHA-256',
+    typical: 'Pixel browser, atau server GTM terpisah',
+    tracker: 'Terpisah dari form dan status COD',
+    ours: 'Bawaan toko, satu event_id per pesanan',
   },
   {
-    feature: 'Kecepatan & isolasi database toko',
-    typical: 'Database dipakai bersama (shared)',
-    tracker: 'Tambah script luar di halaman',
-    ours: 'Database mandiri 10 GB per toko',
+    feature: 'Database toko',
+    typical: 'Tergantung arsitektur penyedia',
+    tracker: 'Menambah script di halaman',
+    ours: 'Database 10 GB khusus per toko',
   },
 ] as const;
 ---
@@ -41,17 +41,17 @@ const ROWS = [
 <div class="compare-card" role="region" aria-label="Perbandingan fitur dan biaya platform">
   <div class="compare-table" role="table">
     <div class="c-row c-head" role="row">
-      <span role="columnheader">Kebutuhan Pengiklan</span>
-      <span role="columnheader" class="c-muted-col">Form / Toko Biasa</span>
-      <span role="columnheader" class="c-muted-col">+ Aplikasi Tracker Luar</span>
+      <span role="columnheader">Kebutuhan pengiklan</span>
+      <span role="columnheader" class="c-muted-col">Form atau toko biasa</span>
+      <span role="columnheader" class="c-muted-col">+ aplikasi tracker</span>
       <span role="columnheader" class="c-ours-head"><span class="mini-mark" aria-hidden="true">a<i></i></span>adsbook.id</span>
     </div>
 
     {ROWS.map((row) => (
       <div class="c-row" role="row">
         <span role="cell" class="c-feat">{row.feature}</span>
-        <span role="cell" class="c-other" data-col="Form / Toko Biasa">{row.typical}</span>
-        <span role="cell" class="c-other" data-col="+ Tracker Luar">{row.tracker}</span>
+        <span role="cell" class="c-other" data-col="Form atau toko biasa">{row.typical}</span>
+        <span role="cell" class="c-other" data-col="+ aplikasi tracker">{row.tracker}</span>
         <span role="cell" class="c-ours" data-col="adsbook.id"><i class="sq" aria-hidden="true"></i>{row.ours}</span>
       </div>
     ))}

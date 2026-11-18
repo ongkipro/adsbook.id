@@ -12,19 +12,10 @@ import { PILLARS } from './content.ts';
     <article class={`bento-card bento-${pillar.id} ${index < 2 ? 'bento-wide' : ''}`}>
       <div class="bento-visual" aria-hidden="true">
         {pillar.id === 'sinyal' && (
-          <div class="vis-hub">
-            <div class="hub-sources">
-              <span>Meta Ads</span>
-              <span>Google Ads</span>
-              <span>TikTok UTM</span>
-            </div>
-            <div class="hub-rails">
-              <i class="rail r1"></i>
-              <i class="rail r2"></i>
-              <i class="rail r3"></i>
-            </div>
-            <div class="hub-core"><span>a<i></i></span><small>1:1</small></div>
-            <div class="hub-dest">Dashboard Iklan</div>
+          <div class="vis-signal">
+            <div class="vsig-row"><span class="vsig-pf">Meta Ads</span><span class="vsig-how">Pixel + Conversions API</span><b class="vsig-ok">1:1</b></div>
+            <div class="vsig-row"><span class="vsig-pf">Google Ads</span><span class="vsig-how">Tag + offline conversion</span><b class="vsig-ok">1:1</b></div>
+            <div class="vsig-row"><span class="vsig-pf">TikTok Ads</span><span class="vsig-how">UTM di Analitik</span><b class="vsig-utm">UTM</b></div>
           </div>
         )}
 
@@ -32,7 +23,7 @@ import { PILLARS } from './content.ts';
           <div class="vis-form">
             <div class="vf-search">
               <span class="vf-typed">Sukajadi, Bandung</span>
-              <b class="vf-ms">0 ms</b>
+              <b class="vf-ms">Instan</b>
             </div>
             <div class="vf-lead">
               <span class="sq-blue"></span>
@@ -48,14 +39,14 @@ import { PILLARS } from './content.ts';
               <span class="rts-safe">Skor RTS Aman</span>
             </div>
             <div class="rts-bar"><span></span></div>
-            <p class="rts-meta">Pilih otomatis dari 10 titik gudang terdekat</p>
+            <p class="rts-meta">Gudang di provinsi pembeli dipakai lebih dulu</p>
           </div>
         )}
 
         {pillar.id === 'uang' && (
           <div class="vis-money">
             <div class="vm-compare">
-              <span class="vm-strike">Potongan 1% – 5%</span>
+              <span class="vm-strike">Potongan per transaksi</span>
               <strong class="vm-zero">0% Komisi Platform</strong>
             </div>
             <p class="vm-flow">Mengantar COD &amp; AutoLaris QRIS/VA → Langsung ke Akun Anda</p>
@@ -116,23 +107,20 @@ import { PILLARS } from './content.ts';
   .bento-wide { grid-column: span 6; }
 
   .bento-visual { min-height: 108px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.95rem 1rem; display: flex; flex-direction: column; justify-content: center; }
+  /* Signal card: a mini status table per platform, no connector lines. */
+  .vis-signal { display: grid; gap: 0.35rem; }
+  .vsig-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.35rem 0.55rem; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; font-size: 0.74rem; }
+  .vsig-pf { font-weight: 700; color: var(--ink); }
+  .vsig-how { color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vsig-ok, .vsig-utm { font-size: 0.66rem; padding: 0.05rem 0.4rem; border-radius: 999px; }
+  .vsig-ok { background: #eff6ff; color: var(--accent); }
+  .vsig-utm { background: #f1f5f9; color: #475569; }
+  .bento-grid.is-playing .bento-sinyal .vsig-row { animation: vsig-in 0.5s ease-out both; }
+  .bento-grid.is-playing .bento-sinyal .vsig-row:nth-child(2) { animation-delay: 0.12s; }
+  .bento-grid.is-playing .bento-sinyal .vsig-row:nth-child(3) { animation-delay: 0.24s; }
+  @keyframes vsig-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
   /* 1. Sinyal Hub */
-  .vis-hub { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 0.6rem; }
-  .hub-sources { display: grid; gap: 0.3rem; }
-  .hub-sources span { font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px; background: #ffffff; border: 1px solid #cbd5e1; color: var(--ink); white-space: nowrap; }
-  .hub-rails { display: grid; gap: 0.55rem; }
-  .rail { display: block; height: 2px; background: #dbeafe; position: relative; overflow: hidden; }
-  .rail::after { content: ""; position: absolute; top: 0; left: -30%; width: 30%; height: 100%; background: var(--accent); }
-  .bento-grid.is-playing .rail::after { animation: rail-move 2.2s linear infinite; }
-  .bento-grid.is-playing .r2::after { animation-delay: 0.4s; }
-  .bento-grid.is-playing .r3::after { animation-delay: 0.8s; }
-  @keyframes rail-move { to { left: 110%; } }
-  .hub-core { width: 44px; height: 44px; border-radius: 11px; background: var(--ink); color: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
-  .hub-core span { font-family: var(--display); font-weight: 800; font-size: 0.95rem; display: inline-flex; align-items: baseline; }
-  .hub-core span i { width: 4px; height: 4px; background: #60a5fa; margin-left: 1px; display: inline-block; }
-  .hub-core small { font-size: 0.62rem; color: #93c5fd; font-weight: 700; margin-top: 2px; }
-  .hub-dest { font-size: 0.74rem; font-weight: 800; padding: 0.38rem 0.65rem; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: var(--accent); white-space: nowrap; }
 
   /* 2. Instant Form + Rescued Lead */
   .vis-form { display: grid; gap: 0.55rem; }
@@ -185,10 +173,8 @@ import { PILLARS } from './content.ts';
   }
   @media (max-width: 640px) {
     .bento-card, .bento-wide { grid-column: span 12; }
-    .vis-hub { grid-template-columns: 1fr auto 1fr; }
-    .hub-dest { grid-column: 1 / -1; text-align: center; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .rail::after, .bento-card { animation: none !important; transition: none !important; }
+    .bento-card, .bento-grid.is-playing .bento-sinyal .vsig-row { transition: none; animation: none; }
   }
 </style>

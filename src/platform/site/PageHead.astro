@@ -1,18 +1,44 @@
 ---
 /**
- * The head of every inner page: one h1 ending on the brand's square dot, one
- * lead. Same left edge as the content below (DESIGN.md C4).
+ * The opening of every inner page (Paduka, 2026-11-18, white gallery): a small
+ * pill naming the page, one centred h1 ending on the brand's square dot, one
+ * short lead. Airy, white, a faint dot grid that fades out at the edges; no
+ * rule, no card, no dark band. The page's wash comes from SiteLayout's body.
  */
-interface Props { title: string; lead?: string; id?: string }
-const { title, lead, id = 'page-title' } = Astro.props;
+interface Props { title: string; lead?: string; id?: string; eyebrow?: string }
+const { title, lead, id = 'page-title', eyebrow } = Astro.props;
 ---
 
 <section class="page-head" aria-labelledby={id}>
-  <div class="wrap">
-    <div class="head">
-      <h1 id={id} class="dot-end">{title}</h1>
-      {lead && <p class="lead">{lead}</p>}
-      <slot />
-    </div>
+  <div class="dots" aria-hidden="true"></div>
+  <div class="wrap head">
+    {eyebrow && <p class="eyebrow"><span class="sq" aria-hidden="true"></span>{eyebrow}</p>}
+    <h1 id={id} class="dot-end">{title}</h1>
+    {lead && <p class="lead">{lead}</p>}
+    <slot />
   </div>
 </section>
+
+<style>
+  .page-head { position: relative; padding: 3.5rem 0 4.5rem; overflow: hidden; }
+  /* An architectural dot grid, masked to nothing at the edges: texture, never a line. */
+  .dots {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(rgb(15 23 42 / 0.09) 1px, transparent 1.4px);
+    background-size: 22px 22px; background-position: center top;
+    mask-image: radial-gradient(ellipse 55% 75% at 50% 30%, #000 0%, transparent 72%);
+    -webkit-mask-image: radial-gradient(ellipse 55% 75% at 50% 30%, #000 0%, transparent 72%);
+  }
+  /* `.page-head` prefixes win over SiteLayout's left-aligned legal-page rules. */
+  .page-head .head { position: relative; display: grid; gap: 1.1rem; max-width: none; justify-items: center; text-align: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.8rem; border-radius: 999px;
+    background: rgb(255 255 255 / 0.85); border: 1px solid #dbeafe; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+    font: 600 0.72rem/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+  }
+  .sq { width: 6px; height: 6px; background: var(--accent); }
+  .page-head h1 { max-width: 20ch; font-size: clamp(2.2rem, 1.5rem + 2.6vw, 3.4rem); }
+  .page-head .lead { max-width: 58ch; }
+  .head > :global(:not(h1, p)) { justify-self: center; }
+  @media (max-width: 760px) { .page-head { padding: 2rem 0 3rem; } }
+</style>

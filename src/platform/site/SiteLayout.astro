@@ -62,7 +62,7 @@ const year = new Date().getFullYear();
       <div class="wrap footer-grid">
         <div class="footer-brand">
           <img src="/platform/brand/adsbook-id-wordmark-on-dark.svg" alt="adsbook.id" width="151" height="24" loading="lazy" decoding="async" />
-          <p>Toko COD yang presisi untuk seller iklan di semua kanal: satu pesanan, satu konversi.</p>
+          <p>Toko COD yang presisi untuk pengiklan di semua platform: satu pesanan, satu konversi.</p>
         </div>
         <nav aria-label="Produk" class="footer-col">
           <p class="footer-head">Produk</p>
@@ -119,7 +119,9 @@ const year = new Date().getFullYear();
   @media (max-width: 760px) { :root { --section: 4rem; } }
   *, *::before, *::after { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--canvas); color: var(--ink); font: 17px/1.6 var(--body); }
+  /* White gallery (Paduka, 2026-11-18): one ice-blue wash at the top of every page, behind the header and
+     the page head alike, so the two read as one surface. The home's hero paints its own stage over it. */
+  body { margin: 0; color: var(--ink); font: 17px/1.6 var(--body); background: radial-gradient(ellipse 58% 520px at 50% 0, rgb(219 234 254 / 0.45), rgb(255 255 255 / 0) 75%) no-repeat, var(--canvas); }
   img { max-width: 100%; height: auto; display: block; }
   a { color: var(--accent); text-underline-offset: 3px; }
   a:hover { color: var(--accent-hover); }
@@ -167,6 +169,7 @@ const year = new Date().getFullYear();
   @media (max-width: 760px) { .section-head { margin-bottom: 2rem; } }
   .section { padding-block: var(--section); }
   /* Inner pages: one head, on the same left edge as the content below it. */
+  /* The legal pages' head; PageHead.astro (every other inner page) styles its own, centred. */
   .page-head { padding: 3rem 0 4rem; }
   .page-head .head { display: grid; gap: 1.1rem; max-width: 64ch; }
   .page-head h1 { font-size: clamp(2.2rem, 1.5rem + 2.6vw, 3.4rem); }

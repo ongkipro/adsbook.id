@@ -106,7 +106,7 @@ test("the inner pages carry the same header: /fitur at 390, and the desktop nav 
   await page.goto(`${PLATFORM}/fitur`);
   await expect(page.locator("#btn-mobile-menu")).toBeHidden();
   await expect(page.locator(".sh-nav a[aria-current=page]")).toHaveText("Fitur");
-  await expect(page.locator("header .sh-try")).toHaveAttribute("href", "/daftar");
+  await expect(page.locator("header .sh-try"), "the inner pages carry the home's clean header").toHaveCount(0);
   await page.goto(`${PLATFORM}/daftar`);
   await expect(page.locator("#btn-user-auth"), "the signup page keeps only the wordmark").toHaveCount(0);
 });

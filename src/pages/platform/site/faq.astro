@@ -11,7 +11,7 @@ const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').
 ---
 
 <SiteLayout page={SITE_PAGES.faq}>
-  <PageHead title="Pertanyaan umum" lead="Jawaban singkat, dikelompokkan menurut yang biasa ditanyakan seller sebelum membuka toko.">
+  <PageHead eyebrow="Pusat jawaban" title="Pertanyaan umum" lead="Jawaban singkat, dikelompokkan menurut yang biasa ditanyakan seller sebelum membuka toko.">
     <nav class="faq-index" aria-label="Kelompok pertanyaan">
       {FAQ_GROUPS.map((group) => <a href={`#${slug(group.title)}`}>{group.title}</a>)}
     </nav>

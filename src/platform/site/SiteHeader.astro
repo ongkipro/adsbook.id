@@ -9,7 +9,7 @@
  * into × and opens a screen-aligned panel with a short line per page.
  * Every action is a real link first (/masuk, /daftar); scripts add the dialog.
  */
-import { SIGNUP_LABEL, SIGNUP_LABEL_SHORT, SIGNUP_PATH, SITE_PAGES } from './site.ts';
+import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from './site.ts';
 
 interface Props {
   currentPath?: string;
@@ -22,11 +22,11 @@ const { currentPath, suffix = 'adsbook.my.id', variant = 'page', quiet = false }
 const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
 /** One line per page in the phone menu: what the visitor finds there. */
 const NAV_HINTS: Record<string, string> = {
-  '/fitur': 'Enam keunggulan toko dan sinyal 1:1',
-  '/cara-kerja': 'Alur dari klik iklan sampai konversi tercatat',
-  '/harga': 'Mulai Rp149.000/bulan · 0% komisi transaksi',
-  '/faq': 'Pertanyaan umum pengiklan',
-  '/kontak': 'Hubungi tim adsbook.id',
+  '/fitur': 'Server tracking 1:1, Hybrid Form, dan kontrol RTS',
+  '/cara-kerja': 'Alur dari ad click sampai konversi tercatat',
+  '/harga': 'Mulai Rp149.000/bulan · 0% biaya per transaksi',
+  '/faq': 'Seputar tracking, pembayaran, dan domain',
+  '/kontak': 'Hubungi tim dukungan adsbook.id',
 };
 const current = (path: string) => (path === currentPath ? 'page' : undefined);
 ---
@@ -41,7 +41,6 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
     )}
     {!quiet && (
       <div class="sh-tools">
-        {variant === 'page' && <a class="sh-try" href={SIGNUP_PATH}>{SIGNUP_LABEL_SHORT}</a>}
         <a id="btn-user-auth" class="sh-round" href="/masuk" aria-label="Masuk atau Daftar" aria-haspopup="dialog" title="Daftar / Masuk">
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <circle cx="10" cy="6.6" r="3.1" stroke="currentColor" stroke-width="1.65"/>
@@ -214,12 +213,11 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
 
 <style>
   .site-header { --sh-ease: cubic-bezier(0.22, 1, 0.36, 1); color: var(--ink); }
-  .sh-page { background: var(--canvas); border-bottom: 1px solid var(--line); }
-  .sh-row { width: min(1120px, 100% - 2rem); margin-inline: auto; display: flex; align-items: center; gap: 1rem; }
-  .sh-page .sh-row { min-height: 72px; }
-  /* Inside the hero the header floats on the stage with the exact same 1120px container width! */
-  .sh-hero { flex-shrink: 0; pointer-events: none; padding: 0.75rem 0 0.25rem; }
-  .sh-hero .sh-row { min-height: 56px; }
+  /* One header, one look (Paduka, 2026-11-18): the inner pages get the home's clean header,
+     transparent on the page's own surface, no rule under it, no second action. */
+  .sh-row { width: min(1120px, 100% - 2rem); margin-inline: auto; min-height: 56px; display: flex; align-items: center; gap: 1rem; }
+  .sh-hero, .sh-page { flex-shrink: 0; padding: 0.75rem 0 0.25rem; }
+  .sh-hero { pointer-events: none; }
   .sh-hero .sh-wordmark, .sh-hero .sh-nav, .sh-hero .sh-tools { pointer-events: auto; }
 
   /* The logo is outlines (logo/make-logo.mjs in the content folder): a one-module square dot. */
@@ -227,13 +225,10 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
   .sh-wordmark img { height: 21px; width: auto; }
   .sh-nav { display: none; gap: 1.75rem; }
   .sh-nav a { position: relative; color: #475569; text-decoration: none; font-weight: 600; font-size: 0.93rem; letter-spacing: -0.005em; }
-  .sh-page .sh-nav a { color: var(--ink); }
   .sh-nav a:hover { color: var(--accent); }
   .sh-nav a[aria-current="page"] { color: var(--accent); }
   .sh-nav a[aria-current="page"]::after { content: ""; position: absolute; left: 50%; bottom: -0.55rem; width: 5px; height: 5px; margin-left: -2.5px; background: var(--accent); }
   .sh-tools { display: flex; align-items: center; gap: 0.5rem; }
-  .sh-try { display: none; align-items: center; min-height: 40px; padding: 0 1rem; border-radius: 8px; border: 2px solid var(--accent); color: var(--accent); font-weight: 700; font-size: 0.93rem; text-decoration: none; white-space: nowrap; }
-  .sh-try:hover { background: var(--accent-tint); color: var(--accent-hover); }
 
   .sh-round {
     width: 40px; height: 40px; padding: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; cursor: pointer;
@@ -305,14 +300,13 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
   .auth-error[hidden] { display: none; }
 
   @media (min-width: 640px) {
-    .sh-hero { padding: 1.1rem 0 0.25rem; }
+    .sh-hero, .sh-page { padding: 1.1rem 0 0.25rem; }
     .sh-wordmark img { height: 24px; }
   }
   @media (min-width: 901px) {
     .sh-row { display: grid; grid-template-columns: 1fr auto 1fr; }
     .sh-nav { display: flex; }
     .sh-tools { justify-self: end; }
-    .sh-try { display: inline-flex; }
     .sh-burger, .sh-backdrop, .sh-dropdown { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {

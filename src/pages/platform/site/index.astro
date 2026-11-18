@@ -2,6 +2,7 @@
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import KineticHero3D from '../../../platform/site/KineticHero3D.astro';
 import HybridGeoSim from '../../../platform/site/HybridGeoSim.astro';
+import TopCampaignsShowcase from '../../../platform/site/TopCampaignsShowcase.astro';
 import SignalBand from '../../../platform/site/SignalBand.astro';
 import HomeBentoGrid from '../../../platform/site/HomeBentoGrid.astro';
 import CompetitorCompare from '../../../platform/site/CompetitorCompare.astro';
@@ -15,9 +16,10 @@ import { getRuntimeEnv } from '../../../lib/env';
 import { tenantHostSuffix } from '../../../platform/hostnames';
 
 export const prerender = false;
-// Homepage (Paduka, 2026-11-18): 100dvh 3D hero -> Hybrid Geo-Form interactive
-// mind-map -> clean 1:1 Signal & Ad-Dashboard deck -> 6 visual Bento cards ->
-// Head-to-Head comparison + flat pricing -> real mobile checkout proof & FAQ.
+// Homepage (Paduka, 2026-11-18, white gallery): the 100dvh 3D hero (unchanged)
+// -> campaign analytics showcase -> 1:1 tracking proof -> Hybrid Form by
+// province -> six-pillar bento -> comparison and pricing -> the real phone
+// checkout -> FAQ -> close. White and porcelain surfaces only; no dark band.
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 ---
 
@@ -26,16 +28,18 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
     <h1 slot="title" id="hero-title" class="dot-end">Dari klik iklan ke pesanan terkirim — <span class="accent">terkunci di satu titik</span></h1>
   </KineticHero3D>
 
-  <HybridGeoSim />
+  <TopCampaignsShowcase />
 
   <SignalBand />
+
+  <HybridGeoSim />
 
   <section class="section" aria-labelledby="bento-title">
     <div class="wrap">
       <div class="section-head">
-        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Enam Keunggulan Inti</p>
-        <h2 id="bento-title">Dirancang untuk seller yang beriklan di semua kanal</h2>
-        <p class="lead">Ringan di HP pembeli, ketat menyaring paket berisiko retur, dan bersih mengirim konversi ke dashboard iklan Anda.</p>
+        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Enam keunggulan inti</p>
+        <h2 id="bento-title">Dirancang untuk seller yang beriklan di semua platform iklan</h2>
+        <p class="lead">Ringan di HP pembeli, ketat terhadap paket berisiko retur, dan rapi mengirim konversi ke Ads Manager Anda.</p>
       </div>
       <HomeBentoGrid />
     </div>
@@ -44,9 +48,9 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
   <section class="section section-white" aria-labelledby="harga-title">
     <div class="wrap">
       <div class="section-head">
-        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Perbandingan &amp; Biaya Langganan</p>
-        <h2 id="harga-title">Satu biaya flat per toko — 0% potongan QRIS/VA dan tanpa kuota order</h2>
-        <p class="lead">Tidak perlu membayar komisi persentase setiap kali penjualan naik atau menyewa aplikasi pelacak sinyal terpisah.</p>
+        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Perbandingan &amp; biaya langganan</p>
+        <h2 id="harga-title">Satu biaya flat per toko: 0% potongan QRIS/VA, tanpa kuota order</h2>
+        <p class="lead">Tidak ada persentase yang ikut naik saat penjualan naik, dan tidak perlu menyewa aplikasi tracker terpisah.</p>
       </div>
       <CompetitorCompare />
       <Pricing compact />
@@ -57,12 +61,12 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
   <section class="section" aria-labelledby="bukti-produk-title">
     <div class="wrap proof-grid">
       <div class="proof-text">
-        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Tampilan Nyata di HP Pembeli</p>
-        <h2 id="bukti-produk-title">Form checkout bersih tanpa gangguan, siap dibuka dalam hitungan detik</h2>
-        <p class="lead">Pilih varian, ketik kecamatan langsung muncul instan, dan pesanan masuk ke antrean verifikasi tim CS Anda.</p>
+        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Tampilan nyata di HP pembeli</p>
+        <h2 id="bukti-produk-title">Form checkout yang bersih dan cepat dibuka</h2>
+        <p class="lead">Pilih varian, ketik kecamatan dan hasilnya langsung muncul, lalu pesanan masuk ke antrean verifikasi tim CS Anda.</p>
         <ul class="proof-facts" aria-label="Ringkasan">
-          <li>Siap jalan tanpa koding</li>
-          <li>Bebas rakit &amp; review toko dulu</li>
+          <li>Setup tanpa coding</li>
+          <li>Review toko dulu tanpa biaya</li>
           <li>0% potongan per transaksi</li>
         </ul>
         <div class="proof-actions">
@@ -76,7 +80,7 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 
   <section class="section section-white" aria-labelledby="faq-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="faq-title">Pertanyaan yang sering ditanyakan pengiklan</h2></div>
+      <div class="section-head"><h2 id="faq-title">Pertanyaan yang sering diajukan pengiklan</h2></div>
       <FaqList items={FAQ_SHORT} />
       <p class="more"><a class="text-link" href="/faq">Semua pertanyaan</a></p>
     </div>
