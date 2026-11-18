@@ -26,7 +26,7 @@ async function withProvider(page: Page, mode: "manual" | "fail") {
     const html = (await response.text())
       .replace(/data-standin(="[^"]*")?/, 'data-standin=""')
       .replace(/data-sitekey(="[^"]*")?/, 'data-sitekey="test-site-key"')
-      .replace("</form>", '<div id="turnstileWidget" class="turnstile-slot"></div></form>');
+      .replace("</form>", '</form><div id="turnstileWidget" class="turnstile-slot"></div>'); // where the real page renders it
     await route.fulfill({ response, body: html });
   });
   await page.route("https://challenges.cloudflare.com/turnstile/v0/api.js*", (route) =>
@@ -60,8 +60,12 @@ test("no token, no request: a slow check keeps the seller's progress; a late tok
 
   const store = { storeName: "Toko Token Lambat", slug: "toko-token-lambat", email: "owner@token-lambat.local.test", password: "password-token-123" };
   await signUpThroughWizard(page, store);
-  // Waiting for the token: the button says so, and nothing the request would send can change.
+  // Waiting for the token: the button says so, a status outside the inert steps announces it,
+  // and nothing the request would send can change.
   await expect(page.locator("#submitSignup")).toHaveText("Menyelesaikan verifikasi keamanan…");
+  await expect(page.getByRole("status")).toHaveText("Menyelesaikan verifikasi keamanan…");
+  expect(await page.locator("#progressNote").evaluate((element) => element.closest('[inert], [aria-busy="true"]') === null), "the wait is announced outside inert and busy").toBe(true);
+  expect(await page.locator("#turnstileWidget").evaluate((element) => element.closest('[inert], [aria-busy="true"]') === null), "the check stays usable").toBe(true);
   await expect(page.getByRole("button", { name: "← Kembali" })).toBeDisabled();
   for (const panel of ["1", "2", "3"]) await expect(page.locator(`[data-step-panel="${panel}"]`)).toHaveAttribute("inert", "");
   // The token never comes: no request, the check is left as it is, the seller can try again.
@@ -70,6 +74,8 @@ test("no token, no request: a slow check keeps the seller's progress; a late tok
   expect(await page.evaluate(() => (window as unknown as { __fakeTurnstile: { resets: number } }).__fakeTurnstile.resets)).toBe(0);
   await expect(page.locator("#submitSignup")).toBeEnabled();
   await expect(page.locator("#submitSignup")).toHaveText("Buat Toko Gratis →");
+  await expect(page.locator("#submitSignup"), "focus returns to the button, not to the page").toBeFocused();
+  await expect(page.locator("#progressNote")).toBeHidden();
   await expect(page.getByRole("button", { name: "← Kembali" })).toBeEnabled();
   await expect(page.locator("#stepNow")).toHaveText("3");
 
@@ -148,10 +154,13 @@ test("an address the server refuses stays refused until it changes; a suggestion
   await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
   await expect(page.locator("#slugError")).toHaveText("Pilih alamat toko yang tersedia.");
   await expect(page.locator("#stepNow")).toHaveText("1");
-  // A suggestion fills the address and keeps the keyboard on it.
+  // A suggestion fills the address and keeps the keyboard on it, reopening the editor if closed.
+  await page.getByRole("button", { name: "Ubah" }).click();
+  await expect(page.locator("#slugEditor")).toBeHidden();
   await page.getByRole("button", { name: "toko-tabrakan-baru" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Alamat toko", { exact: true })).toHaveValue("toko-tabrakan-baru");
+  await expect(page.locator("#slugEditor")).toBeVisible();
   await expect(page.getByLabel("Alamat toko", { exact: true })).toBeFocused();
   await expect(page.locator("#slugHint")).toHaveText("✓ Tersedia", { timeout: 15_000 });
   await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
@@ -190,5 +199,73 @@ test("a lost answer spends the token: the check is reset, and a retry waits for 
   await expect.poll(() => posts.length).toBe(2);
   expect(posts[1]).toMatchObject({ slug: store.slug, email: store.email, turnstile_token: "local-stand-in" });
   await page.waitForURL(`${origin(store.slug)}/admin/setup?welcome=1`, { timeout: 60_000 });
+});
+
+test("a refusal outranks a late availability answer: the address stays refused and Continue holds", async ({ page }) => {
+  test.setTimeout(60_000);
+  // This address's availability check answers "available" 4 s late; the server refuses it at once.
+  await page.route(/\/api\/platform\/slug\?slug=toko-jawaban-telat/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 4_000));
+    await route.continue();
+  });
+  await page.route(`${PLATFORM}/api/platform/signup`, (route) =>
+    route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ success: false, error: "Pendaftaran gagal.", errors: { slug: "Alamat toko ini baru saja dipakai." }, suggestions: ["toko-jawaban-telat-2"] }) }),
+  );
+  await page.goto(`${PLATFORM}/daftar`);
+  await ready(page);
+  await page.getByLabel("Nama toko").fill("Toko Jawaban Telat");
+  await expect(page.locator("#slugHint")).toHaveText("Memeriksa…");
+  // Continue gives the slow check 3 s, then lets the server decide.
+  await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
+  await expect(page.locator("#stepNow")).toHaveText("2", { timeout: 5_000 });
+  await page.getByLabel("Email", { exact: true }).fill("owner@jawaban-telat.local.test");
+  await page.getByRole("button", { name: "Lanjut ke Keamanan →" }).click();
+  await page.getByLabel("Password", { exact: true }).fill("password-telat-123");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
+  await expect(page.locator("#stepNow")).toHaveText("1");
+  await expect(page.locator("#slugHint")).toHaveText("Alamat toko ini baru saja dipakai.");
+  // The late "available" lands after the refusal and changes nothing.
+  await page.waitForTimeout(2_500);
+  await expect(page.locator("#slugHint")).toHaveText("Alamat toko ini baru saja dipakai.");
+  await expect(page.locator("#slugPill")).toHaveAttribute("data-state", "err");
+  await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
+  await expect(page.locator("#slugError")).toHaveText("Pilih alamat toko yang tersedia.");
+  await expect(page.locator("#stepNow")).toHaveText("1");
+});
+
+test("a bot-check refusal at the server is recoverable: retry copy, cleared by a fresh token; other errors stay", async ({ page }) => {
+  await page.setExtraHTTPHeaders({ "cf-connecting-ip": "198.51.100.123" });
+  await withProvider(page, "manual");
+  const answers = [
+    { error: "Verifikasi keamanan gagal. Muat ulang halaman lalu coba lagi.", errors: { turnstile: "Verifikasi gagal." } },
+    { error: "Pendaftaran gagal.", errors: { turnstile: "Verifikasi gagal.", password: "Password terlalu mudah ditebak." } },
+  ];
+  await page.route(`${PLATFORM}/api/platform/signup`, (route) => {
+    const answer = answers.shift();
+    if (!answer) return route.continue();
+    return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ success: false, ...answer }) });
+  });
+  const solve = () => page.evaluate(() => (window as unknown as { __fakeTurnstile: { solve(): void } }).__fakeTurnstile.solve());
+  await page.goto(`${PLATFORM}/daftar`);
+  await ready(page);
+  await solve();
+  await signUpThroughWizard(page, { storeName: "Toko Token Ditolak", email: "owner@token-ditolak.local.test", password: "password-ditolak-123" });
+  // The server's reload instruction becomes a retry: no reload is needed for a fresh token.
+  const retry = "Verifikasi keamanan perlu diulang. Tunggu tanda koneksi terverifikasi, lalu tekan Buat Toko Gratis lagi.";
+  await expect(page.locator("#turnstileError")).toHaveText(retry);
+  await expect(page.locator("#errorSummary")).not.toContainText("Muat ulang");
+  await solve();
+  await expect(page.locator("#turnstileError")).toBeHidden();
+  await expect(page.locator("#errorSummary"), "the summary held only the bot check").toBeHidden();
+  // A refusal on the check and on the password: the fresh token clears only its own.
+  await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
+  await expect(page.locator("#passwordError")).toHaveText("Password terlalu mudah ditebak.");
+  await expect(page.locator("#turnstileError")).toHaveText(retry);
+  await solve();
+  await expect(page.locator("#turnstileError")).toBeHidden();
+  await expect(page.locator("#passwordError")).toHaveText("Password terlalu mudah ditebak.");
+  await expect(page.locator("#errorSummary")).toContainText("Password terlalu mudah ditebak.");
+  await expect(page.locator("#errorSummary")).not.toContainText("Verifikasi keamanan");
 });
 

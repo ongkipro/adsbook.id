@@ -146,13 +146,15 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         <p id="securityStatus" class="security-line" data-state={localStandIn || !siteKey ? 'ok' : 'pending'} aria-live="polite" hidden={!siteKey}>
           {localStandIn ? 'Koneksi terverifikasi · proteksi keamanan aktif' : 'Memverifikasi koneksi aman…'}
         </p>
-        <p id="progressNote" class="progress-note" hidden aria-live="polite"></p>
       </section>
-
-      <!-- The bot check runs from the first second, invisibly for almost every visitor;
-           only a visitor it cannot clear sees a full-width check here, on any step. -->
-      {siteKey && !localStandIn && <div id="turnstileWidget" class="turnstile-slot"></div>}
     </form>
+
+    <!-- Outside the form: while a signup waits, the steps are inert and the form is busy,
+         but the wait is still announced and the check stays usable. -->
+    <p id="progressNote" class="progress-note" role="status" aria-live="polite" hidden></p>
+    <!-- The bot check runs from the first second, invisibly for almost every visitor;
+         only a visitor it cannot clear sees a full-width check here, on any step. -->
+    {siteKey && !localStandIn && <div id="turnstileWidget" class="turnstile-slot"></div>}
 
     <!-- The launch, on the same card, before the handoff to the new store. -->
     <section id="signupDone" class="launch" hidden aria-live="polite">
@@ -298,8 +300,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         clearFieldError('slug');
         slugSuggestions.hidden = true;
         checkAvailability();
-        // The chip just clicked is gone: keyboard focus lands on the address it filled.
-        slugInput.focus();
+        // The chip just clicked is gone: keyboard focus lands on the address it filled, in the open editor.
+        openEditor(true);
       });
       slugSuggestions.append(btn);
     }
@@ -450,8 +452,33 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     progressNote.hidden = true;
   });
 
+  // The bot check failing at the server is recoverable here: a fresh token replaces the spent one.
+  const TOKEN_RETRY = 'Verifikasi keamanan perlu diulang. Tunggu tanda koneksi terverifikasi, lalu tekan Buat Toko Gratis lagi.';
+  let shownErrors: { message: string; errors: Record<string, string> } | null = null;
+  const renderSummary = () => {
+    if (!shownErrors) return void (summary.hidden = true);
+    const listed = Object.values(shownErrors.errors).filter(Boolean);
+    if (!listed.length && !shownErrors.message) return void (summary.hidden = true);
+    summary.textContent = listed.length ? `${shownErrors.message} ${listed.join(' ')}`.trim() : shownErrors.message;
+    summary.hidden = false;
+  };
+  /** A fresh token answers the bot-check error alone; other errors stay as they are. */
+  const clearTokenError = () => {
+    clearFieldError('turnstile');
+    if (!shownErrors?.errors.turnstile) return;
+    const { turnstile: _spent, ...rest } = shownErrors.errors;
+    shownErrors = Object.values(rest).some(Boolean) ? { message: 'Pendaftaran belum selesai.', errors: rest } : null;
+    renderSummary();
+  };
+
   /** Field errors on their steps: the wizard returns to the earliest step with one and focuses it. */
-  const showErrors = (message: string, errors: Record<string, string>, suggestions: string[] = []) => {
+  const showErrors = (message: string, rawErrors: Record<string, string>, suggestions: string[] = []) => {
+    const errors = { ...rawErrors };
+    if (errors.turnstile) {
+      errors.turnstile = TOKEN_RETRY;
+      // The server's own words ask for a reload; here a fresh token is all it takes.
+      if (Object.keys(errors).filter((key) => errors[key]).length === 1) message = '';
+    }
     let first: { input: HTMLElement; step: number } | null = null;
     for (const [name, field] of Object.entries(fields)) {
       const text = errors[name] || '';
@@ -464,6 +491,11 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       if (text && (!first || field.step < first.step)) first = { input: field.input, step: field.step };
     }
     if (errors.slug) {
+      // The server's word is final for this address: any check still running is void.
+      window.clearTimeout(availabilityTimer);
+      availabilitySeq += 1;
+      settleAvailability?.();
+      settleAvailability = null;
       rejectedSlugs.set(slugInput.value.trim(), errors.slug);
       setSlugState('err', errors.slug);
       openEditor();
@@ -472,9 +504,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       openEditor();
       renderSuggestions(suggestions);
     }
-    const listed = Object.values(errors).filter(Boolean);
-    summary.textContent = listed.length ? `${message} ${listed.join(' ')}` : message;
-    summary.hidden = false;
+    shownErrors = { message, errors };
+    renderSummary();
     if (first) showStep(first.step, first.input === submit ? null : first.input);
     else summary.focus();
   };
@@ -493,7 +524,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       const problem = (): [key: string, text: string] | null => {
         if (!nameInput.value.trim()) return ['storeName', 'Isi nama toko.'];
         if (slugInput.value.trim().length < 3) return ['slug', 'Alamat toko minimal 3 karakter.'];
-        if (slugHint.dataset.state === 'err') return ['slug', 'Pilih alamat toko yang tersedia.'];
+        if (rejectedSlugs.has(slugInput.value.trim()) || slugHint.dataset.state === 'err') return ['slug', 'Pilih alamat toko yang tersedia.'];
         return null;
       };
       // Wait for the check of the address as it is now; edits made while waiting start a new
@@ -547,13 +578,13 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           appearance: 'interaction-only',
           callback: (token: string) => {
             turnstileToken = token;
-            clearFieldError('turnstile');
+            clearTokenError();
             setSecurity('ok', 'Koneksi terverifikasi · proteksi keamanan aktif');
             tokenWaiters.splice(0).forEach((resolve) => resolve());
           },
           'error-callback': () => {
             turnstileToken = '';
-            setSecurity('error', 'Verifikasi keamanan belum berhasil. Muat ulang halaman bila tidak pulih.');
+            setSecurity('error', 'Verifikasi keamanan belum berhasil dan sedang diulang otomatis.');
           },
           'expired-callback': () => {
             turnstileToken = '';
@@ -635,6 +666,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
 
     if (!turnstileToken) {
       submit.textContent = 'Menyelesaikan verifikasi keamanan…';
+      progressNote.textContent = 'Menyelesaikan verifikasi keamanan…';
+      progressNote.hidden = false;
       await awaitToken();
       if (!turnstileToken) {
         // No request without a token: it would only spend one of the hour's attempts. The
@@ -645,6 +678,9 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           ? LOAD_FAILED
           : 'Verifikasi keamanan belum selesai. Selesaikan pemeriksaan di bawah formulir bila muncul, lalu tekan Buat Toko Gratis lagi.';
         error.hidden = false;
+        // Focus went with the inert step; it returns to the button, unless the seller is
+        // working in the check itself.
+        if (!widget?.contains(document.activeElement)) submit.focus();
         return;
       }
     }
@@ -702,6 +738,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
 
       // The launch sequence on the same card, then the handoff.
       form.hidden = true;
+      progressNote.hidden = true;
       for (const element of document.querySelectorAll<HTMLElement>('.wizard-head, .card-head, .picked-plan')) element.hidden = true;
       (document.getElementById('doneEmail') as HTMLElement).textContent = data.email;
       (document.getElementById('doneStoreUrl') as HTMLElement).textContent = data.store_url.replace(/^https?:\/\//, '');
