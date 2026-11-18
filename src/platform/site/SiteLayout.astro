@@ -14,9 +14,11 @@ interface Props {
   page: SitePage;
   /** Hide the header's signup button (the page carries its own primary action in view). */
   quietHeader?: boolean;
+  /** The page's first section brings its own header (the home's 100dvh hero): no second one above it. */
+  heroHeader?: boolean;
 }
 
-const { page, quietHeader = false } = Astro.props;
+const { page, quietHeader = false, heroHeader = false } = Astro.props;
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 const canonical = canonicalUrl(env, page.path);
 const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
@@ -50,7 +52,7 @@ const year = new Date().getFullYear();
   </head>
   <body>
     <a class="skip" href="#isi">Langsung ke isi</a>
-    <header class="site-header">
+    {!heroHeader && <header class="site-header">
       <div class="wrap header-row">
         <a class="wordmark" href="/" aria-label="adsbook.id, beranda"><img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="151" height="24" loading="eager" decoding="async" /></a>
         <nav aria-label="Utama" class="nav-wide">
@@ -64,7 +66,7 @@ const year = new Date().getFullYear();
           </nav>
         </details>
       </div>
-    </header>
+    </header>}
     <main id="isi">
       <slot />
     </main>

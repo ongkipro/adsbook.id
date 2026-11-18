@@ -269,6 +269,8 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
 </SiteLayout>
 
 <script>
+  import { HERO_EMAIL_KEY, storeLoginUrl, toSlug } from '../../platform/store-finder.ts';
+
   const form = document.getElementById('signupForm') as HTMLFormElement;
   const summary = document.getElementById('errorSummary') as HTMLElement;
   const submit = document.getElementById('submitSignup') as HTMLButtonElement;
@@ -292,15 +294,15 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   let slugTouched = false;
   let pending = false;
 
-  const toSlug = (value: string) =>
-    value
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 32)
-      .replace(/-+$/g, '');
+  // The home hero's account dialog hands its email over in this tab's session, never in the URL
+  // (a page URL reaches the platform Pixel); read once, then forgotten.
+  try {
+    const handed = sessionStorage.getItem(HERO_EMAIL_KEY);
+    sessionStorage.removeItem(HERO_EMAIL_KEY);
+    if (handed && !emailInput.value) emailInput.value = handed.slice(0, 254);
+  } catch {
+    // Storage blocked: the seller types it again.
+  }
 
   const cleanSlugTyping = (value: string) =>
     value
@@ -612,22 +614,14 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   finderForm?.addEventListener('submit', (event) => {
     event.preventDefault();
     if (!finderInput || !finderError) return;
-    const raw = finderInput.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    if (!raw) {
-      finderError.textContent = 'Masukkan slug atau domain toko Anda.';
-      finderError.hidden = false;
-      return;
-    }
-    const host = raw.includes('.') ? raw : `${toSlug(raw)}.${suffix}`;
-    if (!/^[a-z0-9.-]+(?::\d+)?$/.test(host) || host.startsWith('.') || host.endsWith('.')) {
-      finderError.textContent = 'Format alamat toko tidak valid.';
+    const login = storeLoginUrl(finderInput.value, suffix, window.location);
+    if ('error' in login) {
+      finderError.textContent = login.error;
       finderError.hidden = false;
       return;
     }
     finderError.hidden = true;
-    const proto = window.location.protocol;
-    const port = window.location.port && !host.includes(':') && suffix === 'localhost' ? `:${window.location.port}` : '';
-    window.location.assign(`${proto}//${host}${port}/hello`);
+    window.location.assign(login.url);
   });
 </script>
 
