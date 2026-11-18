@@ -128,10 +128,9 @@ export function orderListFilter(searchParams: URLSearchParams):
   } else if (sourceFilter === "google") {
     parts.push("(ad_click_ids LIKE '%gclid%' OR ad_click_ids LIKE '%gbraid%' OR ad_click_ids LIKE '%wbraid%' OR ad_click_ids LIKE '%google%')");
   } else if (sourceFilter === "organic") {
-    // `%ttclid%` stays excluded even though TikTok is no longer a filterable
-    // source: an order captured with one before that removal has a real ad
-    // click id on it, and must not read as organic just because its own
-    // category went away.
+    // `%ttclid%` stays excluded: a TikTok click (captured again since tracking
+    // chapter 11) is a real ad click, not organic, even though the list has no
+    // TikTok filter option of its own yet.
     parts.push("(ad_click_ids IS NULL OR ad_click_ids = '' OR ad_click_ids = '{}' OR (ad_click_ids NOT LIKE '%fbclid%' AND ad_click_ids NOT LIKE '%gclid%' AND ad_click_ids NOT LIKE '%ttclid%' AND ad_click_ids NOT LIKE '%gbraid%' AND ad_click_ids NOT LIKE '%wbraid%'))");
   }
   return { ok: true, parts, params, statusPart, statusParam };

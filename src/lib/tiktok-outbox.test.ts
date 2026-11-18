@@ -18,6 +18,7 @@ import {
   tiktokOrderQualifies,
 } from "./tiktok-outbox.ts";
 import type { TikTokEventData } from "./tiktok-events.ts";
+import { POST as postTikTokEvent } from "../pages/api/tiktok-event.ts";
 
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 const PIXEL = "C4ABCDEFGHIJ1234";
@@ -29,7 +30,8 @@ async function store(options: { trigger?: "order_created" | "delivered"; token?:
   const database = createSqliteD1();
   database.sqlite.exec(`
     CREATE TABLE stores (id INTEGER PRIMARY KEY, meta_pixel_id TEXT, meta_capi_token TEXT, google_tag_manager_id TEXT,
-      google_ads_conversion_id TEXT, google_ads_conversion_label TEXT);
+      google_ads_conversion_id TEXT, google_ads_conversion_label TEXT, embed_allowed_origins TEXT);
+    CREATE TABLE rate_limits (key TEXT PRIMARY KEY NOT NULL, count INTEGER DEFAULT 0 NOT NULL, reset_at INTEGER NOT NULL);
     INSERT INTO stores (id) VALUES (1);
     CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT NOT NULL);
     CREATE TABLE product_variants (id INTEGER PRIMARY KEY, product_id INTEGER NOT NULL);
@@ -274,4 +276,52 @@ test("the hourly sweep finds a delivered COD order (delivered trigger) and a mis
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("review finding 2: a paid QRIS order whose inline enqueue was lost is swept once, and only once", async () => {
+  const now = new Date("2026-11-18T12:00:00Z");
+  const database = await store();
+  addOrder(database, 80, { payment_method: "qris", payment_status: "paid", created_at: "2026-11-18T09:00:00Z" });
+  addOrder(database, 81, { payment_method: "qris", payment_status: "unpaid", created_at: "2026-11-18T09:00:00Z" });
+  addOrder(database, 82, { payment_method: "manual_transfer", payment_status: "settled", shipping_status: "cancelled", created_at: "2026-11-18T09:00:00Z" });
+  addOrder(database, 83, { payment_method: "va", payment_status: "paid", created_at: "2026-11-10T09:00:00Z" });
+  const { calls, fetchImpl } = recordingFetch();
+  const original = globalThis.fetch;
+  globalThis.fetch = fetchImpl;
+  try {
+    assert.equal(await sweepTikTokCompletePayments(database, locals(database), now), 1);
+    assert.equal(await sweepTikTokCompletePayments(database, locals(database), now), 0, "the second run finds it already owed nothing");
+  } finally {
+    globalThis.fetch = original;
+  }
+  assert.deepEqual(calls.map((call) => call.body.data[0].event_id), ["INV-10080"], "unpaid, void and older-than-48h orders stay out");
+  assert.deepEqual(outbox(database).map((row) => [row.event_name, row.event_id, row.status]), [["CompletePayment", "INV-10080", "sent"]]);
+});
+
+test("review finding 1: a cross-origin or text/plain post is refused before any write or send; the store's own JSON post goes through", async () => {
+  const database = await store();
+  database.sqlite.exec("UPDATE stores SET embed_allowed_origins = 'https://lp.seller.example'");
+  const { calls, fetchImpl } = recordingFetch();
+  const original = globalThis.fetch;
+  globalThis.fetch = fetchImpl;
+  const body = JSON.stringify({ event: "InitiateCheckout", event_id: "ic_1763450000000_abcd", url: `${SITE}/produk/serum`, properties: { value: 149000 } });
+  const post = async (headers: Record<string, string>) =>
+    (await postTikTokEvent({ request: new Request(`${SITE}/api/tiktok-event`, { method: "POST", headers, body }), locals: locals(database) } as never)).status;
+  try {
+    // The attack: a CORS-simple POST from another site, no preflight needed.
+    assert.equal(await post({ "content-type": "text/plain;charset=UTF-8", origin: "https://evil.example", "sec-fetch-site": "cross-site" }), 415);
+    assert.equal(await post({ "content-type": "application/json", origin: "https://evil.example" }), 403);
+    assert.equal(await post({ "content-type": "application/json", "sec-fetch-site": "cross-site" }), 403);
+    assert.equal(await post({ "content-type": "text/plain", origin: SITE }), 415, "even same-origin must declare JSON");
+    assert.equal(outbox(database).length, 0, "no outbox row for a refused post");
+    assert.equal(calls.length, 0, "no TikTok call for a refused post");
+    assert.equal((database.sqlite.prepare("SELECT COUNT(*) AS n FROM rate_limits").get() as { n: number }).n, 0, "refused before the rate limit writes");
+    // The store's own page, and a page the seller allowed for embedding.
+    assert.equal(await post({ "content-type": "application/json", origin: SITE, "sec-fetch-site": "same-origin" }), 200);
+    assert.equal(await post({ "content-type": "application/json", origin: "https://lp.seller.example", "sec-fetch-site": "cross-site" }), 200);
+  } finally {
+    globalThis.fetch = original;
+  }
+  assert.deepEqual(outbox(database).map((row) => [row.event_name, row.event_id]), [["InitiateCheckout", "ic_1763450000000_abcd"]], "the second accepted post is the same event, deduplicated");
+  assert.equal(calls.length, 1);
 });

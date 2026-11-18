@@ -181,6 +181,8 @@ export const TIKTOK_RATE_LIMIT_CODE = 40100;
  * Pure, so the ladder is testable without a network.
  *
  * - HTTP 2xx with `code` 0: sent.
+ * - HTTP 5xx or no answer (network): doubling backoff, whatever code the
+ *   body carries — a gateway fault is never a terminal client error.
  * - Rate limit (HTTP 429 or code 40100): a flat 15 minutes.
  * - Any other 4xxxx code (permission, parameter, token): terminal at once —
  *   the same request can never succeed, and retrying a dead token only burns
@@ -197,6 +199,13 @@ export function decideTikTokRetry(result: TikTokSendResult, attempts: number, ma
   const ok = result.httpStatus >= 200 && result.httpStatus < 300;
   if (ok && result.code === 0) return { status: "sent", delayMs: 0 };
   const nextAttempt = attempts + 1;
+  // A gateway or network fault first: a 5xx (or no answer) is transient
+  // whatever code a proxy put in its body, so a 503 carrying 40002 retries.
+  if (result.httpStatus === 0 || result.httpStatus >= 500) {
+    return nextAttempt >= maxAttempts
+      ? { status: "failed", delayMs: 0 }
+      : { status: "pending", delayMs: Math.min(2 ** nextAttempt, 60) * 60_000 };
+  }
   if (result.httpStatus === 429 || result.code === TIKTOK_RATE_LIMIT_CODE) {
     return nextAttempt >= maxAttempts ? { status: "failed", delayMs: 0 } : { status: "pending", delayMs: 15 * 60_000 };
   }
@@ -285,4 +294,36 @@ export function validateTikTokFunnelPayload(
   }
   const phone = typeof body.phone === "string" && body.phone.length <= 32 ? body.phone : undefined;
   return { ok: true, value: { event: event as TikTokFunnelEvent, eventId, url, value, contents, phone } };
+}
+
+/**
+ * Review finding 1: who may post a funnel event. `/api/tiktok-event` is public,
+ * and a CORS-simple POST (`text/plain`) from any other site would otherwise be
+ * accepted from every visitor's own IP — fabricated events in the seller's
+ * pixel and their Events API quota spent, with no rate limit able to tell.
+ *
+ * - The body must be declared `application/json`: a cross-origin page cannot
+ *   send that without a preflight, which this route never answers.
+ * - A browser's `Origin` must be the store's own, or one the seller allowed for
+ *   embedding (`embed_allowed_origins`). The pixel only runs on store pages,
+ *   the embed iframe included, so the store's own origin is the normal case.
+ * - With no `Origin`, a `Sec-Fetch-Site` other than `same-origin`/`none` is refused.
+ * - A request with neither header is not a browser: it passes on to the rate limit.
+ */
+export function tiktokEventRequestRefusal(
+  request: Request,
+  allowedOrigins: readonly string[] = [],
+): { status: 403 | 415; error: string } | null {
+  const contentType = (request.headers.get("content-type") ?? "").toLowerCase();
+  if (!contentType.startsWith("application/json")) {
+    return { status: 415, error: "Content-Type harus application/json." };
+  }
+  const own = new URL(request.url).origin;
+  const origin = request.headers.get("origin");
+  if (origin) {
+    return origin === own || allowedOrigins.includes(origin) ? null : { status: 403, error: "Origin tidak diizinkan." };
+  }
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") return { status: 403, error: "Origin tidak diizinkan." };
+  return null;
 }

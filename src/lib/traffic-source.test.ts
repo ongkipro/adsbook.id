@@ -25,14 +25,20 @@ test('parseTrafficSource identifies Google Ads from gclid, gbraid, or wbraid', (
   assert.equal(sourceGbraid.label, 'Google Ads');
 });
 
-test('a leftover ttclid from before TikTok support was removed reads as organic, not a phantom category', () => {
-  // TikTok classification was removed 2026-08-24 (TRACKING_SPECS.md §8). An
-  // order whose ad_click_ids still holds a ttclid from before that — nothing
-  // was backfilled — must not resolve to a `TrafficSourceType` that no longer
-  // exists in the union; it falls through to organic like any other unknown key.
+test('a ttclid reads as TikTok Ads again (tracking chapter 11 restored TikTok), with or without a UTM', () => {
   const source = parseTrafficSource(JSON.stringify({ ttclid: 'E_123456' }));
-  assert.equal(source.type, 'organic');
-  assert.equal(source.label, 'Organic / Direct');
+  assert.equal(source.type, 'tiktok');
+  assert.equal(source.label, 'TikTok Ads');
+  assert.equal(parseTrafficSource(JSON.stringify({ utm_source: 'tiktok' })).type, 'tiktok');
+});
+
+test('an explicit click id beats the passive _fbp cookie a Meta pixel mints on every visit', () => {
+  const fbp = 'fb.1.1730000000000.123';
+  assert.equal(parseTrafficSource(JSON.stringify({ ttclid: 'E.C.P.123', _fbp: fbp })).type, 'tiktok');
+  assert.equal(parseTrafficSource(JSON.stringify({ gclid: 'Cj0abc', _fbp: fbp })).type, 'google');
+  assert.equal(parseTrafficSource(JSON.stringify({ utm_source: 'google', _fbp: fbp })).type, 'google');
+  assert.equal(parseTrafficSource(JSON.stringify({ _fbp: fbp })).type, 'meta', '_fbp alone still reads as Meta');
+  assert.equal(parseTrafficSource(JSON.stringify({ fbclid: 'IwAR1', ttclid: 'E1' })).type, 'meta', 'two explicit clicks keep Meta first');
 });
 
 test('parseTrafficSource identifies Organic / Direct when adClickIds is empty or absent', () => {

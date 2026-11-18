@@ -405,8 +405,9 @@ export const TIKTOK_SWEEP_LIMIT = 50;
 /**
  * The hourly net: COD orders whose CompletePayment never left (the buyer's
  * tab closed before `/thanks`, or, with the `delivered` trigger, the package
- * was delivered since the last run). Orders already in the outbox are skipped
- * by the query; the order number keys every leg, so a late `/thanks` is a no-op.
+ * was delivered since the last run), and paid online orders whose inline
+ * enqueue was lost. Orders already in the outbox are skipped by the query; the
+ * order number keys every leg, so a late `/thanks` is a no-op.
  */
 export async function sweepTikTokCompletePayments(
   database: D1Database,
@@ -436,14 +437,46 @@ export async function sweepTikTokCompletePayments(
     )
     .bind(oldest.toISOString(), newest.toISOString(), TIKTOK_SWEEP_LIMIT)
     .all<{ id: number; created_at: string }>();
+  // Review finding 2: a paid QRIS/VA/manual-transfer order whose inline
+  // enqueue was lost (a D1 blip during the payment confirmation, which never
+  // rolls back for an ad signal) has no other way back in. Paid in the last
+  // 48 hours by its creation time; the NOT EXISTS runs before the LIMIT, so
+  // handled orders never crowd out the ones still owed.
+  const paidMissed = await database
+    .prepare(
+      `SELECT o.id
+         FROM orders o
+        WHERE o.created_at >= ? AND o.created_at <= ?
+          AND o.payment_method <> 'cod'
+          AND lower(o.payment_status) IN ('paid', 'settled', 'success')
+          AND o.shipping_status NOT IN ('abandoned', 'cancelled', 'returned', 'failed')
+          AND o.stock_restored_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM tiktok_event_outbox t
+             WHERE t.event_name = 'CompletePayment' AND t.event_id = o.order_number
+          )
+        ORDER BY o.id
+        LIMIT ?`,
+    )
+    .bind(
+      new Date(now.getTime() - TIKTOK_SWEEP_ORDER_CREATED_MAX_AGE_MS).toISOString(),
+      newest.toISOString(),
+      TIKTOK_SWEEP_LIMIT,
+    )
+    .all<{ id: number }>();
   let queued = 0;
-  for (const row of missed.results ?? []) {
-    const placedAt = Date.parse(row.created_at);
+  const candidates = [
+    ...(missed.results ?? []).map((row) => ({ id: row.id, placedAt: Date.parse(row.created_at), cod: true })),
+    // Paid online: the conversion is the payment, which this run is the first
+    // to see, so it is stamped now.
+    ...(paidMissed.results ?? []).map((row) => ({ id: row.id, placedAt: Number.NaN, cod: false })),
+  ];
+  for (const row of candidates) {
     try {
       const result = await enqueueTikTokCompletePayment(database, locals, row.id, {
         // Created: the buyer bought when they ordered. Delivered: the sale is
         // the delivery, which this run is the first to see.
-        eventTime: !delivered && Number.isFinite(placedAt) ? Math.floor(placedAt / 1000) : undefined,
+        eventTime: row.cod && !delivered && Number.isFinite(row.placedAt) ? Math.floor(row.placedAt / 1000) : undefined,
         now,
       });
       if (result.status === "queued") queued += 1;

@@ -84,6 +84,9 @@ test("a server error or network failure doubles from two minutes, caps at an hou
   assert.equal(decideTikTokRetry({ httpStatus: 503 }, 20, 50).delayMs, 60 * MINUTE);
   assert.equal(decideTikTokRetry({ httpStatus: 503 }, 7, 8).status, "failed");
   assert.equal(decideTikTokRetry({ httpStatus: 200 }, 0, 8).status, "pending", "a 200 without code 0 is not a delivery");
+  // Review finding 4: a gateway 5xx carrying a 4xxxx body is transient, not terminal.
+  assert.deepEqual(decideTikTokRetry({ httpStatus: 503, code: 40002 }, 0, 8), { status: "pending", delayMs: 2 * MINUTE });
+  assert.deepEqual(decideTikTokRetry({ httpStatus: 502, code: 40001 }, 1, 8), { status: "pending", delayMs: 4 * MINUTE });
 });
 
 // ---- The request ----

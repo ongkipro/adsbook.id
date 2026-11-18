@@ -3,9 +3,8 @@ import { parseTrafficSource } from "./traffic-source.ts";
 /**
  * The ad channel an order came through, read-only (PRD A37, REQ-203).
  *
- * `traffic-source.ts` is a protected surface, so it is called here, never
- * edited: Meta and Google are exactly what `parseTrafficSource` (and so the
- * order list's badge) says. This module only splits what that function lumps
+ * Meta, Google and TikTok are exactly what `parseTrafficSource` (and so the
+ * order list's badge) says; this module only splits what that function lumps
  * together as "custom" or "organic".
  *
  * **Stored shape.** `orders.ad_click_ids` is NULL, or the JSON object
@@ -19,8 +18,9 @@ import { parseTrafficSource } from "./traffic-source.ts";
  * a fresh `ttclid` replaces the stored set at landing, so it never sits beside
  * an older Meta or Google click. `_ttp` alone is a cookie, not a click.
  *
- * Note what `parseTrafficSource` decides and this inherits: a `_fbp` cookie
- * alone reads as Meta, and a `utm_source` containing `ig` or `fb` does too.
+ * Note what `parseTrafficSource` decides and this inherits: an explicit click
+ * id or a platform's utm_source wins over the passive `_fbp` cookie, which
+ * reads as Meta only alone; a `utm_source` containing `ig` or `fb` is Meta too.
  *
  * `adChannelSql` is the same decision as a SQL `CASE` for aggregation;
  * `ad-channel.test.ts` runs both over the same stored values.
@@ -40,22 +40,12 @@ export const AD_CHANNEL_LABELS: Record<AdChannel, string> = {
 /** `utm_medium` values that mean a bought placement, compared lower-cased. */
 const PAID_MEDIUMS = ["cpc", "ppc", "cpm", "cpv", "paid", "paid_social", "paidsocial", "paid-social", "display", "ads", "ad", "banner"] as const;
 
-function hasTtclid(raw: string | null | undefined): boolean {
-  if (!raw) return false;
-  try {
-    const parsed = JSON.parse(raw);
-    return Boolean(parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof parsed.ttclid === "string" && parsed.ttclid);
-  } catch {
-    return false;
-  }
-}
-
 export function adChannelFromClickIds(raw: string | null | undefined): AdChannel {
   const source = parseTrafficSource(raw);
   if (source.type === "meta") return "meta";
   if (source.type === "google") return "google";
+  if (source.type === "tiktok") return "tiktok";
   const utmSource = source.details.utm_source || "";
-  if (hasTtclid(raw) || utmSource.includes("tiktok")) return "tiktok";
   if (source.type === "custom") {
     const medium = (source.details.utm_medium || "").toLowerCase();
     return (PAID_MEDIUMS as readonly string[]).includes(medium) ? "other_paid" : "organic";
@@ -68,8 +58,8 @@ export function adChannelFromClickIds(raw: string | null | undefined): AdChannel
 /**
  * The same decision in SQL, over a column holding the stored shape. It mirrors
  * `parseTrafficSource` step by step: a key counts only as a non-empty JSON
- * string, `utm_source` is trimmed and lower-cased, Meta is checked before
- * Google. SQLite's `lower()` is ASCII-only, which the stored pattern already is.
+ * string, `utm_source` is trimmed and lower-cased, explicit Meta before
+ * Google before TikTok, and a bare `_fbp` last of the ad channels. SQLite's `lower()` is ASCII-only, which the stored pattern already is.
  */
 export function adChannelSql(column = "ad_click_ids"): string {
   // CASE, not AND: json_type() raises on malformed text, and only CASE is
@@ -83,11 +73,12 @@ export function adChannelSql(column = "ad_click_ids"): string {
   const paid = PAID_MEDIUMS.map((value) => `'${value}'`).join(", ");
   return `(CASE
     WHEN NOT COALESCE(${obj}, 0) THEN 'direct'
-    WHEN ${has("fbclid")} OR ${has("_fbc")} OR ${has("_fbp")}
+    WHEN ${has("fbclid")} OR ${has("_fbc")}
       OR ${utmHas("meta")} OR ${utmHas("facebook")} OR ${utmHas("fb")} OR ${utmHas("instagram")} OR ${utmHas("ig")} THEN 'meta'
     WHEN ${has("gclid")} OR ${has("gbraid")} OR ${has("wbraid")}
       OR ${utmHas("google")} OR ${utmHas("gads")} OR ${utmHas("cpc")} THEN 'google'
     WHEN ${has("ttclid")} OR ${utmHas("tiktok")} THEN 'tiktok'
+    WHEN ${has("_fbp")} THEN 'meta'
     WHEN ${utm} NOT IN ('', 'organic', 'direct') THEN
       CASE WHEN ${medium} IN (${paid}) THEN 'other_paid' ELSE 'organic' END
     WHEN ${utm} = 'organic' THEN 'organic'
