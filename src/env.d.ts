@@ -55,6 +55,8 @@ interface CloudflareRuntimeEnv extends SharedEnvVars {
   ASSETS: unknown;
   /** The control plane (TD-2): tenants, hosts, plans, audit. */
   PLATFORM_DB?: D1Database;
+  /** Private bucket for the daily `PLATFORM_DB` snapshot (T-30); only `src/platform/backup.ts` writes it. */
+  BACKUP_BUCKET?: R2Bucket;
   /** One SQLite Durable Object per tenant (TD-3); only `src/platform/` reaches it. */
   TENANT_STORE?: unknown;
   /** Extra exact platform hosts for local development, comma separated. */

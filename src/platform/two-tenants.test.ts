@@ -2521,3 +2521,70 @@ test("IAM-8: resolveHandoffTarget routes new owners to /admin/setup or /admin/bi
   assert.equal(resolveHandoffTarget("//evil.example"), "/admin/dashboard");
 });
 
+
+/** R2's head/put, in memory, for the cron's backup step. */
+function memoryBackupBucket() {
+  const objects = new Map<string, string>();
+  return {
+    objects,
+    head: async (key: string) => (objects.has(key) ? { key } : null),
+    put: async (key: string, body: Uint8Array) => (objects.set(key, new TextDecoder().decode(body)), { key }),
+  };
+}
+
+test("T-30: the cron's backup runs first, so a failing migration read later in the run never costs the day's file", async () => {
+  const platformDb = await platform([["b-a", "active", "backup-a.adsbook.my.id"]]);
+  const bucket = memoryBackupBucket();
+  const original = { error: console.error, info: console.info };
+  console.error = console.info = () => undefined;
+  platformDb.failWhen = /schema_version < \?/;
+  try {
+    await assert.rejects(
+      runPlatformCron(
+        { PLATFORM_DB: platformDb, TENANT_STORE: namespace().binding, BACKUP_BUCKET: bucket, ...TEST_CREDENTIAL_ENV } as never,
+        Date.parse("2026-11-16T01:07:00.000Z"),
+        { waitUntil() {}, passThroughOnException() {} } as never,
+      ),
+    );
+  } finally {
+    platformDb.failWhen = null;
+    Object.assign(console, original);
+  }
+  assert.deepEqual([...bucket.objects.keys()], ["platform-db/2026-11-16.sql"]);
+  assert.match(bucket.objects.get("platform-db/2026-11-16.sql") ?? "", /'backup-a\.adsbook\.my\.id'/);
+});
+
+test("T-30: a backup still failing from 06:00 UTC reaches the operator once that day, and the rest of the cron still runs", async () => {
+  const platformDb = await platform([["b-b", "active", "backup-b.adsbook.my.id"]]);
+  platformDb.sqlite.prepare("UPDATE tenants SET schema_version = ?").run(CHAIN.length);
+  const bucket = memoryBackupBucket();
+  const stores = namespace();
+  const sent: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => (sent.push(String(init?.body)), new Response("ok"))) as typeof fetch;
+  const errors: string[] = [];
+  const original = { error: console.error, info: console.info };
+  console.error = (label: unknown) => void errors.push(String(label));
+  console.info = () => undefined;
+  platformDb.failWhen = /\bquote\(/;
+  const waits: Promise<unknown>[] = [];
+  const context = { waitUntil: (task: Promise<unknown>) => void waits.push(task), passThroughOnException() {} } as never;
+  const env = { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, BACKUP_BUCKET: bucket, PLATFORM_ALERT_WEBHOOK_URL: "https://hooks.example.test/x", ...TEST_CREDENTIAL_ENV } as never;
+  try {
+    const first = await runPlatformCron(env, Date.parse("2026-11-16T05:07:00.000Z"), context);
+    await Promise.all(waits);
+    assert.equal(first.armed, 1, "the rest of the cron ran");
+    assert.equal(sent.length, 0, "05:07: failing, retried next hour, nobody told yet");
+    await runPlatformCron(env, Date.parse("2026-11-16T06:07:00.000Z"), context);
+    await runPlatformCron(env, Date.parse("2026-11-16T07:07:00.000Z"), context);
+    await Promise.all(waits);
+  } finally {
+    globalThis.fetch = originalFetch;
+    platformDb.failWhen = null;
+    Object.assign(console, original);
+  }
+  assert.equal(bucket.objects.size, 0);
+  assert.equal(errors.filter((label) => label === "scheduled-platform-backup-failed").length, 3);
+  assert.equal(sent.length, 1, "one notice that day");
+  assert.match(sent[0], /Backup harian PLATFORM_DB gagal \(platform-db\/2026-11-16\.sql\)/);
+});
