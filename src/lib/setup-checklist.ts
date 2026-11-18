@@ -1,4 +1,4 @@
-import { readReadiness, type ReadinessFacts } from "../platform/readiness.ts";
+import { readinessTrack, readReadiness, type ReadinessFacts } from "../platform/readiness.ts";
 import { getRuntimeEnv } from "./env.ts";
 
 /**
@@ -20,6 +20,62 @@ export type SetupStep = {
 };
 
 export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
+  const optional: SetupStep[] = [
+    {
+      id: "domain",
+      label: "Pasang domain sendiri",
+      hint: "Opsional. Toko tetap bisa jualan di alamat adsbook.my.id.",
+      href: "/admin/settings/domains",
+      done: facts.customDomain,
+      required: false,
+    },
+    {
+      id: "signals",
+      label: "Pasang Meta Pixel atau Google Ads",
+      hint: "Opsional. Agar iklan belajar dari pesanan.",
+      href: "/admin/ads",
+      done: facts.signals,
+      required: false,
+    },
+  ];
+  // DIGITAL-PRODUCTS-SPEC §3: the digital track owes three steps, nothing that ships.
+  if (readinessTrack(facts) === "digital") {
+    return [
+      {
+        id: "store",
+        label: "Isi identitas toko",
+        hint: "Nama toko yang dilihat pembeli.",
+        href: "/admin/settings/store",
+        done: facts.storeName,
+        required: true,
+      },
+      {
+        id: "product",
+        label: "Tambah produk digital pertama + link akses",
+        hint: "Produk digital aktif dengan harga dan link akses https:// yang dibuka setelah lunas.",
+        href: "/admin/products",
+        done: facts.digitalProduct,
+        required: true,
+      },
+      {
+        id: "payment",
+        label: "Aktifkan pembayaran QRIS/VA atau Transfer Bank",
+        hint: "AutoLaris dengan API key, atau minimal satu rekening bank aktif. Produk digital tidak memakai COD.",
+        href: "/admin/payments",
+        done: facts.prepaid,
+        required: true,
+      },
+      // A hybrid store selling digital with physical products waiting: what those still owe.
+      ...(facts.catalogMode === "hybrid" && facts.physicalCatalog
+        ? ([
+            { id: "warehouse", label: "Lengkapi gudang utama", hint: "Wajib untuk menjual produk fisik. Produk digital tetap jualan tanpa gudang.", href: "/admin/settings/warehouse", done: facts.primaryWarehouse, required: false },
+            { id: "mengantar", label: "Simpan API key Mengantar", hint: "Wajib untuk ongkir dan resi produk fisik.", href: "/admin/profile", done: facts.mengantar, required: false },
+            { id: "couriers", label: "Aktifkan minimal satu kurir", hint: "Wajib untuk mengirim produk fisik.", href: "/admin/expeditions", done: facts.enabledCouriers > 0, required: false },
+          ] satisfies SetupStep[])
+        : []),
+      ...optional,
+    ];
+  }
   return [
     {
       id: "store",
@@ -71,22 +127,7 @@ export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
       done: facts.payment,
       required: true,
     },
-    {
-      id: "domain",
-      label: "Pasang domain sendiri",
-      hint: "Opsional. Toko tetap bisa jualan di alamat adsbook.my.id.",
-      href: "/admin/settings/domains",
-      done: facts.customDomain,
-      required: false,
-    },
-    {
-      id: "signals",
-      label: "Pasang Meta Pixel atau Google Ads",
-      hint: "Opsional. Agar iklan belajar dari pesanan.",
-      href: "/admin/ads",
-      done: facts.signals,
-      required: false,
-    },
+    ...optional,
   ];
 }
 

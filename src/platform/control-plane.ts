@@ -173,3 +173,27 @@ export async function resolveTenantHost(
   cache.set(host, resolution, now.getTime());
   return resolution;
 }
+
+/**
+ * Paket 1 (2026-11-18): makes every edge-cached page of this tenant unreachable
+ * (`tenantCacheKey` carries the version), so the next anonymous request renders
+ * fresh. Effective at once in every isolate: an active host is read from
+ * `PLATFORM_DB` on every request (`HostCache` keeps misses only), so there is no
+ * in-isolate entry to clear. Moving the version also has each isolate re-ask
+ * the store its schema state once (`ensureTenantSchema`), one cheap read.
+ * Best-effort: a failure is logged and never fails the save that caused it.
+ */
+export async function bumpTenantCacheVersion(env: unknown, tenantId: string | undefined): Promise<boolean> {
+  const db = (env as { PLATFORM_DB?: D1Database } | null | undefined)?.PLATFORM_DB;
+  if (!tenantId || !db?.prepare) return false;
+  try {
+    const result = await db
+      .prepare("UPDATE tenants SET cache_version = cache_version + 1 WHERE id = ? AND status = 'active'")
+      .bind(tenantId)
+      .run();
+    return Number(result.meta?.changes ?? 0) > 0;
+  } catch (error) {
+    console.error("tenant-cache-bump-failed", { tenantId, error: error instanceof Error ? error.message : String(error) });
+    return false;
+  }
+}

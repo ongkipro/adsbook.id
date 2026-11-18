@@ -26,6 +26,7 @@ export type CatalogProduct = {
   seoDescription?: string;
   heroImage: string;
   variants: CatalogProductVariant[];
+  productType?: "digital";
 };
 
 export function escapeXml(value: string): string {
@@ -163,6 +164,9 @@ function buildCatalogXml(
 
   for (const product of products) {
     if (!product.variants || product.variants.length === 0) continue;
+    // DIGITAL-PRODUCTS-SPEC §6.2: these are shopping feeds of shipped goods. A
+    // digital item has no shipping, and Merchant Center disapproves it there.
+    if (product.productType === "digital") continue;
 
     // A category the merchant chose from Google's taxonomy is sent exactly;
     // the keyword engine is only the fallback for a product without one. Meta

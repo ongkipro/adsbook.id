@@ -405,6 +405,8 @@ export async function dispatchOrderToMengantar(
         AND stock_restored_at IS NULL
         AND payment_status NOT IN ('cancelled', 'refunded', 'failed')
         AND shipping_status = 'pending'
+        -- DIGITAL-PRODUCTS-SPEC §4.3: a digital order ships nothing, ever.
+        AND fulfillment_type <> 'digital'
         AND COALESCE(provider_dispatch_error, '') NOT LIKE ?
         AND (
           COALESCE(provider_dispatch_error, '') <> 'DISPATCHING'

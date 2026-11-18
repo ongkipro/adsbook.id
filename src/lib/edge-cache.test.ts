@@ -2,7 +2,7 @@ import { bindTestCredentialsIn } from "../platform/testing/credentials.ts";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
-import { edgeCachePath, edgeCacheRequest, isEdgeStorable, readEdgeCache, writeEdgeCache, writeUploadCache } from "./edge-cache.ts";
+import { bumpsStorefrontCache, edgeCachePath, edgeCacheRequest, isEdgeStorable, readEdgeCache, writeEdgeCache, writeUploadCache } from "./edge-cache.ts";
 
 const req = (href: string, init?: RequestInit & { cf?: Record<string, unknown> }) => {
   const { cf, ...rest } = init ?? {};
@@ -352,3 +352,26 @@ test("a cached copy survives garbage collection: the stored body is never a drop
   assert.equal(await hit?.text(), "<p>page</p>");
   assert.equal(await (await upload.match(uploadKey))?.text(), "bytes");
 });
+
+test("Paket 1: affiliate and social parameters share the page's entry", () => {
+  const base = "https://store.example/aussie-formulabaru";
+  assert.equal(key(`${base}?ref=budi&source=ig&igshid=abc&twclid=t1`), base);
+  assert.equal(key(`${base}?ref=budi&varian=2`), `${base}?varian=2`);
+});
+
+test("Paket 1: a 2xx write to a storefront-visible admin API bumps the cache; reads, failures and other APIs do not", () => {
+  for (const path of [
+    "/api/admin/products", "/api/admin/landing-pages", "/api/admin/landing-pages/12", "/api/admin/settings",
+    "/api/admin/settings/privacy", "/api/admin/ads", "/api/admin/whatsapp-numbers", "/api/admin/content",
+    "/api/admin/seller-bank-accounts",
+  ]) {
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) assert.equal(bumpsStorefrontCache(path, method, 200), true, `${method} ${path}`);
+  }
+  assert.equal(bumpsStorefrontCache("/api/admin/products", "GET", 200), false);
+  assert.equal(bumpsStorefrontCache("/api/admin/products", "PATCH", 400), false);
+  assert.equal(bumpsStorefrontCache("/api/admin/products", "PATCH", 500), false);
+  assert.equal(bumpsStorefrontCache("/api/admin/orders/5", "PATCH", 200), false);
+  assert.equal(bumpsStorefrontCache("/api/admin/productsx", "POST", 200), false);
+  assert.equal(bumpsStorefrontCache("/api/admin/profile", "PUT", 200), false);
+});
+

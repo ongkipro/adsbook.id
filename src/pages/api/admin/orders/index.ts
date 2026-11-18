@@ -70,6 +70,8 @@ type OrderRow = {
   payment_instruction_status?: string | null;
   shipping_status: string;
   courier_code: string | null;
+  fulfillment_type: string | null;
+  digital_accessed_at: string | null;
   cnote_no: string | null;
   seller_name: string | null;
   seller_bank_name: string | null;
@@ -230,6 +232,8 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
           ${LIST_SHIPPING_STATUS_SQL} AS shipping_status,
           courier_code,
           cnote_no,
+          fulfillment_type,
+          digital_accessed_at,
           (
             SELECT name
             FROM stores
@@ -352,6 +356,7 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
           providerDispatchClaimedAt: row.provider_dispatch_claimed_at,
           destinationAreaId: row.destination_area_id,
           courierCode: row.courier_code,
+          fulfillmentType: row.fulfillment_type,
           pickupAddressId: row.pickup_address_id || '',
         });
         return {
@@ -374,6 +379,8 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
           payment_instruction_status: row.payment_instruction_status || null,
           shipping_status: row.shipping_status,
           courier_code: row.courier_code,
+          fulfillment_type: row.fulfillment_type === 'digital' ? 'digital' : 'physical',
+          digital_accessed_at: row.digital_accessed_at ?? null,
           cnote_no: row.cnote_no,
           seller_name: row.seller_name,
           // The account this order was told to pay, else the store's active ones.

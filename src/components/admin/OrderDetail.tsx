@@ -136,6 +136,10 @@ type Order = {
   courier_code: string | null;
   courier_service: string | null;
   cnote_no: string | null;
+  /** DIGITAL-PRODUCTS-SPEC §4.3. */
+  fulfillment_type?: string | null;
+  digital_accessed_at?: string | null;
+  public_status_token?: string | null;
   provider_order_id: string | null;
   provider_dispatch_error: string | null;
   dispatchEligible?: boolean;
@@ -1238,6 +1242,15 @@ export function OrderDetail({
 
   const paymentStatus = String(order.payment_status || "unpaid").toLowerCase();
   const paymentPaid = ["paid", "settled", "success"].includes(paymentStatus);
+  const digital = order.fulfillment_type === "digital";
+  const digitalOpen = digital && paymentPaid && !isVoidOrder(order);
+  // One tap for CS: the buyer's own order page carries the access once paid (/thanks locator).
+  const digitalAccessWaUrl = () => {
+    const page = `${window.location.origin}/thanks#o=${encodeURIComponent(String(order.id))}&t=${encodeURIComponent(order.public_status_token || "")}`;
+    const product = order.items?.[0]?.product_title || "produk digital";
+    const message = `Halo ${order.customer_name || "Kak"}, terima kasih sudah membeli ${product} (${order.order_number}). Pembayaran sudah kami terima. Buka produk digital Anda di sini:\n${page}\n\nSimpan link ini untuk membukanya lagi kapan saja.`;
+    return `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+  };
   const paymentFailed = ["failed", "expired"].includes(paymentStatus);
   const paymentRefunded = paymentStatus === "refunded";
 
@@ -1566,7 +1579,43 @@ export function OrderDetail({
             </CardContent>
           </Card>
 
+          {digital && (
+            <Card className="rounded-xl border border-blue-200 shadow-xs overflow-hidden" data-digital-access-panel>
+              <CardHeader className="border-b border-blue-100 bg-blue-50/60 p-4 sm:px-6">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Badge className="bg-blue-600 text-white hover:bg-blue-600">Digital</Badge>
+                  <span>Akses produk digital</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 p-5 sm:p-6 text-sm">
+                <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs text-slate-500">Status akses</dt>
+                    <dd className={`font-semibold ${digitalOpen ? "text-emerald-700" : "text-slate-700"}`}>
+                      {digitalOpen ? "Akses aktif" : isVoidOrder(order) ? "Akses ditutup (batal/refund)" : "Menunggu pembayaran"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Dibuka pembeli</dt>
+                    <dd className={`font-semibold ${order.digital_accessed_at ? "text-emerald-700" : "text-slate-700"}`} data-digital-accessed={order.digital_accessed_at ? "yes" : "no"}>
+                      {order.digital_accessed_at
+                        ? `Sudah dibuka pembeli · ${new Date(order.digital_accessed_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}`
+                        : "Belum dibuka"}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="text-xs text-slate-500">Tanpa ekspedisi dan tanpa resi: link akses terbuka di halaman pesanan pembeli begitu pembayaran lunas.</p>
+                {digitalOpen && waNumber && order.public_status_token ? (
+                  <a href={digitalAccessWaUrl()} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "default" })} data-send-digital-access>
+                    Kirim Akses via WhatsApp
+                  </a>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Mengantar Expedition & Tracking Card */}
+          {!digital && (
           <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -1684,6 +1733,7 @@ export function OrderDetail({
               )}
             </CardContent>
           </Card>
+          )}
         </div>
 
         {/* Right Column: Financials, Risk & CRM */}
@@ -1828,7 +1878,8 @@ export function OrderDetail({
             </CardContent>
           </Card>
 
-          {/* Receiver Risk Card */}
+          {/* Receiver Risk Card: a digital order has no receiver to score. */}
+          {!digital && (
           <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -1878,6 +1929,7 @@ export function OrderDetail({
               </Button>
             </CardContent>
           </Card>
+          )}
 
           {order.kelola?.configured && (
             <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">

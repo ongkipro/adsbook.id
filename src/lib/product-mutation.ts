@@ -19,7 +19,48 @@ export type ProductMutationPayload = {
   is_active?: unknown;
   image_url?: unknown;
   variants?: unknown;
+  /** DIGITAL-PRODUCTS-SPEC §2.2: 'physical' (default) or 'digital'. */
+  product_type?: unknown;
+  digital_access_url?: unknown;
+  digital_access_note?: unknown;
 };
+
+export type ProductType = "physical" | "digital";
+export const DIGITAL_ACCESS_NOTE_MAX = 500;
+export const DIGITAL_ACCESS_URL_MAX = 2000;
+
+/**
+ * The paid buyer's access link (§6.3): an absolute `https://` URL and nothing
+ * else — never `http:`, `javascript:`, `data:` or a relative path, which a
+ * buyer's browser would open from the store's own page. No credentials in it,
+ * no whitespace or control characters. Null when it is not one.
+ */
+export function parseDigitalAccessUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw || raw.length > DIGITAL_ACCESS_URL_MAX || /[\s\u0000-\u001f\u007f]/.test(raw)) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || !url.hostname || url.username || url.password) return null;
+  return url.toString();
+}
+
+/**
+ * Which product types a store in this catalog mode may save (§4.2): a digital
+ * store digital ones, a physical store physical ones, a hybrid store either.
+ * A product keeps its own type after the store's mode moves (§8.6), so editing
+ * an older product never forces it to change.
+ */
+export function productTypeAllowed(mode: string | null | undefined, type: ProductType, storedType?: ProductType | null): boolean {
+  if (storedType && storedType === type) return true;
+  if (mode === "digital") return type === "digital";
+  if (mode === "physical") return type === "physical";
+  return true;
+}
 
 export type ProductStatusTogglePayload = {
   id: number;
@@ -98,6 +139,10 @@ type ParsedProduct = {
   google_category_path?: string | null;
   image_url: string | null;
   is_active: boolean;
+  product_type: ProductType;
+  /** Null for a physical product; a digital one always has its https link. */
+  digital_access_url: string | null;
+  digital_access_note: string | null;
   variants: ParsedVariant[];
 };
 
@@ -246,6 +291,26 @@ export function parseProductMutationPayload(
     return { error: `Produk maksimal memiliki ${MAX_VARIANTS} varian.` };
   }
 
+  // §2.2/§6.3: an unknown type is refused, never guessed; a digital product
+  // needs its https access link and ships nothing, so it has no weight.
+  if (body.product_type !== undefined && body.product_type !== "physical" && body.product_type !== "digital") {
+    return { error: "Jenis produk tidak dikenal." };
+  }
+  const productType: ProductType = body.product_type === "digital" ? "digital" : "physical";
+  let digitalAccessUrl: string | null = null;
+  let digitalAccessNote: string | null = null;
+  if (productType === "digital") {
+    digitalAccessUrl = parseDigitalAccessUrl(body.digital_access_url);
+    if (!digitalAccessUrl) {
+      return { error: "Link akses produk digital wajib berupa alamat https:// yang valid.", status: 422 };
+    }
+    const note = typeof body.digital_access_note === "string" ? body.digital_access_note.replace(/\r\n?/g, "\n").trim() : "";
+    if (note.length > DIGITAL_ACCESS_NOTE_MAX) {
+      return { error: `Instruksi akses maksimal ${DIGITAL_ACCESS_NOTE_MAX} karakter.` };
+    }
+    digitalAccessNote = note || null;
+  }
+
   const variants: ParsedVariant[] = [];
   const skuSet = new Set<string>();
   const variantIdSet = new Set<number>();
@@ -279,10 +344,12 @@ export function parseProductMutationPayload(
         : parseInteger(rawVariant.compare_price);
     // Missing and 1000 are different (PRD A41): a missing weight is never
     // invented. A new variant must state it; an existing one keeps its own.
-    const weightMissing = isMissing(rawVariant.weight_grams);
-    const weightGrams = weightMissing
-      ? null
-      : parseInteger(rawVariant.weight_grams);
+    const weightMissing = productType === "physical" && isMissing(rawVariant.weight_grams);
+    const weightGrams = productType === "digital"
+      ? 0
+      : weightMissing
+        ? null
+        : parseInteger(rawVariant.weight_grams);
     const stock = parseInteger(rawVariant.stock);
 
     if (variantId !== undefined && (!variantId || variantId <= 0)) {
@@ -300,7 +367,9 @@ export function parseProductMutationPayload(
     if (!price || price <= 0) {
       return { error: `Harga varian ${sku} harus integer positif.` };
     }
-    if (weightMissing) {
+    if (productType === "digital") {
+      // Nothing ships: the weight is 0 whatever the request said.
+    } else if (weightMissing) {
       if (variantId === undefined) {
         return { error: `Berat varian ${sku} wajib diisi (gram).`, status: 422 };
       }
@@ -347,6 +416,9 @@ export function parseProductMutationPayload(
       : {}),
     image_url: imageUrl || null,
     is_active: isActive,
+    product_type: productType,
+    digital_access_url: digitalAccessUrl,
+    digital_access_note: digitalAccessNote,
     variants,
   };
   if (isActive) {

@@ -30,7 +30,10 @@
  *   by the middleware on a hit, because it never lived in the HTML.
  *
  * The browser sees `Cache-Control: public, max-age=0, must-revalidate`; the
- * edge lifetime is internal. An admin edit shows within `EDGE_CACHE_SECONDS`.
+ * edge lifetime is internal. An admin write that buyers see shows on the next
+ * request: the middleware bumps the tenant's cache version after it
+ * (`bumpsStorefrontCache`, `bumpTenantCacheVersion`), so every key written
+ * before it is unreachable. `EDGE_CACHE_SECONDS` bounds anything else.
  * Prices are never read from here: checkout validates them again server-side.
  */
 import { tenantCacheKey, type TenantScope } from "../platform/keys.ts";
@@ -47,6 +50,11 @@ const TRACKING_PARAMS = new Set<string>([
   "gad_source",
   "gad_campaignid",
   "utm_id",
+  // Affiliate and social links (Paket 1, 2026-11-18): the same page, not a new cache entry.
+  "ref",
+  "source",
+  "igshid",
+  "twclid",
   "__prov",
 ]);
 
@@ -97,6 +105,33 @@ export function edgeCacheRequest(request: Request, url: URL, tenant: TenantScope
     if (province) key.searchParams.set("__prov", province);
   }
   return new Request(key.toString(), { method: "GET" });
+}
+
+/**
+ * Admin APIs whose writes change what an anonymous visitor sees: catalogue,
+ * landing pages, store identity and template, home content, pixels, CS numbers,
+ * and the payment rails a store opens with.
+ */
+const STOREFRONT_WRITE_APIS = [
+  "/api/admin/products",
+  "/api/admin/landing-pages",
+  "/api/admin/settings",
+  "/api/admin/ads",
+  "/api/admin/whatsapp-numbers",
+  "/api/admin/content",
+  "/api/admin/seller-bank-accounts",
+];
+
+/**
+ * Paket 1 (2026-11-18): whether this admin answer ends with the tenant's
+ * cached pages made unreachable. Any 2xx write to a storefront-visible admin
+ * API counts — one path, so a handler added later cannot forget it. A test or
+ * a refused save that still answers 2xx costs one extra render, nothing more.
+ */
+export function bumpsStorefrontCache(pathname: string, method: string, status: number): boolean {
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return false;
+  if (status < 200 || status >= 300) return false;
+  return STOREFRONT_WRITE_APIS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 /** Whether an answer may be stored for the next visitor. */

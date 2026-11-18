@@ -885,6 +885,21 @@ test("T-26/IAM-10: a signup yields an active tenant whose owner signs in with th
   assert.equal(validateAdminUsername("bukan email@x"), false);
 });
 
+test("DIGITAL-PRODUCTS-SPEC §1.1: a signup stores the seller's catalog mode; anything but 'digital' is physical", async () => {
+  const { stores, env } = await signupHarness();
+  const mode = async (slug: string, catalogMode: unknown, ip: string) => {
+    const result = await signup(env, { storeName: `Toko ${slug}`, slug, email: `owner@${slug}.example`, password: "kata-sandi-panjang-1", terms: true, turnstileToken: "ok", catalogMode }, ip, { verifyTurnstile: async () => true });
+    assert.equal(result.status, 201);
+    if (result.status !== 201) return "";
+    const row = await createTenantDb(stores.get(result.tenantId).stub).prepare("SELECT catalog_mode FROM stores").first<{ catalog_mode: string }>();
+    return row?.catalog_mode;
+  };
+  assert.equal(await mode("toko-ebook", "digital", "198.51.100.71"), "digital");
+  assert.equal(await mode("toko-sambal", "physical", "198.51.100.72"), "physical");
+  assert.equal(await mode("toko-lama", undefined, "198.51.100.73"), "physical", "the default choice");
+  assert.equal(await mode("toko-aneh", "hybrid'; DROP TABLE stores;--", "198.51.100.74"), "physical", "an unknown value is the default, never stored");
+});
+
 test("T-26/API-4: invalid input 400, taken or reserved slug 409, rate limited 429, the password never the email", async () => {
   const { run, env, input } = await signupHarness();
   assert.equal((await run("sudah-ada")).status, 201);
@@ -1745,6 +1760,174 @@ test("T-38: a new store says 'toko belum siap' (no checkout) until the ready pre
   // And closes again if a required fact goes away (derived, never stored).
   store.sql.exec("UPDATE stores SET mengantar_api_key = NULL");
   assert.equal((await store.open("/")).status, 503);
+});
+
+test("DIGITAL-PRODUCTS-SPEC §3: a digital store opens with a digital product and a prepaid rail — no warehouse, Mengantar key or courier", async () => {
+  const store = await readinessHarness("toko-ebook-siap");
+  store.sql.exec("UPDATE stores SET catalog_mode = 'digital'; UPDATE courier_rules SET is_enabled = 0;");
+  const digital = (url: string) =>
+    store.sql.exec(`DELETE FROM product_variants; DELETE FROM products;
+      INSERT INTO products (id, store_id, title, slug, is_active, created_at, product_type, digital_access_url) VALUES (1, 1, 'E-book', 'ebook', 1, '2026-11-18', 'digital', '${url}');
+      INSERT INTO product_variants (product_id, sku, title, price, weight_grams) VALUES (1, 'EB-1', 'E-book', 49000, 0);`);
+  assert.equal((await store.open("/")).status, 503, "nothing yet");
+  digital("http://drive.example/ebook");
+  assert.equal((await store.facts()).digitalProduct, false, "an http link is not an access link");
+  digital("https://drive.example/ebook");
+  assert.equal((await store.facts()).digitalProduct, true);
+  assert.equal((await store.open("/")).status, 503, "COD alone is not a prepaid rail");
+  store.sql.exec("INSERT INTO seller_bank_accounts (store_id, bank_code, account_holder, account_number, is_active, display_order, created_at, updated_at) VALUES (1, 'BCA', 'Toko Ebook', '1234567890', 1, 0, '2026-11-18', '2026-11-18')");
+  const facts = await store.facts();
+  assert.deepEqual({ prepaid: facts.prepaid, primaryWarehouse: facts.primaryWarehouse, mengantar: facts.mengantar, enabledCouriers: facts.enabledCouriers }, { prepaid: true, primaryWarehouse: false, mengantar: false, enabledCouriers: 0 });
+  assert.equal((await store.open("/")).reached, true, "open with no warehouse, no Mengantar key and no courier");
+  store.sql.exec("UPDATE seller_bank_accounts SET is_active = 0");
+  assert.equal((await store.open("/")).status, 503, "and closes when its only prepaid rail goes");
+  store.sql.exec("UPDATE seller_bank_accounts SET is_active = 1");
+
+  // Hybrid: either track opens it (review finding 1); a physical product waits at the order boundary instead.
+  store.sql.exec("UPDATE stores SET catalog_mode = 'hybrid'");
+  assert.equal((await store.open("/")).reached, true);
+  store.sql.exec(`INSERT INTO products (id, store_id, title, slug, is_active, created_at) VALUES (2, 1, 'Kopi', 'kopi', 1, '2026-11-18');
+                  INSERT INTO product_variants (product_id, sku, title, price, weight_grams) VALUES (2, 'KOPI-1', 'Kopi', 85000, 300);`);
+  assert.equal((await store.open("/")).reached, true, "a physical product never closes a store that sells digital");
+  // Physical mode never takes the digital predicate.
+  store.sql.exec("UPDATE stores SET catalog_mode = 'physical'");
+  assert.equal((await store.open("/")).status, 503);
+});
+
+test("DIGITAL-PRODUCTS-SPEC §2.3/§5.2/§8.1: a digital order is never COD, opens its link only while paid and live, and stamps the first open", async () => {
+  const { persistOrder, OrderInputError, DIGITAL_ORDER_ADDRESS } = await import("../lib/order-persistence.ts");
+  const { readDigitalAccess, markDigitalAccessed } = await import("../lib/digital-access.ts");
+  const { markDigitalOrderDelivered } = await import("../lib/order-lifecycle.ts");
+  const store = await readinessHarness("toko-ebook-akses");
+  store.sql.exec(`UPDATE stores SET catalog_mode = 'hybrid';
+    INSERT INTO products (id, store_id, title, slug, is_active, created_at, product_type, digital_access_url, digital_access_note)
+      VALUES (7, 1, 'E-book Resep', 'ebook', 1, '2026-11-18', 'digital', 'https://drive.example/ebook', 'Password: SUKSES');
+    INSERT INTO product_variants (id, product_id, sku, title, price, weight_grams) VALUES (70, 7, 'EB-1', 'PDF', 49000, 0);
+    INSERT INTO seller_bank_accounts (id, store_id, bank_code, account_holder, account_number, is_active, display_order, created_at, updated_at)
+      VALUES (3, 1, 'BCA', 'Toko Ebook', '1234567890', 1, 0, '2026-11-18', '2026-11-18');`);
+  const base = { customerName: "Budi Pembeli", customerPhone: "6281234567801", customerEmail: "budi@example.test", ...DIGITAL_ORDER_ADDRESS, variantKey: "70", quantity: 1, shippingCost: 0 };
+  await assert.rejects(persistOrder(store.database, { ...base, submitToken: "digital-cod-000000001", paymentMethod: "cod" }), OrderInputError, "COD refused for a digital product");
+  await assert.rejects(persistOrder(store.database, { ...base, submitToken: "digital-ship-00000001", paymentMethod: "manual_transfer", sellerBankAccountId: 3, shippingCost: 18000 }), OrderInputError, "no shipping cost");
+  const order = await persistOrder(store.database, { ...base, submitToken: "digital-ok-0000000001", paymentMethod: "manual_transfer", sellerBankAccountId: 3 });
+  const row = () => store.sql.prepare("SELECT fulfillment_type, payment_status, shipping_status, digital_accessed_at, total_amount, shipping_cost FROM orders WHERE id = ?").get(order.id) as Record<string, unknown>;
+  assert.deepEqual({ ...row() }, { fulfillment_type: "digital", payment_status: "pending", shipping_status: "pending", digital_accessed_at: null, total_amount: 49000, shipping_cost: 0 });
+
+  const access = () => readDigitalAccess(store.database, order.orderNumber, order.publicStatusToken);
+  assert.deepEqual(await access(), { fulfillmentType: "digital", access: null }, "unpaid: no link");
+  assert.equal(await readDigitalAccess(store.database, order.orderNumber, "wrong-token"), null, "a wrong token learns nothing");
+  assert.equal(await markDigitalAccessed(store.database, order.orderNumber, order.publicStatusToken), false, "nothing to stamp while unpaid");
+
+  store.sql.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").run(order.id);
+  assert.equal(await markDigitalOrderDelivered(store.database, order.id), true, "paid: delivered at once");
+  assert.equal(await markDigitalOrderDelivered(store.database, order.id), false, "idempotent");
+  const open = await access();
+  assert.deepEqual(open?.access && { url: open.access.url, note: open.access.note, product: open.access.product_name }, { url: "https://drive.example/ebook", note: "Password: SUKSES", product: "E-book Resep" });
+  assert.equal(row().shipping_status, "delivered");
+
+  const first = new Date("2026-11-18T10:00:00.000Z");
+  assert.equal(await markDigitalAccessed(store.database, order.orderNumber, order.publicStatusToken, first), true);
+  assert.equal(await markDigitalAccessed(store.database, order.orderNumber, order.publicStatusToken, new Date("2026-11-19T10:00:00.000Z")), true);
+  assert.equal(row().digital_accessed_at, first.toISOString(), "the first open is kept");
+
+  // The seller replaces the link: the buyer gets the current one; a non-https one never reaches them.
+  store.sql.exec("UPDATE products SET digital_access_url = 'javascript:alert(1)' WHERE id = 7");
+  assert.equal((await access())?.access, null);
+  store.sql.exec("UPDATE products SET digital_access_url = 'https://drive.example/ebook-v2' WHERE id = 7");
+  assert.equal((await access())?.access?.url, "https://drive.example/ebook-v2");
+
+  // Refunded: closed again, with nothing to revoke.
+  store.sql.prepare("UPDATE orders SET payment_status = 'refunded' WHERE id = ?").run(order.id);
+  assert.deepEqual(await access(), { fulfillmentType: "digital", access: null });
+
+  // A physical order never carries digital access, paid or not (the store can ship it now).
+  store.mengantar();
+  store.warehouse(1, 1, "12345", "pickup-1");
+  store.sql.exec(`INSERT INTO products (id, store_id, title, slug, is_active, created_at) VALUES (8, 1, 'Kopi', 'kopi', 1, '2026-11-18');
+    INSERT INTO product_variants (id, product_id, sku, title, price, weight_grams) VALUES (80, 8, 'KOPI-1', 'Kopi', 85000, 300);`);
+  const physical = await persistOrder(store.database, { ...base, submitToken: "physical-ok-000000001", variantKey: "80", paymentMethod: "cod", shippingCost: 18000, address: "Jl. Dago No. 12 Bandung" });
+  store.sql.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").run(physical.id);
+  assert.equal(await markDigitalOrderDelivered(store.database, physical.id), false, "a physical order is never auto-delivered");
+  assert.deepEqual(await readDigitalAccess(store.database, physical.orderNumber, physical.publicStatusToken), { fulfillmentType: "physical", access: null });
+});
+
+test("review findings 1, 2, 4: a hybrid store keeps selling digital while its physical products wait for shipping; the mode decides what is for sale; headless digital checkout", async () => {
+  const { persistOrder, OrderInputError, PhysicalShippingNotReadyError } = await import("../lib/order-persistence.ts");
+  const { getStorefrontProducts } = await import("../lib/catalog.ts");
+  const { hashApiKeySecret } = await import("../lib/developer-api-keys.ts");
+  const submitOrderRoute = await import("../pages/api/submit-order.ts");
+  const middleOrderRoute = await import("../pages/api/submit-middle-order.ts");
+  const headlessCheckoutRoute = await import("../pages/api/v1/checkout.ts");
+  const store = await readinessHarness("toko-hybrid-batas");
+  store.sql.exec(`UPDATE stores SET catalog_mode = 'hybrid';
+    INSERT INTO products (id, store_id, title, slug, image_url, is_active, created_at, product_type, digital_access_url)
+      VALUES (7, 1, 'E-book', 'ebook', '/assets/uploads/e.webp', 1, '2026-11-18', 'digital', 'https://drive.example/ebook');
+    INSERT INTO product_variants (id, product_id, sku, title, price, weight_grams) VALUES (70, 7, 'EB-1', 'PDF', 49000, 0);
+    INSERT INTO seller_bank_accounts (id, store_id, bank_code, account_holder, account_number, is_active, display_order, created_at, updated_at)
+      VALUES (3, 1, 'BCA', 'Toko Hybrid', '1234567890', 1, 0, '2026-11-18', '2026-11-18');`);
+  assert.equal((await store.open("/")).reached, true, "digital track ready");
+  // Finding 1: activating a physical product before the warehouse never closes the store.
+  store.sql.exec(`INSERT INTO products (id, store_id, title, slug, image_url, is_active, created_at) VALUES (8, 1, 'Kopi', 'kopi', '/assets/uploads/k.webp', 1, '2026-11-18');
+    INSERT INTO product_variants (id, product_id, sku, title, price, weight_grams) VALUES (80, 8, 'KOPI-1', 'Kopi', 85000, 300);`);
+  assert.equal((await store.open("/")).reached, true, "still open with a physical product and no warehouse");
+
+  // Each route through the real middleware, as a buyer's browser or a headless caller reaches it.
+  const onRequest = createMiddleware();
+  const call = async (route: { POST: unknown }, path: string, body: unknown, headers: Record<string, string> = {}) => {
+    const href = `https://toko-hybrid-batas.adsbook.my.id${path}`;
+    const request = new Request(href, { method: "POST", headers: { "content-type": "application/json", origin: "https://toko-hybrid-batas.adsbook.my.id", "sec-fetch-site": "same-origin", "cf-connecting-ip": `203.0.113.${Math.floor(Math.random() * 200)}`, ...headers }, body: JSON.stringify(body) });
+    const context = { request, url: new URL(href), locals: { runtimeEnv: store.env }, routePattern: path, redirect: () => new Response(null, { status: 302 }) };
+    const original = { log: console.log, info: console.info, error: console.error };
+    console.log = console.info = console.error = () => undefined;
+    try {
+      const handler = route.POST as (context: never) => Response | Promise<Response>;
+      const response = (await onRequest(context as never, (async () => handler(context as never)) as never)) as Response;
+      return { status: response.status, body: (await response.json()) as Record<string, any> };
+    } finally {
+      Object.assign(console, original);
+    }
+  };
+  const contact = { customer_name: "Budi Pembeli", customer_phone: "081234567801", quantity: 1 };
+  // Finding 2: the physical product is refused until the store can ship it — on every route.
+  const middle = await call(middleOrderRoute, "/api/submit-middle-order", { ...contact, submit_token: "middle-kopi-000000001", address: "Jl. Dago No. 12 Bandung", variant_id: "80" });
+  assert.equal(middle.status, 422, JSON.stringify(middle.body));
+  assert.match(middle.body.error, /Pengiriman produk fisik belum siap/);
+  await assert.rejects(
+    persistOrder(store.database, { submitToken: "persist-kopi-00000001", customerName: "Budi", customerPhone: "6281234567801", address: "Jl. Dago No. 12", province: "Jawa Barat", city: "Bandung", district: "Coblong", variantKey: "80", quantity: 1, shippingCost: 0, paymentMethod: "cod" }),
+    PhysicalShippingNotReadyError,
+  );
+  // ...while the digital product sells, with '-' in the address columns.
+  const digital = await call(submitOrderRoute, "/api/submit-order", { ...contact, submit_token: "digital-ebook-000000001", variant_id: "70", payment_method: "manual_transfer", seller_bank_account_id: 3 });
+  assert.equal(digital.status, 200, JSON.stringify(digital.body));
+  assert.equal(digital.body.order.fulfillment_type, "digital");
+  const stored = store.sql.prepare("SELECT address, province, city, district, postal_code, shipping_cost FROM orders WHERE id = ?").get(digital.body.order.id) as Record<string, unknown>;
+  assert.deepEqual({ ...stored }, { address: "-", province: "-", city: "-", district: "-", postal_code: null, shipping_cost: 0 });
+
+  // Finding 4: headless digital checkout needs no shipping fields; COD is refused.
+  const secret = "adsbook_live_digitalheadlesskey0000000000000000";
+  store.sql.prepare("INSERT INTO developer_api_keys (name, key_hash, key_preview, created_by, created_at) VALUES ('uji', ?, 'adsbook_live_…', 'owner', '2026-11-18')").run(await hashApiKeySecret(secret));
+  const headless = (body: Record<string, unknown>) => call(headlessCheckoutRoute, "/api/v1/checkout", body, { authorization: `Bearer ${secret}` });
+  const viaApi = await headless({ ...contact, submit_token: "headless-ebook-00000001", variant_id: "70", payment_method: "manual_transfer", seller_bank_account_id: 3 });
+  assert.equal(viaApi.status, 201, JSON.stringify(viaApi.body).slice(0, 300));
+  const apiCod = await headless({ ...contact, submit_token: "headless-ebook-00000002", variant_id: "70", payment_method: "cod" });
+  assert.equal(apiCod.status, 422);
+  assert.equal(apiCod.body.error?.code ?? apiCod.body.code, "DIGITAL_REQUIRES_PREPAID");
+
+  // Finding 2: the catalog mode decides what is shown and what is sold; nothing is deleted.
+  const slugs = async () => (await getStorefrontProducts({ tenantDb: store.database } as never)).map((product) => product.slug).sort();
+  assert.deepEqual(await slugs(), ["ebook", "kopi"]);
+  store.sql.exec("UPDATE stores SET catalog_mode = 'digital'");
+  assert.deepEqual(await slugs(), ["ebook"], "a digital store shows no physical product");
+  await assert.rejects(
+    persistOrder(store.database, { submitToken: "persist-kopi-00000002", customerName: "Budi", customerPhone: "6281234567801", address: "Jl. Dago No. 12", province: "Jawa Barat", city: "Bandung", district: "Coblong", variantKey: "80", quantity: 1, shippingCost: 0, paymentMethod: "cod" }),
+    (error: unknown) => error instanceof OrderInputError && /tidak dijual/.test((error as Error).message),
+  );
+  store.sql.exec("UPDATE stores SET catalog_mode = 'physical'");
+  assert.deepEqual(await slugs(), ["kopi"], "a physical store shows no digital product");
+  await assert.rejects(
+    persistOrder(store.database, { submitToken: "persist-ebook-00000003", customerName: "Budi", customerPhone: "6281234567801", address: "-", province: "-", city: "-", district: "-", variantKey: "70", quantity: 1, shippingCost: 0, paymentMethod: "manual_transfer", sellerBankAccountId: 3 }),
+    (error: unknown) => error instanceof OrderInputError && /tidak dijual/.test((error as Error).message),
+  );
+  assert.equal(Number((store.sql.prepare("SELECT COUNT(*) AS n FROM products").get() as { n: number }).n), 2, "switching hides, never deletes");
 });
 
 test("T-38/PR-23: COD + product without a Mengantar key is not ready", async () => {

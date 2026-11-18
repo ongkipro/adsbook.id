@@ -46,6 +46,7 @@ const CRM_KEYS = ["welcome", "1", "2", "3", "4", "5", "6", "7"] as const;
 type SettingsPayload = {
   action?:
     | "save-store"
+    | "save-catalog-mode"
     | "add-storefront-template"
     | "save-embed-origins"
     | "save-headless-origins"
@@ -59,6 +60,7 @@ type SettingsPayload = {
     | "test-mengantar"
     | "test-autolaris"
     | "test-autolaris-channels";
+  catalog_mode?: string;
   is_cod_enabled?: boolean;
   is_autolaris_enabled?: boolean;
   disabled_autolaris_channels?: string[];
@@ -474,6 +476,17 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
     const current = await getSettingsRow(db);
     if (!current) return jsonError("Store belum tersedia.", 404);
+
+    // DIGITAL-PRODUCTS-SPEC §1/§8.6: non-destructive — only the column moves; no product,
+    // warehouse or courier is touched, so switching back restores everything as it was.
+    if (body.action === "save-catalog-mode") {
+      const mode = body.catalog_mode;
+      if (mode !== "physical" && mode !== "digital" && mode !== "hybrid") {
+        return jsonError("Mode katalog tidak dikenal.", 400);
+      }
+      await db.prepare("UPDATE stores SET catalog_mode = ? WHERE id = ?").bind(mode, current.store_id).run();
+      return jsonOk({ message: "Mode katalog toko disimpan.", catalog_mode: mode });
+    }
 
     if (body.action === "save-embed-origins") {
       const policy = parseEmbedAllowedOrigins(body.embed_allowed_origins);

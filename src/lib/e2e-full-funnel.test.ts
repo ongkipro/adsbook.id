@@ -113,12 +113,14 @@ class SqliteD1Database {
 
       CREATE TABLE stores (
         id INTEGER PRIMARY KEY,
-        cod_fee_bearer TEXT
+        cod_fee_bearer TEXT,
+        catalog_mode TEXT NOT NULL DEFAULT 'physical'
       );
 
       CREATE TABLE products (
         id INTEGER PRIMARY KEY,
-        is_active INTEGER NOT NULL
+        is_active INTEGER NOT NULL,
+        product_type TEXT NOT NULL DEFAULT 'physical'
       );
 
       CREATE TABLE product_variants (
@@ -167,6 +169,7 @@ class SqliteD1Database {
         meta_request_context TEXT,
         checkout_fingerprint TEXT,
         checkout_dedupe_expires_at TEXT,
+        fulfillment_type TEXT NOT NULL DEFAULT 'physical',
         created_at TEXT NOT NULL
       );
 

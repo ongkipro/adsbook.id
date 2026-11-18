@@ -22,6 +22,8 @@ export interface PublicTenantConfig {
   defaultTitle: string;
   storefrontTemplate: StorefrontTemplateId;
   adminName: string;
+  /** DIGITAL-PRODUCTS-SPEC §1: what the store sells; the admin menu and product form follow it. */
+  catalogMode: "physical" | "digital" | "hybrid";
 }
 
 /** Shape of the identity columns on the single `stores` row (migration 0036). */
@@ -36,6 +38,7 @@ export interface StoreIdentityRow {
   locale?: string | null;
   storefront_template?: string | null;
   admin_name?: string | null;
+  catalog_mode?: string | null;
 }
 
 /**
@@ -197,6 +200,7 @@ export function resolveTenantConfig(
       ),
     ),
     adminName: pick(row?.admin_name, defaults.adminName),
+    catalogMode: row?.catalog_mode === "digital" || row?.catalog_mode === "physical" ? row.catalog_mode : "hybrid",
   });
 }
 
@@ -229,7 +233,7 @@ export async function readStoreIdentity(
   try {
     const row = await database
       .prepare(
-        "SELECT name, slug, site_url, description, logo, tagline, theme_color, locale, storefront_template, admin_name FROM stores ORDER BY id LIMIT 1",
+        "SELECT name, slug, site_url, description, logo, tagline, theme_color, locale, storefront_template, admin_name, catalog_mode FROM stores ORDER BY id LIMIT 1",
       )
       .first<StoreIdentityRow>();
     return row ? { state: "installed", row } : { state: "uninstalled" };

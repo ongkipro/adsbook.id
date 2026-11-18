@@ -22,7 +22,9 @@ import { scheduleReceiverPerformanceRefresh } from "../../lib/rts-scoring";
 import { scheduleOrderCreated } from "../../plugins/registry";
 import { scheduleCodPurchase } from "../../lib/paid-order-purchase";
 import {
+  DIGITAL_PARSE_ADDRESS,
   DuplicateSubmissionError,
+  isDigitalVariant,
   OrderInputError,
   persistOrder,
 } from "../../lib/order-persistence";
@@ -99,7 +101,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  const parsed = parseOrderSubmit(body);
+  // DIGITAL-PRODUCTS-SPEC §5.1: the product decides the checkout, never the
+  // request. A digital variant takes no address and no courier (its columns get
+  // the honest placeholder), and is never COD; `persistOrder` enforces both again.
+  const variantKey = String(body.variant_id ?? "").trim().slice(0, 120);
+  const lookupDatabase = tenantDatabase(locals);
+  const digital = lookupDatabase?.prepare ? await isDigitalVariant(lookupDatabase, variantKey) : false;
+  const parsed = parseOrderSubmit(digital ? { ...body, ...DIGITAL_PARSE_ADDRESS } : body);
   if (!parsed.success) {
     return json(
       {
@@ -111,6 +119,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
   const data = parsed.data;
+  if (digital && data.payment_method === "cod") {
+    return json(
+      {
+        success: false,
+        error: "Produk digital dibayar di muka: pilih QRIS, Virtual Account, atau transfer bank.",
+        code: "DIGITAL_REQUIRES_PREPAID",
+      },
+      422,
+    );
+  }
   const customerPhone = normalizePhone(data.customer_phone);
   const database = tenantDatabase(locals);
   if (!database?.prepare) {
@@ -178,6 +196,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
   }
 
+  // A digital order ships nothing: no destination, courier or quote.
+  let quote: ResolvedShippingRates | undefined;
+  let selectedRate: CourierRateResult | undefined;
+  let trustedShippingCost = 0;
+  if (!digital) {
   const destinationId = String(
     body.location_id || body.destination_id || "",
   ).trim();
@@ -229,9 +252,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  let quote: ResolvedShippingRates;
-  let selectedRate: CourierRateResult | undefined;
-  let trustedShippingCost: number;
   try {
     quote = await resolveEligibleShippingRates(database, locals, {
       destinationId,
@@ -277,6 +297,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       quoteError?.status || 502,
     );
   }
+  }
+  const destinationId = digital ? undefined : String(body.location_id || body.destination_id || "").trim();
   try {
     // Attribution captured at the ad landing by the middleware; kept with the
     // order so a COD sale confirmed later can be uploaded to Google Ads.
@@ -317,10 +339,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       shippingCost: trustedShippingCost,
       paymentMethod: data.payment_method,
       sellerBankAccountId: data.seller_bank_account_id,
-      warehouseId: quote.warehouse?.id,
+      warehouseId: quote?.warehouse?.id,
       destinationAreaId: destinationId,
-      courierCode: selectedRate.courier_code,
-      courierService: selectedRate.courier_service,
+      courierCode: selectedRate?.courier_code,
+      courierService: selectedRate?.courier_service,
       adClickIds: storedClickIds,
       metaRequestContext,
       sourcePagePath: String(body.source_page_path || "").slice(0, 500) || undefined,
@@ -382,6 +404,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         cod_fee_bearer: order.codFeeBearer,
         seller_bank_account_id: order.sellerBankAccountId || null,
         payment_url: paymentUrl,
+        fulfillment_type: digital ? "digital" : "physical",
       },
       payment: payment
         ? {

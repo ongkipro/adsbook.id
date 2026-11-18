@@ -107,6 +107,8 @@ type OrderRow = {
   shipping_status: string;
   confirmed_at: string | null;
   courier_code: string | null;
+  fulfillment_type: string | null;
+  digital_accessed_at: string | null;
   courier_service: string | null;
   cnote_no: string | null;
   provider_order_id: string | null;
@@ -203,6 +205,8 @@ async function loadOrder(database: D1Database, rawOrderKey: string) {
       o.courier_code,
       o.courier_service,
       o.cnote_no,
+      o.fulfillment_type,
+      o.digital_accessed_at,
       o.provider_order_id,
       o.provider_dispatch_error,
       o.provider_dispatch_claimed_at,
@@ -297,6 +301,7 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
       providerDispatchClaimedAt: order.provider_dispatch_claimed_at,
       destinationAreaId: order.destination_area_id,
       courierCode: order.courier_code,
+      fulfillmentType: order.fulfillment_type,
       pickupAddressId: order.pickup_address_id || '',
     });
 
@@ -350,6 +355,10 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
         stock_restored_at: order.stock_restored_at,
         confirmed_at: order.confirmed_at,
         courier_code: order.courier_code,
+        fulfillment_type: order.fulfillment_type === 'digital' ? 'digital' : 'physical',
+        digital_accessed_at: order.digital_accessed_at ?? null,
+        // The buyer's own order page (/thanks locator) for "Kirim Akses via WhatsApp"; admin-only.
+        public_status_token: order.fulfillment_type === 'digital' ? order.public_status_token : null,
         courier_service: order.courier_service,
         cnote_no: order.cnote_no,
         provider_order_id: order.provider_order_id,
@@ -501,6 +510,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         providerDispatchClaimedAt: updated.provider_dispatch_claimed_at,
         destinationAreaId: updated.destination_area_id,
         courierCode: updated.courier_code,
+        fulfillmentType: updated.fulfillment_type,
         pickupAddressId: updated.pickup_address_id || '',
       });
       return jsonOk({

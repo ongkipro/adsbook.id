@@ -149,6 +149,23 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
               <p id="emailError" class="field-error" hidden></p>
             </div>
 
+            <fieldset class="field catalog-choice">
+              <legend>Jenis produk utama</legend>
+              <div class="catalog-options">
+                <label class="catalog-option">
+                  <input type="radio" name="catalog_mode" value="physical" checked />
+                  <span class="catalog-title">Produk Fisik</span>
+                  <span class="catalog-sub">COD &amp; ekspedisi</span>
+                </label>
+                <label class="catalog-option">
+                  <input type="radio" name="catalog_mode" value="digital" />
+                  <span class="catalog-title">Produk Digital</span>
+                  <span class="catalog-sub">Akses instan setelah lunas</span>
+                </label>
+              </div>
+              <p class="field-hint">Bisa diubah ke Hybrid kapan saja di Pengaturan Toko.</p>
+            </fieldset>
+
             <div class="field">
               <div class="label-row">
                 <label for="whatsapp">Nomor WhatsApp aktif</label>
@@ -532,6 +549,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
           whatsapp: values.get('whatsapp'),
           password: values.get('password'),
           terms: values.get('terms') === 'on',
+          catalog_mode: values.get('catalog_mode') === 'digital' ? 'digital' : 'physical',
           turnstile_token: turnstileToken,
           event_id: eventId,
         }),
@@ -731,6 +749,17 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
 
   .signup-form { display: grid; gap: 1.15rem; }
   .field { display: grid; gap: 0.38rem; }
+  /* Jenis produk utama: two radio cards, the chosen one in the accent. */
+  .catalog-choice { margin: 0; padding: 0; border: 0; min-width: 0; }
+  .catalog-choice legend { padding: 0; margin-bottom: 0.38rem; font-size: 0.875rem; font-weight: 700; }
+  .catalog-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .catalog-option { position: relative; display: grid; gap: 0.15rem; padding: 0.75rem 0.875rem 0.75rem 2.4rem; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; }
+  .catalog-option input { position: absolute; left: 0.875rem; top: 0.95rem; margin: 0; accent-color: var(--accent); }
+  .catalog-option:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+  .catalog-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .catalog-title { font-size: 0.9rem; font-weight: 700; }
+  .catalog-sub { font-size: 0.78rem; color: #64748b; }
+  @media (max-width: 380px) { .catalog-options { grid-template-columns: 1fr; } }
   .field label { font-size: 0.92rem; font-weight: 700; color: var(--ink); }
   .label-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
   .optional-tag { font-size: 0.8rem; color: var(--ink-muted); font-weight: 500; }

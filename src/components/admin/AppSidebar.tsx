@@ -20,6 +20,7 @@ import {
   isAdminNavHrefActive,
   profileNavItem,
   type AdminRole,
+  type CatalogMode,
 } from "./admin-navigation";
 import { CMS_VERSION } from "@/lib/version";
 import { SIDEBAR_SCROLL_RESTORE } from "@/lib/sidebar-scroll";
@@ -34,6 +35,7 @@ export function AppSidebar({
   siteName,
   siteLogo,
   adminRole,
+  catalogMode = "hybrid",
   restricted = false,
   onOpenChangelog,
   docsHref,
@@ -45,6 +47,7 @@ export function AppSidebar({
   siteName?: string;
   siteLogo?: string;
   adminRole: AdminRole;
+  catalogMode?: CatalogMode;
   restricted?: boolean;
   onOpenChangelog?: () => void;
   /** Set only for a role that may open /admin/docs. */
@@ -60,7 +63,7 @@ export function AppSidebar({
     .replace(/\s+cms$/i, "")
     .trim();
   const displayDomain = siteUrl.replace(/^https?:\/\//, "") || "adsbook.internal";
-  const groups = restricted ? [] : getVisibleNavGroups(adminRole);
+  const groups = restricted ? [] : getVisibleNavGroups(adminRole, catalogMode);
 
   return (
     <Sidebar variant="sidebar" collapsible="icon" className="border-r-0">

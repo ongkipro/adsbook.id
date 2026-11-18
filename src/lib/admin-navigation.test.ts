@@ -72,3 +72,21 @@ test("navigation active matching keeps required query filters and accepts pagina
   assert.equal(isAdminNavHrefActive("/admin/settings/pluginsx", "/admin/settings/plugins"), false);
   assert.equal(isAdminNavHrefActive("/admin/settings/plugins/kelola", "/admin/settings/store"), false);
 });
+
+test("DIGITAL-PRODUCTS-SPEC §4.1: a digital store's menu drops shipping, couriers, rate check and the warehouse; physical and hybrid keep them", () => {
+  const hrefs = (mode: "physical" | "digital" | "hybrid", role: "owner" | "admin" | "customer_service" = "owner") =>
+    getVisibleNavGroups(role, mode).flatMap((group) => group.items.flatMap((item) => [item.href, ...(item.children ?? []).map((child) => child.href)]));
+  const shipping = ["/admin/shipping", "/admin/expeditions", "/admin/check", "/admin/settings/warehouse"];
+  for (const mode of ["physical", "hybrid"] as const) {
+    for (const href of shipping) assert.ok(hrefs(mode).includes(href), `${mode} keeps ${href}`);
+  }
+  for (const role of ["owner", "admin", "customer_service"] as const) {
+    for (const href of shipping) assert.ok(!hrefs("digital", role).includes(href), `${role} digital hides ${href}`);
+  }
+  for (const href of ["/admin/orders", "/admin/products", "/admin/payments", "/admin/ads/tiktok", "/admin/settings/store"]) {
+    assert.ok(hrefs("digital").includes(href), `digital keeps ${href}`);
+  }
+  const search = getSearchableNavItems("owner", "digital").map((item) => item.href);
+  for (const href of shipping) assert.ok(!search.includes(href), `search hides ${href}`);
+  assert.deepEqual(getVisibleNavGroups("owner"), getVisibleNavGroups("owner", "hybrid"), "the default is today's menu");
+});

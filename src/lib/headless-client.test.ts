@@ -76,7 +76,7 @@ function createJourneyDatabase__raw(keyHash: string, providerBaseUrl: string) {
           if (query.includes("SELECT pv.id, pv.price")) {
             return { id: 11, price: 100_000 };
           }
-          if (query.includes("SELECT id, cod_fee_bearer FROM stores")) {
+          if (query.includes("SELECT id, cod_fee_bearer, catalog_mode FROM stores")) {
             return { id: 1, cod_fee_bearer: "buyer" };
           }
           if (query.includes("shipping_status = 'abandoned'")) return null;

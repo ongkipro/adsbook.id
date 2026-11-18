@@ -6,6 +6,7 @@ import {
 import { isAutoLarisCheckoutChannel } from "../../lib/autolaris-client.ts";
 import { loadPublicOrderStatus, resolvePublicOrderId } from "../../lib/order-status.ts";
 import { checkRateLimit, getClientIp, rateLimitHeaders } from "../../lib/rate-limit.ts";
+import { markDigitalAccessed, readDigitalAccess } from "../../lib/digital-access.ts";
 import { tenantDatabase } from "../../lib/tenant-database.ts";
 import { readTikTokCodTrigger, tiktokOrderQualifies } from "../../lib/tiktok-outbox.ts";
 
@@ -27,6 +28,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       order_id?: unknown;
       status_token?: unknown;
       retry_payment?: unknown;
+      mark_digital_accessed?: unknown;
     } | null;
     const orderIdentity = String(body?.order_pk ?? body?.order_id ?? "").trim();
     const statusToken = String(body?.status_token ?? "").trim();
@@ -115,7 +117,23 @@ export const POST: APIRoute = async ({ request, locals }) => {
       },
       await readTikTokCodTrigger(database),
     );
-    return json({ success: true, ...orderStatus, tiktok_complete_payment: tiktokCompletePayment });
+    // DIGITAL-PRODUCTS-SPEC §5.2/§8.1: the access link only for a paid, live digital
+    // order; `mark_digital_accessed` stamps the buyer's first open (same pair, same check).
+    // Best-effort: a physical buyer's status never fails on the digital read.
+    let digital: Awaited<ReturnType<typeof readDigitalAccess>> = null;
+    try {
+      if (body?.mark_digital_accessed === true) await markDigitalAccessed(database, orderIdentity, statusToken);
+      digital = await readDigitalAccess(database, orderIdentity, statusToken);
+    } catch (error) {
+      console.error("public-digital-access-failed", error);
+    }
+    return json({
+      success: true,
+      ...orderStatus,
+      tiktok_complete_payment: tiktokCompletePayment,
+      fulfillment_type: digital?.fulfillmentType ?? "physical",
+      digital_access: digital?.access ?? null,
+    });
   } catch (error) {
     console.error("public-order-status-failed", error);
     return json({ success: false, error: "Failed to fetch order status" }, 500);

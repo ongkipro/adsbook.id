@@ -172,9 +172,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
             request.url,
           ) ||
           payload.email,
-        city: purchaseOrder?.city || payload.city,
-        province: purchaseOrder?.province || payload.province,
-        postalCode: purchaseOrder?.postal_code || payload.postalCode,
+        // A digital order has no place: neither its '-' columns nor a browser's guess (review finding 3).
+        city: purchaseOrder?.fulfillment_type === 'digital' ? undefined : purchaseOrder?.city || payload.city,
+        province: purchaseOrder?.fulfillment_type === 'digital' ? undefined : purchaseOrder?.province || payload.province,
+        postalCode: purchaseOrder?.fulfillment_type === 'digital' ? undefined : purchaseOrder?.postal_code || payload.postalCode,
         // Truthful without guessing: a resolved order is Indonesian by
         // construction, and every other event falls back to the country
         // Cloudflare resolved for this very request.

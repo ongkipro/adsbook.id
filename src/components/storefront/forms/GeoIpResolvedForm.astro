@@ -2,6 +2,8 @@
 import { tenantDatabase } from '../../../lib/tenant-database.ts';
 import FormHybridContent from './FormHybridContent.astro';
 import FormMiddleContent from './FormMiddleContent.astro';
+import FormDigitalContent from './FormDigitalContent.astro';
+import { getStorefrontProduct } from '../../../lib/catalog';
 import {
   loadStoreCodDisabledProvinceCodes,
   resolveFormModeContext,
@@ -25,6 +27,8 @@ const {
   selectedVariantId,
   bannerImage,
 } = Astro.props;
+// DIGITAL-PRODUCTS-SPEC §5.1: a digital product takes the digital checkout, whatever the page asked for.
+const digital = (await getStorefrontProduct(Astro.locals, productSlug))?.productType === 'digital';
 const database = tenantDatabase(Astro.locals);
 const codDisabledProvinceCodes = await loadStoreCodDisabledProvinceCodes(database);
 const formContext = await resolveFormModeContext(
@@ -40,9 +44,11 @@ const resolvedMode =
 const resolvedProvince = province || formContext.province;
 ---
 
-<div class="mx-auto w-full max-w-[480px] bg-white" data-canonical-order-form data-resolved-mode={resolvedMode}>
+<div class="mx-auto w-full max-w-[480px] bg-white" data-canonical-order-form data-resolved-mode={digital ? 'digital' : resolvedMode}>
   {
-    resolvedMode === 'full' ? (
+    digital ? (
+      <FormDigitalContent productSlug={productSlug} selectedVariantId={selectedVariantId} embedded={embedded} />
+    ) : resolvedMode === 'full' ? (
       <FormHybridContent
         productSlug={productSlug}
         selectedVariantId={selectedVariantId}
