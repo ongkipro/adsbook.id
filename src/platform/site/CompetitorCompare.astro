@@ -1,0 +1,88 @@
+---
+/**
+ * Clean Head-to-Head comparison matrix (Paduka, 2026-11-18: selling points &
+ * direct comparison against typical Indonesian form builders & external
+ * tracking apps, without naming any competitor brand).
+ */
+const ROWS = [
+  {
+    feature: 'Potongan transaksi QRIS & VA',
+    typical: 'Dipotong 1% – 5% per transaksi',
+    tracker: 'Bayar aplikasi kedua tiap bulan',
+    ours: '0% komisi platform (cair langsung)',
+  },
+  {
+    feature: 'Batas kuota order & jumlah produk',
+    typical: 'Dibatasi kuota bulanan per paket',
+    tracker: 'Tagihan naik sesuai trafik order',
+    ours: 'Tanpa kuota order & produk',
+  },
+  {
+    feature: 'Filter iklan bocor ke provinsi jauh',
+    typical: 'Tetap masuk jadi COD rawan retur',
+    tracker: 'Tidak bisa mengunci metode bayar',
+    ours: 'Hybrid Form Geo-IP otomatis',
+  },
+  {
+    feature: 'Sinyal Server 1:1 & 8 Hash SHA-256',
+    typical: 'Pixel dasar / sewa server GTM lagi',
+    tracker: 'Terpisah dari form & status COD',
+    ours: 'Menyatu langsung di inti toko',
+  },
+  {
+    feature: 'Kecepatan & isolasi database toko',
+    typical: 'Database dipakai bersama (shared)',
+    tracker: 'Tambah script luar di halaman',
+    ours: 'Database mandiri 10 GB per toko',
+  },
+] as const;
+---
+
+<div class="compare-card" role="region" aria-label="Perbandingan fitur dan biaya platform">
+  <div class="compare-table" role="table">
+    <div class="c-row c-head" role="row">
+      <span role="columnheader">Kebutuhan Pengiklan</span>
+      <span role="columnheader" class="c-muted-col">Form / Toko Biasa</span>
+      <span role="columnheader" class="c-muted-col">+ Aplikasi Tracker Luar</span>
+      <span role="columnheader" class="c-ours-head"><span class="mini-mark" aria-hidden="true">a<i></i></span>adsbook.id</span>
+    </div>
+
+    {ROWS.map((row) => (
+      <div class="c-row" role="row">
+        <span role="cell" class="c-feat">{row.feature}</span>
+        <span role="cell" class="c-other" data-col="Form / Toko Biasa">{row.typical}</span>
+        <span role="cell" class="c-other" data-col="+ Tracker Luar">{row.tracker}</span>
+        <span role="cell" class="c-ours" data-col="adsbook.id"><i class="sq" aria-hidden="true"></i>{row.ours}</span>
+      </div>
+    ))}
+  </div>
+</div>
+
+<style>
+  .compare-card { margin-bottom: 2.5rem; border-radius: 20px; border: 1px solid var(--line); background: #ffffff; overflow: hidden; box-shadow: 0 16px 36px -20px rgb(15 23 42 / 0.08); }
+  .compare-table { display: grid; }
+  .c-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr); align-items: stretch; border-top: 1px solid var(--line); }
+  .c-row.c-head { border-top: 0; background: #f8fafc; font-family: var(--display); font-weight: 800; font-size: 0.84rem; color: var(--ink); }
+  .c-row > span { padding: 0.95rem 1.15rem; display: flex; align-items: center; font-size: 0.88rem; line-height: 1.45; }
+
+  .c-muted-col { color: var(--ink-muted); font-weight: 700; }
+  .c-ours-head { background: var(--ink); color: #ffffff; gap: 0.5rem; font-size: 0.92rem; }
+  .mini-mark { display: inline-flex; align-items: baseline; padding: 0.1rem 0.34rem; border-radius: 5px; background: var(--accent); color: #ffffff; font-size: 0.8rem; line-height: 1; }
+  .mini-mark i { width: 3px; height: 3px; background: #bfdbfe; margin-left: 1px; display: inline-block; }
+
+  .c-feat { font-weight: 700; color: var(--ink); }
+  .c-other { color: var(--ink-muted); }
+  .c-ours { background: #eff6ff; color: var(--ink); font-weight: 700; gap: 0.55rem; border-left: 1px solid #dbeafe; }
+  .sq { width: 7px; height: 7px; background: var(--accent); flex-shrink: 0; }
+
+  @media (max-width: 860px) {
+    .c-row.c-head { display: none; }
+    .c-row { grid-template-columns: 1fr; padding: 1rem; gap: 0.45rem; }
+    .c-row > span { padding: 0; }
+    .c-feat { font-family: var(--display); font-weight: 800; font-size: 0.98rem; margin-bottom: 0.2rem; }
+    .c-other::before, .c-ours::before { content: attr(data-col) ": "; font-weight: 700; margin-right: 0.35rem; color: var(--ink-muted); }
+    .c-ours { padding: 0.55rem 0.75rem !important; border-radius: 8px; border: 1px solid #bfdbfe; margin-top: 0.15rem; }
+    .c-ours::before { color: var(--accent); }
+    .c-ours .sq { display: none; }
+  }
+</style>

@@ -1,6 +1,7 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import PageHead from '../../../platform/site/PageHead.astro';
+import CompetitorCompare from '../../../platform/site/CompetitorCompare.astro';
 import Pricing from '../../../platform/site/Pricing.astro';
 import FaqList from '../../../platform/site/FaqList.astro';
 import { FAQ_GROUPS } from '../../../platform/site/content.ts';
@@ -11,10 +12,11 @@ const pricingFaq = FAQ_GROUPS[0].items;
 ---
 
 <SiteLayout page={SITE_PAGES.harga}>
-  <PageHead title="Gratis sampai siap beriklan" lead="Satu harga untuk semua fitur, per toko. Pelacakan semua kanal iklan dan konversi 1:1 ke Meta dan Google sudah termasuk, dan tidak ada potongan per transaksi." />
+  <PageHead title="Gratis sampai siap beriklan" lead="Satu biaya flat per toko — 0% potongan QRIS/VA, tanpa kuota order, Hybrid Form wilayah otomatis, dan konversi 1:1 ke dashboard iklan Meta dan Google sudah termasuk." />
   <section class="section section-white" aria-labelledby="paket-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="paket-title">Paket per toko</h2></div>
+      <div class="section-head"><h2 id="paket-title">Perbandingan nilai &amp; pilihan paket per toko</h2></div>
+      <CompetitorCompare />
       <Pricing />
     </div>
   </section>
