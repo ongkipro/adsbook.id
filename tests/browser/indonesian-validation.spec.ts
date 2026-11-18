@@ -28,31 +28,26 @@ async function inlineError(page: Page, id: string, text: RegExp) {
   await expect(page.locator(`#${id}-error`)).toHaveText(text);
 }
 
-test("first-met forms answer inline in Indonesian: home dialog, store sign-in, platform sign-in", async ({ page }) => {
+test("first-met forms answer inline in Indonesian: adsbook.id/masuk, store sign-in, platform sign-in", async ({ page }) => {
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
 
     await page.goto(`${PLATFORM}/`);
     await browserWouldSayEnglish(page);
-    await page.locator("#btn-user-auth").click();
-    await page.locator("#tab-daftar").click();
-    await page.locator("#panel-daftar button[type=submit]").click();
-    await inlineError(page, "hero-email", /^Masukkan alamat email Anda terlebih dahulu\.$/);
-    await expect(page.locator("#hero-email")).toBeFocused();
-    await page.locator("#hero-email").fill("abc");
-    await page.locator("#panel-daftar button[type=submit]").click();
-    await inlineError(page, "hero-email", /^Format email belum benar/);
-    await page.locator("#hero-email").fill("abc@toko.id");
-    await expect(page.locator("#hero-email-error"), "clears as soon as it is right").toBeHidden();
-    await page.locator("#tab-masuk").click();
-    await page.locator("#panel-masuk button[type=submit]").click();
-    await inlineError(page, "hero-store", /^Masukkan nama atau domain toko Anda terlebih dahulu\.$/);
     if (width === 1440) {
       // Entry 322's note: the desktop sub-copy sits on two lines, as in the reference.
-      await page.keyboard.press("Escape");
       const lines = await page.locator(".hero-sub").evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
       expect(lines).toBe(2);
     }
+    // The header's account button is the sign-in page itself (no dialog since the auth UX spec).
+    await page.locator("#btn-user-auth").click();
+    await expect(page).toHaveURL(`${PLATFORM}/masuk`);
+    await page.getByRole("button", { name: "Masuk ke Dashboard →" }).click();
+    await inlineError(page, "loginIdentifier", /^Masukkan email atau username Anda\.$/);
+    await inlineError(page, "loginPassword", /^Masukkan password Anda\.$/);
+    await expect(page.locator("#loginIdentifier")).toBeFocused();
+    await page.locator("#loginIdentifier").fill("pemilik@toko.id");
+    await expect(page.locator("#loginIdentifier-error"), "clears as soon as it is right").toBeHidden();
 
     await page.goto(`${origin(TENANTS[0].slug)}/hello`);
     await page.getByRole("button", { name: "Masuk" }).click();

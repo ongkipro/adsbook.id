@@ -1,13 +1,14 @@
 ---
 /**
  * The marketing site's one header (Paduka, 2026-11-18): the same wordmark,
- * nav, account button and Daftar / Masuk dialog on every platform page.
+ * nav and account button (a plain link to /masuk) on every platform page.
  * - `variant="hero"`: transparent, inside the home's 100dvh stage (KineticHero3D).
  * - `variant="page"`: on the canvas at the top of SiteLayout (inner pages).
  * - `quiet`: the wordmark only (/daftar, which is the signup itself).
  * Up to 900px the nav folds into [account] [menu]: the menu button morphs
  * into × and opens a screen-aligned panel with a short line per page.
- * Every action is a real link first (/masuk, /daftar); scripts add the dialog.
+ * Every action is a real link: the account button and the menu's "Masuk" open
+ * /masuk, the one sign-in page (AUTH-LOGIN-REGISTER-UX-SPEC §2.1: no modal).
  */
 import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from './site.ts';
 
@@ -41,7 +42,7 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
     )}
     {!quiet && (
       <div class="sh-tools">
-        <a id="btn-user-auth" class="sh-round" href="/masuk" aria-label="Masuk atau Daftar" aria-haspopup="dialog" title="Daftar / Masuk">
+        <a id="btn-user-auth" class="sh-round" href="/masuk" aria-label="Masuk atau buat toko" title="Masuk / Daftar">
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <circle cx="10" cy="6.6" r="3.1" stroke="currentColor" stroke-width="1.65"/>
             <path d="M4.4 16.4C5.1 13.7 7.25 12.1 10 12.1C12.75 12.1 14.9 13.7 15.6 16.4" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>
@@ -75,51 +76,19 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
       </ul>
       <div class="sh-dropdown-foot">
         <a class="sh-pill" href={SIGNUP_PATH}>{SIGNUP_LABEL} →</a>
-        <a class="sh-secondary" href="/masuk" data-auth-open="masuk">Sudah punya toko? <b>Masuk ke admin</b></a>
+        <a class="sh-secondary" href="/masuk">Sudah punya toko? <b>Masuk ke admin</b></a>
       </div>
     </nav>
 
-    <dialog id="auth-dialog" class="auth-dialog" aria-labelledby="auth-title" aria-describedby="auth-desc">
-      <div class="auth-head">
-        <img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="126" height="20" loading="lazy" decoding="async" />
-        <form method="dialog"><button class="auth-close" aria-label="Tutup">
-          <svg viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/></svg>
-        </button></form>
-      </div>
-      <div class="auth-tabs" role="tablist" aria-label="Daftar atau masuk">
-        <button type="button" role="tab" id="tab-daftar" aria-selected="true" aria-controls="panel-daftar">Daftar</button>
-        <button type="button" role="tab" id="tab-masuk" aria-selected="false" aria-controls="panel-masuk" tabindex="-1">Masuk</button>
-      </div>
-      <h2 id="auth-title" class="auth-title">Mulai toko konversi 1:1</h2>
-      <p id="auth-desc" class="auth-desc">Kunci sinyal TikTok Ads, Meta Ads, dan Google Ads di satu ID pesanan.</p>
-
-      <form id="panel-daftar" role="tabpanel" aria-labelledby="tab-daftar" class="auth-form" action={SIGNUP_PATH} method="get" novalidate>
-        <label for="hero-email">Email</label>
-        <input id="hero-email" type="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="email@brandkamu.id" aria-describedby="hero-email-error" data-msg-missing="Masukkan alamat email Anda terlebih dahulu." data-msg-invalid="Format email belum benar (contoh: nama@toko.id)." />
-        <p id="hero-email-error" class="auth-error" hidden></p>
-        <button type="submit" class="sh-pill">Lanjutkan gratis →</button>
-      </form>
-
-      <form id="panel-masuk" role="tabpanel" aria-labelledby="tab-masuk" class="auth-form" action={SIGNUP_PATH} method="get" hidden novalidate>
-        <input type="hidden" name="masuk" value="1" />
-        <label for="hero-store">Alamat atau slug toko</label>
-        <input id="hero-store" type="text" required autocomplete="url" autocapitalize="none" spellcheck="false" placeholder="namatoko atau tokoanda.com" aria-describedby="hero-store-error" />
-        <p id="hero-store-error" class="auth-error" hidden></p>
-        <button type="submit" class="sh-pill">Masuk ke toko →</button>
-      </form>
-    </dialog>
   </>
 )}
 
 <script>
-  import { HERO_EMAIL_KEY, storeLoginUrl } from '../store-finder.ts';
-  import { bindInlineValidation, setFieldError, validateInline } from '../../lib/form-validation-id.ts';
 
   const header = document.querySelector<HTMLElement>('[data-site-header]');
   const menuButton = document.getElementById('btn-mobile-menu') as HTMLButtonElement | null;
   const dropdown = document.getElementById('mobile-nav-dropdown');
   const backdrop = document.getElementById('mobile-nav-backdrop');
-  const dialog = document.getElementById('auth-dialog') as HTMLDialogElement | null;
 
   // --- The phone menu: [account] [menu ⇄ ×], a panel aligned to the screen edges.
   // Paduka (2026-11-18): the header and its × stay sharp and clickable while the menu is
@@ -166,74 +135,6 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
   });
   desktop.addEventListener('change', (event) => { if (event.matches) setMenu(false); });
 
-  // --- The account dialog: a real /masuk link; Daftar / Masuk when the browser has <dialog>.
-  if (dialog && typeof dialog.showModal === 'function') {
-    const tabs = { daftar: document.getElementById('tab-daftar')!, masuk: document.getElementById('tab-masuk')! };
-    const panels = { daftar: document.getElementById('panel-daftar') as HTMLFormElement, masuk: document.getElementById('panel-masuk') as HTMLFormElement };
-    const title = document.getElementById('auth-title')!;
-    const desc = document.getElementById('auth-desc')!;
-    const copy = {
-      daftar: ['Mulai toko konversi 1:1', 'Kunci sinyal TikTok Ads, Meta Ads, dan Google Ads di satu ID pesanan.'],
-      masuk: ['Masuk ke toko Anda', 'Ketik alamat toko Anda; halaman masuk toko terbuka di alamatnya sendiri.'],
-    } as const;
-    const show = (mode: 'daftar' | 'masuk', focus = false) => {
-      for (const key of ['daftar', 'masuk'] as const) {
-        const on = key === mode;
-        tabs[key].setAttribute('aria-selected', String(on));
-        tabs[key].tabIndex = on ? 0 : -1;
-        panels[key].hidden = !on;
-      }
-      [title.textContent, desc.textContent] = copy[mode];
-      if (focus) panels[mode].querySelector<HTMLInputElement>('input:not([type=hidden])')?.focus();
-    };
-    const open = (mode: 'daftar' | 'masuk') => {
-      setMenu(false);
-      show(mode);
-      dialog.showModal();
-      panels[mode].querySelector<HTMLInputElement>('input:not([type=hidden])')?.focus();
-    };
-    tabs.daftar.addEventListener('click', () => show('daftar', true));
-    tabs.masuk.addEventListener('click', () => show('masuk', true));
-    for (const tab of Object.values(tabs)) {
-      tab.addEventListener('keydown', (event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        const next = tab === tabs.daftar ? 'masuk' : 'daftar';
-        show(next);
-        tabs[next].focus();
-      });
-    }
-    // A modified click (new tab, new window) keeps the plain /masuk link.
-    const plainClick = (event: MouseEvent) => !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0);
-    for (const trigger of [document.getElementById('btn-user-auth'), ...document.querySelectorAll<HTMLElement>('[data-auth-open]')]) {
-      trigger?.addEventListener('click', (event) => {
-        if (!plainClick(event)) return;
-        event.preventDefault();
-        open('masuk');
-      });
-    }
-    dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
-
-    bindInlineValidation(panels.daftar);
-    bindInlineValidation(panels.masuk);
-    panels.daftar.addEventListener('submit', (event) => {
-      event.preventDefault();
-      if (!validateInline(panels.daftar)) return;
-      const email = (document.getElementById('hero-email') as HTMLInputElement).value.trim();
-      try { if (email) sessionStorage.setItem(HERO_EMAIL_KEY, email); } catch { /* the seller types it again on /daftar */ }
-      window.location.assign(panels.daftar.action);
-    });
-    panels.masuk.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const input = document.getElementById('hero-store') as HTMLInputElement;
-      const login = storeLoginUrl(input.value, header?.dataset.suffix || 'adsbook.my.id', window.location);
-      if ('error' in login) {
-        setFieldError(input, login.error);
-        input.focus();
-        return;
-      }
-      window.location.assign(login.url);
-    });
-  }
 </script>
 
 <style>
@@ -312,30 +213,7 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
   }
   .sh-pill:hover { color: #fff; background: var(--accent-hover); }
 
-  .auth-dialog { width: min(360px, 100% - 2rem); padding: 1.5rem; pointer-events: auto; border: 1px solid rgb(15 23 42 / 0.08); border-radius: 22px; background: #fff; color: var(--ink); box-shadow: 0 24px 56px -12px rgb(15 23 42 / 0.16), 0 2px 8px -2px rgb(15 23 42 / 0.05); }
-  .auth-dialog::backdrop { background: rgb(15 23 42 / 0.14); backdrop-filter: blur(4px); }
-  .auth-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-  .auth-head img { height: 20px; width: auto; }
-  .auth-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 999px; border: 0; background: var(--tile); color: #64748b; cursor: pointer; }
-  .auth-close:hover { background: #eff6ff; color: var(--accent); }
-  .auth-close svg { width: 14px; height: 14px; }
-  .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; margin-bottom: 1rem; border-radius: 999px; background: var(--tile); }
-  .auth-tabs button { min-height: 36px; border: 0; border-radius: 999px; background: transparent; color: #64748b; font: 700 0.8125rem/1 var(--display); cursor: pointer; }
-  .auth-tabs button:hover { color: var(--ink); }
   /* The chosen tab: a white chip on the porcelain track, cobalt text. */
-  .auth-tabs button[aria-selected="true"] { background: #fff; color: var(--accent); box-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 4px 10px -4px rgb(15 23 42 / 0.12); }
-  .auth-title { font-size: 1rem; letter-spacing: -0.02em; }
-  .auth-desc { margin-top: 0.25rem; font-size: 0.8125rem; line-height: 1.5; color: #64748b; }
-  .auth-form { margin-top: 1rem; display: grid; gap: 0.5rem; }
-  .auth-form[hidden] { display: none; }
-  .auth-form label { font-size: 0.8125rem; font-weight: 600; color: #475569; }
-  .auth-form input { width: 100%; min-height: 44px; padding: 0 0.875rem; border-radius: 12px; border: 1px solid rgb(15 23 42 / 0.1); background: #f8fafc; color: var(--ink); font: inherit; font-size: 1rem; }
-  .auth-form input:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15); }
-  .auth-form input[aria-invalid="true"] { border-color: #e11d48; background: #fff; box-shadow: 0 0 0 3px rgb(225 29 72 / 0.14); }
-  .auth-form .sh-pill { width: 100%; margin-top: 0.25rem; }
-  .auth-error { display: flex; align-items: flex-start; gap: 0.375rem; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; color: #be123c; }
-  .auth-error::before { content: ""; width: 6px; height: 6px; margin-top: 0.35em; flex-shrink: 0; background: #e11d48; }
-  .auth-error[hidden] { display: none; }
 
   @media (min-width: 640px) {
     .sh-hero, .sh-page { padding: 1.1rem 0 0.25rem; }

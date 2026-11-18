@@ -25,6 +25,15 @@ export const SIGNUP_PAGE: SitePage = {
   noindex: true,
 };
 
+/** adsbook.id/masuk: one sign-in door for every store (AUTH-LOGIN-REGISTER-UX-SPEC §2.3). */
+export const LOGIN_PATH = "/masuk";
+export const LOGIN_PAGE: SitePage = {
+  path: LOGIN_PATH,
+  title: "Masuk ke Dashboard Toko - adsbook.id",
+  description: "Masuk ke dashboard toko adsbook.id dengan email pemilik atau username tim Anda. Sistem langsung membuka admin toko Anda tanpa perlu mengetik alamat toko.",
+  noindex: true,
+};
+
 /** One entry per indexable page; titles ≤ 70 and descriptions 120–155 characters (copy QA gate). */
 export const SITE_PAGES: Record<"home" | "coba" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
   home: {

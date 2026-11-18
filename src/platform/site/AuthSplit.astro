@@ -1,0 +1,104 @@
+---
+/**
+ * The shared shell of adsbook.id/masuk and /daftar (AUTH-LOGIN-REGISTER-UX-SPEC
+ * §2.2): a porcelain explanation panel and a floating white card. From 960px the
+ * panel sits left (4.8fr) and the card right (7.2fr); below it the switcher and
+ * the card come first, in the first viewport, and the panel follows as a short
+ * reassurance strip — a phone visitor never scrolls past copy to reach a field.
+ */
+interface Props {
+  active: 'masuk' | 'daftar';
+}
+const { active } = Astro.props;
+---
+
+<section class="auth-band">
+  <div class="wrap auth-grid" data-auth-grid>
+    <div class="auth-card-col">
+      <nav class="auth-switch" aria-label="Masuk atau buat toko">
+        <a href="/masuk" aria-current={active === 'masuk' ? 'page' : undefined}>Masuk ke Toko</a>
+        <a href="/daftar" aria-current={active === 'daftar' ? 'page' : undefined}>Buat Toko Baru</a>
+      </nav>
+      <div class="auth-card">
+        <slot />
+      </div>
+    </div>
+    <aside class="auth-pitch" aria-label="Tentang adsbook.id">
+      <slot name="pitch" />
+    </aside>
+  </div>
+</section>
+
+<style>
+  .auth-band { padding: 1rem 0 3.5rem; }
+  .auth-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "card" "pitch";
+    gap: 1.25rem;
+    align-items: start;
+  }
+  .auth-card-col { grid-area: card; display: grid; gap: 0.75rem; min-width: 0; }
+  .auth-pitch {
+    grid-area: pitch;
+    min-width: 0;
+    display: grid;
+    gap: 1.1rem;
+    padding: 1.5rem 1.25rem;
+    border-radius: 22px;
+    background: var(--tile);
+  }
+  /* The switcher: a porcelain track, the current page a white chip with cobalt text. */
+  .auth-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 999px;
+    background: var(--tile);
+  }
+  .auth-switch a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    border-radius: 999px;
+    color: var(--slate);
+    font: 700 0.9rem/1.2 var(--display);
+    word-spacing: 0.06em;
+    text-decoration: none;
+    text-align: center;
+    transition: color 0.15s ease-out, background-color 0.15s ease-out;
+  }
+  .auth-switch a:hover { color: var(--ink); }
+  .auth-switch a[aria-current="page"] {
+    background: #fff;
+    color: var(--accent);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 4px 10px -4px rgb(15 23 42 / 0.12);
+  }
+  .auth-card {
+    min-width: 0;
+    padding: 1.35rem;
+    border-radius: 22px;
+    background: #fff;
+    border: 1px solid rgb(15 23 42 / 0.06);
+    box-shadow: var(--shadow-float);
+  }
+  @media (min-width: 640px) {
+    .auth-card { padding: 2rem; }
+    .auth-pitch { padding: 2rem; }
+  }
+  @media (min-width: 960px) {
+    .auth-band { padding: 2.5rem 0 4.5rem; }
+    .auth-grid {
+      grid-template-columns: minmax(0, 4.8fr) minmax(0, 7.2fr);
+      grid-template-areas: "pitch card";
+      gap: 2.5rem;
+    }
+    .auth-pitch { position: sticky; top: 1.5rem; padding: 2.5rem; }
+    .auth-card { padding: 2.5rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .auth-switch a { transition: none; }
+  }
+</style>

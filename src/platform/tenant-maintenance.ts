@@ -1,3 +1,4 @@
+import { syncTenantIdentities } from "./identities.ts";
 import { encryptStoredCredentials } from "../lib/credential-crypto.ts";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import { tenantKv } from "./keys.ts";
@@ -71,6 +72,9 @@ export async function runTenantMaintenance(
   // step can fail.
   // ADR-040 (T-48): seal any credential still in plaintext, or under an older
   // key version, before anything below reads one. Cheap when nothing is left.
+  // AUTH-LOGIN-REGISTER-UX-SPEC §1.2: the store's sign-in names follow its credentials
+  // in the platform registry, so staff made before 0010 can use adsbook.id/masuk too.
+  await housekeeping("scheduled-identity-sync-failed", async () => (await syncTenantIdentities(env, tenantId, database, new Date(scheduledTime))).synced);
   const sealedCredentials = await housekeeping("scheduled-credential-seal-failed", async () =>
     (await encryptStoredCredentials(database)).sealed + (await sealPluginSecrets(database)),
   );

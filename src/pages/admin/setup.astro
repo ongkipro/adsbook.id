@@ -13,6 +13,15 @@ const host = Astro.locals.tenantContext?.primaryHost ?? Astro.locals.tenantConte
 const storeUrl = host ? `${Astro.url.protocol}//${host}${Astro.url.port && !host.includes(':') ? `:${Astro.url.port}` : ''}` : null;
 const welcome = Astro.url.searchParams.get('welcome') === '1';
 const ownerEmail = Astro.locals.admin?.username ?? '';
+const catalogMode = Astro.locals.tenant.catalogMode;
+// Paduka (2026-11-18): every store may sell physical and digital products at once;
+// the setup page says so for the mode the store is in.
+const hybridNote =
+  catalogMode === 'physical'
+    ? { title: 'Ingin juga jual produk digital?', body: 'E-book, kelas, atau template bisa dijual di toko yang sama. Aktifkan mode Hybrid (Produk Fisik & Digital sekaligus) di Pengaturan › Toko & CS kapan saja.' }
+    : catalogMode === 'digital'
+      ? { title: 'Ingin juga jual barang fisik?', body: 'Aktifkan mode Hybrid (Produk Fisik & Digital sekaligus) di Pengaturan › Toko & CS kapan saja. Produk digital tetap jualan; produk fisik mulai dijual setelah alamat pickup, API key Mengantar, dan kurir siap.' }
+      : { title: 'Toko Anda Hybrid: fisik & digital sekaligus', body: 'Produk digital bisa langsung dijual. Produk fisik mulai bisa dipesan setelah alamat pickup / gudang, API key Mengantar, dan minimal satu kurir siap.' };
 ---
 
 <AdminLayout title="Siapkan toko" activeMenu="settings">
@@ -43,6 +52,13 @@ const ownerEmail = Astro.locals.admin?.username ?? '';
 
     {facts ? (
       <SetupChecklist steps={steps} storeUrl={storeUrl} />
+    ) : null}
+    {facts ? (
+      <section class="rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm shadow-xs md:p-5" aria-label="Mode katalog toko" data-hybrid-note={catalogMode}>
+        <p class="font-semibold text-slate-950">{hybridNote.title}</p>
+        <p class="mt-1 text-xs leading-5 text-slate-700">{hybridNote.body}</p>
+        <a href="/admin/settings/store#catalogModeForm" class="mt-2 inline-flex min-h-11 items-center text-xs font-semibold text-blue-700 underline underline-offset-2">Atur mode katalog</a>
+      </section>
     ) : (
       <p role="alert" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
         Gagal memuat, muat ulang.

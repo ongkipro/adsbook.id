@@ -1,21 +1,21 @@
 import type { APIRoute } from "astro";
-import { getAdminCredential } from "../../lib/admin-credentials.ts";
+import { getAdminCredentialById, isDefaultAdminCredential } from "../../lib/admin-credentials.ts";
 import { storeAdminSession } from "../../lib/admin-session.ts";
 import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS, signJwt } from "../../lib/auth.ts";
 import { resolveAuthSecret } from "../../lib/auth-secret.ts";
 import { getRuntimeEnv } from "../../lib/env.ts";
 import { tenantDatabase } from "../../lib/tenant-database.ts";
-import { consumeHandoff, HANDOFF_FETCH_SITE_HEADER, HANDOFF_ORIGIN_HEADER, isPlatformHandoffOrigin } from "../../platform/handoff.ts";
+import { consumeSessionHandoff, HANDOFF_FETCH_SITE_HEADER, HANDOFF_ORIGIN_HEADER, isPlatformHandoffOrigin } from "../../platform/handoff.ts";
 import { platformHosts } from "../../platform/host.ts";
 import { BRAND_MARK, BRAND_WORDMARK } from "../../lib/brand-assets.ts";
 
 export const prerender = false;
 
-/** Safe post-signup destinations on the seller's own admin surface. */
+/** Safe post-signup and post-login destinations on the seller's own admin surface. */
 export function resolveHandoffTarget(raw: unknown): string {
   if (typeof raw !== "string") return "/admin/dashboard";
   const trimmed = raw.trim();
-  if (/^\/admin\/(?:setup|dashboard|billing)(?:\?[A-Za-z0-9=&_-]{1,64})?$/.test(trimmed)) {
+  if (/^\/admin\/(?:setup|dashboard|billing|orders|ads|profile)(?:\?[A-Za-z0-9=&_-]{1,64})?$/.test(trimmed)) {
     return trimmed;
   }
   return "/admin/dashboard";
@@ -38,9 +38,10 @@ function refused() {
 }
 
 /**
- * API-8 / IAM-8: redeem a signup handoff on the seller host and start the
- * owner's session. The token is in the POST body only; the request log keeps
- * the route pattern, never a body or query.
+ * API-8 / IAM-8: redeem a handoff on the seller host and start a session — a
+ * signup's for the owner, a login's (adsbook.id/masuk) for exactly the user it
+ * names, owner or staff. The token is in the POST body only; the request log
+ * keeps the route pattern, never a body or query.
  */
 export const POST: APIRoute = async ({ request, locals, cookies, redirect }) => {
   const env = getRuntimeEnv(locals) as Record<string, unknown> | undefined;
@@ -53,19 +54,30 @@ export const POST: APIRoute = async ({ request, locals, cookies, redirect }) => 
   if (!isPlatformHandoffOrigin(request.headers.get(HANDOFF_ORIGIN_HEADER), request.headers.get(HANDOFF_FETCH_SITE_HEADER), hosts)) return refused();
 
   const form = await request.formData().catch(() => null);
-  const tenantId = await consumeHandoff(platformDb, form?.get("token"), tenant.host, "signup");
-  if (!tenantId || tenantId !== tenant.tenantId) return refused();
+  const consumed = await consumeSessionHandoff(platformDb, form?.get("token"), tenant.host);
+  if (!consumed || consumed.tenantId !== tenant.tenantId) return refused();
 
-  const owner = await platformDb
-    .prepare("SELECT owner_email FROM tenants WHERE id = ? AND status = 'active'")
-    .bind(tenantId)
-    .first<{ owner_email: string }>();
-  const credential = owner ? await getAdminCredential(database, owner.owner_email) : null;
-  const secret = await resolveAuthSecret(database, tenantId);
-  if (!credential || credential.role !== "owner" || secret.length < 32) return refused();
+  const active = await platformDb
+    .prepare("SELECT 1 AS yes FROM tenants WHERE id = ? AND status = 'active'")
+    .bind(consumed.tenantId)
+    .first<{ yes: number }>();
+  if (!active || !consumed.credential) return refused();
+  // Exactly the credential revision the token was issued for: a password reset, a
+  // role change, or a credential deleted and made again since then voids it.
+  const credential = await getAdminCredentialById(database, consumed.credential.id);
+  const secret = await resolveAuthSecret(database, consumed.tenantId);
+  if (
+    !credential ||
+    credential.username !== consumed.credential.username ||
+    credential.updatedAt !== consumed.credential.updatedAt ||
+    isDefaultAdminCredential(credential) ||
+    secret.length < 32
+  ) return refused();
+  if (consumed.purpose === "signup" && credential.role !== "owner") return refused();
 
   const { token, session } = await signJwt({ username: credential.username, role: credential.role }, secret);
   await storeAdminSession(database, session, credential);
   cookies.set(SESSION_COOKIE_NAME, token, { ...SESSION_COOKIE_OPTIONS, maxAge: 60 * 60 * 24 });
-  return redirect(resolveHandoffTarget(form?.get("next")), 303);
+  // As /hello: a user who must change the password goes there first.
+  return redirect(credential.mustChangePassword ? "/admin/profile" : resolveHandoffTarget(form?.get("next")), 303);
 };

@@ -33,16 +33,12 @@ test("home hero: real links, the account dialog, the stage on the home only", as
   }
 
   expect(problems, "the home itself: no console, CSP or page error").toEqual([]);
-  await page.locator("#btn-user-auth").click();
-  await expect(page.locator("#auth-dialog")).toBeVisible();
-  await expect(page.locator("#auth-title")).toHaveText("Masuk ke toko Anda");
-  await page.locator("#hero-store").fill("toko hero uji");
-  const hello = page.waitForRequest((request) => request.url().startsWith("http://toko-hero-uji.localhost:") && request.url().endsWith("/hello"));
-  await page.locator("#panel-masuk button[type=submit]").click();
-  await hello;
-
   expect(requests.some((url) => /kinetic-stage/.test(url)), "the home loads the stage chunk").toBe(true);
-  // The finder lands on that store's own host (no such test store: its 404 is not the home's).
+  // AUTH-LOGIN-REGISTER-UX-SPEC §2.1: the account button opens the sign-in page, never a modal.
+  await expect(page.locator("#auth-dialog")).toHaveCount(0);
+  await page.locator("#btn-user-auth").click();
+  await expect(page).toHaveURL(`${PLATFORM}/masuk`);
+  await expect(page.locator(".auth-switch a[aria-current=page]")).toHaveText("Masuk ke Toko");
   await page.goto(`${PLATFORM}/fitur`);
   problems.length = 0;
   requests.length = 0;
@@ -126,17 +122,14 @@ async function phoneMenu(page: import("@playwright/test").Page, path: string, cu
   await expect(button).toHaveAttribute("aria-expanded", "false");
   expect(await htmlOverflow(page), "the backdrop unlocks the page").toBe("");
 
-  // "Sudah punya toko?" opens the same dialog on Masuk, and closes the menu.
+  // "Sudah punya toko?" is the sign-in page; leaving through it releases the scroll lock.
   await button.click();
-  await panel.locator("[data-auth-open]").click();
-  await expect(page.locator("#auth-dialog")).toBeVisible();
-  await expect(page.locator("#auth-title")).toHaveText("Masuk ke toko Anda");
-  await expect(button).toHaveAttribute("aria-expanded", "false");
-  expect(await htmlOverflow(page), "opening the dialog unlocks the menu's scroll lock").toBe("");
-  if (shotDir && shotName === "hdr2-home-open-390.png") await page.screenshot({ path: `${shotDir}/hdr2-dialog-390.png` });
+  await panel.locator('a.sh-secondary[href="/masuk"]').click();
+  await expect(page).toHaveURL(`${PLATFORM}/masuk`);
+  expect(await htmlOverflow(page)).toBe("");
 }
 
-test("phone header on the home: [account] [menu ⇄ ×], a screen-aligned menu, the dialog from it", async ({ page }) => {
+test("phone header on the home: [account] [menu ⇄ ×], a screen-aligned menu, sign-in from it", async ({ page }) => {
   await phoneMenu(page, "/", null, "hdr2-home-open-390.png");
   if (shotDir) {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -168,7 +161,7 @@ test("a short phone screen: the menu scrolls inside itself, never past the scree
   expect(fit.bottom, "the panel ends on screen").toBeLessThanOrEqual(480);
   expect(fit.scrolls, "the rest of the menu is reachable by scrolling the panel").toBe(true);
   await panel.evaluate((el) => { el.scrollTop = el.scrollHeight; });
-  await expect(panel.locator("[data-auth-open]")).toBeInViewport();
+  await expect(panel.locator("a.sh-secondary")).toBeInViewport();
   expect(await page.evaluate(() => [document.documentElement.style.overflow, window.scrollY])).toEqual(["hidden", 0]);
   // Reopened, the panel starts at its first row again, never with the focused link above its top.
   await page.locator("#btn-mobile-menu").click();

@@ -1,8 +1,12 @@
 import type { APIRoute } from 'astro';
 import {
   getAdminCredential,
+  normalizeAdminUsername,
   updateAdminCredential,
 } from '../../../lib/admin-credentials';
+import { verifyPasswordHash } from '../../../lib/auth';
+import { getRuntimeEnv } from '../../../lib/env.ts';
+import { checkIdentitiesAvailable, syncTenantIdentities } from '../../../platform/identities.ts';
 import { revokeAdminSessions } from '../../../lib/admin-session';
 import { jsonError, jsonOk } from '../../../lib/api';
 import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../../../lib/auth';
@@ -63,6 +67,21 @@ export const PUT: APIRoute = async ({ request, locals, cookies }) => {
 
   try {
     const actorUsername = locals.admin?.username || '';
+    // AUTH-LOGIN-REGISTER-UX-SPEC §1.2: a username signs in on adsbook.id/masuk, so a new
+    // one must be free on the whole platform. The password is checked first: a wrong one
+    // learns nothing about which names are taken and touches nothing.
+    const env = getRuntimeEnv(locals);
+    const tenantId = locals.tenantContext?.tenantId;
+    const nextUsername = normalizeAdminUsername(username);
+    if (nextUsername && nextUsername !== actorUsername) {
+      const current = await getAdminCredential(database, actorUsername);
+      if (!current || !(await verifyPasswordHash(currentPassword, current.passwordHash))) {
+        return jsonError('Password saat ini salah.', 400);
+      }
+      if (!(await checkIdentitiesAvailable(env, tenantId, current.id, [nextUsername]))) {
+        return jsonError('Username atau email ini sudah digunakan. Pilih yang lain.', 409);
+      }
+    }
     const result = await updateAdminCredential(
       database,
       actorUsername,
@@ -71,6 +90,9 @@ export const PUT: APIRoute = async ({ request, locals, cookies }) => {
       newPassword,
     );
     if (!result.ok) return jsonError(result.error, 400);
+    // The registry follows the store: the new name is added; the owner email and an
+    // unchanged email stay the person's. Logged, never fatal: the next sync repairs it.
+    await syncTenantIdentities(env, tenantId, database).catch((error) => console.error('admin-profile-identity-sync', error));
 
     await revokeAdminSessions(database, actorUsername);
     cookies.delete(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);

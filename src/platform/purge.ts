@@ -115,6 +115,8 @@ export async function purgeTenant(
       .bind(tenantId, now.toISOString()),
     platformDb.prepare("DELETE FROM webhook_secrets WHERE tenant_id = ?").bind(tenantId),
     platformDb.prepare("DELETE FROM handoff_tokens WHERE tenant_id = ?").bind(tenantId),
+    // Its sign-in identifiers: the email and staff names are free for a new store.
+    platformDb.prepare("DELETE FROM platform_identities WHERE tenant_id = ?").bind(tenantId),
     platformDb.prepare("DELETE FROM migration_bookmarks WHERE tenant_id = ?").bind(tenantId),
     platformDb.prepare("DELETE FROM tenant_health WHERE tenant_id = ?").bind(tenantId),
     platformDb.prepare("DELETE FROM tenant_usage_daily WHERE tenant_id = ?").bind(tenantId),

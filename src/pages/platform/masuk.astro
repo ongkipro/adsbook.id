@@ -1,4 +1,213 @@
 ---
+import SiteLayout from '../../platform/site/SiteLayout.astro';
+import AuthSplit from '../../platform/site/AuthSplit.astro';
+import { LOGIN_PAGE } from '../../platform/site/site.ts';
+import { getRuntimeEnv } from '../../lib/env';
+import { tenantHostSuffix } from '../../platform/hostnames';
+
 export const prerender = false;
-return Astro.redirect('/daftar?masuk=1', 302);
+
+// AUTH-LOGIN-REGISTER-UX-SPEC §2.3: one sign-in door for every store. An email or
+// username and a password; the store is found from the identifier, and the
+// session opens on the store's own subdomain (POST /api/platform/masuk → /api/handoff).
+const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>);
 ---
+
+<SiteLayout page={LOGIN_PAGE} quietHeader>
+  <AuthSplit active="masuk">
+    <div class="card-head">
+      <h1 class="dot-end">Masuk ke dashboard toko</h1>
+      <p>Gunakan email pemilik toko atau username unik akun tim Anda.</p>
+    </div>
+
+    <div id="loginError" class="error-banner" hidden role="alert" tabindex="-1"></div>
+
+    <form id="loginForm" class="login-form" novalidate aria-busy="false">
+      <div class="field">
+        <label for="loginIdentifier">Email atau username</label>
+        <input
+          id="loginIdentifier"
+          name="identifier"
+          type="text"
+          required
+          maxlength="254"
+          autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
+          inputmode="email"
+          placeholder="nama@email.com atau username"
+          aria-describedby="loginIdentifier-error"
+          data-msg-missing="Masukkan email atau username Anda."
+        />
+        <p id="loginIdentifier-error" class="field-error" hidden></p>
+      </div>
+      <div class="field">
+        <label for="loginPassword">Password</label>
+        <div class="password-box">
+          <input
+            id="loginPassword"
+            name="password"
+            type="password"
+            required
+            maxlength="1024"
+            autocomplete="current-password"
+            aria-describedby="loginPassword-error"
+            data-msg-missing="Masukkan password Anda."
+          />
+          <button id="loginTogglePassword" type="button" class="toggle-pw" aria-controls="loginPassword" aria-pressed="false">Lihat</button>
+        </div>
+        <p id="loginPassword-error" class="field-error" hidden></p>
+      </div>
+      <button id="loginSubmit" type="submit" class="submit-btn">Masuk ke Dashboard →</button>
+    </form>
+
+    <p class="card-foot">Belum punya toko? <a href="/daftar">Buat toko gratis di Mode Preview →</a></p>
+
+    <Fragment slot="pitch">
+      <h2 class="pitch-title dot-end">Satu pintu masuk ke ruang kendali toko Anda</h2>
+      <p class="pitch-lead">Kelola produk fisik, produk digital, maupun hybrid, periksa pesanan berisiko RTS, dan pantau konversi 1:1 Meta Ads, Google Ads, serta TikTok Ads dari satu tempat.</p>
+      <ol class="pitch-list">
+        <li><span aria-hidden="true">01</span><div><strong>Langsung ke toko Anda</strong><p>Sistem mengenali toko Anda secara otomatis dari email atau username unik Anda.</p></div></li>
+        <li><span aria-hidden="true">02</span><div><strong>Akses langsung di domain toko</strong><p>Anda juga tetap bisa masuk kapan saja lewat alamat <code>nama-toko.{suffix}/hello</code>.</p></div></li>
+        <li><span aria-hidden="true">03</span><div><strong>Database &amp; sesi terisolasi</strong><p>Setiap toko dilindungi enkripsi kredensial dan ruang data mandiri.</p></div></li>
+      </ol>
+    </Fragment>
+  </AuthSplit>
+</SiteLayout>
+
+<script>
+  import { bindInlineValidation, validateInline, setFieldError } from '../../lib/form-validation-id.ts';
+
+  const form = document.getElementById('loginForm') as HTMLFormElement | null;
+  const identifier = document.getElementById('loginIdentifier') as HTMLInputElement | null;
+  const password = document.getElementById('loginPassword') as HTMLInputElement | null;
+  const toggle = document.getElementById('loginTogglePassword') as HTMLButtonElement | null;
+  const submit = document.getElementById('loginSubmit') as HTMLButtonElement | null;
+  const banner = document.getElementById('loginError') as HTMLElement | null;
+
+  toggle?.addEventListener('click', () => {
+    if (!password) return;
+    const show = password.type === 'password';
+    password.type = show ? 'text' : 'password';
+    toggle.textContent = show ? 'Sembunyikan' : 'Lihat';
+    toggle.setAttribute('aria-pressed', String(show));
+  });
+
+  const showError = (message: string) => {
+    if (!banner) return;
+    banner.textContent = message;
+    banner.hidden = !message;
+    if (message) banner.focus();
+  };
+
+  if (form && identifier && password && submit) {
+    bindInlineValidation(form);
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      showError('');
+      if (!validateInline(form)) return;
+      submit.disabled = true;
+      form.setAttribute('aria-busy', 'true');
+      submit.textContent = 'Memeriksa…';
+      try {
+        const response = await fetch('/api/platform/masuk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: identifier.value, password: password.value }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Masuk belum berhasil. Coba lagi.');
+        submit.textContent = 'Membuka dashboard…';
+        // The handoff travels in a POST body to the store's own subdomain, never a URL.
+        const handoff = document.createElement('form');
+        handoff.method = 'POST';
+        handoff.action = payload.data.handoff_url;
+        handoff.hidden = true;
+        for (const [name, value] of [['token', payload.data.handoff_token], ['next', payload.data.next]]) {
+          const field = document.createElement('input');
+          field.type = 'hidden';
+          field.name = name;
+          field.value = String(value ?? '');
+          handoff.append(field);
+        }
+        document.body.append(handoff);
+        handoff.submit();
+      } catch (error) {
+        showError(error instanceof Error ? error.message : 'Masuk belum berhasil. Coba lagi.');
+        setFieldError(password, '');
+        password.value = '';
+        password.focus();
+        submit.disabled = false;
+        form.setAttribute('aria-busy', 'false');
+        submit.textContent = 'Masuk ke Dashboard →';
+      }
+    });
+  }
+</script>
+
+<style>
+  .card-head { display: grid; gap: 0.35rem; margin-bottom: 1.5rem; }
+  .card-head h1 { font-size: clamp(1.45rem, 1.2rem + 1vw, 1.85rem); }
+  .card-head p { color: var(--slate); font-size: 0.95rem; }
+  .login-form { display: grid; gap: 1.1rem; }
+  .field { display: grid; gap: 0.4rem; }
+  .field label { font-size: 0.875rem; font-weight: 700; color: var(--ink); }
+  .field input {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 0.95rem;
+    border-radius: 12px;
+    border: 1px solid rgb(15 23 42 / 0.12);
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1rem;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15); }
+  .field input[aria-invalid="true"] { border-color: #e11d48; box-shadow: 0 0 0 3px rgb(225 29 72 / 0.12); }
+  .password-box { position: relative; }
+  .password-box input { padding-right: 7.5rem; }
+  .toggle-pw {
+    position: absolute;
+    top: 50%;
+    right: 0.4rem;
+    transform: translateY(-50%);
+    min-height: 40px;
+    padding: 0 0.8rem;
+    border: 0;
+    border-radius: 9px;
+    background: var(--tile);
+    color: var(--ink);
+    font: 600 0.82rem/1 var(--sans, inherit);
+    cursor: pointer;
+  }
+  .field-error { display: flex; gap: 0.4rem; font-size: 0.82rem; font-weight: 500; color: #be123c; }
+  .field-error::before { content: ""; width: 6px; height: 6px; margin-top: 0.4em; flex-shrink: 0; background: #e11d48; }
+  .field-error[hidden] { display: none; }
+  .error-banner { margin-bottom: 1rem; padding: 0.8rem 1rem; border-radius: 12px; background: #fff1f2; color: #9f1239; font-size: 0.9rem; font-weight: 600; }
+  .error-banner[hidden] { display: none; }
+  .submit-btn {
+    min-height: 48px;
+    margin-top: 0.25rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font: 700 0.98rem/1 var(--display);
+    word-spacing: 0.06em;
+    cursor: pointer;
+    box-shadow: 0 8px 20px -10px rgb(37 99 235 / 0.5);
+  }
+  .submit-btn:hover { background: var(--accent-hover); }
+  .submit-btn:disabled { opacity: 0.7; cursor: progress; }
+  .card-foot { margin-top: 1.25rem; padding-top: 1.1rem; border-top: var(--hairline); font-size: 0.9rem; color: var(--slate); }
+  .card-foot a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .pitch-title { font: 800 clamp(1.25rem, 1.05rem + 0.9vw, 1.6rem)/1.25 var(--display); letter-spacing: -0.02em; word-spacing: 0.06em; color: var(--ink); }
+  .pitch-lead { color: var(--slate); font-size: 0.95rem; line-height: 1.6; }
+  .pitch-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+  .pitch-list li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.75rem; }
+  .pitch-list span { font: 600 0.75rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+  .pitch-list strong { display: block; font-size: 0.95rem; color: var(--ink); }
+  .pitch-list p { margin-top: 0.15rem; font-size: 0.88rem; line-height: 1.5; color: var(--slate); }
+  .pitch-list code { font-size: 0.85em; overflow-wrap: anywhere; }
+</style>
