@@ -118,6 +118,7 @@ const isOwner = Astro.locals.admin?.role === 'owner';
       <fieldset class="p-5 md:p-6">
         <legend class="text-base font-semibold text-slate-950">Mode katalog toko</legend>
         <p class="mt-1 text-xs leading-5 text-slate-500">Menentukan menu admin, jenis produk yang bisa dibuat, dan syarat toko siap jualan. Pindah mode tidak menghapus produk, gudang, atau kurir yang sudah tersimpan.</p>
+        <p class="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">Mau menambah lini produk lain? Pilih <strong>Hybrid</strong> kapan saja untuk menjual produk fisik &amp; digital sekaligus di toko yang sama.</p>
         <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
           {([
             ['physical', 'Produk Fisik', 'COD, ekspedisi, gudang, dan kontrol RTS.'],

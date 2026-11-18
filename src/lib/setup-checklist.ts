@@ -68,7 +68,7 @@ export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
       // A hybrid store selling digital with physical products waiting: what those still owe.
       ...(facts.catalogMode === "hybrid" && facts.physicalCatalog
         ? ([
-            { id: "warehouse", label: "Lengkapi gudang utama", hint: "Wajib untuk menjual produk fisik. Produk digital tetap jualan tanpa gudang.", href: "/admin/settings/warehouse", done: facts.primaryWarehouse, required: false },
+            { id: "warehouse", label: "Lengkapi alamat pickup / gudang utama", hint: "Wajib untuk menjual produk fisik. Produk digital tetap jualan tanpa gudang.", href: "/admin/settings/warehouse", done: facts.primaryWarehouse, required: false },
             { id: "mengantar", label: "Simpan API key Mengantar", hint: "Wajib untuk ongkir dan resi produk fisik.", href: "/admin/profile", done: facts.mengantar, required: false },
             { id: "couriers", label: "Aktifkan minimal satu kurir", hint: "Wajib untuk mengirim produk fisik.", href: "/admin/expeditions", done: facts.enabledCouriers > 0, required: false },
           ] satisfies SetupStep[])
@@ -87,7 +87,7 @@ export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
     },
     {
       id: "product",
-      label: "Tambah produk pertama",
+      label: "Tambah produk fisik pertama",
       hint: "Produk aktif dengan harga dan berat: dipakai checkout dan hitung ongkir.",
       href: "/admin/products",
       done: facts.product,
@@ -95,7 +95,7 @@ export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
     },
     {
       id: "warehouse",
-      label: "Lengkapi gudang utama",
+      label: "Lengkapi alamat pickup / gudang utama",
       hint: "Area origin dan alamat pickup Mengantar di gudang utama. Gudang lain tidak menggantikannya.",
       href: "/admin/settings/warehouse",
       done: facts.primaryWarehouse,

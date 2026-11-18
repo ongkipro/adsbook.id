@@ -86,6 +86,7 @@ test("the control-plane chain creates every table of the data model, with the pi
     "migration_bookmarks",
     "operator_notices",
     "plans",
+    "platform_identities",
     "platform_sessions",
     "platform_users",
     "purge_sweeps",
@@ -445,3 +446,39 @@ test("Paket 1: bumpTenantCacheVersion moves an active tenant's version, never an
   assert.equal(await bumpTenantCacheVersion({ PLATFORM_DB: broken }, "t_a"), false, "a failure never fails the save");
 });
 
+
+test("AUTH migration 0010 on a live control plane: owners backfilled, live tokens kept, a duplicate owner email stops the file whole", async () => {
+  const { ensureSchemaUpgraded } = await import("../lib/schema-version.ts");
+  const before = CHAIN.slice(0, 10);
+  const db = createSqliteD1();
+  await ensureSchemaUpgraded(db, { migrations: before, expected: before.length, cache: false });
+  db.sqlite.exec(`
+    INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES
+      ('t_a', 'toko-a', 'Pemilik@A.example ', 'active', '2026-11-01'),
+      ('t_b', 'toko-b', 'b@b.example', 'suspended', '2026-11-02'),
+      ('t_c', 'toko-c', 'c@c.example', 'purged', '2026-11-03'),
+      ('t_d', 'toko-d', 'c@c.example', 'active', '2026-11-04');
+    INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at) VALUES ('h1', 't_a', 'signup', 'toko-a.adsbook.my.id', '2099-01-01');
+  `);
+  await ensureControlPlane(db, CHAIN);
+  assert.deepEqual(
+    db.sqlite.prepare("SELECT identifier, tenant_id, kind FROM platform_identities ORDER BY identifier").all().map((row) => ({ ...(row as object) })),
+    [
+      { identifier: "b@b.example", tenant_id: "t_b", kind: "owner_email" },
+      { identifier: "c@c.example", tenant_id: "t_d", kind: "owner_email" },
+      { identifier: "pemilik@a.example", tenant_id: "t_a", kind: "owner_email" },
+    ],
+    "every store that is not purged, lowercased and trimmed",
+  );
+  assert.deepEqual({ ...db.sqlite.prepare("SELECT token_hash, purpose, username FROM handoff_tokens").get() }, { token_hash: "h1", purpose: "signup", username: null });
+  db.sqlite.prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at, username) VALUES ('h2', 't_a', 'login', 'h', '2099-01-01', 'x')").run();
+  assert.throws(() => db.sqlite.prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at) VALUES ('h3', 't_a', 'lain', 'h', '2099-01-01')").run(), /CHECK/);
+  assert.ok(db.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE name = 'handoff_tokens_expires'").get(), "the expiry index is back");
+
+  // Two live stores on one email: the unique index fails, and nothing of 0010 is applied.
+  const dup = createSqliteD1();
+  await ensureSchemaUpgraded(dup, { migrations: before, expected: before.length, cache: false });
+  dup.sqlite.exec(`INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES ('t_x', 'x', 'sama@x.example', 'active', '2026-11-01'), ('t_y', 'y', 'SAMA@x.example', 'active', '2026-11-01');`);
+  await assert.rejects(ensureControlPlane(dup, CHAIN), /SCHEMA_UPGRADE_APPLY_FAILED/);
+  assert.equal(dup.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE name = 'platform_identities'").get(), undefined, "rolled back whole");
+});

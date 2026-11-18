@@ -157,13 +157,13 @@ test("every HTML document the app serves installs the Indonesian validation net"
   assert.deepEqual(missing, [], "a document without the net lets the browser speak English");
 });
 
-test("sign-in, recovery and the home dialog validate inline (novalidate, a message slot per field), and no English validation text ships", () => {
+test("sign-in, recovery and adsbook.id/masuk validate inline (novalidate, a message slot per field), and no English validation text ships", () => {
   const inline: Record<string, string[]> = {
     "src/pages/hello.astro": ["username", "password"],
     "src/pages/pemulihan.astro": ["token", "password"],
     "src/pages/platform/login.astro": ["email", "password", "totp"],
-    // The home dialog moved into the shared header (SiteHeader.astro), the same on every page.
-    "src/platform/site/SiteHeader.astro": ["hero-email", "hero-store"],
+    // The header's dialog became the one sign-in page (AUTH-LOGIN-REGISTER-UX-SPEC §2.1).
+    "src/pages/platform/masuk.astro": ["loginIdentifier", "loginPassword"],
   };
   for (const [path, ids] of Object.entries(inline)) {
     const text = readFileSync(path, "utf8");

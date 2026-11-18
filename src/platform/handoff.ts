@@ -3,14 +3,16 @@
  * session on the seller host, which it cannot set a cookie for. 32 random
  * bytes, kept only as a SHA-256 in `PLATFORM_DB.handoff_tokens`, bound to one
  * tenant, one purpose and the tenant's platform subdomain, valid 10 minutes
- * (signup) or 24 hours (owner recovery), consumed atomically once. The token
- * travels only in a POST body (never a URL that is logged or cached).
+ * (signup), 2 minutes (login, adsbook.id/masuk: it names the user it signs in)
+ * or 24 hours (owner recovery), consumed atomically once. The token travels
+ * only in a POST body (never a URL that is logged or cached).
  */
-export type HandoffPurpose = "signup" | "owner_recovery";
+export type HandoffPurpose = "signup" | "owner_recovery" | "login";
 
 const LIFETIME_MS: Record<HandoffPurpose, number> = {
   signup: 10 * 60 * 1000,
   owner_recovery: 24 * 60 * 60 * 1000,
+  login: 2 * 60 * 1000,
 };
 
 const TOKEN = /^[0-9a-f]{64}$/;
@@ -84,13 +86,40 @@ export async function issueHandoff(
   host: string,
   purpose: HandoffPurpose,
   now = new Date(),
+  /** `login` only: the credential the session is for, owner or staff. */
+  username: string | null = null,
 ): Promise<string> {
+  if ((purpose === "login") !== Boolean(username)) throw new Error("a login handoff names its user; no other does");
   const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
   await platformDb
-    .prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at) VALUES (?, ?, ?, ?, ?)")
-    .bind(await sha256Hex(token), tenantId, purpose, host, new Date(now.getTime() + LIFETIME_MS[purpose]).toISOString())
+    .prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at, username) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(await sha256Hex(token), tenantId, purpose, host, new Date(now.getTime() + LIFETIME_MS[purpose]).toISOString(), username)
     .run();
   return token;
+}
+
+/**
+ * Redeems a signup or login token for `host` in one statement: the tenant, the
+ * purpose and, for a login, the user it was issued for; null for anything
+ * unknown, used, expired or bound elsewhere. Owner recovery is never redeemed
+ * here (it has its own form, `src/platform/admin/recovery.ts`).
+ */
+export async function consumeSessionHandoff(
+  platformDb: D1Database,
+  token: unknown,
+  host: string,
+  now = new Date(),
+): Promise<{ tenantId: string; purpose: "signup" | "login"; username: string | null } | null> {
+  if (typeof token !== "string" || !TOKEN.test(token)) return null;
+  const row = await platformDb
+    .prepare(
+      `UPDATE handoff_tokens SET used_at = ?
+       WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? AND host = ? AND purpose IN ('signup', 'login')
+       RETURNING tenant_id, purpose, username`,
+    )
+    .bind(now.toISOString(), await sha256Hex(token), now.toISOString(), host)
+    .first<{ tenant_id: string; purpose: "signup" | "login"; username: string | null }>();
+  return row ? { tenantId: row.tenant_id, purpose: row.purpose, username: row.username } : null;
 }
 
 /**

@@ -2,8 +2,9 @@
 import SiteLayout from '../../platform/site/SiteLayout.astro';
 import { getRuntimeEnv } from '../../lib/env';
 import { tenantHostSuffix } from '../../platform/hostnames';
-import { PLANS, PLAN_POINTS } from '../../platform/site/content.ts';
+import { PLANS } from '../../platform/site/content.ts';
 import { SIGNUP_PAGE } from '../../platform/site/site.ts';
+import AuthSplit from '../../platform/site/AuthSplit.astro';
 
 export const prerender = false;
 
@@ -16,7 +17,9 @@ const suffix = tenantHostSuffix(env);
 
 const rawPaket = Astro.url.searchParams.get('paket') ?? '';
 const chosenPlan = PLANS.find((plan) => plan.code === rawPaket) ?? null;
-const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
+// The returning seller's door moved to its own page (AUTH-LOGIN-REGISTER-UX-SPEC §2.3);
+// an old "/daftar?masuk=1" link or bookmark lands there.
+if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk', 302);
 ---
 
 <SiteLayout page={SIGNUP_PAGE} quietHeader>
@@ -24,61 +27,10 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
     <script slot="head" is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   )}
 
-  <section class="signup-band">
-    <div class="wrap signup-grid">
-      <!-- Left column (desktop) / Secondary context: value summary & journey -->
-      <aside class="signup-pitch" aria-label="Yang Anda dapatkan">
-        <p class="eyebrow">Mode Preview Gratis · Tanpa Kartu</p>
-        <h1>Siapkan toko sekarang, bayar saat siap beriklan</h1>
-        <p class="lead-copy">
-          Toko langsung aktif di alamat <code>nama-toko.{suffix}</code> milik Anda sendiri. Susun produk, landing page, gudang, dan pixel lebih dulu sebelum berlangganan.
-        </p>
-
-        {chosenPlan && (
-          <div class="picked-plan" role="note">
-            <div>
-              <p class="picked-label">Paket pilihan setelah toko siap</p>
-              <p class="picked-title">{chosenPlan.label} · <strong>{chosenPlan.price}</strong> <span class="muted">({chosenPlan.note})</span></p>
-            </div>
-            <p class="picked-sub">Tidak ditagih sekarang. Anda baru membayar di menu Langganan setelah mencoba admin toko.</p>
-          </div>
-        )}
-
-        <ol class="journey-steps" aria-label="Alur mulai berjualan">
-          <li>
-            <span class="step-num" aria-hidden="true">1</span>
-            <div>
-              <strong>Daftar &amp; masuk otomatis (&lt; 30 detik)</strong>
-              <p>Database terisolasi dibuat khusus untuk toko Anda dan langsung membuka dashboard admin.</p>
-            </div>
-          </li>
-          <li>
-            <span class="step-num" aria-hidden="true">2</span>
-            <div>
-              <strong>Lengkapi produk, LP &amp; lihat preview di HP</strong>
-              <p>Cek tampilan form COD dan halaman produk Anda secara nyata tanpa batas waktu.</p>
-            </div>
-          </li>
-          <li>
-            <span class="step-num" aria-hidden="true">3</span>
-            <div>
-              <strong>Aktifkan langganan &amp; jalankan iklan 1:1</strong>
-              <p>Bayar via QRIS/VA mulai Rp149.000/bulan untuk membuka pesanan, sinyal Meta CAPI 1:1, dan 1 domain sendiri.</p>
-            </div>
-          </li>
-        </ol>
-
-        <ul class="pitch-points">
-          {PLAN_POINTS.slice(0, 4).map((point) => <li>{point}</li>)}
-        </ul>
-      </aside>
-
-      <!-- Right column: the signup card -->
-      <div class="signup-card-col">
-        <div class="signup-card">
+  <AuthSplit active="daftar">
           <div class="card-head">
-            <h2>Buat akun toko</h2>
-            <p class="muted">1 akun = 1 toko terisolasi + 1 domain sendiri.</p>
+            <h1 class="dot-end">Buat toko gratis</h1>
+            <p class="muted">1 email = 1 toko mandiri. Email ini juga dipakai untuk masuk di <strong>adsbook.id/masuk</strong>.</p>
           </div>
 
           <div id="errorSummary" class="error-banner" hidden role="alert" tabindex="-1"></div>
@@ -92,6 +44,23 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
             data-standin={localStandIn ? '1' : ''}
             data-paket={chosenPlan?.code ?? ''}
           >
+            <fieldset class="field catalog-choice">
+              <legend>Fokus katalog awal</legend>
+              <div class="catalog-options">
+                <label class="catalog-option">
+                  <input type="radio" name="catalog_mode" value="physical" checked />
+                  <span class="catalog-title">Produk Fisik</span>
+                  <span class="catalog-sub">COD, ongkir kecamatan &amp; kontrol RTS</span>
+                </label>
+                <label class="catalog-option">
+                  <input type="radio" name="catalog_mode" value="digital" />
+                  <span class="catalog-title">Produk Digital</span>
+                  <span class="catalog-sub">Tanpa gudang · link akses otomatis saat lunas</span>
+                </label>
+              </div>
+              <p class="field-hint catalog-hint"><strong>Satu toko bisa keduanya.</strong> Pilihan ini hanya mengatur tampilan menu awal dashboard Anda. Kapan pun Anda ingin menjual produk fisik sekaligus digital, aktifkan mode Hybrid di Pengaturan › Toko.</p>
+            </fieldset>
+
             <div class="field">
               <label for="storeName">Nama toko</label>
               <input
@@ -145,26 +114,10 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
                 placeholder="anda@email.com"
                 aria-describedby="emailHint emailError"
               />
-              <p id="emailHint" class="field-hint">Email ini dipakai untuk masuk ke toko.</p>
+              <p id="emailHint" class="field-hint">1 email untuk 1 toko — dipakai masuk di adsbook.id/masuk.</p>
               <p id="emailError" class="field-error" hidden></p>
             </div>
 
-            <fieldset class="field catalog-choice">
-              <legend>Jenis produk utama</legend>
-              <div class="catalog-options">
-                <label class="catalog-option">
-                  <input type="radio" name="catalog_mode" value="physical" checked />
-                  <span class="catalog-title">Produk Fisik</span>
-                  <span class="catalog-sub">COD &amp; ekspedisi</span>
-                </label>
-                <label class="catalog-option">
-                  <input type="radio" name="catalog_mode" value="digital" />
-                  <span class="catalog-title">Produk Digital</span>
-                  <span class="catalog-sub">Akses instan setelah lunas</span>
-                </label>
-              </div>
-              <p class="field-hint">Bisa diubah ke Hybrid kapan saja di Pengaturan Toko.</p>
-            </fieldset>
 
             <div class="field">
               <div class="label-row">
@@ -233,7 +186,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
             <p id="turnstileError" class="field-error" hidden role="alert"></p>
 
             <button id="submitSignup" type="submit" class="btn submit-btn">
-              Buat toko
+              Buat Toko Gratis →
             </button>
             <p id="progressNote" class="progress-note" hidden aria-live="polite"></p>
           </form>
@@ -256,37 +209,46 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
             </div>
           </section>
 
-          <!-- Returning Seller Store Finder -->
-          <div class="login-finder">
-            <details id="finderDetails" open={modeMasuk ? true : undefined}>
-              <summary>Sudah punya toko? Masuk ke admin toko Anda</summary>
-              <form id="finderForm" class="finder-form" novalidate>
-                <label for="finderSlug">Masukkan alamat / slug toko Anda</label>
-                <div class="finder-row">
-                  <div class="slug-box finder-box">
-                    <input
-                      id="finderSlug"
-                      type="text"
-                      required
-                      placeholder="nama-toko atau domainanda.com"
-                      autocomplete="off"
-                      spellcheck="false"
-                    />
-                  </div>
-                  <button type="submit" class="btn btn-small">Buka Login</button>
-                </div>
-                <p id="finderError" class="field-error" hidden></p>
-              </form>
-            </details>
+    <Fragment slot="pitch">
+      <p class="eyebrow">Mode Preview Gratis · Tanpa Kartu</p>
+      <h2 class="pitch-title dot-end">Satu toko presisi untuk produk fisik, digital, atau keduanya</h2>
+      <p class="lead-copy">Siapkan katalog dan review tampilannya di HP tanpa biaya dan tanpa kartu. Aktifkan langganan hanya saat toko siap menerima trafik iklan.</p>
+
+      {chosenPlan && (
+        <div class="picked-plan" role="note">
+          <div>
+            <p class="picked-label">Paket pilihan setelah toko siap</p>
+            <p class="picked-title">{chosenPlan.label} · <strong>{chosenPlan.price}</strong> <span class="muted">({chosenPlan.note})</span></p>
           </div>
+          <p class="picked-sub">Tidak ditagih sekarang. Anda baru membayar di menu Langganan setelah mencoba admin toko.</p>
         </div>
+      )}
+
+      <ol class="foundation-list" aria-label="Pondasi adsbook.id">
+        <li><span aria-hidden="true">01</span><div><strong>Bebas jual fisik, digital, maupun hybrid</strong><p>Mulai dari e-book &amp; kelas instan tanpa perlu gudang, paket COD dengan filter provinsi anti-retur, hingga gabungan keduanya dalam 1 toko.</p></div></li>
+        <li><span aria-hidden="true">02</span><div><strong>Server tracking 1:1 di 3 platform iklan</strong><p>Meta Conversions API, Google Data Manager API, dan TikTok Events API sudah menyatu tanpa sewa server tambahan.</p></div></li>
+        <li><span aria-hidden="true">03</span><div><strong>1 email = 1 toko mandiri 10 GB, 0% komisi</strong><p>Uang penjualan cair langsung ke akun Mengantar &amp; AutoLaris milik Anda sendiri, tanpa kuota order bulanan.</p></div></li>
+      </ol>
+
+      <div class="hybrid-note" role="note">
+        <strong>Fisik + digital dalam 1 toko</strong>
+        <p>Satu toko sebenarnya mendukung penjualan Produk Fisik sekaligus Produk Digital (Hybrid). Pilihan di formulir hanya mengatur tampilan menu awal dashboard Anda — kapan pun Anda ingin menjual keduanya sekaligus, cukup aktifkan mode Hybrid di Pengaturan › Toko.</p>
       </div>
-    </div>
-  </section>
+      <!-- What the first minutes after signup ask, for the focus chosen in the form. -->
+      <div class="next-steps" data-next-steps="physical">
+        <strong>Setelah daftar (Produk Fisik)</strong>
+        <p>Halaman Setup menuntun 3 langkah: tambah produk fisik, isi alamat pickup / gudang awal, lalu simpan API key Mengantar. Tidak perlu diisi sekarang.</p>
+      </div>
+      <div class="next-steps" data-next-steps="digital" hidden>
+        <strong>Setelah daftar (Produk Digital)</strong>
+        <p>Cukup 2 langkah tanpa gudang: tambah produk digital dengan link akses, lalu aktifkan QRIS/VA atau transfer bank.</p>
+      </div>
+    </Fragment>
+  </AuthSplit>
 </SiteLayout>
 
 <script>
-  import { HERO_EMAIL_KEY, storeLoginUrl, toSlug } from '../../platform/store-finder.ts';
+  import { toSlug } from '../../platform/store-finder.ts';
 
   const form = document.getElementById('signupForm') as HTMLFormElement;
   const summary = document.getElementById('errorSummary') as HTMLElement;
@@ -310,16 +272,8 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   const paket = form.dataset.paket || '';
   let slugTouched = false;
   let pending = false;
-
-  // The home hero's account dialog hands its email over in this tab's session, never in the URL
-  // (a page URL reaches the platform Pixel); read once, then forgotten.
-  try {
-    const handed = sessionStorage.getItem(HERO_EMAIL_KEY);
-    sessionStorage.removeItem(HERO_EMAIL_KEY);
-    if (handed && !emailInput.value) emailInput.value = handed.slice(0, 254);
-  } catch {
-    // Storage blocked: the seller types it again.
-  }
+  // The button's resting label, restored after every refused attempt.
+  const SUBMIT_LABEL = 'Buat Toko Gratis →';
 
   const cleanSlugTyping = (value: string) =>
     value
@@ -481,7 +435,7 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
     if (!event.persisted) return;
     pending = false;
     submit.disabled = false;
-    submit.textContent = 'Buat toko';
+    submit.textContent = SUBMIT_LABEL;
     form.setAttribute('aria-busy', 'false');
     progressNote.hidden = true;
   });
@@ -581,8 +535,6 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
       }
 
       form.hidden = true;
-      const finderWrap = document.querySelector('.login-finder') as HTMLElement | null;
-      if (finderWrap) finderWrap.hidden = true;
       (document.getElementById('doneEmail') as HTMLElement).textContent = data.email;
       (document.getElementById('doneStoreUrl') as HTMLElement).textContent = data.store_url;
       (document.getElementById('doneAdminHref') as HTMLElement).textContent = `${data.store_url}/admin`;
@@ -618,41 +570,26 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
       if (!succeeded) {
         pending = false;
         submit.disabled = false;
-        submit.textContent = 'Buat toko';
+        submit.textContent = SUBMIT_LABEL;
         form.setAttribute('aria-busy', 'false');
         progressNote.hidden = true;
       }
     }
   });
 
-  // Store-finder for returning sellers ("Sudah punya toko?")
-  const finderForm = document.getElementById('finderForm') as HTMLFormElement | null;
-  const finderInput = document.getElementById('finderSlug') as HTMLInputElement | null;
-  const finderError = document.getElementById('finderError') as HTMLElement | null;
-  finderForm?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    if (!finderInput || !finderError) return;
-    const login = storeLoginUrl(finderInput.value, suffix, window.location);
-    if ('error' in login) {
-      finderError.textContent = login.error;
-      finderError.hidden = false;
-      return;
-    }
-    finderError.hidden = true;
-    window.location.assign(login.url);
+  // The panel's "after signup" note follows the focus chosen in the form.
+  const grid = document.querySelector('[data-auth-grid]');
+  const syncNextSteps = () => {
+    const mode = (document.querySelector('input[name="catalog_mode"]:checked') as HTMLInputElement | null)?.value ?? 'physical';
+    for (const note of document.querySelectorAll<HTMLElement>('[data-next-steps]')) note.hidden = note.dataset.nextSteps !== mode;
+  };
+  grid?.addEventListener('change', (event) => {
+    if ((event.target as HTMLElement).matches('input[name="catalog_mode"]')) syncNextSteps();
   });
+  syncNextSteps();
 </script>
 
 <style>
-  .signup-band { padding: 2rem 0 4.5rem; }
-  .signup-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    gap: 3.5rem;
-    align-items: start;
-  }
-
-  .signup-pitch { display: grid; gap: 1.25rem; padding-top: 0.5rem; }
   .eyebrow {
     font-size: 0.85rem;
     font-weight: 700;
@@ -663,7 +600,16 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
     padding: 0.25rem 0.7rem;
     border-radius: 999px;
   }
-  .signup-pitch h1 { font-size: clamp(1.85rem, 1.35rem + 2vw, 2.65rem); }
+  .pitch-title { font-size: clamp(1.35rem, 1.1rem + 1.1vw, 1.9rem); line-height: 1.2; }
+  .foundation-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+  .foundation-list li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.75rem; }
+  .foundation-list span { font: 600 0.75rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+  .foundation-list strong { display: block; font-size: 0.95rem; color: var(--ink); }
+  .foundation-list p { margin-top: 0.15rem; font-size: 0.88rem; line-height: 1.5; color: var(--ink-muted); }
+  .hybrid-note, .next-steps { display: grid; gap: 0.3rem; padding: 1rem 1.1rem; border-radius: 14px; background: #fff; font-size: 0.88rem; line-height: 1.5; color: var(--ink-muted); }
+  .hybrid-note strong, .next-steps strong { color: var(--ink); font-size: 0.92rem; }
+  .next-steps { border-left: 3px solid var(--accent); }
+  .catalog-hint strong { color: var(--ink); }
   .lead-copy { color: var(--ink-muted); font-size: 1.05rem; }
   .lead-copy code {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -687,53 +633,8 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   .picked-title { font-size: 1rem; color: var(--ink); }
   .picked-sub { font-size: 0.85rem; color: var(--ink-muted); }
 
-  .journey-steps {
-    list-style: none;
-    margin: 0.25rem 0 0;
-    padding: 0;
-    display: grid;
-    gap: 1rem;
-  }
-  .journey-steps li {
-    display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr);
-    gap: 0.85rem;
-    align-items: start;
-  }
-  .step-num {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 999px;
-    background: var(--accent-tint);
-    color: var(--accent);
-    font-weight: 800;
-    font-size: 0.92rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .journey-steps strong { display: block; font-size: 0.98rem; color: var(--ink); }
-  .journey-steps p { font-size: 0.9rem; color: var(--ink-muted); line-height: 1.45; margin-top: 0.15rem; }
-
-  .pitch-points {
-    margin: 0.25rem 0 0;
-    padding: 1rem 0 0 1.2rem;
-    border-top: 1px solid var(--line);
-    display: grid;
-    gap: 0.35rem;
-    font-size: 0.92rem;
-    color: var(--ink-muted);
-  }
-
-  .signup-card {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 2rem;
-    box-shadow: 0 12px 32px rgb(15 23 42 / 0.06);
-  }
   .card-head { display: grid; gap: 0.25rem; margin-bottom: 1.5rem; }
-  .card-head h2 { font-size: 1.45rem; }
+  .card-head h1 { font-size: clamp(1.45rem, 1.2rem + 1vw, 1.85rem); }
   .card-head p { font-size: 0.92rem; }
 
   .error-banner {
@@ -759,7 +660,8 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   .catalog-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .catalog-title { font-size: 0.9rem; font-weight: 700; }
   .catalog-sub { font-size: 0.78rem; color: #64748b; }
-  @media (max-width: 380px) { .catalog-options { grid-template-columns: 1fr; } }
+  /* A phone stacks the two choices: two narrow columns broke both titles and their lines. */
+  @media (max-width: 480px) { .catalog-options { grid-template-columns: 1fr; } }
   .field label { font-size: 0.92rem; font-weight: 700; color: var(--ink); }
   .label-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
   .optional-tag { font-size: 0.8rem; color: var(--ink-muted); font-weight: 500; }
@@ -949,47 +851,9 @@ const modeMasuk = Astro.url.searchParams.get('masuk') === '1';
   .done-actions { display: grid; gap: 0.6rem; }
   .small { font-size: 0.82rem; }
 
-  .login-finder {
-    margin-top: 1.5rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid var(--line);
-    font-size: 0.9rem;
-  }
-  .login-finder summary {
-    cursor: pointer;
-    font-weight: 600;
-    color: var(--ink-muted);
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-  }
-  .login-finder summary:hover { color: var(--accent); }
-  .finder-form { margin-top: 0.75rem; display: grid; gap: 0.5rem; }
-  .finder-form label { font-size: 0.82rem; font-weight: 600; color: var(--ink-muted); }
-  .finder-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .finder-box { flex: 1 1 12rem; }
-  .finder-box input {
-    width: 100%;
-    min-height: 44px;
-    padding: 0.5rem 0.75rem;
-    border: 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.9rem;
-  }
-
   [hidden] { display: none !important; }
 
-  @media (max-width: 900px) {
-    .signup-grid {
-      grid-template-columns: 1fr;
-      gap: 2rem;
-    }
-    .signup-card-col { order: 1; }
-    .signup-pitch { order: 2; }
-  }
   @media (max-width: 520px) {
-    .signup-band { padding: 1.25rem 0 3rem; }
-    .signup-card { padding: 1.35rem; }
     .slug-suffix { padding: 0 0.55rem; font-size: 0.8rem; }
   }
 </style>

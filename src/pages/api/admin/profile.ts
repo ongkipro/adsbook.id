@@ -1,12 +1,15 @@
 import type { APIRoute } from 'astro';
 import {
   getAdminCredential,
+  normalizeAdminUsername,
   updateAdminCredential,
 } from '../../../lib/admin-credentials';
 import { revokeAdminSessions } from '../../../lib/admin-session';
 import { jsonError, jsonOk } from '../../../lib/api';
 import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../../../lib/auth';
 import { tenantDatabase } from '../../../lib/tenant-database.ts';
+import { getRuntimeEnv } from '../../../lib/env.ts';
+import { claimPlatformIdentity, releasePlatformIdentity, type IdentityKind } from '../../../platform/identities.ts';
 
 export const prerender = false;
 
@@ -63,14 +66,34 @@ export const PUT: APIRoute = async ({ request, locals, cookies }) => {
 
   try {
     const actorUsername = locals.admin?.username || '';
+    // AUTH-LOGIN-REGISTER-UX-SPEC §1.2: a username signs in on adsbook.id/masuk, so a
+    // new one must be free on the whole platform. Claimed first, the old one released after.
+    const env = getRuntimeEnv(locals);
+    const tenantId = locals.tenantContext?.tenantId;
+    const kind: IdentityKind = locals.admin?.role === 'owner' ? 'owner_email' : 'staff_username';
+    const nextUsername = normalizeAdminUsername(username);
+    const renaming = nextUsername !== '' && nextUsername !== actorUsername;
+    let claimedNew = false;
+    if (renaming) {
+      const claim = await claimPlatformIdentity(env, tenantId, nextUsername, kind);
+      if (claim === 'taken') return jsonError('Username atau email ini sudah digunakan. Pilih yang lain.', 409);
+      claimedNew = claim === 'claimed';
+    }
     const result = await updateAdminCredential(
       database,
       actorUsername,
       currentPassword,
       username,
       newPassword,
-    );
-    if (!result.ok) return jsonError(result.error, 400);
+    ).catch(async (error) => {
+      if (claimedNew) await releasePlatformIdentity(env, tenantId, nextUsername, kind).catch(() => undefined);
+      throw error;
+    });
+    if (!result.ok) {
+      if (claimedNew) await releasePlatformIdentity(env, tenantId, nextUsername, kind).catch(() => undefined);
+      return jsonError(result.error, 400);
+    }
+    if (renaming) await releasePlatformIdentity(env, tenantId, actorUsername, kind);
 
     await revokeAdminSessions(database, actorUsername);
     cookies.delete(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);

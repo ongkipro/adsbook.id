@@ -73,7 +73,7 @@ test("digital store: signup → menu without shipping → digital product → op
   await page.getByRole("radio", { name: /Produk Digital/ }).check();
   await page.getByRole("checkbox").check();
   if (shots) await page.screenshot({ path: `${shots}/dig-signup-1366.png`, fullPage: true });
-  await page.getByRole("button", { name: "Buat toko" }).click();
+  await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
   await page.waitForURL(new RegExp(`^${STORE}/admin`), { timeout: 60_000 });
 
   // 2. A menu with nothing that ships, and a three-step digital checklist.
@@ -83,7 +83,7 @@ test("digital store: signup → menu without shipping → digital product → op
     await expect(page.locator(`a[href="${href}"]`), href).toHaveCount(0);
   }
   await expect(page.getByText("Tambah produk digital pertama + link akses")).toBeVisible();
-  await expect(page.getByText("Lengkapi gudang utama")).toHaveCount(0);
+  await expect(page.getByText("Lengkapi alamat pickup / gudang utama")).toHaveCount(0);
 
   // 3. A digital product through the real form: locked type, access card, no weight field.
   await page.goto(`${STORE}/admin/products/new`);

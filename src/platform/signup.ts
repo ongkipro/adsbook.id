@@ -51,7 +51,7 @@ export type SignupInput = {
   password?: unknown;
   terms?: unknown;
   turnstileToken?: unknown;
-  /** DIGITAL-PRODUCTS-SPEC §1.1: 'physical' (the default) or 'digital'; 'hybrid' is chosen later in Pengaturan Toko. */
+  /** AUTH-LOGIN-REGISTER-UX-SPEC §2.4: 'physical' (the default), 'digital' or 'hybrid'. */
   catalogMode?: unknown;
 };
 
@@ -63,7 +63,7 @@ export type SignupPlan = {
   email: string;
   whatsapp: string | null;
   password: string;
-  catalogMode: "physical" | "digital";
+  catalogMode: "physical" | "digital" | "hybrid";
 };
 
 /** UX-1 field rules, decided before any write. */
@@ -92,8 +92,8 @@ export function planSignup(input: SignupInput): { ok: true; plan: SignupPlan } |
   if (Object.keys(errors).length || !slug.ok) {
     return { ok: false, errors, reserved: !slug.ok && slug.reserved };
   }
-  // Anything but an explicit 'digital' is the physical default: the choice is reversible in settings.
-  const catalogMode = input.catalogMode === "digital" ? "digital" : "physical";
+  // Anything unknown is the physical default: the choice is reversible in settings.
+  const catalogMode = input.catalogMode === "digital" || input.catalogMode === "hybrid" ? input.catalogMode : "physical";
   return { ok: true, plan: { storeName, slug: slug.slug, email, whatsapp, password, catalogMode } };
 }
 
@@ -134,6 +134,22 @@ export type SignupResult =
 
 export { tenantHostSuffix };
 
+const EMAIL_TAKEN_MESSAGE = "Email ini sudah terdaftar untuk sebuah toko. Silakan masuk, atau gunakan email lain.";
+const EMAIL_TAKEN = { status: 409, error: EMAIL_TAKEN_MESSAGE, errors: { email: EMAIL_TAKEN_MESSAGE } } as const;
+
+/** Whether this email already signs into a store, as an owner or as a staff identifier. */
+async function emailTaken(platformDb: D1Database, email: string): Promise<boolean> {
+  const row = await platformDb
+    .prepare(
+      `SELECT 1 AS yes FROM platform_identities WHERE identifier = ?
+       UNION ALL SELECT 1 FROM tenants WHERE lower(owner_email) = ? AND status <> 'purged'
+       LIMIT 1`,
+    )
+    .bind(email, email)
+    .first<{ yes: number }>();
+  return Boolean(row);
+}
+
 function newTenantId(): string {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
   return `t_${Array.from(crypto.getRandomValues(new Uint8Array(20)), (byte) => alphabet[byte % alphabet.length]).join("")}`;
@@ -165,6 +181,10 @@ export async function signup(
   const human = await (deps.verifyTurnstile ?? ((token, address) => verifyTurnstile(env, token, address)))(input.turnstileToken, ip);
   if (!human) return { status: 400, error: "Verifikasi keamanan gagal. Muat ulang halaman lalu coba lagi.", errors: { turnstile: "Verifikasi gagal." } };
 
+  // One email, one store (AUTH-LOGIN-REGISTER-UX-SPEC §1.2). Asked after the rate
+  // limit and the human check, so the answer is no cheaper to harvest than a signup.
+  if (await emailTaken(platformDb, plan.email)) return EMAIL_TAKEN;
+
   const tenantId = newTenantId();
   const host = `${plan.slug}.${tenantHostSuffix(env)}`;
   const at = now().toISOString();
@@ -176,8 +196,14 @@ export async function signup(
       platformDb
         .prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'pending', 0, ?)")
         .bind(host, tenantId, at),
+      // The owner's sign-in identifier, in the same transaction: a second store
+      // racing for this email fails here even after the check above passed.
+      platformDb
+        .prepare("INSERT INTO platform_identities (identifier, tenant_id, kind, created_at) VALUES (?, ?, 'owner_email', ?)")
+        .bind(plan.email, tenantId, at),
     ]);
   } catch (error) {
+    if (/platform_identities|owner_email/i.test(String(error))) return EMAIL_TAKEN;
     if (/UNIQUE|PRIMARY KEY|constraint/i.test(String(error))) {
       const suggestions = await suggestFreeSlugs(platformDb, plan.slug, 3).catch(() => []);
       return {
@@ -252,6 +278,8 @@ export async function signup(
     await platformDb
       .batch([
         platformDb.prepare("UPDATE tenants SET status = 'purging' WHERE id = ? AND status IN ('provisioning', 'active')").bind(tenantId),
+        // The store never opened: its sign-in identifier is not its to keep.
+        platformDb.prepare("DELETE FROM platform_identities WHERE tenant_id = ?").bind(tenantId),
         platformDb
           .prepare("INSERT INTO tenant_events (tenant_id, kind, actor, at, detail_json) VALUES (?, 'provision_failed', 'platform', ?, json_object('step', ?))")
           .bind(tenantId, now().toISOString(), step),
