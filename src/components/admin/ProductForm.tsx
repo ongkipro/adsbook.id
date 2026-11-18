@@ -530,7 +530,7 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
                   {imageUrl ? (
                     <img
                       src={imageUrl}
-                      alt={`Pratinjau ${title || "produk"}`}
+                      alt={`Tampilan ${title || "produk"}`}
                       className="h-full w-full object-contain"
                     />
                   ) : (

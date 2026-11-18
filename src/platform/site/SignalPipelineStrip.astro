@@ -1,0 +1,104 @@
+---
+/**
+ * One order's signal, five stops (Paduka, 2026-11-18, pagecopy v3): a square
+ * pulse runs from the ad click to the ad network. Every stop is a mechanism in
+ * the code — src/lib/click-ids.ts (Meta and Google click ids and UTM tags, 90
+ * days, not erased by a WhatsApp follow-up link), src/lib/meta-identity.ts (the
+ * 8 hashed keys), ADR-036 (one event id, browser and server), and
+ * src/lib/google-ads-offline.ts (Google Ads offline conversions).
+ * Motion only while on screen; under reduced motion the finished state, still.
+ */
+interface Props { id?: string; tone?: 'canvas' | 'white' }
+const { id = 'jalur-sinyal-title', tone = 'white' } = Astro.props;
+
+const STOPS = [
+  { title: 'Klik iklan', text: 'ID klik Meta dan Google, plus UTM untuk TikTok dan kanal lain' },
+  { title: 'Jejak 90 hari', text: 'Disimpan first-party di toko Anda; link follow-up WhatsApp tidak menghapusnya' },
+  { title: 'Order dan 8 kunci', text: 'Nama, WhatsApp, kota, provinsi, dan kode pos di-hash SHA-256' },
+  { title: 'Kunci 1:1', text: 'Browser dan server memakai satu ID pesanan; jalur server tidak terhalang pemblokir iklan' },
+  { title: 'Jaringan iklan', text: 'Purchase sampai ke Meta (Conversions API) dan Google Ads (konversi offline)' },
+];
+---
+
+<section class={`section pipeline ${tone === 'white' ? 'section-white' : ''}`} aria-labelledby={id} data-pipeline>
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id={id}>Jalur sinyal satu pesanan</h2>
+      <p class="lead">Dari klik iklan sampai Purchase tercatat di jaringan iklan, tanpa server tambahan dan tanpa ditebak.</p>
+    </div>
+    <ol class="pipe">
+      {STOPS.map((stop, index) => (
+        <li class="stop" style={`--n:${index}`}>
+          <span class="node" aria-hidden="true"><span class="node-num">{index + 1}</span></span>
+          <div class="stop-text">
+            <p class="stop-title">{stop.title}</p>
+            <p class="stop-desc">{stop.text}</p>
+          </div>
+        </li>
+      ))}
+      <li class="pulse" aria-hidden="true"></li>
+    </ol>
+  </div>
+</section>
+
+<script>
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const strips = Array.from(document.querySelectorAll<HTMLElement>('[data-pipeline]'));
+  if (!reduce && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) (entry.target as HTMLElement).classList.toggle('is-playing', entry.isIntersecting);
+    }, { threshold: 0.3 });
+    strips.forEach((strip) => observer.observe(strip));
+  } else {
+    strips.forEach((strip) => strip.classList.add('is-still'));
+  }
+</script>
+
+<style>
+  .pipe { --cycle: 6s; --gap: 1rem; position: relative; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--gap); }
+  /* The track behind the nodes, from the first node's centre to the last. */
+  .pipe::before { content: ""; position: absolute; top: 21px; left: 10%; right: 10%; height: 2px; background: linear-gradient(90deg, var(--accent-tint), var(--accent)); }
+  .stop { position: relative; display: grid; gap: 0.85rem; justify-items: center; text-align: center; }
+  .node { position: relative; z-index: 1; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--surface); border: 2px solid var(--accent-tint); color: var(--accent); transition: background-color 0.3s, border-color 0.3s, color 0.3s, box-shadow 0.3s; }
+  .node-num { font: 800 1rem/1 var(--display); }
+  .stop-text { display: grid; gap: 0.3rem; }
+  .stop-title { font-family: var(--display); font-weight: 800; color: var(--ink); font-size: 1rem; }
+  .stop-desc { font-size: 0.88rem; line-height: 1.5; color: var(--ink-muted); }
+  .pulse { position: absolute; z-index: 2; top: 16px; left: 10%; width: 12px; height: 12px; margin-left: -6px; background: var(--accent); box-shadow: 0 0 0 4px rgb(37 99 235 / 0.18), 0 0 14px rgb(37 99 235 / 0.6); opacity: 0; pointer-events: none; }
+
+  /* Finished state: every stop reached (reduced motion, and before the strip is first seen). */
+  .node { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pipeline.is-playing .node { background: var(--surface); border-color: var(--accent-tint); color: var(--accent); animation: node-lit var(--cycle) linear infinite; animation-delay: calc(var(--n) * var(--cycle) / 6); }
+  .pipeline.is-playing .pulse { opacity: 1; animation: pulse-x var(--cycle) cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+  @keyframes node-lit {
+    0%, 3% { background: var(--surface); border-color: var(--accent-tint); color: var(--accent); box-shadow: none; }
+    8%, 70% { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 0 4px rgb(37 99 235 / 0.16); }
+    85%, 100% { background: var(--surface); border-color: var(--accent-tint); color: var(--accent); box-shadow: none; }
+  }
+  @keyframes pulse-x {
+    0% { left: 10%; opacity: 0; }
+    6% { opacity: 1; }
+    83% { left: 90%; opacity: 1; }
+    92%, 100% { left: 90%; opacity: 0; }
+  }
+
+  /* A phone: the stops stack, the track and the pulse run down. */
+  @media (max-width: 760px) {
+    /* Equal rows, so the fifth node's centre is computable: one row is (100% - 4 gaps) / 5. */
+    .pipe { --row-gap: 1.25rem; --last: calc((100% - 4 * var(--row-gap)) / 5 - 22px); grid-template-columns: 1fr; grid-auto-rows: 1fr; gap: var(--row-gap); }
+    .pipe::before { top: 22px; bottom: var(--last); left: 21px; right: auto; width: 2px; height: auto; background: linear-gradient(var(--accent-tint), var(--accent)); }
+    .stop { grid-template-columns: 44px 1fr; justify-items: start; text-align: left; align-items: start; gap: 1rem; }
+    .pulse { top: 22px; left: 16px; margin-left: 0; margin-top: -6px; }
+    .pipeline.is-playing .pulse { animation-name: pulse-y; }
+    @keyframes pulse-y {
+      0% { top: 22px; opacity: 0; }
+      6% { opacity: 1; }
+      83% { top: calc(100% - (100% - 4 * 1.25rem) / 5 + 22px); opacity: 1; }
+      92%, 100% { top: calc(100% - (100% - 4 * 1.25rem) / 5 + 22px); opacity: 0; }
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pipeline .node, .pipeline .pulse { animation: none !important; transition: none !important; }
+    .pipeline .pulse { display: none; }
+  }
+</style>

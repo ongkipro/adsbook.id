@@ -225,3 +225,39 @@ test("home 3D hero (Paduka, 2026-11-18): three loads on the home alone, from our
   // The email the hero dialog hands to /daftar never rides in a URL (the platform Pixel reports page URLs).
   assert.doesNotMatch(hero, /name="email"/);
 });
+
+test("tracking proof (pagecopy v3): simulations are captioned illustrations of mechanisms the code has, and calm in motion", async () => {
+  const band = readFileSync("src/platform/site/SignalBand.astro", "utf8");
+  const strip = readFileSync("src/platform/site/SignalPipelineStrip.astro", "utf8");
+  for (const [name, source] of [["SignalBand", band], ["SignalPipelineStrip", strip]] as const) {
+    assert.match(source, /@media \(prefers-reduced-motion: reduce\)/, `${name}: CSS holds still under reduced motion`);
+    assert.match(source, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/, `${name}: the script never starts the loop under reduced motion`);
+    assert.match(source, /IntersectionObserver/, `${name}: plays only on screen`);
+    assert.doesNotMatch(source, /https?:\/\//, `${name}: no remote asset`);
+  }
+  assert.equal((band.match(/class="sim-caption">Ilustrasi /g) ?? []).length, 2, "both simulations say they are illustrations");
+  assert.ok(band.includes('class="signal-logo"'), "the animated logo stays");
+
+  // The 8 keys the simulation shows are exactly the keys the store hashes and sends.
+  const shown = JSON.parse((band.match(/const MATCH_KEYS = (\[[^\]]*\])/)?.[1] ?? "[]").replaceAll("'", '"')) as string[];
+  const { buildMetaAdvancedMatching } = await import("../lib/meta-identity.ts");
+  const sent = await buildMetaAdvancedMatching({ customer_name: "Rina Lestari", customer_phone: "081234567890", city: "Bandung", province: "Jawa Barat", postal_code: "40135", country: "id", external_id: "v1" });
+  assert.deepEqual(shown.sort(), Object.keys(sent).filter((key) => key !== "client_user_agent").sort());
+  assert.equal(shown.length, 8);
+
+  // Rendered copy across the site: no stiff "pratinjau", no promise of a ROAS number, no tracker
+  // or infrastructure brand, no product domain of anyone else, no server signal claimed for TikTok.
+  const pages = readdirSync("src/pages/platform/site").filter((name) => name.endsWith(".astro")).map((name) => `src/pages/platform/site/${name}`);
+  const components = readdirSync("src/platform/site").filter((name) => name.endsWith(".astro")).map((name) => `src/platform/site/${name}`);
+  const markupOf = (path: string) => readFileSync(path, "utf8").split("---").slice(2).join("---").replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, " ");
+  const strings = [...readFileSync("src/platform/site/content.ts", "utf8").matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
+  // The band's own copy is its single-quoted data (rows, notes, benefits), one line each.
+  const bandData = [band, strip].flatMap((source) => [...source.matchAll(/'([^'\n]*)'/g)].map((m) => m[1]));
+  const copy = [...strings, ...bandData, ...[...pages, ...components].map(markupOf), readFileSync("src/platform/state-pages.ts", "utf8")].join("\n");
+  assert.doesNotMatch(copy, /pratinjau/i);
+  assert.doesNotMatch(copy, /\bROAS (naik|meningkat|dijamin)\s*\d|\bdijamin\b|\d+\s*%\s*lebih (untung|tinggi)/i, "no promised result");
+  assert.doesNotMatch(copy, /Cloudflare|\bAstro\b|Durable Object|AdsBookCMS/);
+  assert.doesNotMatch(copy, /\b[a-z0-9-]+\.(io|co)\b/i, "no other product's domain");
+  assert.doesNotMatch(copy, /server[^.]{0,80}TikTok|TikTok[^.]{0,40}(Conversions API|Events API|konversi offline)/, "TikTok is tracked by UTM, not sent from the server");
+  assert.match(readFileSync("src/layouts/BaseLayout.astro", "utf8"), /Mode Review Pemilik/);
+});

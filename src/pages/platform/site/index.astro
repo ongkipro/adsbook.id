@@ -28,17 +28,17 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
   <section class="section section-white proof" aria-labelledby="bukti-produk-title">
     <div class="wrap proof-grid">
       <div class="proof-text">
-        <p class="proof-kicker">Toko COD untuk seller iklan di semua kanal</p>
-        <h2 id="bukti-produk-title">Setiap pesanan dari iklan tercatat tepat satu kali</h2>
-        <p class="lead">Meta, Google, TikTok, atau jaringan lain: setiap pesanan tercatat ke kanal iklannya. Form cepat di HP, pesanan Anda periksa sebelum dikirim, dan konversi sampai ke Meta dan Google dari server, walau pembeli langsung menutup halaman.</p>
+        <p class="proof-kicker">Toko COD dan mesin sinyal server untuk semua kanal iklan</p>
+        <h2 id="bukti-produk-title">Berhenti mematikan iklan yang sebenarnya laris, dan berhenti men-scale iklan yang angkanya dobel</h2>
+        <p class="lead">Pemblokir iklan, privasi iOS, dan pembeli COD yang langsung menutup browser membuat banyak penjualan tidak sampai ke jaringan iklan. Sebaliknya, laporan ganda membuat iklan boncos tampak untung. adsbook.id menyatukan form order yang ringan di HP dengan sinyal server first-party: setiap pesanan nyata sampai ke Meta dan Google tepat satu kali, jadi budget Anda mendorong kampanye yang benar-benar menjual.</p>
         <ul class="proof-facts" aria-label="Ringkasan">
-          <li>Gratis di Mode Preview</li>
-          <li>Mulai Rp149.000/bulan</li>
-          <li>0% potongan transaksi</li>
+          <li>Siap jalan dalam hitungan menit, tanpa ngoding</li>
+          <li>Bebas rakit dan review toko dulu tanpa biaya</li>
+          <li>0% potongan per transaksi</li>
         </ul>
         <div class="proof-actions">
           <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
-          <a class="text-link" href="/cara-kerja">Lihat cara kerjanya</a>
+          <a class="text-link" href="/cara-kerja">Lihat alur kerjanya</a>
         </div>
       </div>
       <div class="proof-shot"><ShotFrame shot={SHOTS.form} caption /></div>
@@ -50,8 +50,8 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
   <section class="section section-white" aria-labelledby="pilar-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="pilar-title">Presisi di setiap langkah pesanan</h2>
-        <p class="lead">Enam hal yang menentukan hasil iklan COD Anda, semuanya sudah berjalan hari ini.</p>
+        <h2 id="pilar-title">Satu kendali penuh dari klik iklan sampai dana cair</h2>
+        <p class="lead">Dirancang untuk ritme seller iklan Indonesia: ringan di HP pembeli, ketat menjaga margin Anda. Enam pilar, semuanya sudah berjalan hari ini.</p>
       </div>
       <PillarGrid />
     </div>
@@ -59,7 +59,7 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 
   <section class="section" aria-labelledby="harga-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="harga-title">Satu harga, semua fitur, per toko</h2></div>
+      <div class="section-head"><h2 id="harga-title">Satu biaya langganan rata, tanpa komisi per order dan tanpa aplikasi tracker tambahan</h2></div>
       <Pricing compact />
       <p class="more"><a class="text-link" href="/harga">Rincian paket</a></p>
     </div>
@@ -67,7 +67,7 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 
   <section class="section section-white" aria-labelledby="faq-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="faq-title">Pertanyaan yang sering muncul</h2></div>
+      <div class="section-head"><h2 id="faq-title">Yang paling sering ditanyakan pengiklan</h2></div>
       <FaqList items={FAQ_SHORT} />
       <p class="more"><a class="text-link" href="/faq">Semua pertanyaan</a></p>
     </div>

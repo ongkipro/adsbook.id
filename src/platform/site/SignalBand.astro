@@ -1,15 +1,58 @@
 ---
 /**
- * The brand band: the logo explains the product. The two signals and the dot
- * are the 1:1 promise; the animated logo is swapped in when the band is in
- * view and stays static under reduced motion (brand test in platform-site.test.ts).
+ * The brand band and the tracking proof (Paduka, 2026-11-18, pagecopy v3): the
+ * logo's two signals and its dot are the 1:1 promise; under it two simulations
+ * show what that promise changes — the Purchase count an ad network receives
+ * against the store's real orders, and the campaign decision it makes possible.
+ *
+ * Both are illustrations, captioned as such: no store's data, no promised
+ * ROAS. Every mechanism they show is in the code — click ids kept 90 days and
+ * not erased by a WhatsApp follow-up link (src/lib/click-ids.ts), the 8 hashed
+ * match keys (src/lib/meta-identity.ts), one event id for browser and server
+ * (ADR-036), Google offline conversions (src/lib/google-ads-offline.ts), and
+ * orders per channel and campaign in Analitik (src/lib/insights.ts).
+ *
+ * Motion only while the band is on screen, none under reduced motion; the
+ * animated logo is swapped in the same way (brand test in platform-site.test.ts).
  */
 interface Props { id?: string }
 const { id = 'signal-title' } = Astro.props;
+
+const BEFORE = [
+  { day: 'Hari 1', orders: 42, received: 19, accuracy: '45%', note: 'Bocor: pemblokir iklan, halaman ditutup cepat', tone: 'leak' },
+  { day: 'Hari 2', orders: 38, received: 21, accuracy: '55%', note: 'Jejak klik putus di iOS', tone: 'leak' },
+  { day: 'Hari 3', orders: 31, received: 52, accuracy: '168%', note: 'Dobel: browser dan server tanpa ID yang sama', tone: 'double' },
+] as const;
+const AFTER = [
+  { day: 'Hari 4', orders: 48, received: 48 },
+  { day: 'Hari 5', orders: 53, received: 53 },
+  { day: 'Hari 6', orders: 61, received: 61 },
+] as const;
+// src/lib/meta-identity.ts: the keys hashed with SHA-256 before they leave the store.
+const MATCH_KEYS = ['ph', 'fn', 'ln', 'ct', 'st', 'zp', 'country', 'external_id'];
+const BENEFITS = [
+  {
+    title: 'Tahu persis iklan mana yang layak di-scale',
+    text: 'Setiap pesanan dan omzetnya tercatat ke kanal dan kampanye asalnya: Meta, Google, TikTok, maupun kanal lain. Matikan iklan yang membakar budget, perbesar yang terbukti menjual.',
+  },
+  {
+    title: 'Jejak klik 90 hari dan 8 kunci pencocokan',
+    text: 'ID klik disimpan sebagai data first-party selama 90 hari dan tidak terhapus walau pembeli membuka link follow-up WhatsApp. Setiap pesanan dikirim dengan 8 data pembeli yang di-hash SHA-256.',
+  },
+  {
+    title: 'Tanpa aplikasi tracker atau server GTM terpisah',
+    text: 'Pixel, Conversions API, dan konversi offline Google Ads sudah bawaan toko. Cukup isi ID dan token akun iklan Anda di admin: satu dashboard, satu angka.',
+  },
+];
 ---
 
-<section class="signal" aria-labelledby={id}>
-  <div class="wrap signal-grid">
+<section class="signal" aria-labelledby={id} data-signal-band>
+  <div class="wrap signal-head">
+    <div class="signal-text">
+      <p class="signal-eyebrow">Mesin sinyal first-party dan 8 kunci pencocokan</p>
+      <h2 id={id}>Dorong data penjualan yang utuh ke jaringan iklan, biarkan algoritma mencari pembeli asli</h2>
+      <p class="lead">Tanpa estimasi yang mengira-ngira: murni fakta transaksi dari toko Anda. Dua sinyal untuk pesanan yang sama bertemu di satu titik. Tidak dobel, tidak hilang.</p>
+    </div>
     <div class="signal-mark">
       <img class="signal-logo" src="/platform/brand/adsbook-id-wordmark.svg" data-animated="/platform/brand/adsbook-id-wordmark-animated.svg" alt="" width="530" height="85" loading="lazy" decoding="async" />
       <ol class="signal-legend" aria-label="Arti titik pada logo">
@@ -18,49 +61,209 @@ const { id = 'signal-title' } = Astro.props;
         <li><span class="tick tick-dot" aria-hidden="true"></span>Satu ID pesanan: dihitung satu konversi</li>
       </ol>
     </div>
-    <div class="signal-text">
-      <h2 id={id}>Titik di logo kami adalah janji kami</h2>
-      <p class="lead">Dua sinyal untuk pesanan yang sama bertemu di satu titik. Tidak dobel, tidak hilang.</p>
-      <p>Penjualan yang terhitung dua kali membuat iklan terlihat lebih untung dari kenyataannya. Penjualan yang tidak sampai membuat iklan yang menjual terlihat rugi. adsbook.id mencatat setiap pesanan ke kanal iklannya, dan mengirimnya ke Meta dan Google dari browser dan server dengan ID yang sama, jadi iklan belajar dari pesanan yang benar-benar terjadi.</p>
-      <a class="text-link" href="/fitur#sinyal">Cara kerja sinyal semua kanal</a>
-    </div>
   </div>
+
+  <div class="wrap sim-grid">
+    <figure class="sim-card sim-accuracy">
+      <div class="sim-card-head">
+        <p class="sim-kicker">Simulasi A</p>
+        <h3>Akurasi sinyal: sebelum dan sesudah mesin 1:1 aktif</h3>
+      </div>
+      <div class="acc-table" role="table" aria-label="Order toko dibanding Purchase yang diterima jaringan iklan, per hari">
+        <div class="acc-row acc-header" role="row">
+          <span role="columnheader">Hari</span>
+          <span role="columnheader">Order toko</span>
+          <span role="columnheader">Purchase diterima</span>
+          <span role="columnheader">Akurasi</span>
+        </div>
+        {BEFORE.map((row, index) => (
+          <div class={`acc-row acc-before tone-${row.tone}`} role="row" style={`--i:${index}`}>
+            <span role="cell">{row.day}</span>
+            <span role="cell" class="num">{row.orders}</span>
+            <span role="cell" class="num">{row.received}</span>
+            <span role="cell"><b class="badge">{row.accuracy}</b></span>
+            <span role="cell" class="acc-note">{row.note}</span>
+          </div>
+        ))}
+        <div class="acc-divider" role="row">
+          <span role="cell" class="acc-divider-pill"><span class="mini-a" aria-hidden="true">a<i></i></span>Mesin sinyal 1:1 aktif</span>
+        </div>
+        {AFTER.map((row, index) => (
+          <div class="acc-row acc-after" role="row" style={`--i:${index + 4}`}>
+            <span role="cell">{row.day}</span>
+            <span role="cell" class="num">{row.orders}</span>
+            <span role="cell" class="num">{row.received}</span>
+            <span role="cell"><b class="badge">100%</b></span>
+            <span role="cell" class="acc-note">1:1 terkunci: satu pesanan, satu Purchase</span>
+          </div>
+        ))}
+      </div>
+      <figcaption class="sim-caption">Ilustrasi cara kerja pencocokan order toko ke Conversions API dan konversi offline Google, bukan data toko tertentu. Atribusi ke kampanye tetap mengikuti jendela atribusi platform iklan.</figcaption>
+    </figure>
+
+    <figure class="sim-card sim-roas">
+      <div class="sim-card-head">
+        <p class="sim-kicker">Simulasi B</p>
+        <h3>Dampak ke keputusan ROAS</h3>
+      </div>
+      <div class="camp-stack">
+        <div class="camp camp-win">
+          <div class="camp-top"><span class="camp-name">Kampanye A · Video masalah</span><b class="camp-badge">Layak scale</b></div>
+          <p class="camp-figures"><span>34 pesanan nyata</span><span>Rp5.610.000</span></p>
+          <p class="camp-signal"><span class="sq" aria-hidden="true"></span>Sinyal 1:1 terkunci: algoritma belajar dari pembeli asli</p>
+        </div>
+        <div class="camp camp-lose">
+          <div class="camp-top"><span class="camp-name">Kampanye B · Broad interest</span><b class="camp-badge">Matikan</b></div>
+          <p class="camp-figures"><span>Klik ramai</span><span>0 pesanan nyata</span></p>
+          <p class="camp-signal"><span class="sq" aria-hidden="true"></span>Tidak lagi tampak untung karena konversi dobel</p>
+        </div>
+      </div>
+      <div class="enrich" aria-label="Data form pembeli menjadi 8 kunci pencocokan SHA-256">
+        <p class="enrich-label">Data form pembeli</p>
+        <div class="enrich-in">
+          <span>Nama</span><span>0812…</span><span>Alamat &amp; kecamatan</span>
+        </div>
+        <p class="enrich-label">8 kunci pencocokan, di-hash SHA-256</p>
+        <ul class="enrich-out">
+          {MATCH_KEYS.map((key, index) => <li style={`--k:${index}`}>{key}</li>)}
+        </ul>
+        <p class="enrich-click"><span class="sq" aria-hidden="true"></span>+ ID klik Meta dan Google, disimpan 90 hari</p>
+      </div>
+      <p class="roas-why">ROAS membaik karena dua hal: budget berhenti mengalir ke iklan yang angkanya dobel, dan Meta serta Google belajar dari profil pembeli yang benar-benar memesan.</p>
+      <figcaption class="sim-caption">Ilustrasi keputusan dari laporan Analitik per kampanye. Hasil ROAS tetap ditentukan produk, iklan, dan pasar Anda.</figcaption>
+    </figure>
+  </div>
+
+  <div class="wrap benefit-grid">
+    {BENEFITS.map((benefit) => (
+      <div class="benefit">
+        <span class="sq" aria-hidden="true"></span>
+        <h3>{benefit.title}</h3>
+        <p>{benefit.text}</p>
+      </div>
+    ))}
+  </div>
+  <div class="wrap signal-more"><a class="text-link" href="/fitur#sinyal">Detail mesin sinyal semua kanal</a></div>
 </section>
 
 <script>
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const logos = Array.from(document.querySelectorAll<HTMLImageElement>('img.signal-logo'));
+  const bands = Array.from(document.querySelectorAll<HTMLElement>('[data-signal-band]'));
   if (!reduce && 'IntersectionObserver' in window) {
+    // The simulations play only while the band is on screen.
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
+        const band = entry.target as HTMLElement;
+        band.classList.toggle('is-playing', entry.isIntersecting);
         if (!entry.isIntersecting) continue;
-        const logo = entry.target as HTMLImageElement;
-        observer.unobserve(logo);
-        if (logo.dataset.animated) logo.src = logo.dataset.animated;
+        band.classList.add('has-played');
+        const logo = band.querySelector<HTMLImageElement>('img.signal-logo');
+        if (logo?.dataset.animated && !logo.src.endsWith(logo.dataset.animated)) logo.src = logo.dataset.animated;
       }
-    }, { threshold: 0.6 });
-    logos.forEach((logo) => observer.observe(logo));
+    }, { threshold: 0.25 });
+    bands.forEach((band) => observer.observe(band));
+  } else {
+    bands.forEach((band) => band.classList.add('has-played', 'is-still'));
   }
 </script>
 
 <style>
-  .signal { background: var(--ink); color: #cbd5e1; padding-block: var(--section); }
-  .signal h2 { color: #f8fafc; }
+  .signal { --slate: #1e293b; --line-dark: #334155; --sky: #60a5fa; --emerald: #10b981; --rose: #f43f5e; --amber: #f59e0b; background: var(--ink); color: #cbd5e1; padding-block: var(--section); }
+  .signal h2, .signal h3 { color: #f8fafc; }
   .signal .lead { color: #e2e8f0; }
-  .signal-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
-  .signal-mark { display: grid; gap: 2rem; padding: 2.5rem; border-radius: 16px; background: #ffffff; }
+  .sq { display: inline-block; width: 6px; height: 6px; background: var(--accent); flex-shrink: 0; }
+
+  .signal-head { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 3rem; align-items: center; }
+  .signal-text { display: grid; gap: 1rem; }
+  .signal-eyebrow { color: #93c5fd; font-weight: 700; font-size: 0.95rem; }
+  .signal-mark { display: grid; gap: 1.25rem; padding: 1.75rem; border-radius: 16px; background: #ffffff; }
   .signal-mark img { width: 100%; height: auto; }
-  .signal-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; color: var(--ink); font-size: 0.97rem; font-weight: 600; }
+  .signal-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; color: var(--ink); font-size: 0.9rem; font-weight: 600; }
   .signal-legend li { display: grid; grid-template-columns: 28px 1fr; gap: 0.75rem; align-items: center; }
   .tick { justify-self: center; background: var(--accent); }
   .tick-v { width: 4px; height: 22px; background: linear-gradient(var(--accent-tint), var(--accent)); }
   .tick-h { width: 22px; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent-tint)); }
   .tick-dot { width: 12px; height: 12px; }
-  .signal-text { display: grid; gap: 1.1rem; justify-items: start; }
+
+  .sim-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 1.5rem; margin-top: 3.5rem; align-items: start; }
+  .sim-card { margin: 0; display: grid; gap: 1.1rem; padding: 1.5rem; border-radius: 16px; background: var(--slate); border: 1px solid var(--line-dark); }
+  .sim-card-head { display: grid; gap: 0.35rem; }
+  .sim-kicker { font: 600 0.72rem/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sky); }
+  .sim-card h3 { font-size: 1.15rem; }
+  .sim-caption { font-size: 0.8rem; line-height: 1.5; color: #94a3b8; border-top: 1px solid var(--line-dark); padding-top: 0.85rem; }
+
+  /* Card A: the accuracy table. */
+  .acc-table { display: grid; gap: 0.35rem; font-size: 0.92rem; }
+  .acc-row { display: grid; grid-template-columns: 4.5rem 1fr 1fr 4.75rem; column-gap: 0.75rem; row-gap: 0.15rem; align-items: center; padding: 0.55rem 0.75rem; border-radius: 10px; background: rgb(15 23 42 / 0.55); }
+  .acc-header { background: transparent; padding-block: 0.2rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; }
+  .acc-row .num { font-variant-numeric: tabular-nums; color: #f8fafc; font-weight: 600; }
+  .acc-note { grid-column: 1 / -1; font-size: 0.78rem; color: #94a3b8; }
+  .badge { display: inline-flex; justify-content: center; min-width: 4.25rem; padding: 0.15rem 0.45rem; border-radius: 6px; font: 700 0.82rem/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .tone-leak .badge { background: rgb(244 63 94 / 0.16); color: #fda4af; border: 1px solid rgb(244 63 94 / 0.45); }
+  .tone-double .badge { background: rgb(245 158 11 / 0.14); color: #fcd34d; border: 1px solid rgb(245 158 11 / 0.45); }
+  .acc-after { background: rgb(16 185 129 / 0.07); border: 1px solid rgb(16 185 129 / 0.22); }
+  .acc-after .badge { background: rgb(16 185 129 / 0.16); color: #6ee7b7; border: 1px solid rgb(16 185 129 / 0.5); }
+  .acc-divider { position: relative; display: flex; justify-content: center; margin: 0.6rem 0; }
+  .acc-divider::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-50%); background: linear-gradient(90deg, transparent, var(--accent), var(--sky), var(--accent), transparent); box-shadow: 0 0 14px rgb(37 99 235 / 0.7); }
+  .acc-divider-pill { position: relative; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.8rem 0.3rem 0.45rem; border-radius: 999px; background: var(--ink); border: 1px solid var(--accent); color: #f8fafc; font-weight: 700; font-size: 0.82rem; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18); }
+  .mini-a { display: inline-flex; align-items: flex-end; gap: 2px; padding: 0 0.3rem; height: 1.3rem; border-radius: 6px; background: #f8fafc; color: var(--ink); font: 800 0.9rem/1.3rem var(--display); }
+  .mini-a i { width: 4px; height: 4px; margin-bottom: 4px; background: var(--accent); }
+
+  /* Card B: two campaigns and the match keys. */
+  .camp-stack { display: grid; gap: 0.6rem; }
+  .camp { display: grid; gap: 0.4rem; padding: 0.9rem 1rem; border-radius: 12px; background: rgb(15 23 42 / 0.55); border: 1px solid var(--line-dark); }
+  .camp-win { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.16), 0 12px 28px -12px rgb(37 99 235 / 0.6); }
+  .camp-lose { opacity: 0.72; }
+  .camp-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .camp-name { color: #f8fafc; font-weight: 700; font-size: 0.92rem; }
+  .camp-badge { flex-shrink: 0; padding: 0.15rem 0.5rem; border-radius: 6px; font: 700 0.68rem/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+  .camp-win .camp-badge { background: rgb(16 185 129 / 0.16); color: #6ee7b7; border: 1px solid rgb(16 185 129 / 0.5); }
+  .camp-lose .camp-badge { background: rgb(244 63 94 / 0.14); color: #fda4af; border: 1px solid rgb(244 63 94 / 0.45); }
+  .camp-figures { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; color: #e2e8f0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .camp-signal { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #94a3b8; }
+  .camp-win .camp-signal .sq { background: var(--emerald); }
+  .camp-lose .camp-signal .sq { background: var(--rose); }
+  .enrich { display: grid; gap: 0.5rem; padding: 0.9rem 1rem; border-radius: 12px; border: 1px dashed var(--line-dark); }
+  .enrich-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; }
+  .enrich-in { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .enrich-in span { padding: 0.2rem 0.55rem; border-radius: 6px; background: #f8fafc; color: var(--ink); font-size: 0.8rem; font-weight: 600; }
+  .enrich-out { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .enrich-out li { padding: 0.18rem 0.5rem; border-radius: 6px; background: rgb(37 99 235 / 0.16); border: 1px solid rgb(96 165 250 / 0.45); color: #bfdbfe; font: 600 0.76rem/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .enrich-click { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #cbd5e1; }
+  .roas-why { font-size: 0.9rem; line-height: 1.55; color: #e2e8f0; }
+
+  .benefit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; margin-top: 2.5rem; }
+  .benefit { display: grid; gap: 0.5rem; align-content: start; padding-top: 1rem; border-top: 1px solid var(--line-dark); }
+  .benefit h3 { font-size: 1.05rem; }
+  .benefit p { font-size: 0.95rem; line-height: 1.6; }
+  .signal-more { margin-top: 2rem; }
   .signal .text-link { color: #93c5fd; }
   .signal .text-link:hover { color: #bfdbfe; }
+
+  /* Motion: rows and keys settle in once, the divider scans while the band is on screen. */
+  .signal.has-played:not(.is-still) .acc-before,
+  .signal.has-played:not(.is-still) .acc-after { animation: row-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 0.16s); }
+  .signal.has-played:not(.is-still) .enrich-out li { animation: key-in 0.4s ease-out both; animation-delay: calc(0.9s + var(--k) * 0.12s); }
+  .signal.is-playing .acc-divider::before { animation: scan 2.4s ease-in-out infinite; }
+  .signal.is-playing .camp-win { animation: win-glow 3.2s ease-in-out infinite; }
+  @keyframes row-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes key-in { from { opacity: 0.25; background: transparent; } to { opacity: 1; } }
+  @keyframes scan { 0%, 100% { opacity: 0.55; filter: brightness(0.9); } 50% { opacity: 1; filter: brightness(1.35); } }
+  @keyframes win-glow { 0%, 100% { box-shadow: 0 0 0 3px rgb(37 99 235 / 0.16), 0 12px 28px -12px rgb(37 99 235 / 0.6); } 50% { box-shadow: 0 0 0 4px rgb(37 99 235 / 0.28), 0 14px 32px -10px rgb(37 99 235 / 0.8); } }
+  @media (prefers-reduced-motion: reduce) {
+    .signal *, .signal *::before { animation: none !important; transition: none !important; }
+  }
+
+  @media (max-width: 900px) {
+    .signal-head, .sim-grid { grid-template-columns: 1fr; }
+    .benefit-grid { grid-template-columns: 1fr; gap: 1.25rem; }
+  }
   @media (max-width: 760px) {
-    .signal-grid { grid-template-columns: 1fr; gap: 2rem; }
-    .signal-mark { padding: 1.5rem; gap: 1.5rem; }
+    .signal-head { gap: 2rem; }
+    .signal-mark { padding: 1.25rem; }
+    .sim-card { padding: 1.1rem; }
+    .acc-row { grid-template-columns: 3.6rem 1fr 1fr 4.1rem; column-gap: 0.5rem; padding-inline: 0.6rem; font-size: 0.86rem; }
+    .acc-header { font-size: 0.64rem; letter-spacing: 0.03em; }
+    .badge { min-width: 3.6rem; font-size: 0.76rem; }
   }
 </style>
