@@ -157,7 +157,7 @@ const tenantGate = async () => ({
 const onRequest = createMiddleware(async (env) => { schemaCalls += 1; return (env as { OMS_DB: D1Database }).OMS_DB; }, tenantGate);
 
 const READY_ROW = {
-  store_name: 1, product: 1, primary_warehouse: 1, mengantar_api_key: "k", cod: 1, autolaris_on: 0, autolaris_key: null,
+  store_name: 1, product: 1, primary_warehouse: 1, mengantar_api_key: "k", cod: 1, bank_account: 1, autolaris_on: 0, autolaris_key: null,
   autolaris_origin: null, autolaris_destination: null, warehouse_address: "Jl. 1", couriers: 1, signals: 0,
 };
 

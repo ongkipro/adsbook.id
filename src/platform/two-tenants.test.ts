@@ -205,6 +205,8 @@ function makeReady(sql: { exec(source: string): void }) {
     INSERT INTO warehouses (store_id, name, origin_area_id, pickup_address_id, address, city, province, is_primary, is_active)
       VALUES (1, 'Utama', '12345', 'pickup-1', 'Jl. Siap 1', 'Bandung', 'Jawa Barat', 1, 1);
     INSERT INTO courier_rules (store_id, courier_code, is_enabled) SELECT 1, 'jne', 1 WHERE NOT EXISTS (SELECT 1 FROM courier_rules WHERE is_enabled = 1);
+    INSERT INTO seller_bank_accounts (store_id, bank_code, account_holder, account_number, is_active, display_order, created_at, updated_at)
+      VALUES (1, 'BCA', 'Toko Siap', '1234567890', 1, 0, '2026-11-16', '2026-11-16');
   `);
 }
 
@@ -1913,8 +1915,11 @@ async function readinessHarness(slug: string, options: { preview?: boolean } = {
     sql.prepare(`INSERT INTO warehouses (id, store_id, name, origin_area_id, pickup_address_id, address, city, province, is_primary, is_active)
                  VALUES (?, 1, ?, ?, ?, 'Jl. Contoh 1', 'Bandung', 'Jawa Barat', ?, 1)`).run(id, `Gudang ${id}`, origin, pickup, primary);
   const mengantar = () => sql.exec("UPDATE stores SET mengantar_api_key = 'mengantar-test-key'");
+  // ONBOARDING-BANK-WAREHOUSE-SPEC §2: the transfer rail a buyer outside COD's provinces pays on.
+  const bank = () =>
+    sql.exec("INSERT INTO seller_bank_accounts (store_id, bank_code, account_holder, account_number, is_active, display_order, created_at, updated_at) VALUES (1, 'BCA', 'Toko', '1234567890', 1, 0, '2026-11-19', '2026-11-19')");
   const facts = async () => readReadiness(database);
-  return { open, product, warehouse, mengantar, facts, sql, database, env, tenantId: created.tenantId, stub: stores.get(created.tenantId).stub };
+  return { open, product, warehouse, mengantar, bank, facts, sql, database, env, tenantId: created.tenantId, stub: stores.get(created.tenantId).stub };
 }
 
 test("PR-23 owner preview: the signed-in owner sees the unready storefront, buyers and checkout stay closed", async () => {
@@ -1969,17 +1974,20 @@ test("T-38: a new store says 'toko belum siap' (no checkout) until the ready pre
 
   // Step by step: closed until the last required step, open right after.
   const required = async () => {
-    const steps = buildSetupChecklist({ ...(await store.facts()), customDomain: false });
+    const steps = buildSetupChecklist({ ...(await store.facts()), customDomain: false, businessAddress: false });
     return steps.filter((step) => step.required && !step.done).map((step) => step.id);
   };
-  assert.deepEqual(await required(), ["product", "warehouse", "mengantar"], "signup sets the name; COD and couriers start on");
+  assert.deepEqual(await required(), ["product", "warehouse", "mengantar", "payment"], "signup sets the name; COD and couriers start on; COD skips 15 provinces");
   store.product();
-  assert.deepEqual(await required(), ["warehouse", "mengantar"]);
+  assert.deepEqual(await required(), ["warehouse", "mengantar", "payment"]);
   assert.equal((await store.open("/")).status, 503);
   store.mengantar();
-  assert.deepEqual(await required(), ["warehouse"], "COD on, product present, Mengantar set: still the warehouse");
+  assert.deepEqual(await required(), ["warehouse", "payment"], "COD on, product present, Mengantar set: still the warehouse and a bank account");
   assert.equal((await store.open("/")).status, 503);
   store.warehouse(1, 1, "12345", "pickup-1");
+  assert.deepEqual(await required(), ["payment"], "a buyer in a non-COD province has no way to pay yet");
+  assert.equal((await store.open("/")).status, 503);
+  store.bank();
   assert.deepEqual(await required(), []);
   const opened = await store.open("/produk/kopi");
   assert.equal(opened.reached, true, "the store opens the moment the predicate holds");
@@ -2162,6 +2170,7 @@ test("T-38/PR-23: COD + product without a Mengantar key is not ready", async () 
   const store = await readinessHarness("tanpa-mengantar");
   store.product();
   store.warehouse(1, 1, "12345", "pickup-1");
+  store.bank();
   const facts = await store.facts();
   assert.equal(facts.payment, true);
   assert.equal(isStoreReady(facts), false);
@@ -2188,8 +2197,19 @@ test("T-38: payment, product price/weight and couriers each gate readiness; opti
   store.product();
   store.mengantar();
   store.warehouse(1, 1, "12345", "pickup-1");
-  assert.equal(isStoreReady(await store.facts()), true);
-  store.sql.exec("UPDATE stores SET is_cod_enabled = 0");
+  // ONBOARDING-BANK-WAREHOUSE-SPEC §2.2: COD that excludes the default 15 provinces is not enough.
+  const before = await store.facts();
+  assert.deepEqual([before.codDisabledProvinces, before.payment, isStoreReady(before)], [15, false, false]);
+  store.bank();
+  assert.equal(isStoreReady(await store.facts()), true, "a bank account serves the non-COD provinces");
+  store.sql.exec("UPDATE seller_bank_accounts SET is_active = 0");
+  assert.equal((await store.facts()).payment, false, "an inactive account serves nobody");
+  store.sql.exec("UPDATE stores SET cod_disabled_province_codes = ''");
+  const everywhere = await store.facts();
+  assert.deepEqual([everywhere.codDisabledProvinces, everywhere.payment], [0, true], "COD consciously opened to all 38 provinces: COD alone is enough");
+  store.sql.exec("UPDATE stores SET cod_disabled_province_codes = 'PA'");
+  assert.equal((await store.facts()).payment, false, "one excluded province is enough to need a transfer rail");
+  store.sql.exec("UPDATE stores SET is_cod_enabled = 0, cod_disabled_province_codes = ''");
   assert.equal((await store.facts()).payment, false, "COD off and AutoLaris without its key");
   store.sql.exec("UPDATE stores SET autolaris_api_key = 'k', autolaris_order_origin_id = '1', autolaris_order_destination_id = '2'");
   assert.equal(isStoreReady(await store.facts()), true, "AutoLaris with what its rail validates");
@@ -2207,7 +2227,7 @@ test("T-38: payment, product price/weight and couriers each gate readiness; opti
   const steps = buildSetupChecklist(setup!);
   assert.deepEqual(steps.map((step) => [step.id, step.required, step.done]), [
     ["store", true, true], ["product", true, true], ["warehouse", true, true], ["mengantar", true, true],
-    ["couriers", true, true], ["payment", true, true], ["domain", false, false], ["signals", false, false],
+    ["couriers", true, true], ["payment", true, true], ["address", false, false], ["domain", false, false], ["signals", false, false],
   ]);
 });
 
@@ -2343,6 +2363,7 @@ test("T-47/A-55: an order from /embed/form through the real middleware and route
   store.product();
   store.warehouse(1, 1, "ORIGIN-1", "pickup-1");
   store.mengantar();
+  store.bank();
   store.sql.exec(`UPDATE stores SET meta_pixel_id = '100000000000009', meta_capi_token = 'tenant-capi-token';
     INSERT INTO courier_rules (store_id, courier_code, is_enabled, is_cod_enabled) SELECT 1, 'jne', 1, 1 WHERE NOT EXISTS (SELECT 1 FROM courier_rules WHERE courier_code = 'jne');
     UPDATE courier_rules SET is_cod_enabled = 1 WHERE courier_code = 'jne';`);
@@ -2447,6 +2468,7 @@ test("T-44/PR-29: one 'ready' and one 'first order' notice through the real midd
   store.product();
   store.warehouse(1, 1, "ORIGIN-1", "pickup-1");
   store.mengantar();
+  store.bank();
   store.sql.exec(`INSERT INTO courier_rules (store_id, courier_code, is_enabled, is_cod_enabled) SELECT 1, 'jne', 1, 1 WHERE NOT EXISTS (SELECT 1 FROM courier_rules WHERE courier_code = 'jne');
     UPDATE courier_rules SET is_cod_enabled = 1 WHERE courier_code = 'jne';`);
   Object.assign(store.env, { PLATFORM_ALERT_WEBHOOK_URL: "https://hooks.example/notify" });
@@ -2802,6 +2824,7 @@ test("ADR-041 (T-49): preview → grace → expired through the real middleware;
   store.product();
   store.warehouse(1, 1, "ORIGIN-1", "pickup-1");
   store.mengantar();
+  store.bank();
   const platformDb = store.env.PLATFORM_DB as D1Database;
   const setEnds = (ends: number | null) =>
     platformDb

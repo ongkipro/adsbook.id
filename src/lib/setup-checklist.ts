@@ -8,10 +8,10 @@ import { getRuntimeEnv } from "./env.ts";
  * (`src/platform/readiness.ts`), so the checklist says ready exactly when the
  * storefront opens to buyers.
  */
-export type SetupFacts = ReadinessFacts & { customDomain: boolean };
+export type SetupFacts = ReadinessFacts & { customDomain: boolean; businessAddress: boolean };
 
 export type SetupStep = {
-  id: "store" | "product" | "warehouse" | "mengantar" | "couriers" | "payment" | "domain" | "signals";
+  id: "store" | "product" | "warehouse" | "mengantar" | "couriers" | "payment" | "address" | "domain" | "signals";
   label: string;
   hint: string;
   href: string;
@@ -19,8 +19,19 @@ export type SetupStep = {
   required: boolean;
 };
 
+const PAYMENT_STEP_LABEL = "Tambahkan rekening bank (atau AutoLaris QRIS/VA)";
+
 export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
   const optional: SetupStep[] = [
+    {
+      // ONBOARDING-BANK-WAREHOUSE-SPEC §3.3: the public address, not the courier's pickup point.
+      id: "address",
+      label: "Isi alamat usaha (tampil publik)",
+      hint: "Opsional. Tampil di halaman Kontak & Kebijakan Privasi agar pembeli dari iklan lebih percaya. Berbeda dari alamat pickup kurir di menu Gudang.",
+      href: "/admin/settings/store#businessAddress",
+      done: facts.businessAddress,
+      required: false,
+    },
     {
       id: "domain",
       label: "Pasang domain sendiri",
@@ -59,8 +70,8 @@ export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
       },
       {
         id: "payment",
-        label: "Aktifkan pembayaran QRIS/VA atau Transfer Bank",
-        hint: "AutoLaris dengan API key, atau minimal satu rekening bank aktif. Produk digital tidak memakai COD.",
+        label: PAYMENT_STEP_LABEL,
+        hint: "Pilih salah satu: rekening bank transfer manual untuk mulai cepat hari ini, atau sambungkan AutoLaris untuk QRIS & VA otomatis.",
         href: "/admin/payments",
         done: facts.prepaid,
         required: true,
@@ -121,8 +132,9 @@ export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
     },
     {
       id: "payment",
-      label: "Aktifkan metode bayar",
-      hint: "COD, atau AutoLaris (QRIS/VA) dengan API key dan area order lengkap.",
+      label: PAYMENT_STEP_LABEL,
+      // ONBOARDING-BANK-WAREHOUSE-SPEC §2.2: done by COD alone only when it serves all 38 provinces.
+      hint: "Wajib agar pembeli dari provinsi non-COD tetap bisa membayar via transfer bank. AutoLaris (QRIS & VA otomatis) bersifat opsional.",
       href: "/admin/payments",
       done: facts.payment,
       required: true,
@@ -140,7 +152,7 @@ export async function readSetupFacts(
   try {
     const tenantId = locals.tenantContext?.tenantId;
     const platformDb = (getRuntimeEnv(locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database | undefined;
-    const [facts, custom] = await Promise.all([
+    const [facts, custom, contact] = await Promise.all([
       readReadiness(database),
       platformDb && tenantId
         ? platformDb
@@ -148,10 +160,22 @@ export async function readSetupFacts(
             .bind(tenantId)
             .first()
         : null,
+      database.prepare("SELECT business_address FROM stores ORDER BY id LIMIT 1").first<{ business_address: string | null }>(),
     ]);
-    return { ...facts, customDomain: Boolean(custom) };
+    return { ...facts, customDomain: Boolean(custom), businessAddress: Boolean(contact?.business_address?.trim()) };
   } catch (error) {
     console.error("setup-checklist-unreadable", error);
     return null;
   }
+}
+
+/**
+ * ONBOARDING-BANK-WAREHOUSE-SPEC §3.1: what a seller adding a physical product
+ * still owes before a buyer can be quoted and pay — shown above the form, never
+ * blocking the save. Null when nothing is owed (or the facts are unreadable).
+ */
+export function physicalProductGuide(facts: SetupFacts | null): { warehouse: boolean; mengantar: boolean; payment: boolean } | null {
+  if (!facts) return null;
+  const owed = { warehouse: !facts.primaryWarehouse, mengantar: !facts.mengantar, payment: !facts.payment };
+  return owed.warehouse || owed.payment ? owed : null;
 }

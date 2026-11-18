@@ -407,7 +407,9 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           <CardTitle as="h3" className="font-semibold">Status metode pembayaran</CardTitle>
           <CardDescription>Metode aktif otomatis tersedia pada checkout pembeli.</CardDescription>
         </CardHeader>
-        {/* One row per method, not a card per method inside this card. */}
+        {/* One row per method, not a card per method inside this card. Bank before
+            AutoLaris (ONBOARDING-BANK-WAREHOUSE-SPEC §3.2): what every seller has on
+            day one first, the optional accelerator after it. */}
         <CardContent className="divide-y px-0">
           <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
@@ -424,8 +426,26 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           </div>
           <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
-              <h4 className="font-semibold text-card-foreground">AutoLaris</h4>
-              <p className="text-xs text-muted-foreground">QRIS dan Virtual Account · {activeChannelCount} dari {channels.length} channel aktif</p>
+              <h4 className="flex flex-wrap items-center gap-2 font-semibold text-card-foreground">
+                Transfer Bank Manual <Badge variant="secondary" data-bank-primary>Siap pakai hari ini</Badge>
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                Rekening aktif otomatis melayani pembeli dari provinsi yang dikecualikan dari COD dan pembeli produk digital · {manualActiveCount} rekening aktif
+              </p>
+            </div>
+            <StatusBadge ready={manualActiveCount > 0}>{loading ? "Memuat" : manualActiveCount > 0 ? "Aktif" : "Belum tersedia"}</StatusBadge>
+            <Button type="button" variant="outline" onClick={() => setBanksOpen(true)} disabled={loading}>
+              <Landmark /> Kelola rekening
+            </Button>
+          </div>
+          <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <h4 className="flex flex-wrap items-center gap-2 font-semibold text-card-foreground">
+                AutoLaris Payment Gateway <Badge variant="outline" data-autolaris-optional>Opsional</Badge>
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                QRIS &amp; Virtual Account otomatis: verifikasi pembayaran 24 jam tanpa cek mutasi manual. Bisa ditambahkan kapan saja · {activeChannelCount} dari {channels.length} channel aktif
+              </p>
             </div>
             <StatusBadge ready={apiReady && autolarisEnabled}>
               {loading ? "Memuat" : !apiReady ? "Belum siap" : autolarisEnabled ? "Aktif" : "Nonaktif"}
@@ -436,16 +456,6 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
               disabled={mutationsDisabled || !apiReady}
               aria-label="Aktifkan AutoLaris"
             />
-          </div>
-          <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
-            <div className="min-w-0 flex-1">
-              <h4 className="font-semibold text-card-foreground">Transfer manual</h4>
-              <p className="text-xs text-muted-foreground">Rekening tujuan milik toko · {manualActiveCount} rekening aktif</p>
-            </div>
-            <StatusBadge ready={manualActiveCount > 0}>{loading ? "Memuat" : manualActiveCount > 0 ? "Aktif" : "Belum tersedia"}</StatusBadge>
-            <Button type="button" variant="outline" onClick={() => setBanksOpen(true)} disabled={loading}>
-              <Landmark /> Kelola rekening
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -615,7 +625,7 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
         <Card id="rekening-bank-section" className="scroll-mt-20">
           <CardHeader className="border-b">
             <CardTitle as="h3" className="font-semibold">Rekening transfer manual</CardTitle>
-            <CardDescription>Rekening aktif langsung tersedia di checkout sesuai urutan.</CardDescription>
+            <CardDescription>Rekening aktif langsung tersedia di checkout sesuai urutan, termasuk untuk provinsi non-COD dan produk digital.</CardDescription>
             <CardAction className="flex items-center gap-2">
               <Badge variant="outline">{manualActiveCount} aktif</Badge>
               <CollapsibleTrigger
