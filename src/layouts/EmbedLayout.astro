@@ -25,5 +25,10 @@ const { title } = Astro.props;
     <div class="mx-auto min-h-screen w-full max-w-[480px] bg-white">
       <slot />
     </div>
+    <script>
+      // Constraint validation speaks Indonesian on every page, whatever the browser's language.
+      import { installIndonesianValidation } from '../lib/form-validation-id.ts';
+      installIndonesianValidation();
+    </script>
   </body>
 </html>

@@ -29,7 +29,7 @@ export type StoreLogin = { url: string } | { error: string };
  */
 export function storeLoginUrl(raw: string, suffix: string, current: { protocol: string; port: string }): StoreLogin {
   const typed = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/?#].*$/, "");
-  if (!typed) return { error: "Masukkan slug atau domain toko Anda." };
+  if (!typed) return { error: "Masukkan nama atau domain toko Anda terlebih dahulu." };
   const host = typed.includes(".") ? typed : `${toSlug(typed)}.${suffix}`;
   if (!/^[a-z0-9.-]+(?::\d+)?$/.test(host) || host.startsWith(".") || host.endsWith(".") || host.includes("..")) {
     return { error: "Format alamat toko tidak valid." };

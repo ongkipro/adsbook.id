@@ -38,18 +38,21 @@ if (Astro.locals.platformUser) return Astro.redirect('/platform');
           <form id="loginForm" class="space-y-4" novalidate aria-busy="false">
             <div class="space-y-2">
               <label for="email" class="text-sm font-semibold text-slate-900">Email</label>
-              <input id="email" name="email" type="email" required autocomplete="username" autofocus placeholder="nama@email.com" class="admin-input-flat" spellcheck="false" />
+              <input id="email" name="email" type="email" required autocomplete="username" autofocus placeholder="nama@email.com" class="admin-input-flat" spellcheck="false" aria-describedby="email-error" data-msg-missing="Masukkan email akun platform Anda." data-msg-invalid="Format email belum benar (contoh: nama@adsbook.id)." />
+              <p id="email-error" class="admin-field-error" hidden></p>
             </div>
             <div class="space-y-2">
               <label for="password" class="text-sm font-semibold text-slate-900">Password</label>
               <div class="relative flex items-center">
-                <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Masukkan password" class="admin-input-flat pr-20" />
+                <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Masukkan password" class="admin-input-flat pr-20" aria-describedby="password-error" data-msg-missing="Masukkan password Anda." />
                 <button id="togglePassword" type="button" class="absolute right-1 flex items-center justify-center rounded px-3 text-sm font-normal text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1" aria-controls="password" aria-label="Tampilkan password" aria-pressed="false">Lihat</button>
               </div>
+              <p id="password-error" class="admin-field-error" hidden></p>
             </div>
             <div class="space-y-2">
               <label for="totp" class="text-sm font-semibold text-slate-900">Kode autentikator</label>
-              <input id="totp" name="totp" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6 digit" class="admin-input-flat font-mono tracking-widest" />
+              <input id="totp" name="totp" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6 digit" class="admin-input-flat font-mono tracking-widest" aria-describedby="totp-error" data-msg-missing="Masukkan kode 6 digit dari aplikasi autentikator." data-msg-invalid="Kode autentikator terdiri dari 6 angka." />
+              <p id="totp-error" class="admin-field-error" hidden></p>
             </div>
             <button id="loginSubmit" type="submit" class="mt-1 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[#1D4ED8] disabled:text-white/80">Masuk</button>
           </form>
@@ -61,7 +64,10 @@ if (Astro.locals.platformUser) return Astro.redirect('/platform');
     </div>
   </main>
   <script>
+    import { bindInlineValidation, validateInline } from '../../lib/form-validation-id.ts';
+
     const form = document.getElementById('loginForm') as HTMLFormElement;
+    bindInlineValidation(form);
     const errorBox = document.getElementById('loginErrorBox') as HTMLElement;
     const error = document.getElementById('loginError') as HTMLElement;
     const button = document.getElementById('loginSubmit') as HTMLButtonElement;
@@ -83,7 +89,7 @@ if (Astro.locals.platformUser) return Astro.redirect('/platform');
     });
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      if (!form.reportValidity() || button.disabled) return;
+      if (button.disabled || !validateInline(form)) return;
       button.disabled = true;
       button.textContent = 'Memverifikasi…';
       form.setAttribute('aria-busy', 'true');

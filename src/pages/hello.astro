@@ -184,18 +184,20 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
         )}
 
 
-        <form id="loginForm" method="POST" class="space-y-4" aria-busy="false" aria-describedby={[errorMessage && 'loginError'].filter(Boolean).join(' ') || undefined}>
+        <form id="loginForm" method="POST" class="space-y-4" novalidate aria-busy="false" aria-describedby={[errorMessage && 'loginError'].filter(Boolean).join(' ') || undefined}>
           <div class="space-y-2">
             <label for="username" class="text-sm font-semibold text-slate-900">Email atau username</label>
-            <input id="username" type="text" name="username" required maxlength="254" autocomplete="username" autofocus={!focusPassword} value={submittedUsername} placeholder="nama@email.com" class="admin-input-flat" spellcheck="false" />
+            <input id="username" type="text" name="username" required maxlength="254" autocomplete="username" autofocus={!focusPassword} value={submittedUsername} placeholder="nama@email.com" class="admin-input-flat" spellcheck="false" aria-describedby="username-error" data-msg-missing="Masukkan email atau username Anda." />
+            <p id="username-error" class="admin-field-error" hidden></p>
           </div>
 
           <div class="space-y-2">
             <label for="password" class="text-sm font-semibold text-slate-900">Password</label>
             <div class="relative flex items-center">
-              <input id="password" type="password" name="password" required autocomplete="current-password" autofocus={focusPassword} placeholder="Masukkan password" class="admin-input-flat pr-20" />
+              <input id="password" type="password" name="password" required autocomplete="current-password" autofocus={focusPassword} placeholder="Masukkan password" class="admin-input-flat pr-20" aria-describedby="password-error" data-msg-missing="Masukkan password Anda." />
               <button id="togglePassword" type="button" class="absolute right-1 flex items-center justify-center rounded px-3 text-sm font-normal text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1" aria-controls="password" aria-label="Tampilkan password" aria-pressed="false">Lihat</button>
             </div>
+            <p id="password-error" class="admin-field-error" hidden></p>
           </div>
 
           <button id="loginSubmit" type="submit" class="mt-1 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[#1D4ED8] disabled:text-white/80">
@@ -209,6 +211,8 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
           <p class="font-mono text-slate-400">adsbook.id v{CMS_VERSION.version}</p>
         </footer>
       <script>
+        import { bindInlineValidation, validateInline } from '../lib/form-validation-id.ts';
+
         const form = document.getElementById('loginForm') as HTMLFormElement | null;
         const submit = document.getElementById('loginSubmit') as HTMLButtonElement | null;
         const password = document.getElementById('password') as HTMLInputElement | null;
@@ -234,13 +238,20 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
             event.preventDefault();
             return;
           }
-          if (!form.checkValidity() || !submit) return;
+          // novalidate: the messages are ours, in Indonesian, under each field.
+          if (!validateInline(form)) {
+            event.preventDefault();
+            return;
+          }
+          if (!submit) return;
           pending = true;
           form.setAttribute('aria-busy', 'true');
           submit.disabled = true;
           submit.innerHTML = '<svg class="mr-2 h-4 w-4 animate-spin text-white/80 motion-reduce:animate-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Memverifikasi&hellip;';
           if (status) status.textContent = 'Memverifikasi kredensial admin.';
         });
+
+        if (form) bindInlineValidation(form);
 
         toggle?.addEventListener('click', () => {
           if (!password) return;
@@ -253,5 +264,10 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
       </script>
       </div>
     </main>
+    <script>
+      // Constraint validation speaks Indonesian on every page, whatever the browser's language.
+      import { installIndonesianValidation } from '../lib/form-validation-id.ts';
+      installIndonesianValidation();
+    </script>
   </body>
 </html>

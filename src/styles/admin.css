@@ -92,7 +92,16 @@
     /* The static-page twin of the shadcn Input (ui/input.tsx): same height,
        radius, border and type, so a form on an Astro page and one in an
        island look like one system. */
-    @apply flex min-h-10 w-full rounded-lg border border-input bg-white px-2.5 py-1.5 text-base transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 disabled:opacity-100 md:text-sm;
+    @apply flex min-h-10 w-full rounded-lg border border-input bg-white px-2.5 py-1.5 text-base transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 disabled:opacity-100 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:focus-visible:border-destructive aria-invalid:focus-visible:ring-destructive/25 md:text-sm;
+  }
+
+  /* The message under a field that failed validation (src/lib/form-validation-id.ts). */
+  .admin-field-error {
+    @apply mt-1.5 flex items-start gap-1.5 text-[13px] font-medium leading-snug text-rose-700;
+  }
+  .admin-field-error::before {
+    content: "";
+    @apply mt-[5px] size-1.5 shrink-0 bg-rose-600;
   }
 
   .btn-primary:focus-visible,
@@ -404,6 +413,8 @@
 .login-wordmark-link:focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; }
 .login-wordmark-name { font-size: 1.125rem; line-height: 1; font-weight: 700; letter-spacing: -0.02em; color: rgb(15 23 42); }
 .admin-login-card .admin-input-flat:focus-visible { border-color: #2563EB; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18); }
+/* A field the operator must fix stays red while they fix it (src/lib/form-validation-id.ts). */
+.admin-login-card .admin-input-flat[aria-invalid="true"], .admin-login-card .admin-input-flat[aria-invalid="true"]:focus-visible { border-color: #e11d48; box-shadow: 0 0 0 3px rgb(225 29 72 / 0.16); }
 .admin-login-foot {
   display: flex; flex-wrap: wrap; justify-content: center; text-align: center; gap: 0.25rem 1rem;
   width: 100%; max-width: 24rem; margin-inline: auto; padding-top: 1rem;

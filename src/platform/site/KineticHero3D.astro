@@ -129,9 +129,10 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
   <h2 id="auth-title" class="auth-title">Mulai toko konversi 1:1</h2>
   <p id="auth-desc" class="auth-desc">Kunci sinyal TikTok Ads, Meta Ads, dan Google Ads di satu ID pesanan.</p>
 
-  <form id="panel-daftar" role="tabpanel" aria-labelledby="tab-daftar" class="auth-form" action={SIGNUP_PATH} method="get">
+  <form id="panel-daftar" role="tabpanel" aria-labelledby="tab-daftar" class="auth-form" action={SIGNUP_PATH} method="get" novalidate>
     <label for="hero-email">Email</label>
-    <input id="hero-email" type="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="email@brandkamu.id" />
+    <input id="hero-email" type="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="email@brandkamu.id" aria-describedby="hero-email-error" data-msg-missing="Masukkan alamat email Anda terlebih dahulu." data-msg-invalid="Format email belum benar (contoh: nama@toko.id)." />
+    <p id="hero-email-error" class="auth-error" hidden></p>
     <button type="submit" class="cta-modern cta-block">Lanjutkan gratis →</button>
   </form>
 
@@ -146,6 +147,7 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
 
 <script>
   import { HERO_EMAIL_KEY, storeLoginUrl } from '../store-finder.ts';
+  import { bindInlineValidation, setFieldError, validateInline } from '../../lib/form-validation-id.ts';
 
   const root = document.getElementById('hero-root');
   const dialog = document.getElementById('auth-dialog') as HTMLDialogElement | null;
@@ -189,8 +191,11 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
     });
     dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
 
+    bindInlineValidation(panels.daftar);
+    bindInlineValidation(panels.masuk);
     panels.daftar.addEventListener('submit', (event) => {
       event.preventDefault();
+      if (!validateInline(panels.daftar)) return;
       const email = (document.getElementById('hero-email') as HTMLInputElement).value.trim();
       try { if (email) sessionStorage.setItem(HERO_EMAIL_KEY, email); } catch { /* the seller types it again on /daftar */ }
       window.location.assign(panels.daftar.action);
@@ -198,12 +203,9 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
     panels.masuk.addEventListener('submit', (event) => {
       event.preventDefault();
       const input = document.getElementById('hero-store') as HTMLInputElement;
-      const error = document.getElementById('hero-store-error')!;
       const login = storeLoginUrl(input.value, root.dataset.suffix || 'adsbook.my.id', window.location);
       if ('error' in login) {
-        error.textContent = login.error;
-        error.hidden = false;
-        input.setAttribute('aria-invalid', 'true');
+        setFieldError(input, login.error);
         input.focus();
         return;
       }
@@ -328,7 +330,7 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
     .hero-wordmark img { height: 24px; }
     #copy-zone { padding: 0 2rem 1.75rem; }
     .pill { margin-bottom: 0.625rem; font-size: 10.5px; }
-    .hero-sub { margin-top: 0.5rem; }
+    .hero-sub { margin-top: 0.5rem; max-width: 62ch; }
     .cta-modern { margin-top: 1rem; font-size: 0.84375rem; padding: 0 1.25rem 0 1.5rem; }
     .ad-token { height: 2.25rem; padding: 0 0.875rem 0 0.625rem; gap: 0.5rem; }
     .token-icon { width: 1.25rem; height: 1.25rem; }
@@ -374,6 +376,9 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
   .auth-form label { font-size: 0.8125rem; font-weight: 600; color: #475569; }
   .auth-form input { width: 100%; min-height: 44px; padding: 0 0.875rem; border-radius: 12px; border: 1px solid var(--line); background: var(--canvas); color: var(--ink); font: inherit; font-size: 1rem; }
   .auth-form input:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15); }
-  .auth-error { font-size: 0.8125rem; color: #b91c1c; }
+  .auth-error { display: flex; align-items: flex-start; gap: 0.375rem; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; color: #be123c; }
+  .auth-error::before { content: ""; width: 6px; height: 6px; margin-top: 0.35em; flex-shrink: 0; background: #e11d48; }
+  .auth-error[hidden] { display: none; }
+  .auth-form input[aria-invalid="true"] { border-color: #e11d48; background: #fff; box-shadow: 0 0 0 3px rgb(225 29 72 / 0.14); }
   .cta-block { width: 100%; margin-top: 0.25rem; }
 </style>

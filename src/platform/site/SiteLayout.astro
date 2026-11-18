@@ -97,6 +97,11 @@ const year = new Date().getFullYear();
       </div>
       <div class="wrap footer-base"><p>&copy; {year} {SITE_NAME}</p></div>
     </footer>
+    <script>
+      // Constraint validation speaks Indonesian on every page, whatever the browser's language.
+      import { installIndonesianValidation } from '../../lib/form-validation-id.ts';
+      installIndonesianValidation();
+    </script>
   </body>
 </html>
 

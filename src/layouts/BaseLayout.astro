@@ -303,5 +303,10 @@ const preloadImageUrls =
       </div>
     </div>
 
+    <script>
+      // Constraint validation speaks Indonesian on every page, whatever the browser's language.
+      import { installIndonesianValidation } from '../lib/form-validation-id.ts';
+      installIndonesianValidation();
+    </script>
   </body>
 </html>

@@ -33,6 +33,11 @@ const sidebarDefaultOpen = Astro.cookies.get('sidebar_state')?.value !== 'false'
     {[inter400, inter500, inter600, inter700].map((href) => (
       <link rel="preload" as="font" type="font/woff2" href={href} crossorigin />
     ))}
+    <script>
+      // Constraint validation speaks Indonesian on every page, whatever the browser's language.
+      import { installIndonesianValidation } from '../../lib/form-validation-id.ts';
+      installIndonesianValidation();
+    </script>
   </head>
   {user ? (
     <body class="admin-shell flex h-dvh overflow-hidden bg-[#f6f7f9] text-slate-900 antialiased" style={`--admin-accent:${ADMIN_ACCENT}`}>
