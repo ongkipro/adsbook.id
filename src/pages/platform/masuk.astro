@@ -206,6 +206,6 @@ const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<st
   .card-foot { margin-top: 1.25rem; padding-top: 1.1rem; border-top: var(--hairline); font-size: 0.9rem; color: var(--slate); }
   .card-foot a { color: var(--accent); font-weight: 700; text-decoration: none; }
   .card-foot code, :global(.panel-checks code) { font-size: 0.85em; overflow-wrap: anywhere; }
-  /* One height for every label, so the button never moves while it works (0 CLS). */
-  .submit-btn { white-space: nowrap; }
+  /* The label may wrap under enlarged text; the minimum height keeps one-line labels steady. */
+  .submit-btn { padding: 0.7rem 1rem; line-height: 1.25; }
 </style>

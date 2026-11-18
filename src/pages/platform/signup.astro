@@ -231,7 +231,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     stepBack.hidden = next === 1;
     if (!moveFocus) return;
     const target = focus ?? panels[next - 1].querySelector<HTMLElement>('input:not([type="radio"])');
-    target?.focus({ preventScroll: true });
+    // A focused field outside the viewport (zoomed text, a short screen) is scrolled into view.
+    target?.focus();
   };
   stepBack.addEventListener('click', () => {
     summary.hidden = true;
@@ -297,6 +298,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         clearFieldError('slug');
         slugSuggestions.hidden = true;
         checkAvailability();
+        // The chip just clicked is gone: keyboard focus lands on the address it filled.
+        slugInput.focus();
       });
       slugSuggestions.append(btn);
     }
@@ -313,8 +316,16 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   let availabilityTimer = 0;
   let availabilitySeq = 0;
   let availability: Promise<void> = Promise.resolve();
+  let settleAvailability: (() => void) | null = null;
+  // Addresses the server refused at signup stay unavailable until the seller picks another.
+  const rejectedSlugs = new Map<string, string>();
   const checkAvailability = () => {
     window.clearTimeout(availabilityTimer);
+    // A superseded check settles at once (a waiting Continue re-reads the current inputs),
+    // and its late answer is ignored.
+    availabilitySeq += 1;
+    settleAvailability?.();
+    settleAvailability = null;
     const slug = slugInput.value.trim();
     syncStoreContext();
     if (!slug) {
@@ -327,9 +338,15 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       renderSuggestions([]);
       return;
     }
+    if (rejectedSlugs.has(slug)) {
+      setSlugState('err', rejectedSlugs.get(slug)!);
+      openEditor();
+      return;
+    }
     setSlugState('checking', 'Memeriksa…');
-    const seq = ++availabilitySeq;
+    const seq = availabilitySeq;
     availability = new Promise((resolve) => {
+      settleAvailability = resolve;
       availabilityTimer = window.setTimeout(async () => {
         const response = await fetch(`/api/platform/slug?slug=${encodeURIComponent(slug)}`).catch(() => null);
         const payload = await response?.json().catch(() => null);
@@ -347,6 +364,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           // No answer: the server decides on submit.
           setSlugState('neutral', 'Diperiksa saat membuat toko');
         }
+        if (seq === availabilitySeq) settleAvailability = null;
         resolve();
       }, 240);
     });
@@ -445,7 +463,11 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       }
       if (text && (!first || field.step < first.step)) first = { input: field.input, step: field.step };
     }
-    if (errors.slug) openEditor();
+    if (errors.slug) {
+      rejectedSlugs.set(slugInput.value.trim(), errors.slug);
+      setSlugState('err', errors.slug);
+      openEditor();
+    }
     if (suggestions.length) {
       openEditor();
       renderSuggestions(suggestions);
@@ -468,15 +490,22 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   /** Step 1 and 2 checks before moving on; the server checks everything again. */
   const stepReady = async (current: number): Promise<boolean> => {
     if (current === 1) {
-      if (!nameInput.value.trim()) return stepError('storeName', 'Isi nama toko.'), false;
-      if (slugInput.value.trim().length < 3) {
-        openEditor();
-        return stepError('slug', 'Alamat toko minimal 3 karakter.'), false;
+      const problem = (): [key: string, text: string] | null => {
+        if (!nameInput.value.trim()) return ['storeName', 'Isi nama toko.'];
+        if (slugInput.value.trim().length < 3) return ['slug', 'Alamat toko minimal 3 karakter.'];
+        if (slugHint.dataset.state === 'err') return ['slug', 'Pilih alamat toko yang tersedia.'];
+        return null;
+      };
+      // Wait for the check of the address as it is now; edits made while waiting start a new
+      // check, so the wait follows them, and the inputs are judged again once it settles.
+      for (let round = 0; round < 3 && !problem() && slugHint.dataset.state === 'checking'; round += 1) {
+        await Promise.race([availability, new Promise((resolve) => setTimeout(resolve, 3000))]);
       }
-      if (slugHint.dataset.state === 'checking') await Promise.race([availability, new Promise((resolve) => setTimeout(resolve, 3000))]);
-      if (slugHint.dataset.state === 'err') {
-        openEditor();
-        return stepError('slug', 'Pilih alamat toko yang tersedia.'), false;
+      const found = problem();
+      if (found) {
+        if (found[0] === 'slug') openEditor();
+        stepError(found[0], found[1]);
+        return false;
       }
       return true;
     }
@@ -489,7 +518,9 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
 
   // ---- the bot check: invisible unless a visitor needs it ---------------------
   let turnstileToken = form.dataset.standin ? 'local-stand-in' : '';
+  let turnstileFailed = false;
   const tokenWaiters: Array<() => void> = [];
+  const LOAD_FAILED = 'Pemeriksaan keamanan gagal dimuat. Periksa koneksi, lalu muat ulang halaman.';
   const setSecurity = (state: 'pending' | 'ok' | 'error', text: string) => {
     security.dataset.state = state;
     security.textContent = text;
@@ -498,40 +529,52 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   let widgetId: string | undefined;
   const widget = document.getElementById('turnstileWidget');
   if (widget && form.dataset.sitekey) {
+    setSecurity('pending', 'Memverifikasi koneksi aman…');
+    const failed = () => {
+      turnstileFailed = true;
+      setSecurity('error', LOAD_FAILED);
+      tokenWaiters.splice(0).forEach((resolve) => resolve());
+    };
     (window as unknown as Record<string, unknown>).__adsbookTurnstileReady = () => {
       const turnstile = (window as unknown as { turnstile?: Turnstile }).turnstile;
-      widgetId = turnstile?.render(widget, {
-        sitekey: form.dataset.sitekey,
-        language: 'id',
-        theme: 'light',
-        size: 'flexible',
-        appearance: 'interaction-only',
-        callback: (token: string) => {
-          turnstileToken = token;
-          clearFieldError('turnstile');
-          setSecurity('ok', 'Koneksi terverifikasi · proteksi keamanan aktif');
-          tokenWaiters.splice(0).forEach((resolve) => resolve());
-        },
-        'error-callback': () => {
-          turnstileToken = '';
-          setSecurity('error', 'Verifikasi keamanan belum berhasil. Muat ulang halaman bila tidak pulih.');
-        },
-        'expired-callback': () => {
-          turnstileToken = '';
-          setSecurity('pending', 'Memperbarui verifikasi keamanan…');
-          (window as unknown as { turnstile?: Turnstile }).turnstile?.reset(widgetId);
-        },
-      });
+      if (!turnstile) return failed();
+      try {
+        widgetId = turnstile.render(widget, {
+          sitekey: form.dataset.sitekey,
+          language: 'id',
+          theme: 'light',
+          size: 'flexible',
+          appearance: 'interaction-only',
+          callback: (token: string) => {
+            turnstileToken = token;
+            clearFieldError('turnstile');
+            setSecurity('ok', 'Koneksi terverifikasi · proteksi keamanan aktif');
+            tokenWaiters.splice(0).forEach((resolve) => resolve());
+          },
+          'error-callback': () => {
+            turnstileToken = '';
+            setSecurity('error', 'Verifikasi keamanan belum berhasil. Muat ulang halaman bila tidak pulih.');
+          },
+          'expired-callback': () => {
+            turnstileToken = '';
+            setSecurity('pending', 'Memperbarui verifikasi keamanan…');
+            (window as unknown as { turnstile?: Turnstile }).turnstile?.reset(widgetId);
+          },
+        });
+      } catch {
+        failed();
+      }
     };
     const script = document.createElement('script');
+    script.addEventListener('error', failed);
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__adsbookTurnstileReady';
     script.async = true;
     script.defer = true;
     document.head.append(script);
   }
-  /** A token still in flight when the seller is faster: wait up to 4 seconds, then let the server decide. */
+  /** A token still in flight when the seller is faster: wait up to 4 seconds. Without one, nothing is sent. */
   const awaitToken = () =>
-    turnstileToken
+    turnstileToken || turnstileFailed
       ? Promise.resolve()
       : Promise.race([new Promise<void>((resolve) => tokenWaiters.push(resolve)), new Promise<void>((resolve) => setTimeout(resolve, 4000))]);
 
@@ -541,6 +584,20 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     'Mengatur kredensial pemilik…',
   ];
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : ms));
+  /** While a signup is in flight nothing it sends can change: Back, the address editor and every step are locked. */
+  const lockForm = (locked: boolean) => {
+    stepBack.disabled = locked;
+    slugEdit.disabled = locked;
+    for (const panel of panels) panel.inert = locked;
+  };
+  const restoreSubmit = () => {
+    lockForm(false);
+    pending = false;
+    submit.disabled = false;
+    submit.textContent = SUBMIT_LABEL;
+    form.setAttribute('aria-busy', 'false');
+    progressNote.hidden = true;
+  };
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -556,13 +613,29 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       return;
     }
     pending = true;
+    // What is sent is what the seller confirmed with this click, read before any wait.
+    const values = new FormData(form);
+    const mode = catalogMode();
+    lockForm(true);
     submit.disabled = true;
     form.setAttribute('aria-busy', 'true');
     summary.hidden = true;
+    clearFieldError('turnstile');
 
     if (!turnstileToken) {
       submit.textContent = 'Menyelesaikan verifikasi keamanan…';
       await awaitToken();
+      if (!turnstileToken) {
+        // No request without a token: it would only spend one of the hour's attempts. The
+        // check stays as it is (never reset here), so a visitor solving it keeps their progress.
+        restoreSubmit();
+        const error = fields.turnstile.error;
+        error.textContent = turnstileFailed
+          ? LOAD_FAILED
+          : 'Verifikasi keamanan belum selesai. Selesaikan pemeriksaan di bawah formulir bila muncul, lalu tekan Buat Toko Gratis lagi.';
+        error.hidden = false;
+        return;
+      }
     }
     submit.textContent = 'Membuat toko…';
     let stageIdx = 0;
@@ -573,7 +646,6 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       progressNote.textContent = PROVISION_STAGES[stageIdx];
     }, 1100);
 
-    const values = new FormData(form);
     const eventId = crypto.randomUUID();
 
     let succeeded = false;
@@ -588,13 +660,15 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           whatsapp: values.get('whatsapp'),
           password: values.get('password'),
           terms: values.get('terms') === 'on',
-          catalog_mode: catalogMode(),
+          catalog_mode: mode,
           turnstile_token: turnstileToken,
           event_id: eventId,
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) {
+        // Unlocked first: the error moves focus into a step that must be usable.
+        restoreSubmit();
         showErrors(
           payload.error || 'Pendaftaran gagal.',
           payload.errors || {},
@@ -647,16 +721,11 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         handoff.submit();
       }
     } catch {
+      restoreSubmit();
       showErrors('Koneksi terputus. Coba lagi.', {});
     } finally {
       window.clearInterval(stageTimer);
-      if (!succeeded) {
-        pending = false;
-        submit.disabled = false;
-        submit.textContent = SUBMIT_LABEL;
-        form.setAttribute('aria-busy', 'false');
-        progressNote.hidden = true;
-      }
+      if (!succeeded) restoreSubmit();
     }
   });
 
@@ -759,7 +828,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   .terms-row input[type="checkbox"] { width: 1.1rem; height: 1.1rem; margin-top: 0.15rem; accent-color: var(--accent); cursor: pointer; }
   .terms-row a { font-weight: 700; }
 
-  .submit-btn { width: 100%; min-height: 48px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 700 0.98rem/1 var(--display); word-spacing: 0.06em; white-space: nowrap; cursor: pointer; box-shadow: 0 8px 20px -10px rgb(37 99 235 / 0.5); }
+  /* The label may wrap under enlarged text; the button only grows. */
+  .submit-btn { width: 100%; min-height: 48px; padding: 0.7rem 1rem; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 700 0.98rem/1.25 var(--display); word-spacing: 0.06em; cursor: pointer; box-shadow: 0 8px 20px -10px rgb(37 99 235 / 0.5); }
   .submit-btn:hover { background: var(--accent-hover); }
   .submit-btn:disabled { opacity: 0.75; cursor: progress; }
   .security-line { display: flex; align-items: center; justify-content: center; gap: 0.45rem; font-size: 0.76rem; color: var(--ink-muted); }
