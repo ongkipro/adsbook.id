@@ -4,6 +4,7 @@ import ShotFrame from '../../../platform/site/ShotFrame.astro';
 import SignalBand from '../../../platform/site/SignalBand.astro';
 import PillarRows from '../../../platform/site/PillarRows.astro';
 import StepFlow from '../../../platform/site/StepFlow.astro';
+import SignalPipelineStrip from '../../../platform/site/SignalPipelineStrip.astro';
 import CapabilityList from '../../../platform/site/CapabilityList.astro';
 import Pricing from '../../../platform/site/Pricing.astro';
 import FaqList from '../../../platform/site/FaqList.astro';
@@ -24,7 +25,7 @@ export const prerender = false;
         <h1 id="hero-title" class="dot-end">Berhenti menebak hasil iklan COD Anda</h1>
         <p class="lead">Purchase dobel membuat iklan terlihat untung. Purchase yang hilang membuat iklan yang menjual terlihat rugi. adsbook.id mencatat setiap pesanan ke kanal iklannya, dan mengirimnya ke Meta dan Google tepat satu kali, dari browser dan dari server.</p>
         <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
-        <p class="hero-note">Gratis di Mode Preview · mulai Rp149.000/bulan saat siap beriklan · 0% potongan transaksi</p>
+        <p class="hero-note">Bebas rakit dan review toko dulu tanpa biaya · mulai Rp149.000/bulan saat siap beriklan · 0% potongan transaksi</p>
       </div>
       <div class="hero-shot"><ShotFrame shot={SHOTS.form} eager caption /></div>
     </div>
@@ -32,10 +33,12 @@ export const prerender = false;
 
   <SignalBand />
 
+  <SignalPipelineStrip tone="canvas" />
+
   <section class="section section-white" aria-labelledby="pilar-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="pilar-title">Presisi di setiap langkah pesanan</h2>
+        <h2 id="pilar-title">Satu kendali penuh dari klik iklan sampai dana cair</h2>
         <p class="lead">Semuanya sudah berjalan hari ini. Gambar adalah layar produk yang sebenarnya, dengan data dari toko contoh.</p>
       </div>
       <PillarRows headingLevel="h3" />
@@ -65,7 +68,7 @@ export const prerender = false;
 
   <section class="section section-white" aria-labelledby="faq-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="faq-title">Pertanyaan yang sering muncul</h2></div>
+      <div class="section-head"><h2 id="faq-title">Yang paling sering ditanyakan pengiklan</h2></div>
       <FaqList items={FAQ_SHORT} />
       <p class="more"><a class="text-link" href="/faq">Semua pertanyaan</a></p>
     </div>

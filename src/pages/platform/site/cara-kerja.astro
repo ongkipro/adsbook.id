@@ -2,6 +2,7 @@
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import PageHead from '../../../platform/site/PageHead.astro';
 import StepFlow from '../../../platform/site/StepFlow.astro';
+import SignalPipelineStrip from '../../../platform/site/SignalPipelineStrip.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
 import { SITE_PAGES } from '../../../platform/site/site.ts';
 
@@ -10,8 +11,9 @@ export const prerender = false;
 
 <SiteLayout page={SITE_PAGES.caraKerja}>
   <PageHead title="Dari klik iklan sampai konversi tercatat" lead="Lima langkah yang sama untuk setiap pesanan, dari kanal iklan mana pun: apa yang dilihat pembeli dan apa yang Anda kerjakan. Kapan pesanan dikirim selalu keputusan Anda, dan langkah terakhir mengirim penjualan ke jaringan iklan tepat satu kali." />
-  <section class="section section-white" aria-label="Lima langkah satu pesanan">
+  <SignalPipelineStrip />
+  <section class="section" aria-label="Lima langkah satu pesanan">
     <div class="wrap"><StepFlow headingLevel="h2" detail /></div>
   </section>
-  <ClosingCta />
+  <ClosingCta tone="white" />
 </SiteLayout>

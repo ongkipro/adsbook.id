@@ -124,14 +124,15 @@ export const PREVIEW = {
 export type Faq = { q: string; a: string };
 
 export const FAQ_SHORT: Faq[] = [
-  { q: "Apakah gratis?", a: "Membuat toko dan menyiapkannya gratis di Mode Preview, tanpa kartu. Saat toko siap menerima pesanan dan diiklankan, berlangganan mulai Rp149.000 per bulan, atau Rp1.490.000 per tahun (bayar 10 bulan, gratis 2 bulan). Tidak ada potongan per transaksi." },
-  { q: "Apa maksud deduplikasi sinyal iklan 1:1?", a: "Satu pesanan dikirim dari browser dan dari server dengan ID yang sama, jadi jaringan iklan menghitungnya satu kali, bukan dua. Di Meta: Pixel dan Conversions API dengan event_id yang sama. Di Google Ads: tag konversi dan konversi offline dengan ID transaksi yang sama. Dari server, konversi tetap terkirim walau pembeli langsung menutup halaman." },
-  { q: "Uang pembeli masuk ke mana?", a: "Ke akun Anda. COD dicairkan oleh Mengantar, QRIS dan VA oleh AutoLaris, keduanya ke akun Anda sendiri. adsbook.id tidak memegang dana pembeli dan tidak memotong per transaksi." },
+  { q: "Apa bedanya mesin sinyal adsbook.id dengan pasang Pixel atau CAPI biasa?", a: "Pixel saja hanya mengirim dari browser: pemblokir iklan, privasi iOS, dan pembeli yang langsung menutup halaman membuat sebagian penjualan tidak sampai. CAPI tanpa ID yang sama dengan Pixel bisa menghitung satu pesanan dua kali. Di adsbook.id, ID klik disimpan 90 hari sebagai data first-party (tidak terhapus walau pembeli membuka link follow-up WhatsApp), setiap pesanan dikirim dari server dengan 8 data pembeli yang di-hash SHA-256, dan browser serta server memakai satu ID pesanan, jadi dihitung satu kali. Di Meta: Pixel dan Conversions API; di Google Ads: tag konversi dan konversi offline. Tidak perlu server GTM atau aplikasi tracker terpisah." },
+  { q: "Bagaimana ini membantu ROAS, dan amankah untuk akun iklan saya?", a: "Algoritma iklan belajar dari konversi yang ia terima. Kalau penjualan bocor, iklan yang laris tampak rugi; kalau terhitung dobel, iklan yang boncos tampak untung. Dengan setiap pesanan nyata terkirim tepat satu kali, Anda bisa mematikan iklan yang memang tidak menjual dan menambah budget ke yang terbukti menjual, sementara Meta dan Google mengoptimasi ke profil pembeli sungguhan. Hasil ROAS tetap ditentukan produk, iklan, dan pasar Anda. Data dikirim ke Pixel dan akun iklan milik Anda sendiri, lewat API resmi Meta dan Google." },
+  { q: "Benarkah bisa rakit dan review toko gratis dulu?", a: "Benar. Membuat toko dan menyiapkannya gratis di Mode Preview, tanpa kartu. Saat toko siap menerima pesanan dan diiklankan, berlangganan mulai Rp149.000 per bulan, atau Rp1.490.000 per tahun (bayar 10 bulan, gratis 2 bulan). Tidak ada potongan per transaksi." },
+  { q: "Uang hasil jualan mampir ke rekening adsbook.id dulu?", a: "Tidak. COD dicairkan oleh Mengantar, QRIS dan VA oleh AutoLaris, keduanya langsung ke akun Anda sendiri. adsbook.id tidak memegang dana pembeli dan tidak memotong per transaksi." },
   { q: "Bisa pakai domain sendiri?", a: "Bisa, 1 domain sendiri per toko yang berlangganan. Untuk domain lain, buka toko baru. Domain utama (contoh.com) bisa dipakai bila DNS Anda mendukung CNAME di root; kalau tidak, pakai www." },
-  { q: "Apa saja yang perlu disiapkan?", a: "Satu produk dengan harga dan berat, gudang utama dengan alamat pickup, dan API key Mengantar. Sampai semua langkah wajib selesai, pembeli melihat halaman \"Toko belum siap\" dan belum bisa memesan." },
 ];
 
 export const FAQ_MORE: Faq[] = [
+  { q: "Apa saja yang perlu disiapkan?", a: "Satu produk dengan harga dan berat, gudang utama dengan alamat pickup, dan API key Mengantar. Sampai semua langkah wajib selesai, pembeli melihat halaman \"Toko belum siap\" dan belum bisa memesan." },
   { q: "Apa yang terjadi kalau langganan habis?", a: "Toko tetap jalan 48 jam setelah jatuh tempo. Setelah itu pesanan, iklan, dan AI dijeda, data toko tetap utuh, dan Anda tetap bisa masuk ke admin untuk memperpanjang; toko langsung aktif lagi begitu pembayaran masuk." },
   { q: "Bayar langganan pakai apa?", a: "QRIS atau Virtual Account BCA, Mandiri, BNI, BRI, dan Permata, langsung dari menu Langganan di admin toko." },
   { q: "Siapa pemilik data pembeli?", a: "Anda. Kami memprosesnya hanya untuk menjalankan toko Anda. Data tiap toko terpisah dan bisa Anda ekspor dari admin." },
@@ -170,21 +171,23 @@ export const PILLARS: Pillar[] = [
   {
     id: "sinyal",
     label: "Semua kanal iklan",
-    title: "Satu pesanan, satu konversi, di kanal mana pun",
-    summary: "Setiap pesanan tercatat ke kanal iklannya. Meta dan Google menerimanya dari browser dan server dengan satu ID: tidak dobel, tidak hilang.",
+    title: "Data konversi bersih untuk mendongkrak performa iklan",
+    summary: "Jalur server tidak terhalang pemblokir iklan atau halaman yang ditutup cepat. Setiap penjualan tercatat ke kampanye asalnya, tidak dobel dan tidak hilang.",
     points: [
-      "Meta, Google, TikTok, dan jaringan lain: setiap pesanan menyimpan kanal dan kampanyenya dari ID klik dan UTM, selama 90 hari",
-      "Meta: Pixel di browser dan Conversions API dari server dengan event_id yang sama",
-      "Google Ads: tag konversi dan konversi offline dari pesanan yang benar-benar terjadi, dengan ID produk yang sama di feed",
-      "Dari server saat pesanan COD dibuat atau lunas, walau pembeli langsung menutup halaman; 8 data pembeli di-hash SHA-256",
+      // src/lib/click-ids.ts: a later UTM-only visit (a WhatsApp follow-up link) keeps the stored click id.
+      "Jejak first-party 90 hari: ID klik Meta dan Google, plus UTM TikTok dan kanal lain; link follow-up WhatsApp dari CS tidak menghapusnya",
+      // src/lib/meta-identity.ts: ph (08 → 628), fn, ln, ct, st, zp, country, external_id.
+      "8 data pembeli di-hash SHA-256 sebelum dikirim: nomor WhatsApp dinormalkan ke 628, nama, kota, provinsi, kode pos, negara, dan ID pengunjung",
+      "Deduplikasi 1:1: Meta Pixel dan Conversions API dengan event_id yang sama; Google Ads menerima tag konversi dan konversi offline dari pesanan nyata",
+      "Dari server saat pesanan COD dibuat atau lunas, walau pembeli langsung menutup halaman; tanpa server GTM atau aplikasi tracker terpisah",
     ],
     shot: SHOTS.meta,
   },
   {
     id: "form",
     label: "Form COD",
-    title: "Form cepat di HP, tidak ada pesanan yang lepas",
-    summary: "Form singkat dengan ongkir per kecamatan. Yang tidak selesai tetap tercatat sebagai lead untuk CS.",
+    title: "Form ngebut di sinyal pas-pasan, lead yang gantung tetap tertangkap",
+    summary: "Kecamatan muncul seketika saat diketik, ongkir dihitung otomatis, dan pembeli yang berhenti di tengah jalan masuk antrean follow-up CS.",
     points: [
       "Form singkat, lengkap, atau hybrid dengan ongkir per kecamatan",
       "Di halaman produk dan landing page, atau dipasang di situs lain",
@@ -196,8 +199,8 @@ export const PILLARS: Pillar[] = [
   {
     id: "kirim",
     label: "Kontrol pengiriman",
-    title: "Anda yang memutuskan apa yang dikirim",
-    summary: "Semua pesanan menunggu keputusan Anda. Cek risiko RTS dulu, baru rilis ke kurir.",
+    title: "Paket baru berangkat setelah lolos saringan Anda",
+    summary: "Tidak ada order iseng yang otomatis ter-pickup kurir. Cek dulu risiko RTS penerima, baru rilis ke kurir.",
     points: [
       "Tidak ada pesanan yang terkirim sendiri: semua masuk sebagai menunggu",
       "Cek risiko RTS penerima sebelum dikirim",
@@ -209,8 +212,8 @@ export const PILLARS: Pillar[] = [
   {
     id: "uang",
     label: "Akun Anda sendiri",
-    title: "Uang pembeli langsung ke akun Anda",
-    summary: "COD, QRIS, dan VA lewat akun Mengantar dan AutoLaris Anda. Tanpa potongan per transaksi.",
+    title: "Uang jualan langsung cair ke akun Anda, komisi 0%",
+    summary: "Pakai akun Mengantar dan AutoLaris atas nama Anda sendiri. Kami tidak menahan saldo penjualan dan tidak memotong per transaksi.",
     points: [
       "0% potongan per transaksi dari adsbook.id",
       "COD lewat Mengantar, QRIS dan Virtual Account lewat AutoLaris, keduanya akun Anda",
@@ -222,11 +225,11 @@ export const PILLARS: Pillar[] = [
   {
     id: "mulai",
     label: "Mulai gratis",
-    title: "Siapkan gratis, buka saat siap beriklan",
-    summary: "Toko aktif sejak mendaftar. Anda melihat toko seperti pembeli; pembeli menunggu sampai Anda siap.",
+    title: "Rakit dan review toko tanpa biaya, bayar saat siap beriklan",
+    summary: "Toko aktif sejak mendaftar, tanpa kartu. Tata produk dan landing page, lalu review tampilannya di HP sebelum berlangganan.",
     points: [
       "Toko aktif di nama-toko.adsbook.my.id sejak mendaftar, tanpa kartu",
-      "Mode Preview: Anda melihat toko seperti pembeli, pembeli melihat toko belum siap",
+      "Mode Review Pemilik: Anda mengecek tampilan asli toko di HP seperti pembeli, sementara pengunjung melihat toko sedang disiapkan",
       "Checklist menunjukkan tiga langkah yang tersisa",
       "Lewat jatuh tempo, toko tetap jalan 48 jam agar iklan tidak berhenti mendadak",
     ],
@@ -265,8 +268,8 @@ export const CAPABILITIES: Array<{ title: string; text: string }> = [
 
 /** FAQ grouped by the question a seller brings (/faq), drawn from the two lists above. */
 export const FAQ_GROUPS: Array<{ title: string; items: Faq[] }> = [
-  { title: "Biaya dan langganan", items: [FAQ_SHORT[0], FAQ_MORE[0], FAQ_MORE[1], FAQ_MORE[7]] },
-  { title: "Iklan dan sinyal", items: [FAQ_SHORT[1], FAQ_MORE[5], FAQ_MORE[6]] },
-  { title: "Uang, data, dan domain", items: [FAQ_SHORT[2], FAQ_MORE[2], FAQ_MORE[8], FAQ_SHORT[3]] },
-  { title: "Memulai", items: [FAQ_SHORT[4], FAQ_MORE[3], FAQ_MORE[4]] },
+  { title: "Biaya dan langganan", items: [FAQ_SHORT[2], FAQ_MORE[1], FAQ_MORE[2], FAQ_MORE[8]] },
+  { title: "Iklan dan sinyal", items: [FAQ_SHORT[0], FAQ_SHORT[1], FAQ_MORE[6], FAQ_MORE[7]] },
+  { title: "Uang, data, dan domain", items: [FAQ_SHORT[3], FAQ_MORE[3], FAQ_MORE[9], FAQ_SHORT[4]] },
+  { title: "Memulai", items: [FAQ_MORE[0], FAQ_MORE[4], FAQ_MORE[5]] },
 ];
