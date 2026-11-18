@@ -24,12 +24,14 @@ export const prerender = false;
       <form id="recoveryForm" class="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm" novalidate>
         <div>
           <label for="token" class="block text-sm font-semibold">Kode pemulihan</label>
-          <input id="token" name="token" required autocomplete="one-time-code" spellcheck="false" class="admin-input-flat mt-2 font-mono" />
+          <input id="token" name="token" required autocomplete="one-time-code" spellcheck="false" class="admin-input-flat mt-2 font-mono" aria-describedby="token-error" data-msg-missing="Tempel kode pemulihan dari tim adsbook.id." />
+          <p id="token-error" class="admin-field-error" hidden></p>
         </div>
         <div>
           <label for="password" class="block text-sm font-semibold">Password baru</label>
-          <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password" class="admin-input-flat mt-2" />
-          <p class="mt-1 text-xs text-slate-500">Minimal 10 karakter.</p>
+          <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password" class="admin-input-flat mt-2" aria-describedby="password-hint password-error" data-msg-missing="Buat password baru Anda." data-msg-invalid="Password baru minimal 10 karakter." />
+          <p id="password-hint" class="mt-1 text-xs text-slate-500">Minimal 10 karakter.</p>
+          <p id="password-error" class="admin-field-error" hidden></p>
         </div>
         <p id="recoveryStatus" class="min-h-5 text-sm font-semibold" role="status" aria-live="polite"></p>
         <button id="recoverySubmit" type="submit" class="btn-primary w-full">Simpan password baru</button>
@@ -37,12 +39,15 @@ export const prerender = false;
       <p class="mt-4 text-sm"><a href="/hello" class="font-semibold text-blue-700 underline">Kembali ke halaman masuk</a></p>
     </main>
     <script>
+      import { bindInlineValidation, validateInline } from '../lib/form-validation-id.ts';
+
       const form = document.getElementById('recoveryForm') as HTMLFormElement;
+      bindInlineValidation(form);
       const status = document.getElementById('recoveryStatus') as HTMLElement;
       const button = document.getElementById('recoverySubmit') as HTMLButtonElement;
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        if (!form.reportValidity() || button.disabled) return;
+        if (button.disabled || !validateInline(form)) return;
         button.disabled = true;
         const values = new FormData(form);
         try {
@@ -60,6 +65,11 @@ export const prerender = false;
           button.disabled = false;
         }
       });
+    </script>
+    <script>
+      // Constraint validation speaks Indonesian on every page, whatever the browser's language.
+      import { installIndonesianValidation } from '../lib/form-validation-id.ts';
+      installIndonesianValidation();
     </script>
   </body>
 </html>

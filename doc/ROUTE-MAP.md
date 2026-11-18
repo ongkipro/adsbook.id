@@ -99,8 +99,8 @@ under both headings wherever they are named; which database a statement meant is
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/api/handoff` | POST | handoff token | — | `src/pages/api/handoff.ts` | `admin-credentials` `admin-session` `auth` `auth-secret` `brand-assets` `env` `platform/handoff` `platform/host` `tenant-database` | `admin_credentials` `admin_sessions` `install_secrets` | `handoff_tokens` `tenants` | `lib/admin-bootstrap.test.ts` `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth-secret.test.ts` `lib/auth.test.ts` `lib/env.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/gate.test.ts` `platform/hostnames.test.ts` `platform/isolation.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/api/owner-recovery` | POST | recovery token | — | `src/pages/api/owner-recovery.ts` | `env` `platform/admin/recovery` `tenant-database` | `admin_credentials` `admin_sessions` | `tenant_events` `tenants` | `lib/env.test.ts` `platform/two-tenants.test.ts` |
-| `/hello` | GET | public | — | `src/pages/hello.astro` | `admin-credentials` `admin-session` `auth` `auth-secret` `brand-assets` `rate-limit` `tenant-database` `version` | `admin_credentials` `admin_sessions` `install_secrets` `rate_limits` | `rate_limits` | `lib/admin-bootstrap.test.ts` `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth-secret.test.ts` `lib/auth.test.ts` `lib/changelog.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/meta-purchase-order.test.ts` `lib/order-follow-up.test.ts` `lib/rate-limit.test.ts` `lib/route-map.test.ts` `lib/schema-version.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
-| `/pemulihan` | GET | public | — | `src/pages/pemulihan.astro` | `brand-assets` | — | — | — |
+| `/hello` | GET | public | — | `src/pages/hello.astro` | `admin-credentials` `admin-session` `auth` `auth-secret` `brand-assets` `form-validation-id` `rate-limit` `tenant-database` `version` | `admin_credentials` `admin_sessions` `install_secrets` `rate_limits` | `rate_limits` | `lib/admin-bootstrap.test.ts` `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth-secret.test.ts` `lib/auth.test.ts` `lib/changelog.test.ts` `lib/form-validation-id.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/meta-purchase-order.test.ts` `lib/order-follow-up.test.ts` `lib/rate-limit.test.ts` `lib/route-map.test.ts` `lib/schema-version.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
+| `/pemulihan` | GET | public | — | `src/pages/pemulihan.astro` | `brand-assets` `form-validation-id` | — | — | `lib/form-validation-id.test.ts` |
 
 ## Public API (11)
 
@@ -274,7 +274,7 @@ under both headings wherever they are named; which database a statement meant is
 | Route | Methods | Auth | Roles | File | Modules | Store tables | Platform tables | Tests |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/platform/[...section]` | GET | platform session | platform_owner, platform_support | `src/pages/platform/[...section].astro` | `env` | — | `tenants` | `lib/env.test.ts` `platform/two-tenants.test.ts` |
-| `/platform/login` | GET | public | — | `src/pages/platform/login.astro` | `brand-assets` `version` | — | — | `lib/changelog.test.ts` `lib/route-map.test.ts` `lib/schema-version.test.ts` |
+| `/platform/login` | GET | public | — | `src/pages/platform/login.astro` | `brand-assets` `form-validation-id` `version` | — | — | `lib/changelog.test.ts` `lib/form-validation-id.test.ts` `lib/route-map.test.ts` `lib/schema-version.test.ts` |
 
 ## Platform API (12)
 
@@ -295,7 +295,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-192 modules under `src/lib` and `src/platform`; 10 that no test imports.
+193 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -345,6 +345,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `excluded-area` | 1 | — | — | 1 | `/api/submit-middle-order` |
 | `form-config` | 7 | — | — | 1 | `/embed/form` `/full-form` `/hybrid-form` `/middle-form` `/api/form-config` |
 | `form-mode` | 8 | `stores` | — | 1 | `/produk/[slug]` `/geoipform` `/hybrid-form` `/api/form-config` `/api/geo-province` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/v1/storefront` `/api/admin/abandoned-orders` |
+| `form-validation-id` | 9 | — | — | 1 | `/hello` `/pemulihan` `/platform/login` |
 | `format-idr` | 1 | — | — | 1 | `/payment` `/produk` |
 | `geo` | 4 | — | — | 1 | `/produk/[slug]` `/api/submit-middle-order` |
 | `google-ads-offline` | 22 | `google_ads_conversion_outbox` `order_items` `orders` `stores` | — | 2 | `/api/admin/ads` |
