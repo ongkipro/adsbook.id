@@ -7,12 +7,14 @@ import { FAVICON_PNG, FAVICON_192 } from '../../lib/brand-assets';
  * pages under src/pages/platform/, which seller hosts never serve.
  */
 import { getRuntimeEnv } from '../../lib/env';
+import { tenantHostSuffix } from '../hostnames';
 import PlatformPixel from './PlatformPixel.astro';
-import { SIGNUP_LABEL_SHORT, SIGNUP_PATH, SITE_NAME, SITE_PAGES, canonicalUrl, siteJsonLd, type SitePage } from './site.ts';
+import SiteHeader from './SiteHeader.astro';
+import { SITE_NAME, canonicalUrl, siteJsonLd, type SitePage } from './site.ts';
 
 interface Props {
   page: SitePage;
-  /** Hide the header's signup button (the page carries its own primary action in view). */
+  /** The header shows the wordmark only (the page is the signup itself). */
   quietHeader?: boolean;
   /** The page's first section brings its own header (the home's 100dvh hero): no second one above it. */
   heroHeader?: boolean;
@@ -21,7 +23,6 @@ interface Props {
 const { page, quietHeader = false, heroHeader = false } = Astro.props;
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 const canonical = canonicalUrl(env, page.path);
-const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
 const year = new Date().getFullYear();
 ---
 
@@ -52,21 +53,8 @@ const year = new Date().getFullYear();
   </head>
   <body>
     <a class="skip" href="#isi">Langsung ke isi</a>
-    {!heroHeader && <header class="site-header">
-      <div class="wrap header-row">
-        <a class="wordmark" href="/" aria-label="adsbook.id, beranda"><img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="151" height="24" loading="eager" decoding="async" /></a>
-        <nav aria-label="Utama" class="nav-wide">
-          {nav.map((entry) => <a href={entry.path} aria-current={entry.path === page.path ? 'page' : undefined}>{entry.nav}</a>)}
-        </nav>
-        {!quietHeader && <a class="btn btn-small" href={SIGNUP_PATH}>{SIGNUP_LABEL_SHORT}</a>}
-        <details class="nav-narrow">
-          <summary>Menu</summary>
-          <nav aria-label="Utama">
-            {nav.map((entry) => <a href={entry.path} aria-current={entry.path === page.path ? 'page' : undefined}>{entry.nav}</a>)}
-          </nav>
-        </details>
-      </div>
-    </header>}
+    {/* The header logo (/platform/brand/adsbook-id-wordmark.svg) is rendered by SiteHeader.astro, the one header of every page. */}
+    {!heroHeader && <SiteHeader variant="page" currentPath={page.path} suffix={tenantHostSuffix(env)} quiet={quietHeader} />}
     <main id="isi">
       <slot />
     </main>
@@ -150,30 +138,11 @@ const year = new Date().getFullYear();
 
   .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0.75rem 1.4rem; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 700; text-decoration: none; transition: background-color 150ms ease-out; }
   .btn:hover { background: var(--accent-hover); color: #fff; }
-  /* The header's action is outlined: one filled primary per screen (DESIGN.md C5). */
+  /* An outlined action: one filled primary per screen (DESIGN.md C5). The header's own lives in SiteHeader.astro. */
   .btn-small { min-height: 44px; padding: 0.5rem 1rem; font-size: 0.95rem; background: transparent; color: var(--accent); border: 2px solid var(--accent); white-space: nowrap; }
-  @media (max-width: 400px) { .btn-small { padding: 0.45rem 0.7rem; font-size: 0.9rem; } .wordmark img { height: 21px; } }
+  @media (max-width: 400px) { .btn-small { padding: 0.45rem 0.7rem; font-size: 0.9rem; } }
   .btn-small:hover { background: var(--accent-tint); color: var(--accent-hover); }
   @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
-
-  .site-header { background: var(--canvas); }
-  .header-row { display: flex; align-items: center; gap: 1.5rem; min-height: 72px; }
-  /* The logo is outlines (src: logo/make-logo.mjs in the content folder): 1 module dot, 60|150|60. */
-  .wordmark { display: inline-flex; align-items: center; min-height: 44px; margin-right: auto; border-radius: 6px; }
-  .wordmark img { height: 24px; width: auto; }
-  .nav-wide { display: flex; gap: 1.5rem; }
-  .nav-wide a, .nav-narrow a { color: var(--ink); text-decoration: none; font-weight: 600; font-size: 0.97rem; }
-  .nav-wide a[aria-current="page"], .nav-narrow a[aria-current="page"] { color: var(--accent); text-decoration: underline; text-decoration-thickness: 2px; }
-  .nav-narrow { display: none; position: relative; }
-  .nav-narrow summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; padding: 0 0.25rem; font-weight: 600; }
-  .nav-narrow summary::-webkit-details-marker { display: none; }
-  .nav-narrow nav { position: absolute; right: 0; top: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem; display: grid; min-width: 12rem; box-shadow: 0 8px 24px rgb(15 23 42 / 0.08); z-index: 5; }
-  .nav-narrow nav a { padding: 0.65rem 0.75rem; }
-  @media (max-width: 900px) {
-    .nav-wide { display: none; }
-    .nav-narrow { display: block; }
-    .header-row { gap: 0.75rem; }
-  }
 
   /* The footer is chrome, not a section: dark, so it never merges with the last band (C4). */
   .site-footer { padding: 4rem 0 2rem; background: var(--ink); color: #cbd5e1; font-size: 0.95rem; }
