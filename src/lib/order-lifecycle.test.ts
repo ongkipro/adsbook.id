@@ -436,7 +436,8 @@ class SqliteD1Database {
         provider_order_id TEXT,
         provider_dispatch_error TEXT,
         provider_dispatch_claimed_at TEXT,
-        stock_restored_at TEXT
+        stock_restored_at TEXT,
+        fulfillment_type TEXT NOT NULL DEFAULT 'physical'
       );
       CREATE TABLE order_items (
         id INTEGER PRIMARY KEY,
@@ -1398,3 +1399,14 @@ test("the bulk status route applies the rest and names the conflicts", async () 
   assert.deepEqual(refusedBody.data.conflict_order_ids, ["143"]);
   assert.equal(none.state.orders.get(143)?.shipping_status, "returned");
 });
+
+test("DIGITAL-PRODUCTS-SPEC §2.3/§8.1: a delivered digital order can be refunded or cancelled without a waybill; a physical one still needs it", () => {
+  const digital = { ...order(9, "delivered"), payment_method: "qris", payment_status: "paid", fulfillment_type: "digital" };
+  // A refund voids the order: it is no longer "delivered", so it is cancelled with the refund.
+  assert.deepEqual(resolveAdminOrderTransition(digital, { paymentStatus: "refunded", shippingStatus: "cancelled" }), { paymentStatus: "refunded", shippingStatus: "cancelled", releasesStock: true });
+  assert.equal(resolveAdminOrderTransition(digital, { shippingStatus: "cancelled" }).releasesStock, true);
+  assert.throws(() => resolveAdminOrderTransition(digital, { paymentStatus: "refunded" }), /paid/, "a refunded order is never left delivered");
+  const physical = { ...order(10, "delivered"), payment_method: "qris", payment_status: "paid" };
+  assert.throws(() => resolveAdminOrderTransition(physical, { paymentStatus: "refunded" }), /nomor resi/, "a delivered physical order without its waybill stays refused");
+});
+

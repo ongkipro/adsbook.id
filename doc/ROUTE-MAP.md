@@ -111,7 +111,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/api/geo-province` | GET | public | — | `src/pages/api/geo-province.ts` | `form-mode` `tenant-database` | `stores` | — | `lib/form-mode.test.ts` `platform/two-tenants.test.ts` |
 | `/api/locations` | GET | public | — | `src/pages/api/locations.ts` | `district-catalog` `env` `location-search` `mengantar-areas` `mengantar-client` `platform/shared-areas` `provider-config` `rate-limit` `tenant-database` | `mengantar_areas` `rate_limits` `stores` | `rate_limits` `shared_mengantar_areas` | `lib/dev-providers.test.ts` `lib/district-catalog.test.ts` `lib/env.test.ts` `lib/location-search.test.ts` `lib/mengantar-areas.test.ts` `lib/mengantar-client.test.ts` `lib/meta-purchase-order.test.ts` `lib/provider-config.test.ts` `lib/rate-limit.test.ts` `lib/warehouses.test.ts` `platform/shared-areas.test.ts` `platform/two-tenants.test.ts` |
 | `/api/meta-event` | POST | public | — | `src/pages/api/meta-event.ts` | `autolaris-payment` `capi-outbox` `click-ids` `meta-capi` `meta-event-contract` `meta-identity` `meta-purchase-order` `rate-limit` `store-ads` `tenant-database` | `autolaris_callbacks` `capi_event_outbox` `order_items` `orders` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `rate_limits` `stores` `warehouses` | `rate_limits` | `lib/ad-channel.test.ts` `lib/autolaris-payment.test.ts` `lib/capi-outbox.test.ts` `lib/click-ids.test.ts` `lib/e2e-full-funnel.test.ts` `lib/meta-capi.test.ts` `lib/meta-event-contract.test.ts` `lib/meta-identity.test.ts` `lib/meta-purchase-dedup.test.ts` `lib/meta-purchase-order.test.ts` `lib/payment-attempts.test.ts` `lib/rate-limit.test.ts` `lib/store-ads.test.ts` `lib/tiktok-events.test.ts` `lib/tiktok-outbox.test.ts` `lib/validation.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
-| `/api/order-status` | POST | public | — | `src/pages/api/order-status.ts` | `autolaris-client` `autolaris-payment` `order-status` `rate-limit` `tenant-database` `tiktok-outbox` | `autolaris_callbacks` `order_items` `orders` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `rate_limits` `stores` `tiktok_event_outbox` `warehouses` | `rate_limits` | `lib/autolaris-client.test.ts` `lib/autolaris-payment.test.ts` `lib/dev-providers.test.ts` `lib/meta-purchase-order.test.ts` `lib/order-status-core.test.ts` `lib/order-status.test.ts` `lib/payment-attempts.test.ts` `lib/payment-switch.test.ts` `lib/rate-limit.test.ts` `lib/tiktok-outbox.test.ts` `platform/two-tenants.test.ts` |
+| `/api/order-status` | POST | public | — | `src/pages/api/order-status.ts` | `autolaris-client` `autolaris-payment` `digital-access` `order-status` `rate-limit` `tenant-database` `tiktok-outbox` | `autolaris_callbacks` `order_items` `orders` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `rate_limits` `stores` `tiktok_event_outbox` `warehouses` | `rate_limits` | `lib/autolaris-client.test.ts` `lib/autolaris-payment.test.ts` `lib/dev-providers.test.ts` `lib/meta-purchase-order.test.ts` `lib/order-status-core.test.ts` `lib/order-status.test.ts` `lib/payment-attempts.test.ts` `lib/payment-switch.test.ts` `lib/rate-limit.test.ts` `lib/tiktok-outbox.test.ts` `platform/two-tenants.test.ts` |
 | `/api/payment-methods` | GET | public | — | `src/pages/api/payment-methods.ts` | `autolaris-client` `payment-brand` `payment-fee-policy` `provider-config` `tenant-database` | `seller_bank_accounts` `stores` | — | `lib/autolaris-client.test.ts` `lib/autolaris-payment.test.ts` `lib/dev-providers.test.ts` `lib/payment-brand.test.ts` `lib/payment-fee-policy.test.ts` `lib/provider-config.test.ts` `platform/two-tenants.test.ts` |
 | `/api/record-abandoned-order` | POST | public | — | `src/pages/api/record-abandoned-order.ts` | `api` `click-ids` `meta-order-context` `order-persistence` `rate-limit` `source-slug` `tenant-database` `validation` | `landing_pages` `order_items` `order_number_counters` `orders` `payment_transactions` `product_variants` `products` `rate_limits` `seller_bank_accounts` `stores` | `rate_limits` | `lib/ad-channel.test.ts` `lib/admin-orders-initial.test.ts` `lib/admin-requote-weight.test.ts` `lib/api.test.ts` `lib/click-ids.test.ts` `lib/e2e-full-funnel.test.ts` `lib/google-data-manager.test.ts` `lib/insights.test.ts` `lib/meta-order-context.test.ts` `lib/meta-purchase-dedup.test.ts` `lib/meta-purchase-order.test.ts` `lib/order-item-weight.test.ts` `lib/order-persistence.test.ts` `lib/paid-order-purchase.test.ts` `lib/rate-limit.test.ts` `lib/source-slug.test.ts` `lib/tiktok-events.test.ts` `lib/tiktok-outbox.test.ts` `lib/validation.test.ts` `platform/tenant-store.test.ts` `platform/two-tenants.test.ts` |
 | `/api/shipping-options` | GET | public | — | `src/pages/api/shipping-options.ts` | — | — | — | — |
@@ -287,7 +287,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/api/platform/invoices/[id]/check` | POST | platform session | platform_owner, platform_support | `src/pages/api/platform/invoices/[id]/check.ts` | `env` `platform/billing` | — | `subscription_invoices` `tenant_events` `tenants` | `lib/env.test.ts` `lib/store-closed.test.ts` `platform/billing.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/login` | POST | public | — | `src/pages/api/platform/login.ts` | `env` `platform/admin/session` `rate-limit` | `rate_limits` | `platform_sessions` `platform_users` `rate_limits` | `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/logout` | POST | platform session | platform_owner, platform_support | `src/pages/api/platform/logout.ts` | `env` `platform/admin/session` | — | `platform_sessions` `platform_users` | `lib/env.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
-| `/api/platform/signup` | POST | public | — | `src/pages/api/platform/signup.ts` | `env` `platform/notify` `platform/signup` `platform/site/site` `rate-limit` | `rate_limits` | `operator_notices` `rate_limits` `tenant_events` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/notify.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
+| `/api/platform/signup` | POST | public | — | `src/pages/api/platform/signup.ts` | `env` `platform/notify` `platform/signup` `platform/site/site` `rate-limit` | `rate_limits` `stores` | `operator_notices` `rate_limits` `tenant_events` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/notify.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/slug` | GET | public | — | `src/pages/api/platform/slug.ts` | `env` `platform/control-plane` `platform/slugs` | — | `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/backup.test.ts` `platform/billing.test.ts` `platform/console.test.ts` `platform/domain-poll.test.ts` `platform/gate.test.ts` `platform/hostnames.test.ts` `platform/isolation.test.ts` `platform/jobs.test.ts` `platform/middleware-gate.test.ts` `platform/notify.test.ts` `platform/plans.test.ts` `platform/tenant-store.test.ts` `platform/trust-watch.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/team` | GET, POST | platform session | platform_owner | `src/pages/api/platform/team/index.ts` | `env` `platform/admin/team` | — | `platform_sessions` `platform_users` `tenant_events` | `lib/env.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/team/[id]` | POST | platform session | platform_owner | `src/pages/api/platform/team/[id].ts` | `env` `platform/admin/team` | — | `platform_sessions` `platform_users` `tenant_events` | `lib/env.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
@@ -298,7 +298,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-198 modules under `src/lib` and `src/platform`; 10 that no test imports.
+200 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -340,8 +340,10 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `dashboard-compare` | 6 | — | — | 1 | `/api/admin/analytics` |
 | `deploy-preflight` | 11 | — | — | 1 | — |
 | `developer-api-keys` | 22 | — | — | 8 | `/api/admin/settings/developer` |
+| `digital-access` | 4 | `order_items` `orders` `product_variants` `products` | — | 1 | `/api/order-status` |
+| `digital-checkout` | 3 | — | — | 1 | — |
 | `district-catalog` | 1 | — | — | 2 | `/api/locations` `/api/v1/geo/districts` |
-| `edge-cache` | 11 | — | — | 1 | `/assets/[...key]` |
+| `edge-cache` | 12 | — | — | 1 | `/assets/[...key]` |
 | `embed-markup` | 5 | — | — | 1 | `/embed/form` |
 | `embed-security` | 6 | — | — | 1 | `/api/tiktok-event` `/api/admin/settings` |
 | `env` | 3 | — | — | 2 | `/assets/[...key]` `/media/[...key]` `/api/handoff` `/api/owner-recovery` `/api/form-config` `/api/locations` `/api/webhooks/autolaris/[token]` `/admin/settings/domains` `/admin/settings/plugins/kelola` `/api/admin/ads` `/api/admin/billing` `/api/admin/content` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/media` `/api/admin/orders/[id]` `/api/admin/plugins/kelola` `/api/admin/settings` `/api/admin/store-removal` `/api/admin/upload-r2` `/platform/signup` `/platform/site` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/platform/[...section]` `/api/platform/health` `/api/platform/invoices/[id]/check` `/api/platform/login` `/api/platform/logout` `/api/platform/signup` `/api/platform/slug` `/api/platform/team` `/api/platform/team/[id]` `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` `/api/platform/webhooks/autolaris/[token]` |
@@ -400,10 +402,10 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `order-export` | 12 | `order_items` `orders` `pickup_schedules` `product_variants` `products` `warehouses` | — | 2 | `/api/admin/orders/export` |
 | `order-follow-up` | 7 | `order_follow_ups` `orders` | — | 1 | `/api/admin/orders` `/api/admin/orders/[id]/follow-up` |
 | `order-instruction-hint` | 2 | — | — | 1 | — |
-| `order-lifecycle` | 14 | `order_items` `orders` `payment_reconciliation_audits` `payment_transactions` | — | 4 | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/shipping` |
+| `order-lifecycle` | 15 | `order_items` `orders` `payment_reconciliation_audits` `payment_transactions` | — | 5 | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/shipping` |
 | `order-list-filter` | 10 | `payment_transactions` | — | **none** | `/api/admin/abandoned-orders` `/api/admin/orders` `/api/admin/shipping` |
 | `order-metrics` | 6 | — | — | 1 | `/api/admin/analytics` `/api/admin/orders/[id]/follow-up` |
-| `order-persistence` | 14 | `order_items` `order_number_counters` `orders` `payment_transactions` `product_variants` `products` `seller_bank_accounts` `stores` | — | 8 | `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/retention` |
+| `order-persistence` | 15 | `order_items` `order_number_counters` `orders` `payment_transactions` `product_variants` `products` `seller_bank_accounts` `stores` | — | 9 | `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/retention` |
 | `order-schema` | 4 | — | — | 2 | `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/[id]` |
 | `order-status` | 4 | `order_items` `orders` `payment_transactions` | — | 3 | `/api/order-status` `/api/v1/orders/status` |
 | `paid-order-purchase` | 8 | `capi_event_outbox` `order_items` `orders` `product_variants` `products` | — | 2 | `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` `/api/admin/payment-reconciliation` |
@@ -412,7 +414,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `payment-display` | 9 | — | — | 1 | `/payment` `/thanks` |
 | `payment-fee-policy` | 14 | — | — | 1 | `/api/payment-methods` `/admin/payments` `/api/admin/orders/[id]` |
 | `payment-switch` | 10 | `order_items` `orders` `seller_bank_accounts` `stores` | — | 2 | `/api/admin/orders` `/api/admin/orders/[id]` |
-| `product-mutation` | 10 | `order_items` `product_variants` `products` `storefront_content` | — | 2 | `/api/admin/products` |
+| `product-mutation` | 15 | `order_items` `product_variants` `products` `storefront_content` | — | 2 | `/api/admin/products` |
 | `provider-config` | 10 | `stores` | — | 2 | `/api/locations` `/api/payment-methods` `/api/submit-order` `/api/v1/checkout` `/api/admin/ongkir` `/api/admin/settings` `/api/admin/shipping` `/api/admin/warehouses` |
 | `province` | 13 | — | — | 4 | `/api/submit-middle-order` `/api/v1/checkout` `/api/admin/expeditions` |
 | `public-store` | 6 | `courier_rules` `stores` | — | 1 | `/thanks` `/kebijakan-privasi` `/kontak` `/pengiriman` `/syarat-ketentuan` `/[slug]` |
@@ -470,7 +472,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/backup` | 9 | — | — | 1 | — |
 | `platform/billing` | 31 | — | `subscription_invoices` `tenant_events` `tenants` | 3 | `/api/admin/billing` `/api/admin/billing/[id]/check` `/api/admin/content` `/api/platform/invoices/[id]/check` `/api/platform/webhooks/autolaris/[token]` |
 | `platform/bundled-migrations` | 1 | — | — | **none** | — |
-| `platform/control-plane` | 10 | — | `tenant_hosts` `tenants` | 14 | `/api/platform/slug` |
+| `platform/control-plane` | 11 | — | `tenant_hosts` `tenants` | 14 | `/api/platform/slug` |
 | `platform/cron` | 3 | — | `tenants` | 1 | — |
 | `platform/demo` | 2 | — | — | **none** | — |
 | `platform/domain-poll` | 6 | — | `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]/recheck` |
@@ -485,10 +487,10 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/notify` | 7 | — | `operator_notices` `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]` `/api/admin/domains/[host]/recheck` `/api/platform/signup` |
 | `platform/plans` | 7 | `rate_limits` | `plans` `rate_limits` `tenant_hosts` `tenant_usage_daily` `tenants` | 2 | `/api/admin/content` `/api/admin/media` `/api/admin/upload-r2` |
 | `platform/purge` | 12 | — | `handoff_tokens` `migration_bookmarks` `operator_notices` `purge_sweeps` `tenant_events` `tenant_health` `tenant_hosts` `tenant_usage_daily` `tenants` `webhook_secrets` | 1 | `/api/admin/store-removal` |
-| `platform/readiness` | 4 | `courier_rules` `product_variants` `products` `stores` `warehouses` | — | 2 | — |
+| `platform/readiness` | 7 | `courier_rules` `product_variants` `products` `seller_bank_accounts` `stores` `warehouses` | — | 2 | — |
 | `platform/request-log` | 6 | — | — | 1 | — |
 | `platform/shared-areas` | 5 | — | `shared_mengantar_areas` | 1 | `/api/locations` |
-| `platform/signup` | 12 | — | `tenant_events` `tenant_hosts` `tenants` | 2 | `/api/platform/signup` |
+| `platform/signup` | 12 | `stores` | `tenant_events` `tenant_hosts` `tenants` | 2 | `/api/platform/signup` |
 | `platform/site/content` | 16 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/coba` `/platform/site/faq` `/platform/site/harga` |
 | `platform/site/kinetic-stage` | 1 | — | — | **none** | — |
 | `platform/site/site` | 15 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/cara-kerja` `/platform/site/coba` `/platform/site/faq` `/platform/site/fitur` `/platform/site/harga` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/api/platform/signup` |

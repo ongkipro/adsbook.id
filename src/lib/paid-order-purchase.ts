@@ -16,7 +16,7 @@ import { toE164Digits } from "./meta-capi.ts";
 import { parseMetaOrderContext } from "./meta-order-context.ts";
 import { parseClickIds } from "./click-ids.ts";
 import { matchableCustomerEmail } from "./autolaris-payment.ts";
-import { isVoidOrder } from "./order-lifecycle.ts";
+import { isVoidOrder, markDigitalOrderDelivered } from "./order-lifecycle.ts";
 import { enqueueTikTokCompletePayment } from "./tiktok-outbox.ts";
 
 type PaidOrderRow = {
@@ -86,6 +86,10 @@ export async function enqueuePurchaseForPaidOrder(
   orderId: number,
   options: PurchaseOptions = {},
 ): Promise<PaidOrderPurchaseResult> {
+  // A paid digital order is delivered at once (DIGITAL-PRODUCTS-SPEC §2.3); never fails the signal.
+  await markDigitalOrderDelivered(database, orderId).catch((error) => {
+    console.error("digital-order-delivery-failed", { orderId, error });
+  });
   const tiktok = enqueueTikTokCompletePayment(database, locals, orderId, options).catch((error) => {
     console.error("tiktok-complete-payment-failed", { orderId, error });
   });

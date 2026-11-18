@@ -80,6 +80,7 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
       adminUsername={Astro.locals.admin?.username ?? ''}
       mustChangePassword={mustChangePassword}
       sidebarDefaultOpen={sidebarDefaultOpen}
+      catalogMode={Astro.locals.tenant.catalogMode}
     >
       {browserUnsupported && (
         <div id="browserUnsupportedNotice" role="alert" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">

@@ -132,6 +132,28 @@ const productCatalog = products.map((item) => ({
       </p>
     </section>
 
+    <!-- DIGITAL-PRODUCTS-SPEC §5.2: filled from /api/order-status only when the order
+         is digital, paid and live; the link never appears in this page's HTML. -->
+    <section id="digital-access" hidden class="px-5 pb-5">
+      <div class="rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-5 text-left">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#1D4ED8]">Pembayaran berhasil</p>
+        <h2 class="mt-1 text-[18px] font-semibold leading-snug text-[#0F172A]">Produk Digital Siap Diakses</h2>
+        <p id="digital-access-product" class="mt-1 text-[13px] leading-6 text-[#475569]"></p>
+        <a
+          id="digital-access-link"
+          href="#"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="mt-4 flex min-h-12 items-center justify-center rounded-xl bg-[#2563EB] px-4 text-center text-[14px] font-semibold text-white hover:bg-[#1D4ED8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+        >Buka / Akses Produk Sekarang ↗</a>
+        <div id="digital-access-note-box" hidden class="mt-4 rounded-xl bg-white p-4">
+          <p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#64748B]">Instruksi akses</p>
+          <p id="digital-access-note" class="mt-1 whitespace-pre-line text-[13px] leading-6 text-[#0F172A]"></p>
+        </div>
+        <p class="mt-3 text-[12px] leading-5 text-[#475569]">Simpan halaman ini: link akses bisa dibuka lagi kapan saja dari alamat halaman ini.</p>
+      </div>
+    </section>
+
     <section class="border-y border-[#E5E5E5] bg-[#F5F5F5] px-5 py-5 text-center" data-motion="summary">
       <!-- #555555, not the #767676 used on white: on the #F5F5F5 panel that
            lighter grey measures 4.16:1, under the 4.5 AA floor. -->
@@ -230,7 +252,7 @@ const productCatalog = products.map((item) => ({
 
     <section class="border-t border-[#E5E5E5] px-5 py-5" data-motion="section">
       <div class="mb-3 flex items-center justify-between gap-3">
-        <h2 class="text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Data pengiriman</h2>
+        <h2 id="contact-title" class="text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Data pengiriman</h2>
       </div>
       <div class="divide-y divide-[#E5E5E5] text-[13px]">
         <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
@@ -838,6 +860,54 @@ const productCatalog = products.map((item) => ({
         .then(async (res) => {
           const data = await res.json().catch(() => ({}));
           if (!res.ok || data?.success === false) return;
+          // DIGITAL-PRODUCTS-SPEC §5.2: the access card, only when the server opened it.
+          const access = data?.digital_access;
+          if (access && typeof access.url === 'string' && access.url.startsWith('https://')) {
+            const card = document.getElementById('digital-access');
+            const link = document.getElementById('digital-access-link');
+            link.href = access.url;
+            document.getElementById('digital-access-product').textContent = access.product_name || '';
+            if (access.note) {
+              document.getElementById('digital-access-note').textContent = access.note;
+              document.getElementById('digital-access-note-box').hidden = false;
+            }
+            link.addEventListener('click', () => {
+              // The seller's proof of delivery; the link opens whatever this answers.
+              fetch('/api/order-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order_pk: orderPk, status_token: statusToken, mark_digital_accessed: true }),
+                keepalive: true,
+              }).catch(() => {});
+            });
+            card.hidden = false;
+            // An open access means paid: whatever this tab stored earlier, the page reads as paid.
+            const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+            const hide = (id) => { const el = document.getElementById(id); if (el) el.hidden = true; };
+            document.getElementById('hero-icon-done').hidden = false;
+            document.getElementById('hero-icon-pending').hidden = true;
+            ['payment-qr-row', 'payment-link', 'payment-page-link', 'payment-failure'].forEach(hide);
+            set('payment-title', 'Total pembayaran');
+            set('payment-badge', 'Lunas · akses digital');
+            set('total-label', 'Total lunas');
+            set('total-note', 'Pembayaran berhasil diverifikasi');
+            set('step-two-title', 'Pembayaran berhasil');
+            set('step-two-copy', 'Pembayaran telah diterima dan dikonfirmasi.');
+            set('step-three-title', 'Akses produk digital');
+            set('step-three-copy', 'Tidak ada pengiriman: produk terbuka dari tombol di atas.');
+            set('note-title', 'Pembayaran terkonfirmasi');
+            set('note-badge', 'Lunas');
+            set('shipping-cost', 'Gratis · akses digital');
+            set('contact-title', 'Data pembeli');
+            document.getElementById('full-address')?.parentElement?.setAttribute('hidden', '');
+            set('cta-title', 'Butuh bantuan?');
+            set('cta-copy', 'Hubungi admin jika link akses tidak bisa dibuka atau ada pertanyaan tentang produk.');
+            set('wa-label', 'Hubungi Admin');
+            const notes = document.getElementById('note-list');
+            if (notes) notes.textContent = 'Link akses tersimpan di halaman ini. Buka kembali alamat halaman ini kapan saja untuk mengakses produk.';
+            document.getElementById('thanks-title').textContent = 'Pembayaran berhasil';
+            document.getElementById('thanks-subtitle').textContent = 'Produk digital Anda siap diakses. Tidak ada pengiriman: buka langsung dari tombol di bawah.';
+          }
           // Only when it says something the step title does not already say.
           const paymentNow = data?.payment_status ? paymentWords(data.payment_status) : '';
           if (paymentNow && !isCod && paymentNow !== document.getElementById('step-two-title').textContent)

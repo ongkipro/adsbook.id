@@ -22,7 +22,7 @@ import { SCHEMA_UPGRADE_ERROR_LABEL } from './lib/schema-version';
 import { CMS_VERSION } from './lib/version';
 import { resolveHostRedirect } from './lib/host-redirect';
 import { gateRequest, type GateEnv } from './platform/gate';
-import type { TenantContext } from './platform/control-plane';
+import { bumpTenantCacheVersion, type TenantContext } from './platform/control-plane';
 import { isStoreReady, readReadiness, servedBeforeReady } from './platform/readiness.ts';
 import { demoRefusal } from './platform/demo.ts';
 import { billingState, isLive, subscriptionRefusal } from './platform/billing.ts';
@@ -30,7 +30,7 @@ import { notifyOperator, type Notice } from './platform/notify.ts';
 import { statePage } from './platform/state-pages';
 import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
 import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
-import { edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
+import { bumpsStorefrontCache, edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 import { scopeFromLocals } from './platform/keys.ts';
 import { PROBE_NONCE, PROBE_PATH, probeAnswer, tenantHostSuffix } from './platform/hostnames.ts';
 import { platformSitePath, primaryHostRedirect } from './platform/host.ts';
@@ -594,6 +594,10 @@ export function createMiddleware(
   }
 
   const rendered = await next();
+  // Paket 1: an admin write buyers see reaches them on the next request, not in two minutes.
+  if (isAdminApi && bumpsStorefrontCache(url.pathname, context.request.method, rendered.status)) {
+    await bumpTenantCacheVersion(getRuntimeEnv(context.locals), tenantContext.tenantId);
+  }
   // Stored before cookies and security headers are added: the copy carries
   // none of them, and a visitor's own cookies are never part of a shared page.
   if (edgeKey) {

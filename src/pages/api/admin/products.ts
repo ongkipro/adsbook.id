@@ -6,6 +6,7 @@ import {
   deleteCatalogProduct,
   parseProductMutationPayload,
   parseProductStatusTogglePayload,
+  productTypeAllowed,
   updateProductActiveStatus,
   type ProductMutationPayload,
 } from "../../../lib/product-mutation";
@@ -28,6 +29,9 @@ type DbProductRow = {
   image_url: string | null;
   is_active: number | boolean | null;
   created_at: string;
+  product_type: string | null;
+  digital_access_url: string | null;
+  digital_access_note: string | null;
 };
 
 type DbVariantRow = {
@@ -50,7 +54,8 @@ async function loadProducts(
     ? await database
         .prepare(
           `
-        SELECT id, store_id, title, slug, category, brand, description, google_category_id, google_category_path, is_active, image_url, created_at
+        SELECT id, store_id, title, slug, category, brand, description, google_category_id, google_category_path, is_active, image_url, created_at,
+               product_type, digital_access_url, digital_access_note
         FROM products
         WHERE id = ?
         LIMIT 1
@@ -61,7 +66,8 @@ async function loadProducts(
     : await database
         .prepare(
           `
-        SELECT id, store_id, title, slug, category, brand, description, google_category_id, google_category_path, is_active, image_url, created_at
+        SELECT id, store_id, title, slug, category, brand, description, google_category_id, google_category_path, is_active, image_url, created_at,
+               product_type, digital_access_url, digital_access_note
         FROM products
         ORDER BY created_at DESC, id DESC
         LIMIT ?
@@ -109,6 +115,10 @@ async function loadProducts(
     image_url: product.image_url,
     is_active: Boolean(product.is_active),
     created_at: product.created_at,
+    // Admin-only (§8.4): this route sits behind the admin session; no public query selects these.
+    product_type: product.product_type === "digital" ? "digital" : "physical",
+    digital_access_url: product.digital_access_url ?? "",
+    digital_access_note: product.digital_access_note ?? "",
     variants: (variantsByProduct.get(product.id) ?? []).map((variant) => ({
       id: variant.id,
       sku: variant.sku,
@@ -120,6 +130,14 @@ async function loadProducts(
     })),
   }));
 }
+
+/** The store's catalog mode, which decides the product types it may save (§4.2). */
+async function catalogMode(database: D1Database): Promise<string> {
+  const row = await database.prepare("SELECT catalog_mode FROM stores ORDER BY id LIMIT 1").first<{ catalog_mode: string | null }>();
+  return row?.catalog_mode ?? "hybrid";
+}
+
+const TYPE_REFUSED = "Jenis produk ini tidak tersedia di mode katalog toko. Ubah mode di Pengaturan › Toko & CS.";
 
 async function generateProductId(database: D1Database) {
   for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -183,6 +201,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       .prepare("SELECT id FROM stores ORDER BY id LIMIT 1")
       .first()) as { id: number } | null;
     if (!storeRow) return jsonError("Store belum tersedia.", 404);
+    if (!productTypeAllowed(await catalogMode(db), parsed.value.product_type)) return jsonError(TYPE_REFUSED, 400);
 
     const slugConflict = (await db
       .prepare("SELECT id FROM products WHERE slug = ? LIMIT 1")
@@ -213,9 +232,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           `
         INSERT INTO products (
           id, store_id, title, slug, category, brand, description,
-          google_category_id, google_category_path, is_active, image_url, created_at
+          google_category_id, google_category_path, is_active, image_url, created_at,
+          product_type, digital_access_url, digital_access_note
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
         )
         .bind(
@@ -231,6 +251,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
           parsed.value.is_active ? 1 : 0,
           parsed.value.image_url,
           createdAt,
+          parsed.value.product_type,
+          parsed.value.digital_access_url,
+          parsed.value.digital_access_note,
         ),
       ...parsed.value.variants.map((variant) =>
         db
@@ -322,13 +345,19 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
     const stored =
       Number.isSafeInteger(bodyId) && bodyId > 0
         ? ((await (database as D1Database)
-            .prepare("SELECT image_url FROM products WHERE id = ?")
+            .prepare("SELECT image_url, product_type FROM products WHERE id = ?")
             .bind(bodyId)
-            .first()) as { image_url: string | null } | null)
+            .first()) as { image_url: string | null; product_type: string | null } | null)
         : null;
-    const parsed = parseProductMutationPayload(body, true, stored?.image_url);
+    const storedType = stored?.product_type === "digital" ? "digital" : "physical";
+    // A client that predates digital products sends no type: the product keeps its own.
+    const typed = body && body.product_type === undefined ? { ...body, product_type: storedType } : body;
+    const parsed = parseProductMutationPayload(typed, true, stored?.image_url);
     if ("error" in parsed) return jsonError(parsed.error, parsed.status ?? 400);
     const db = database as D1Database;
+    if (!productTypeAllowed(await catalogMode(db), parsed.value.product_type, stored ? storedType : null)) {
+      return jsonError(TYPE_REFUSED, 400);
+    }
     const currentProductRows = await loadProducts(db, parsed.value.id);
     const currentProduct = currentProductRows[0];
     if (!currentProduct) return jsonError("Produk tidak ditemukan.", 404);
@@ -413,7 +442,8 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
             brand = CASE WHEN ? THEN ? ELSE brand END,
             description = CASE WHEN ? THEN ? ELSE description END,
             google_category_id = CASE WHEN ? THEN ? ELSE google_category_id END,
-            google_category_path = CASE WHEN ? THEN ? ELSE google_category_path END
+            google_category_path = CASE WHEN ? THEN ? ELSE google_category_path END,
+            product_type = ?, digital_access_url = ?, digital_access_note = ?
         WHERE id = ?
       `,
         )
@@ -431,6 +461,9 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
           parsed.value.google_category_id ?? null,
           parsed.value.google_category_id !== undefined ? 1 : 0,
           parsed.value.google_category_path ?? null,
+          parsed.value.product_type,
+          parsed.value.digital_access_url,
+          parsed.value.digital_access_note,
           parsed.value.id,
         ),
       ...parsed.value.variants.map((variant) => {

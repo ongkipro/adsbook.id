@@ -20,8 +20,13 @@ type Variant = {
   weight_grams: string;
   stock: string;
 };
+type ProductType = "physical" | "digital";
+type CatalogMode = "physical" | "digital" | "hybrid";
 type ProductPayload = {
   id?: number | string;
+  product_type: ProductType;
+  digital_access_url: string;
+  digital_access_note: string;
   title: string;
   slug: string;
   category: string;
@@ -64,6 +69,9 @@ type ProductResponse = {
   image_url: string | null;
   is_active: number | boolean;
   variants: ProductVariantResponse[];
+  product_type?: string | null;
+  digital_access_url?: string | null;
+  digital_access_note?: string | null;
 };
 const emptyVariant = (key: string): Variant => ({
   key,
@@ -106,7 +114,12 @@ const taxonomyOption = ([id, path]: TaxonomyRow): DistrictOption => ({
 const searchGoogleCategory = async (query: string) =>
   searchTaxonomy(await loadTaxonomy(), query).map(taxonomyOption);
 
-export function ProductForm({ productId, storeName = "" }: { productId?: string; storeName?: string }) {
+export function ProductForm({ productId, storeName = "", catalogMode = "hybrid" }: { productId?: string; storeName?: string; catalogMode?: CatalogMode }) {
+  // DIGITAL-PRODUCTS-SPEC §4.2: the store's mode decides a new product's type; only hybrid offers the switch.
+  const [productType, setProductType] = useState<ProductType>(catalogMode === "digital" ? "digital" : "physical");
+  const [accessUrl, setAccessUrl] = useState("");
+  const [accessNote, setAccessNote] = useState("");
+  const digital = productType === "digital";
   const editing = Boolean(productId);
   const nextVariantKey = useRef(1);
   const [title, setTitle] = useState("");
@@ -174,6 +187,9 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
         return payload.data as ProductResponse;
       })
       .then((product) => {
+        setProductType(product.product_type === "digital" ? "digital" : "physical");
+        setAccessUrl(product.digital_access_url || "");
+        setAccessNote(product.digital_access_note || "");
         setTitle(product.title || "");
         setSlug(product.slug || "");
         setCategory(product.category || "Umum");
@@ -262,7 +278,7 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
   ) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const missingWeight = variants.find((variant) => !variant.weight_grams.trim());
+    const missingWeight = digital ? undefined : variants.find((variant) => !variant.weight_grams.trim());
     if (missingWeight) {
       setStatusTone("error");
       setStatus(
@@ -281,7 +297,8 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
       ...(variant.compare_price
         ? { compare_price: Number(variant.compare_price) }
         : {}),
-      weight_grams: variant.weight_grams.trim()
+      // A digital product ships nothing: the server stores 0 whatever is sent.
+      weight_grams: digital ? 0 : variant.weight_grams.trim()
         ? Number(variant.weight_grams)
         : null,
       stock: Number(variant.stock),
@@ -297,6 +314,9 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
 
     const payload: ProductPayload = {
       ...(productId ? { id: productId } : {}),
+      product_type: productType,
+      digital_access_url: digital ? accessUrl.trim() : "",
+      digital_access_note: digital ? accessNote.trim() : "",
       title: title.trim(),
       slug: slug.trim(),
       category: category.trim() || "Umum",
@@ -363,6 +383,77 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
       noValidate
     >
       <div className="space-y-6">
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" aria-labelledby="product-type-title">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 id="product-type-title" className="text-base font-semibold text-slate-950">Jenis produk</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {catalogMode === "hybrid"
+                  ? "Toko hybrid: pilih barang fisik atau produk digital."
+                  : `Mengikuti mode katalog toko (${catalogMode === "digital" ? "Produk Digital" : "Produk Fisik"}).`}
+              </p>
+            </div>
+            {catalogMode === "hybrid" ? (
+              <div role="radiogroup" aria-labelledby="product-type-title" className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
+                {([["physical", "Barang Fisik"], ["digital", "Produk Digital"]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={productType === value}
+                    data-product-type={value}
+                    onClick={() => setProductType(value)}
+                    className={`min-h-11 rounded-md px-4 text-sm font-semibold transition-colors ${productType === value ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <Badge variant="secondary" data-product-type-locked={productType}>{digital ? "Produk Digital" : "Barang Fisik"}</Badge>
+            )}
+          </div>
+        </section>
+        {digital && (
+          <section className="rounded-xl border border-blue-200 bg-blue-50/40 shadow-sm" aria-labelledby="digital-access-title">
+            <div className="border-b border-blue-100 p-5">
+              <h2 id="digital-access-title" className="text-base font-semibold text-slate-950">Akses produk digital</h2>
+              <p className="mt-1 text-xs text-slate-600">Dibuka otomatis setelah pembayaran lunas.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 p-5">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">Link akses utama</span>
+                <Input
+                  id="digitalAccessUrl"
+                  type="url"
+                  inputMode="url"
+                  required
+                  maxLength={2000}
+                  pattern="https://.+"
+                  placeholder="https://drive.google.com/…"
+                  aria-describedby="digital-access-url-hint"
+                  value={accessUrl}
+                  onChange={(event) => setAccessUrl(event.target.value)}
+                />
+                <span id="digital-access-url-hint" className="mt-1 block text-xs text-slate-500">
+                  Wajib https://. Tautan ini dirahasiakan di server dan hanya ditampilkan kepada pembeli yang pembayarannya sudah terverifikasi lunas.
+                </span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">Instruksi / catatan akses <span className="font-normal text-slate-400">(opsional)</span></span>
+                <Textarea
+                  id="digitalAccessNote"
+                  rows={3}
+                  maxLength={500}
+                  placeholder="Contoh: password PDF SUKSES2026, lalu gabung grup diskusi lewat link di halaman pertama."
+                  value={accessNote}
+                  onChange={(event) => setAccessNote(event.target.value)}
+                />
+                <span className="mt-1 block text-xs text-slate-500">{accessNote.length}/500 karakter.</span>
+              </label>
+            </div>
+          </section>
+        )}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-5">
             <h2 className="text-base font-semibold text-slate-950">
@@ -760,6 +851,7 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
                         : "Opsional, harus lebih tinggi dari harga jual."}
                     </span>
                   </label>
+                  {!digital && (
                   <label className="sm:col-span-2">
                     <span className="mb-1 block text-xs font-semibold text-slate-600">
                       Berat kirim
@@ -793,6 +885,7 @@ export function ProductForm({ productId, storeName = "" }: { productId?: string;
                         : ""}
                     </span>
                   </label>
+                  )}
                 </div>
               </fieldset>
             ))}

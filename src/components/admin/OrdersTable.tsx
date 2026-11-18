@@ -107,6 +107,9 @@ export type OrderItem = {
   shippingStatus: string;
   courierCode: string;
   cnoteNo: string;
+  /** DIGITAL-PRODUCTS-SPEC §4.3; optional for the same reason as above (two producers). */
+  fulfillmentType?: string;
+  digitalAccessedAt?: string | null;
   sellerName: string;
   bankAccounts: string;
   epaymentLink: string;
@@ -146,6 +149,8 @@ type OrderRow = {
   shipping_status: string;
   courier_code: string | null;
   cnote_no: string | null;
+  fulfillment_type?: string | null;
+  digital_accessed_at?: string | null;
   seller_name: string | null;
   bank_accounts: string;
   epayment_link: string | null;
@@ -212,6 +217,8 @@ export const mapOrder = (row: OrderRow): OrderItem => ({
   shippingStatus: row.shipping_status,
   courierCode: row.courier_code || "",
   cnoteNo: row.cnote_no || "",
+  fulfillmentType: row.fulfillment_type === "digital" ? "digital" : "physical",
+  digitalAccessedAt: row.digital_accessed_at ?? null,
   sellerName: row.seller_name || "",
   bankAccounts: row.bank_accounts || "",
   epaymentLink: row.epayment_link || "",
@@ -231,6 +238,16 @@ export const mapOrder = (row: OrderRow): OrderItem => ({
   sourcePath: row.source_page_path || null,
   sourceLabel: row.source_label || null,
 });
+
+/** DIGITAL-PRODUCTS-SPEC §4.3: a digital order shows this instead of a courier and an airway bill. */
+function DigitalOrderBadge({ accessedAt }: { accessedAt?: string | null }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 text-xs">
+      <span className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-700" data-fulfillment="digital">Digital</span>
+      <span className={accessedAt ? "text-emerald-700" : "text-slate-500"}>{accessedAt ? "Sudah dibuka" : "Belum dibuka"}</span>
+    </span>
+  );
+}
 
 const shippingLabels = SHIPPING_STATUS_LABELS;
 
@@ -1505,9 +1522,13 @@ export function OrdersTable({
                   </p>
                   <p className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 text-xs">
                     <span className={`min-w-0 truncate font-semibold ${deliveryStatus(order).tone}`}>{deliveryStatus(order).label}</span>
-                    <span className="shrink-0 font-mono text-slate-500">
-                      {order.courierCode || "—"}{order.cnoteNo ? ` · ${order.cnoteNo}` : ""}
-                    </span>
+                    {order.fulfillmentType === "digital" ? (
+                      <DigitalOrderBadge accessedAt={order.digitalAccessedAt} />
+                    ) : (
+                      <span className="shrink-0 font-mono text-slate-500">
+                        {order.courierCode || "—"}{order.cnoteNo ? ` · ${order.cnoteNo}` : ""}
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -1623,21 +1644,29 @@ export function OrdersTable({
                       <BuyerArea order={order} className="mt-1" />
                     </TableCell>
                     <TableCell className="px-4 py-4">
-                      <RiskBadge
-                        level={order.receiverRiskLabel}
-                        deliveryRate={order.receiverDeliveryRate}
-                      />
+                      {order.fulfillmentType === "digital" ? (
+                        <span className="text-xs text-slate-400">—</span>
+                      ) : (
+                        <RiskBadge
+                          level={order.receiverRiskLabel}
+                          deliveryRate={order.receiverDeliveryRate}
+                        />
+                      )}
                     </TableCell>
                     <TableCell className="px-4 py-4">
                       <p className={`font-semibold ${deliveryStatus(order).tone}`}>
                         {deliveryStatus(order).label}
                       </p>
-                      <p className="mt-1 font-mono text-xs text-slate-500">
-                        {order.courierCode}
-                        {order.cnoteNo
-                          ? ` · ${order.cnoteNo}`
-                          : " · resi belum tersedia"}
-                      </p>
+                      {order.fulfillmentType === "digital" ? (
+                        <p className="mt-1"><DigitalOrderBadge accessedAt={order.digitalAccessedAt} /></p>
+                      ) : (
+                        <p className="mt-1 font-mono text-xs text-slate-500">
+                          {order.courierCode}
+                          {order.cnoteNo
+                            ? ` · ${order.cnoteNo}`
+                            : " · resi belum tersedia"}
+                        </p>
+                      )}
                       {order.providerDispatchError && (
                         <p className="mt-1 text-xs text-rose-600 font-semibold max-w-[200px] leading-tight">
                           Error: {providerDispatchErrorText(order.providerDispatchError)}

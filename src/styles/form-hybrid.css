@@ -1,7 +1,8 @@
 /* Every checkout route renders one of these two roots, with or without the
    GeoIpResolvedForm wrapper, so palette rules anchored here reach all of them. */
 [data-hybrid-form-root],
-[data-middle-form-root] {
+[data-middle-form-root],
+[data-digital-form-root] {
   color: #1a1a1a;
   /* Ink for text, brand blue for the one action (ADR-019, amended 2026-11-17):
      --sf-accent carries every selected / focused / primary control, a pale
@@ -1142,7 +1143,8 @@
    The floating label is untouched: its position, size and motion are the
    rules above. */
 [data-hybrid-form-root],
-[data-middle-form-root] {
+[data-middle-form-root],
+[data-digital-form-root] {
   /* The frame of the field being typed in. Ink, not the accent: an orange frame
      reads as the red error frame; the accent stays in the ring around it. */
   --sf-focus-frame: #1a1a1a;

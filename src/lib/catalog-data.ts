@@ -14,6 +14,8 @@ export interface CatalogProductRow {
   image_url?: string | null;
   is_active?: number | null;
   created_at?: string | null;
+  /** 'digital' or 'physical'. Never the access link or note: no public query selects them (§6.1). */
+  product_type?: string | null;
 }
 
 export interface CatalogVariantRow {
@@ -203,6 +205,7 @@ export function mergeStorefrontCatalog(
               googleCategoryPath: product.google_category_path?.trim() || "",
             }
           : {}),
+        ...(product.product_type === "digital" ? { productType: "digital" as const } : {}),
         benefits: presentation?.benefits || details.benefits,
         keyPoints: presentation?.keyPoints || details.keyPoints,
         idealFor: presentation?.idealFor || details.idealFor,

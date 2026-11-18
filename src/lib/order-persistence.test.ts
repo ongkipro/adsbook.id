@@ -429,7 +429,7 @@ test("an identical checkout inside the window reuses the order instead of creati
 function variantDatabase(rows: Array<[id: number, productId: number, sku: string, price: number]>, inactive: number[] = []) {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`
-    CREATE TABLE products (id INTEGER PRIMARY KEY, is_active INTEGER NOT NULL DEFAULT 1);
+    CREATE TABLE products (id INTEGER PRIMARY KEY, is_active INTEGER NOT NULL DEFAULT 1, product_type TEXT NOT NULL DEFAULT 'physical');
     CREATE TABLE product_variants (id INTEGER PRIMARY KEY, product_id INTEGER NOT NULL, sku TEXT, price INTEGER NOT NULL);
     CREATE INDEX idx_variants_sku ON product_variants (sku);
   `);
@@ -464,14 +464,14 @@ const SARATOGA_AND_KOJIEN: Array<[number, number, string, number]> = [
 
 test("a variant id wins over another variant whose SKU is that same number", async () => {
   const database = variantDatabase(SARATOGA_AND_KOJIEN);
-  assert.deepEqual(await findOrderVariant(database, "1"), { id: 1, price: 135000 });
-  assert.deepEqual(await findOrderVariant(database, "2"), { id: 2, price: 268000 });
-  assert.deepEqual(await findOrderVariant(database, "7"), { id: 7, price: 130000 });
+  assert.deepEqual(await findOrderVariant(database, "1"), { id: 1, price: 135000, product_type: "physical" });
+  assert.deepEqual(await findOrderVariant(database, "2"), { id: 2, price: 268000, product_type: "physical" });
+  assert.deepEqual(await findOrderVariant(database, "7"), { id: 7, price: 130000, product_type: "physical" });
 });
 
 test("a SKU still resolves when no variant has it as an id", async () => {
   const database = variantDatabase(SARATOGA_AND_KOJIEN);
-  assert.deepEqual(await findOrderVariant(database, "SARATOGA-1L"), { id: 2, price: 268000 });
+  assert.deepEqual(await findOrderVariant(database, "SARATOGA-1L"), { id: 2, price: 268000, product_type: "physical" });
   assert.equal(await findOrderVariant(database, "NOPE"), null);
 });
 

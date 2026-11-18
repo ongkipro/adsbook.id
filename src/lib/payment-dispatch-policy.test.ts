@@ -103,3 +103,14 @@ test("an operator reads dispatch markers as words, and an accepted shipment is n
   assert.equal(acceptedShipmentId("DISPATCH_UNKNOWN: Mengantar timeout: upstream"), null, "a provider message is not an accepted id");
   assert.equal(acceptedShipmentId("Mengantar menerima MG-77: x"), null, "only an unknown-outcome marker carries one");
 });
+
+test("DIGITAL-PRODUCTS-SPEC §4.3: a digital order is never offered to Mengantar, and the claim refuses it too", async () => {
+  const paidDigital = { paymentMethod: "qris", paymentStatus: "paid", shippingStatus: "pending", destinationAreaId: "a", courierCode: "jne", pickupAddressId: "p" };
+  assert.equal(getMengantarDispatchEligibility({ ...paidDigital, fulfillmentType: "digital" }).eligible, false);
+  assert.match(getMengantarDispatchEligibility({ ...paidDigital, fulfillmentType: "digital" }).reason, /digital/);
+  // The claim is the last gate before the provider call: a paid digital order whose
+  // delivery stamp failed (still 'pending') must not slip through it.
+  const { readFileSync } = await import("node:fs");
+  const dispatch = readFileSync(new URL("./mengantar-dispatch.ts", import.meta.url), "utf8");
+  assert.match(dispatch, /SET provider_dispatch_error = 'DISPATCHING'[\s\S]*?AND fulfillment_type <> 'digital'/);
+});

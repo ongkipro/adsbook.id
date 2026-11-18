@@ -230,3 +230,14 @@ test("a product with no brand of its own takes the store's default brand, then t
   assert.match(xml, /<g:brand>Milik Sendiri<\/g:brand>/);
   assert.match(generateMetaCatalogXml([product], "https://toko.test", "Toko Test", "d"), /<g:brand>Toko Test<\/g:brand>/);
 });
+
+test("DIGITAL-PRODUCTS-SPEC §6.2: the Google, Meta and TikTok feeds carry physical products only", () => {
+  const products: CatalogProduct[] = [
+    { productId: 14001, slug: "kopi", productName: "Kopi Gayo", heroImage: "/images/kopi.jpg", variants: [{ id: 1, label: "250g", price: 85000 }] },
+    { productId: 14002, slug: "ebook", productName: "E-book Resep", heroImage: "/images/ebook.jpg", productType: "digital", variants: [{ id: 2, label: "PDF", price: 49000 }] },
+  ];
+  for (const xml of [generateGoogleCatalogXml(products, "https://toko.example"), generateMetaCatalogXml(products, "https://toko.example")]) {
+    assert.deepEqual([...xml.matchAll(/<g:id>([^<]+)<\/g:id>/g)].map((match) => match[1]), ["14001"]);
+    assert.doesNotMatch(xml, /ebook|E-book/);
+  }
+});

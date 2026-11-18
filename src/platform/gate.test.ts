@@ -7,6 +7,7 @@ import test from "node:test";
 
 import type { MigrationSource } from "../lib/schema-version.ts";
 import {
+  bumpTenantCacheVersion,
   decideHost,
   ensureControlPlane,
   HOST_CACHE_TTL_MS,
@@ -424,3 +425,23 @@ test("ADR-039 (c): 0007 moves a store's own subdomain from adsbook.cc to adsbook
   assert.equal(tenantOf((await gate(db, "https://agro.adsbook.my.id/")).result), "t-a");
   assert.equal(statusOf((await gate(db, "https://agro.adsbook.cc/")).result), 404, "the old name no longer routes");
 });
+
+test("Paket 1: bumpTenantCacheVersion moves an active tenant's version, never another's, and never throws", async () => {
+  const db = await controlPlane();
+  addTenant(db, "t_a", "toko-a");
+  addTenant(db, "t_b", "toko-b");
+  addTenant(db, "t_s", "toko-s", "suspended");
+  const version = (id: string) => (db.sqlite.prepare("SELECT cache_version FROM tenants WHERE id = ?").get(id) as { cache_version: number }).cache_version;
+  const before = { a: version("t_a"), b: version("t_b"), s: version("t_s") };
+  assert.equal(await bumpTenantCacheVersion({ PLATFORM_DB: db }, "t_a"), true);
+  assert.equal(await bumpTenantCacheVersion({ PLATFORM_DB: db }, "t_a"), true);
+  assert.equal(version("t_a"), before.a + 2);
+  assert.equal(version("t_b"), before.b, "another tenant's cache is untouched");
+  assert.equal(await bumpTenantCacheVersion({ PLATFORM_DB: db }, "t_s"), false, "a suspended tenant's version is the operator's");
+  assert.equal(version("t_s"), before.s);
+  assert.equal(await bumpTenantCacheVersion({}, "t_a"), false, "no control plane: nothing to bump");
+  assert.equal(await bumpTenantCacheVersion({ PLATFORM_DB: db }, undefined), false);
+  const broken = { prepare() { throw new Error("D1 down"); } };
+  assert.equal(await bumpTenantCacheVersion({ PLATFORM_DB: broken }, "t_a"), false, "a failure never fails the save");
+});
+

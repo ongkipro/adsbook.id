@@ -32,6 +32,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       password: body.password,
       terms: body.terms,
       turnstileToken: body.turnstile_token,
+      catalogMode: body.catalog_mode,
     },
     getClientIp(request.headers),
   );

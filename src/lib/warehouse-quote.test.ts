@@ -73,10 +73,11 @@ export function createOneWarehouseStore() {
       autolaris_api_key TEXT, autolaris_base_url TEXT, autolaris_order_origin_id TEXT, autolaris_order_destination_id TEXT, autolaris_shipper_email TEXT
     );
     INSERT INTO stores VALUES (1, 'Toko', 'qa-key', 'https://mengantar.example.test', NULL, NULL, NULL, NULL, NULL);
-    CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT, is_active INTEGER);
-    INSERT INTO products VALUES (1, 'Sepatu', 1);
+    CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT, is_active INTEGER, product_type TEXT NOT NULL DEFAULT 'physical');
+    INSERT INTO products (id, title, is_active) VALUES (1, 'Sepatu', 1);
     CREATE TABLE product_variants (id INTEGER PRIMARY KEY, product_id INTEGER, title TEXT, price INTEGER, weight_grams INTEGER);
     INSERT INTO product_variants VALUES (7, 1, 'Hitam 42', 150000, 1250);
+    ALTER TABLE product_variants ADD COLUMN sku TEXT;
     CREATE TABLE courier_rules (id INTEGER PRIMARY KEY, courier_code TEXT, is_enabled INTEGER, is_cod_enabled INTEGER);
     INSERT INTO courier_rules VALUES (1, 'SiCepat', 1, 1), (2, 'JNE', 1, 0);
     CREATE TABLE warehouses (

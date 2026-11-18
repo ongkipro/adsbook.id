@@ -55,6 +55,7 @@ import { withInsightsPeriod } from "@/lib/insights-view";
 import {
   ADMIN_ACCENT,
   getSearchableNavItems,
+  type CatalogMode,
   getVisibleNavGroups,
   isAdminNavHrefActive,
   profileNavItem,
@@ -76,6 +77,8 @@ interface AdminShellProps {
   adminUsername?: string;
   mustChangePassword?: boolean;
   sidebarDefaultOpen?: boolean;
+  /** DIGITAL-PRODUCTS-SPEC §4.1: a digital store's menu has nothing that ships. */
+  catalogMode?: CatalogMode;
 }
 
 export function AdminShell({
@@ -91,6 +94,7 @@ export function AdminShell({
   adminUsername = "",
   mustChangePassword = false,
   sidebarDefaultOpen = true,
+  catalogMode = "hybrid",
 }: AdminShellProps) {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -102,11 +106,11 @@ export function AdminShell({
   const [isDesktop, setIsDesktop] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(sidebarDefaultOpen);
   const [changelogOpen, setChangelogOpen] = React.useState(false);
-  const groups = mustChangePassword ? [] : getVisibleNavGroups(adminRole);
+  const groups = mustChangePassword ? [] : getVisibleNavGroups(adminRole, catalogMode);
   // The API & CLI docs speak to whoever manages API keys: owner and admin
   // (auth.ts ADMIN_PAGE_ROUTES holds /admin/docs for them alone).
   const docsHref = !mustChangePassword && (adminRole === "owner" || adminRole === "admin") ? "/admin/docs" : undefined;
-  const searchItems = mustChangePassword ? [] : getSearchableNavItems(adminRole);
+  const searchItems = mustChangePassword ? [] : getSearchableNavItems(adminRole, catalogMode);
   const allItems = groups.flatMap((group) => group.items);
   const currentItem = [...allItems, profileNavItem, statusNavItem].find(
     (item) => item.id === activeMenu,
@@ -217,6 +221,7 @@ export function AdminShell({
           currentPath={currentPath}
           siteUrl={siteUrl}
           adminRole={adminRole}
+          catalogMode={catalogMode}
           restricted={mustChangePassword}
           onOpenChangelog={() => setChangelogOpen(true)}
           docsHref={docsHref}

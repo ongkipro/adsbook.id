@@ -51,6 +51,8 @@ export type OrderLifecycleState = {
   cnote_no: string | null;
   provider_order_id: string | null;
   stock_restored_at: string | null;
+  /** DIGITAL-PRODUCTS-SPEC §2.3: a digital order is delivered on payment, with no shipment. */
+  fulfillment_type?: string | null;
 };
 
 export type OrderLifecycleUpdate = {
@@ -195,6 +197,7 @@ export function resolveAdminOrderTransition(
   }
 
   if (
+    current.fulfillment_type !== "digital" &&
     SHIPPED_LIKE_STATUSES.has(shippingStatus) &&
     (!current.provider_order_id || !current.courier_code || !current.cnote_no)
   ) {
@@ -282,6 +285,29 @@ export async function applyOrderLifecycleMutation(
   };
 }
 
+/**
+ * DIGITAL-PRODUCTS-SPEC §2.3: a digital order is delivered the moment it is
+ * paid — access opens then, and nothing ships. Called from every paid
+ * transition (`enqueuePurchaseForPaidOrder`, ADR-036's one path), so the
+ * operator never moves it by hand. Only a live, paid, digital order moves; a
+ * void one never does. Idempotent; returns whether this call moved it.
+ */
+export async function markDigitalOrderDelivered(database: D1Database, orderId: number): Promise<boolean> {
+  const result = await database
+    .prepare(
+      `UPDATE orders
+          SET shipping_status = 'delivered'
+        WHERE id = ?
+          AND fulfillment_type = 'digital'
+          AND payment_status IN ('paid', 'settled', 'success')
+          AND shipping_status IN ('pending', 'processing')
+          AND stock_restored_at IS NULL`,
+    )
+    .bind(orderId)
+    .run();
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
 export type BulkShippingStatusResult = {
   updatedIds: number[];
   /** Orders whose status changed after they were validated; left untouched. */
@@ -307,7 +333,7 @@ export async function updateAdminOrderShippingStatuses(
   const loaded = await database
     .prepare(
       `SELECT id, payment_method, payment_status, shipping_status,
-        courier_code, cnote_no, provider_order_id, stock_restored_at
+        courier_code, cnote_no, provider_order_id, stock_restored_at, fulfillment_type
       FROM orders
       WHERE id IN (${placeholders})`,
     )

@@ -1,0 +1,139 @@
+---
+/**
+ * The digital checkout (DIGITAL-PRODUCTS-SPEC §5.1): package, name, WhatsApp,
+ * optional email and a prepaid rail. No address, no courier, no COD; the
+ * access link opens on /payment and /thanks once the payment is confirmed.
+ * Rendered by GeoIpResolvedForm (product, landing, full/middle, embed) and
+ * /hybrid-form whenever the product is digital.
+ */
+import { formatIdr } from '../../../lib/format-idr';
+import { getStorefrontProduct } from '../../../lib/catalog';
+import { cheapestVariant, resolveFormVariant } from '../../../lib/form-config';
+import { jsonForScript } from '../../../lib/json-script';
+import '../../../styles/form-hybrid.css';
+
+interface Props {
+  productSlug?: string;
+  selectedVariantId?: string;
+  embedded?: boolean;
+}
+
+const { productSlug = '', selectedVariantId, embedded = false } = Astro.props;
+const product = await getStorefrontProduct(Astro.locals, productSlug);
+if (!product) throw new Error(`Product ${productSlug} not found`);
+const defaultVariant = resolveFormVariant(product, selectedVariantId) || cheapestVariant(product.variants)!;
+const instanceId = `digital-${product.slug}-${embedded ? 'embedded' : 'standalone'}`;
+const RootTag = embedded ? 'section' : 'main';
+const uid = crypto.randomUUID().slice(0, 8);
+---
+
+<RootTag class="digital-checkout bg-white" data-digital-form-root data-instance-id={instanceId}>
+  <form class="grid grid-cols-1 gap-5 px-4 pb-8 pt-4" data-digital-form novalidate>
+    <div class="absolute left-[-10000px] top-auto size-px overflow-hidden" aria-hidden="true">
+      <label>Jangan isi kolom ini <input type="text" name="contact_url_confirm" tabindex="-1" autocomplete="off" /></label>
+    </div>
+
+    <p class="digital-badge"><span aria-hidden="true"></span>Produk digital · akses instan setelah lunas</p>
+
+    {product.variants.length > 1 && (
+      <section class="form-block form-block-first">
+        <div class="form-block-head gap-1.5">
+          <h2 class="section-title">Pilih paket</h2>
+        </div>
+        <div class="variant-group simple-variant-group">
+          {product.variants.map((variant) => (
+            <label class="variant-option simple-variant-option">
+              <input type="radio" name="variant" value={variant.id} checked={variant.id === defaultVariant.id} data-label={variant.label} data-price={variant.price} />
+              <div class="variant-copy simple-variant-copy">
+                <div class="variant-radio" />
+                <div class="variant-main simple-variant-main">
+                  <p class="variant-label">{variant.label}</p>
+                  <span class="variant-price">{formatIdr(variant.price)}</span>
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+      </section>
+    )}
+    {product.variants.length === 1 && (
+      <input type="radio" name="variant" value={defaultVariant.id} checked hidden data-label={defaultVariant.label} data-price={defaultVariant.price} />
+    )}
+
+    <section class="form-block">
+      <div class="form-block-head gap-1.5">
+        <h2 class="section-title">Data pembeli</h2>
+        <p class="section-lead">Tanpa alamat: akses dikirim di halaman pembayaran setelah lunas.</p>
+      </div>
+      <div class="field-grid">
+        <div class="form-field form-field-full">
+          <input id={`dig-name-${uid}`} name="customer_name" required autocomplete="name" placeholder=" " />
+          <label for={`dig-name-${uid}`}>Nama lengkap</label>
+        </div>
+        <div class="form-field form-field-full">
+          <input id={`dig-phone-${uid}`} name="customer_phone" required type="tel" inputmode="numeric" autocomplete="tel" placeholder=" " />
+          <label for={`dig-phone-${uid}`}>Nomor WhatsApp aktif</label>
+        </div>
+        <div class="form-field form-field-full">
+          <input id={`dig-email-${uid}`} name="customer_email" type="email" inputmode="email" autocomplete="email" maxlength="160" placeholder=" " />
+          <label for={`dig-email-${uid}`}>Email (opsional)</label>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-block" aria-labelledby={`dig-pay-${uid}`}>
+      <div class="form-block-head gap-1.5">
+        <h2 class="section-title" id={`dig-pay-${uid}`}>Metode pembayaran</h2>
+        <p class="section-lead">QRIS, Virtual Account, atau transfer bank.</p>
+      </div>
+      <div class="digital-pay-list" data-digital-payments role="radiogroup" aria-labelledby={`dig-pay-${uid}`}>
+        <p class="digital-pay-empty">Memuat metode pembayaran…</p>
+      </div>
+    </section>
+
+    <section class="form-block summary-block">
+      <div class="summary-card">
+        <div class="summary-row summary-row-product">
+          <strong class="summary-product-name">{product.productName}</strong>
+          <span class="summary-variant" data-digital-variant>{defaultVariant.label}</span>
+        </div>
+        <div class="summary-row digital-summary-line"><span>Ongkos kirim</span><span>Gratis · akses digital</span></div>
+        <div class="total-box">
+          <div><p>Total</p><small>Biaya layanan pembayaran (jika ada) tampil di halaman bayar.</small></div>
+          <div class="total-box-side"><strong data-digital-total>{formatIdr(defaultVariant.price)}</strong></div>
+        </div>
+      </div>
+      <div class="submit-panel">
+        <button type="submit" class="submit-main"><span class="submit-main-label" data-label>Bayar &amp; Dapatkan Akses</span></button>
+        <p class="form-error" data-digital-error hidden role="alert"></p>
+      </div>
+    </section>
+  </form>
+  <script
+    is:inline
+    type="application/json"
+    data-digital-form-config
+    set:html={jsonForScript({ instanceId, productSlug: product.slug, productId: product.productId, productName: product.productName })}
+  />
+</RootTag>
+
+<script>
+  import { initDigitalOrderForms } from '../../../scripts/form-digital';
+  initDigitalOrderForms();
+</script>
+
+<style is:global>
+  .digital-checkout .digital-badge { display: inline-flex; align-items: center; gap: 0.5rem; justify-self: start; padding: 0.35rem 0.75rem; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 0.78rem; font-weight: 700; }
+  .digital-checkout .digital-badge span { width: 6px; height: 6px; background: #2563eb; }
+  .digital-checkout .digital-pay-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+  .digital-checkout .digital-pay-option { display: flex; align-items: center; gap: 0.75rem; min-height: 56px; padding: 0.75rem 0.875rem; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; cursor: pointer; }
+  .digital-checkout .digital-pay-option:has(input:checked) { border-color: #2563eb; background: #eff6ff; }
+  .digital-checkout .digital-pay-option:has(input:focus-visible) { outline: 2px solid #2563eb; outline-offset: 2px; }
+  .digital-checkout .digital-pay-option input { width: 18px; height: 18px; margin: 0; accent-color: #2563eb; flex-shrink: 0; }
+  .digital-checkout .digital-pay-text { display: grid; gap: 0.1rem; flex: 1; min-width: 0; }
+  .digital-checkout .digital-pay-text strong { font-size: 0.92rem; color: #0f172a; }
+  .digital-checkout .digital-pay-text small { font-size: 0.78rem; color: #64748b; }
+  .digital-checkout .digital-pay-option img { width: 42px; height: 28px; object-fit: contain; flex-shrink: 0; }
+  .digital-checkout .digital-pay-empty { font-size: 0.85rem; color: #64748b; }
+  .digital-checkout .digital-summary-line { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.85rem; color: #475569; }
+</style>

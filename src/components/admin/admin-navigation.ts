@@ -220,7 +220,33 @@ export function isAdminNavHrefActive(currentPath: string, href: string) {
   return true;
 }
 
-export function getVisibleNavGroups(role: AdminRole) {
+/**
+ * DIGITAL-PRODUCTS-SPEC §4.1: a digital store ships nothing, so its menu has no
+ * shipping, couriers, rate check or warehouse. Hidden, not removed: the pages
+ * still answer, and switching the mode back restores the menu as it was.
+ */
+const SHIPPING_ITEM_IDS = new Set(["shipping", "expeditions", "scoring"]);
+const SHIPPING_CHILD_HREFS = new Set(["/admin/settings/warehouse"]);
+
+export type CatalogMode = "physical" | "digital" | "hybrid";
+
+function forCatalog(groups: AdminNavGroup[], catalogMode: CatalogMode): AdminNavGroup[] {
+  if (catalogMode !== "digital") return groups;
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => !SHIPPING_ITEM_IDS.has(item.id))
+        .map((item) => item.children ? { ...item, children: item.children.filter((child) => !SHIPPING_CHILD_HREFS.has(child.href)) } : item),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+export function getVisibleNavGroups(role: AdminRole, catalogMode: CatalogMode = "hybrid") {
+  return forCatalog(navGroupsForRole(role), catalogMode);
+}
+
+function navGroupsForRole(role: AdminRole) {
   if (role === "owner") return adminNavGroups;
   const visibleIds = role === "admin"
     ? new Set(adminNavGroups.flatMap((group) => group.items.map((item) => item.id)))
@@ -246,8 +272,8 @@ export function getVisibleNavGroups(role: AdminRole) {
     .filter((group) => group.items.length > 0);
 }
 
-export function getSearchableNavItems(role: AdminRole) {
-  const groups = getVisibleNavGroups(role);
+export function getSearchableNavItems(role: AdminRole, catalogMode: CatalogMode = "hybrid") {
+  const groups = getVisibleNavGroups(role, catalogMode);
   return [
     ...groups.flatMap((group) =>
       group.items.flatMap((item) => [

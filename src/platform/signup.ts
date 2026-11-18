@@ -51,6 +51,8 @@ export type SignupInput = {
   password?: unknown;
   terms?: unknown;
   turnstileToken?: unknown;
+  /** DIGITAL-PRODUCTS-SPEC §1.1: 'physical' (the default) or 'digital'; 'hybrid' is chosen later in Pengaturan Toko. */
+  catalogMode?: unknown;
 };
 
 export type SignupFieldErrors = Partial<Record<"storeName" | "slug" | "email" | "whatsapp" | "password" | "terms" | "turnstile", string>>;
@@ -61,6 +63,7 @@ export type SignupPlan = {
   email: string;
   whatsapp: string | null;
   password: string;
+  catalogMode: "physical" | "digital";
 };
 
 /** UX-1 field rules, decided before any write. */
@@ -89,7 +92,9 @@ export function planSignup(input: SignupInput): { ok: true; plan: SignupPlan } |
   if (Object.keys(errors).length || !slug.ok) {
     return { ok: false, errors, reserved: !slug.ok && slug.reserved };
   }
-  return { ok: true, plan: { storeName, slug: slug.slug, email, whatsapp, password } };
+  // Anything but an explicit 'digital' is the physical default: the choice is reversible in settings.
+  const catalogMode = input.catalogMode === "digital" ? "digital" : "physical";
+  return { ok: true, plan: { storeName, slug: slug.slug, email, whatsapp, password, catalogMode } };
 }
 
 /** Cloudflare Turnstile siteverify. No secret configured: signup is closed (fail closed). */
@@ -207,6 +212,7 @@ export async function signup(
       storefrontTemplate: "compact-market",
     });
     if (!installed.ok) throw new Error(`install: ${installed.error}`);
+    await database.prepare("UPDATE stores SET catalog_mode = ?").bind(plan.catalogMode).run();
     await deps.checkpoint?.("install", tenantId);
 
     step = "secrets";

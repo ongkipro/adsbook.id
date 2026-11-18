@@ -45,6 +45,8 @@ export type Product = {
   /** Google product taxonomy id chosen in admin; the feeds send it verbatim. */
   googleCategoryId?: number;
   googleCategoryPath?: string;
+  /** DIGITAL-PRODUCTS-SPEC: 'digital' takes the digital checkout and stays out of the shopping feeds; absent is physical. */
+  productType?: "digital";
   benefits: string[];
   keyPoints: string[];
   idealFor: string[];

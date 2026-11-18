@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   deleteCatalogProduct,
+  parseDigitalAccessUrl,
   parseProductMutationPayload,
+  productTypeAllowed,
 } from "./product-mutation.ts";
 
 type MockStatement = {
@@ -308,3 +310,55 @@ test("an update keeps an image address the row already stores", () => {
   assert.ok("value" in parseProductMutationPayload(payload, true, legacy));
   assert.ok("error" in parseProductMutationPayload(payload, true, "/images/x.jpg"));
 });
+
+test("DIGITAL-PRODUCTS-SPEC §6.3: the access link is https and nothing else", () => {
+  assert.equal(parseDigitalAccessUrl("https://drive.google.com/file/d/abc/view"), "https://drive.google.com/file/d/abc/view");
+  assert.equal(parseDigitalAccessUrl("  https://notion.so/kelas  "), "https://notion.so/kelas");
+  for (const bad of [
+    "http://drive.example/x", "javascript:alert(1)", "JAVASCRIPT:alert(1)", "data:text/html,<script>alert(1)</script>",
+    "//drive.example/x", "/thanks", "drive.example/x", "https://user:pass@drive.example/x", "https://drive.example/a b",
+    "https://drive.example/\nx", "ftp://drive.example/x", "", "   ", `https://x.example/${"a".repeat(2000)}`, 42, null, undefined,
+  ]) {
+    assert.equal(parseDigitalAccessUrl(bad), null, String(bad).slice(0, 40));
+  }
+});
+
+test("DIGITAL-PRODUCTS-SPEC §2.2/§4.2: a digital product needs its link, has no weight, and keeps the note within 500", () => {
+  const digital = (overrides: Record<string, unknown> = {}) =>
+    parseProductMutationPayload(validMutationPayload({ product_type: "digital", digital_access_url: "https://drive.example/ebook", digital_access_note: "Password PDF: SUKSES", variants: [{ sku: "EB-1", title: "E-book", price: 49000, stock: 0 }], ...overrides }), false);
+  const parsed = digital();
+  assert.ok("value" in parsed, JSON.stringify(parsed));
+  if (!("value" in parsed)) return;
+  assert.equal(parsed.value.product_type, "digital");
+  assert.equal(parsed.value.digital_access_url, "https://drive.example/ebook");
+  assert.equal(parsed.value.digital_access_note, "Password PDF: SUKSES");
+  assert.equal(parsed.value.variants[0].weight_grams, 0, "no weight asked, 0 stored");
+  const weighted = digital({ variants: [{ sku: "EB-1", title: "E-book", price: 49000, weight_grams: 900 }] });
+  assert.ok("value" in weighted && weighted.value.variants[0].weight_grams === 0, "a weight sent for a digital product is dropped");
+  for (const url of [undefined, "", "http://drive.example/ebook", "javascript:alert(1)"]) {
+    const refused = digital({ digital_access_url: url });
+    assert.ok("error" in refused && /https/.test(refused.error), String(url));
+  }
+  const long = digital({ digital_access_note: "x".repeat(501) });
+  assert.ok("error" in long && /500/.test(long.error));
+  assert.ok("value" in digital({ digital_access_note: "x".repeat(500) }));
+  const unknown = parseProductMutationPayload(validMutationPayload({ product_type: "jasa" }), false);
+  assert.ok("error" in unknown, "an unknown type is refused");
+  // A physical product clears the digital fields and still needs its weight.
+  const physical = parseProductMutationPayload(validMutationPayload({ digital_access_url: "https://drive.example/x" }), false);
+  assert.ok("value" in physical && physical.value.product_type === "physical" && physical.value.digital_access_url === null);
+  const noWeight = parseProductMutationPayload(validMutationPayload({ variants: [{ sku: "M-1", title: "1 L", price: 1000 }] }), false);
+  assert.ok("error" in noWeight, "a physical product still states its weight");
+});
+
+test("DIGITAL-PRODUCTS-SPEC §4.2/§8.6: the catalog mode decides new product types; an existing product keeps its own", () => {
+  assert.equal(productTypeAllowed("digital", "digital"), true);
+  assert.equal(productTypeAllowed("digital", "physical"), false);
+  assert.equal(productTypeAllowed("physical", "digital"), false);
+  assert.equal(productTypeAllowed("physical", "physical"), true);
+  assert.equal(productTypeAllowed("hybrid", "digital"), true);
+  assert.equal(productTypeAllowed("hybrid", "physical"), true);
+  assert.equal(productTypeAllowed("digital", "physical", "physical"), true, "a physical product made before the switch stays editable");
+  assert.equal(productTypeAllowed("digital", "physical", "digital"), false, "but cannot become physical in a digital store");
+});
+

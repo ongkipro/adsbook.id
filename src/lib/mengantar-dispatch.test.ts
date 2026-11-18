@@ -129,6 +129,7 @@ class DispatchDatabase {
         'cod', 'unpaid', 'pending', 168000,
         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
       );
+      ALTER TABLE orders ADD COLUMN fulfillment_type TEXT NOT NULL DEFAULT 'physical';
       INSERT INTO order_items VALUES (1, 1, 1, 1, 150000);
       -- 0070_order_item_weight: the row above predates it, so it stays NULL.
       ALTER TABLE order_items ADD weight_grams INTEGER;

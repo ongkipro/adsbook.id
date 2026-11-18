@@ -114,6 +114,28 @@ const isOwner = Astro.locals.admin?.role === 'owner';
         <button id="saveStore" type="submit" class="btn-blue w-full sm:w-auto">Simpan profil store</button>
       </div>
     </form>
+    <form id="catalogModeForm" class="rounded-xl border border-slate-200 bg-white shadow-sm" novalidate>
+      <fieldset class="p-5 md:p-6">
+        <legend class="text-base font-semibold text-slate-950">Mode katalog toko</legend>
+        <p class="mt-1 text-xs leading-5 text-slate-500">Menentukan menu admin, jenis produk yang bisa dibuat, dan syarat toko siap jualan. Pindah mode tidak menghapus produk, gudang, atau kurir yang sudah tersimpan.</p>
+        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          {([
+            ['physical', 'Produk Fisik', 'COD, ekspedisi, gudang, dan kontrol RTS.'],
+            ['digital', 'Produk Digital', 'Akses instan setelah lunas. Tanpa menu gudang dan ekspedisi.'],
+            ['hybrid', 'Hybrid (Fisik & Digital)', 'Jual keduanya. Produk digital bisa jualan sebelum gudang siap.'],
+          ] as const).map(([value, label, hint]) => (
+            <label class="flex min-h-11 cursor-pointer gap-3 rounded-xl border border-slate-200 p-4 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+              <input type="radio" name="catalog_mode" value={value} checked={Astro.locals.tenant.catalogMode === value} class="mt-0.5 size-4 accent-blue-600" />
+              <span class="grid grid-cols-1 gap-1"><span class="text-sm font-semibold text-slate-900">{label}</span><span class="text-xs leading-5 text-slate-500">{hint}</span></span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div class="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <p id="catalogModeStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true"></p>
+        <button id="saveCatalogMode" type="submit" class="btn-blue w-full sm:w-auto">Simpan mode katalog</button>
+      </div>
+    </form>
     <form id="templateDefinitionForm" inert data-pending class="rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
       <div class="p-5 md:p-6">
         <h2 class="text-base font-semibold text-slate-950">Tambah template storefront</h2>
@@ -457,6 +479,32 @@ const isOwner = Astro.locals.admin?.role === 'owner';
         showEmbedStatus(error instanceof Error ? error.message : 'Gagal menyimpan daftar origin embed.', 'error');
       } finally {
         setEmbedPending(false);
+      }
+    });
+  </script>
+  <script>
+    // Mode katalog: its own save, then a reload so the menu follows the new mode.
+    const catalogForm = document.getElementById('catalogModeForm') as HTMLFormElement | null;
+    const catalogStatus = document.getElementById('catalogModeStatus');
+    const catalogSave = document.getElementById('saveCatalogMode') as HTMLButtonElement | null;
+    catalogForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const mode = new FormData(catalogForm).get('catalog_mode');
+      if (catalogSave) catalogSave.disabled = true;
+      if (catalogStatus) catalogStatus.textContent = 'Menyimpan…';
+      try {
+        const response = await fetch('/api/admin/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ action: 'save-catalog-mode', catalog_mode: mode }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Gagal menyimpan mode katalog.');
+        if (catalogStatus) catalogStatus.textContent = 'Tersimpan. Memuat ulang menu…';
+        window.location.reload();
+      } catch (error) {
+        if (catalogStatus) catalogStatus.textContent = error instanceof Error ? error.message : 'Gagal menyimpan mode katalog.';
+        if (catalogSave) catalogSave.disabled = false;
       }
     });
   </script>

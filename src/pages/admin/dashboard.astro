@@ -25,7 +25,10 @@ const setupStoreUrl = setupHost ? `${Astro.url.protocol}//${setupHost}${Astro.ur
 const primaryActions = mayManageOrders
   ? [
       { href: '/admin/orders', label: 'Kelola order', primary: false },
-      { href: '/admin/shipping', label: 'Buka pengiriman', primary: true },
+      // DIGITAL-PRODUCTS-SPEC §4.1: a digital store ships nothing.
+      Astro.locals.tenant.catalogMode === 'digital'
+        ? { href: '/admin/products', label: 'Kelola produk', primary: true }
+        : { href: '/admin/shipping', label: 'Buka pengiriman', primary: true },
     ]
   : [
       { href: '/admin/products', label: 'Kelola produk', primary: false },

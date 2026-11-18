@@ -470,7 +470,7 @@ export async function findOrderVariant(database: D1Database, variantKey: string)
   return database
     .prepare(
       `
-      SELECT pv.id, pv.price
+      SELECT pv.id, pv.price, p.product_type
       FROM product_variants pv
       INNER JOIN products p ON p.id = pv.product_id
       WHERE p.is_active = 1
@@ -486,8 +486,16 @@ export async function findOrderVariant(database: D1Database, variantKey: string)
     `,
     )
     .bind(variantKey, variantKey, variantKey)
-    .first<{ id: number; price: number }>();
+    .first<{ id: number; price: number; product_type?: string | null }>();
 }
+
+/** The placeholder address of a digital order (DIGITAL-PRODUCTS-SPEC §2.3): the columns are NOT NULL and nothing ships. */
+export const DIGITAL_ORDER_ADDRESS = {
+  address: "Produk digital (tanpa pengiriman)",
+  province: "Digital",
+  city: "Digital",
+  district: "Digital",
+} as const;
 
 export async function persistOrder(
   database: D1Database,
@@ -495,6 +503,16 @@ export async function persistOrder(
 ): Promise<PersistedOrder> {
   const variant = await findOrderVariant(database, input.variantKey);
   if (!variant) throw new OrderInputError("Varian produk tidak ditemukan.");
+  // DIGITAL-PRODUCTS-SPEC §2.3/§6.3: the product decides, never the request. A
+  // digital product is paid before access — never COD — and ships nothing. Every
+  // order path (checkout, middle form, headless, CS conversion) passes here.
+  const fulfillmentType = variant.product_type === "digital" ? "digital" : "physical";
+  if (fulfillmentType === "digital") {
+    if (input.paymentMethod === "cod") {
+      throw new OrderInputError("Produk digital tidak bisa dibayar COD. Pilih QRIS, Virtual Account, atau transfer bank.");
+    }
+    if (input.shippingCost !== 0) throw new OrderInputError("Produk digital tidak memakai ongkos kirim.");
+  }
   // No stock gate. This store sells on demand rather than from a counted
   // shelf, so an order is never refused for a stock figure and the figure is
   // never spent (ADR-023). Price, weight and identity still come from D1.
@@ -615,7 +633,8 @@ export async function persistOrder(
                  seller_account_holder = ?,
                  seller_account_number = ?,
                  checkout_fingerprint = ?,
-                 checkout_dedupe_expires_at = ?
+                 checkout_dedupe_expires_at = ?,
+                 fulfillment_type = ?
              WHERE id = ?
                AND customer_phone = ?
                AND shipping_status = 'abandoned'
@@ -657,6 +676,7 @@ export async function persistOrder(
             sellerBankAccount?.account_number || null,
             checkoutFingerprint,
             dedupeExpiresAt,
+            fulfillmentType,
             abandonedOrder.id,
             input.customerPhone,
           )
@@ -671,10 +691,10 @@ export async function persistOrder(
               meta_request_context, source_page_path,
               seller_bank_account_id, seller_bank_code, seller_bank_name,
               seller_account_holder, seller_account_number, created_at,
-              checkout_fingerprint, checkout_dedupe_expires_at
+              checkout_fingerprint, checkout_dedupe_expires_at, fulfillment_type
             ) VALUES (
               ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )`,
           )
           .bind(
@@ -714,6 +734,7 @@ export async function persistOrder(
             createdAt,
             checkoutFingerprint,
             dedupeExpiresAt,
+            fulfillmentType,
           );
 
     const identityPredicate = abandonedOrder
