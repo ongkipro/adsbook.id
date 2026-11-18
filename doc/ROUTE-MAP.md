@@ -84,7 +84,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/feed/google-catalog.xml` | GET | public | — | `src/pages/feed/google-catalog.xml.ts` | `catalog` `catalog-feed` | `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog-data.test.ts` `lib/catalog-feed.test.ts` `lib/catalog-identity.test.ts` `lib/catalog.test.ts` `platform/two-tenants.test.ts` |
 | `/feed/meta-catalog.xml` | GET | public | — | `src/pages/feed/meta-catalog.xml.ts` | `catalog` `catalog-feed` | `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog-data.test.ts` `lib/catalog-feed.test.ts` `lib/catalog-identity.test.ts` `lib/catalog.test.ts` `platform/two-tenants.test.ts` |
 | `/feed/tiktok-catalog.xml` | GET | public | — | `src/pages/feed/tiktok-catalog.xml.ts` | `catalog` `catalog-feed` | `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog-data.test.ts` `lib/catalog-feed.test.ts` `lib/catalog-identity.test.ts` `lib/catalog.test.ts` `platform/two-tenants.test.ts` |
-| `/robots.txt` | GET | public | — | `src/pages/robots.txt.ts` | — | — | — | — |
+| `/robots.txt` | GET | public | — | `src/pages/robots.txt.ts` | `robots` | — | — | `platform/middleware-gate.test.ts` |
 | `/sitemap.xml` | GET | public | — | `src/pages/sitemap.xml.ts` | `catalog` `landing-pages` `native-landing-pages` `sitemap` | `landing_pages` `landing_sections` `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/click-ids.test.ts` `lib/landing-pages.test.ts` `lib/native-landing-pages.test.ts` `lib/sitemap.test.ts` `lib/system-precision.test.ts` `platform/two-tenants.test.ts` |
 
 ## Media (2)
@@ -169,7 +169,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/check` | GET | admin session | owner, admin, customer_service | `src/pages/admin/check.astro` | `tenant-database` | `warehouses` | — | `platform/two-tenants.test.ts` |
 | `/admin/content` | GET | admin session | owner, admin, advertiser | `src/pages/admin/content.astro` | — | — | — | — |
 | `/admin/couriers` | GET | admin session | owner, admin | `src/pages/admin/couriers.astro` | — | — | — | — |
-| `/admin/dashboard` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/admin/dashboard.astro` | `auth` `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/setup-checklist.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/dashboard` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/admin/dashboard.astro` | `auth` `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/setup-checklist.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/docs` | GET | admin session | owner, admin | `src/pages/admin/docs/index.astro` | — | — | — | — |
 | `/admin/docs/[chapter]` | GET | admin session | owner, admin | `src/pages/admin/docs/[chapter].astro` | — | — | — | — |
 | `/admin/expeditions` | GET | admin session | owner, admin | `src/pages/admin/expeditions.astro` | — | — | — | — |
@@ -182,7 +182,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/payments` | GET | admin session | owner, admin | `src/pages/admin/payments.astro` | `autolaris-client` `payment-fee-policy` | — | — | `lib/autolaris-client.test.ts` `lib/autolaris-payment.test.ts` `lib/dev-providers.test.ts` `lib/payment-fee-policy.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/products` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products.astro` | `tenant-database` | `product_variants` `products` | — | `platform/two-tenants.test.ts` |
 | `/admin/products/edit` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products/edit.astro` | — | — | — | — |
-| `/admin/products/new` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products/new.astro` | `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/products/new` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products/new.astro` | `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/setup-checklist.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/profile` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/admin/profile.astro` | — | — | — | — |
 | `/admin/settings` | GET | admin session | owner, admin | `src/pages/admin/settings.astro` | — | — | — | — |
 | `/admin/settings/access` | GET | admin session | owner | `src/pages/admin/settings/access.astro` | — | — | — | — |
@@ -195,9 +195,9 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/settings/store` | GET | admin session | owner, admin | `src/pages/admin/settings/store.astro` | `brand-assets` | — | — | — |
 | `/admin/settings/warehouse` | GET | admin session | owner, admin | `src/pages/admin/settings/warehouse.astro` | — | — | — | — |
 | `/admin/settings/whatsapp` | GET | admin session | owner, admin | `src/pages/admin/settings/whatsapp.astro` | — | — | — | — |
-| `/admin/setup` | GET | admin session | owner, admin | `src/pages/admin/setup.astro` | `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/setup` | GET | admin session | owner, admin | `src/pages/admin/setup.astro` | `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/setup-checklist.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/shipping` | GET | admin session | owner, admin, customer_service | `src/pages/admin/shipping.astro` | — | — | — | — |
-| `/admin/status` | GET | admin session | owner, admin | `src/pages/admin/status.astro` | `health-snapshot` `setup-checklist` `tenant-database` | `ops_health_snapshot` `stores` | `tenant_hosts` | `lib/health-snapshot.test.ts` `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/status` | GET | admin session | owner, admin | `src/pages/admin/status.astro` | `health-snapshot` `setup-checklist` `tenant-database` | `ops_health_snapshot` `stores` | `tenant_hosts` | `lib/health-snapshot.test.ts` `lib/setup-checklist.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 
 ## Admin API (50)
 
@@ -263,12 +263,12 @@ under both headings wherever they are named; which database a statement meant is
 | `/platform/signup` ⇐ `/daftar` | GET | public | — | `src/pages/platform/signup.astro` | `env` `platform/hostnames` `platform/site/content` `platform/site/site` `platform/store-finder` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/store-finder.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/site` ⇐ `/` | GET | public | — | `src/pages/platform/site/index.astro` | `env` `platform/hostnames` `platform/site/content` `platform/site/site` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/site/cara-kerja` ⇐ `/cara-kerja` | GET | public | — | `src/pages/platform/site/cara-kerja.astro` | `platform/site/site` | — | — | `platform/platform-site.test.ts` |
-| `/platform/site/coba` ⇐ `/coba` | GET | public | — | `src/pages/platform/site/coba.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/faq` ⇐ `/faq` | GET | public | — | `src/pages/platform/site/faq.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/fitur` ⇐ `/fitur` | GET | public | — | `src/pages/platform/site/fitur.astro` | `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/harga` ⇐ `/harga` | GET | public | — | `src/pages/platform/site/harga.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/kontak` ⇐ `/kontak` | GET | public | — | `src/pages/platform/site/kontak.astro` | `env` `platform/site/site` | — | — | `lib/env.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
-| `/platform/site/robots.txt` ⇐ `/robots.txt` | GET | public | — | `src/pages/platform/site/robots.txt.ts` | `env` `platform/site/site` | — | — | `lib/env.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
+| `/platform/site/llms.txt` ⇐ `/llms.txt` | GET | public | — | `src/pages/platform/site/llms.txt.ts` | `env` `platform/site/site` | — | — | `lib/env.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
+| `/platform/site/robots.txt` ⇐ `/robots.txt` | GET | public | — | `src/pages/platform/site/robots.txt.ts` | `env` `platform/host` `platform/site/site` `robots` | — | — | `lib/env.test.ts` `platform/gate.test.ts` `platform/hostnames.test.ts` `platform/middleware-gate.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/site/sitemap.xml` ⇐ `/sitemap.xml` | GET | public | — | `src/pages/platform/site/sitemap.xml.ts` | `env` `platform/site/site` | — | — | `lib/env.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/syarat` ⇐ `/syarat` | GET | public | — | `src/pages/platform/syarat.astro` | — | — | — | — |
 
@@ -299,7 +299,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-202 modules under `src/lib` and `src/platform`; 10 that no test imports.
+203 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -347,7 +347,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `edge-cache` | 12 | — | — | 1 | `/assets/[...key]` |
 | `embed-markup` | 5 | — | — | 1 | `/embed/form` |
 | `embed-security` | 6 | — | — | 1 | `/api/tiktok-event` `/api/admin/settings` |
-| `env` | 3 | — | — | 2 | `/assets/[...key]` `/media/[...key]` `/api/handoff` `/api/owner-recovery` `/api/form-config` `/api/locations` `/api/webhooks/autolaris/[token]` `/admin/settings/domains` `/admin/settings/plugins/kelola` `/api/admin/access` `/api/admin/ads` `/api/admin/billing` `/api/admin/content` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/media` `/api/admin/orders/[id]` `/api/admin/plugins/kelola` `/api/admin/profile` `/api/admin/settings` `/api/admin/store-removal` `/api/admin/upload-r2` `/platform/masuk` `/platform/signup` `/platform/site` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/platform/[...section]` `/api/platform/health` `/api/platform/invoices/[id]/check` `/api/platform/login` `/api/platform/logout` `/api/platform/masuk` `/api/platform/signup` `/api/platform/slug` `/api/platform/team` `/api/platform/team/[id]` `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` `/api/platform/webhooks/autolaris/[token]` |
+| `env` | 3 | — | — | 2 | `/assets/[...key]` `/media/[...key]` `/api/handoff` `/api/owner-recovery` `/api/form-config` `/api/locations` `/api/webhooks/autolaris/[token]` `/admin/settings/domains` `/admin/settings/plugins/kelola` `/api/admin/access` `/api/admin/ads` `/api/admin/billing` `/api/admin/content` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/media` `/api/admin/orders/[id]` `/api/admin/plugins/kelola` `/api/admin/profile` `/api/admin/settings` `/api/admin/store-removal` `/api/admin/upload-r2` `/platform/masuk` `/platform/signup` `/platform/site` `/platform/site/kontak` `/platform/site/llms.txt` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/platform/[...section]` `/api/platform/health` `/api/platform/invoices/[id]/check` `/api/platform/login` `/api/platform/logout` `/api/platform/masuk` `/api/platform/signup` `/api/platform/slug` `/api/platform/team` `/api/platform/team/[id]` `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` `/api/platform/webhooks/autolaris/[token]` |
 | `excluded-area` | 1 | — | — | 1 | `/api/submit-middle-order` |
 | `form-config` | 7 | — | — | 1 | `/embed/form` `/full-form` `/hybrid-form` `/middle-form` `/api/form-config` |
 | `form-mode` | 8 | `stores` | — | 1 | `/produk/[slug]` `/geoipform` `/hybrid-form` `/api/form-config` `/api/geo-province` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/v1/storefront` `/api/admin/abandoned-orders` |
@@ -423,11 +423,12 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `rate-check` | 10 | — | — | 1 | — |
 | `rate-limit` | 12 | `rate_limits` | `rate_limits` | 2 | `/hello` `/api/locations` `/api/meta-event` `/api/order-status` `/api/record-abandoned-order` `/api/shipping-rates` `/api/submit-middle-order` `/api/submit-order` `/api/tiktok-event` `/api/v1/checkout` `/api/v1/tracking/events` `/api/webhooks/autolaris/[token]` `/api/platform/login` `/api/platform/masuk` `/api/platform/signup` |
 | `receiver-performance` | 5 | — | — | 2 | `/api/admin/orders/[id]` |
+| `robots` | 3 | — | — | 1 | `/robots.txt` `/platform/site/robots.txt` |
 | `route-map` | 26 | — | — | 1 | — |
 | `rts-scoring` | 10 | `orders` | — | 1 | `/api/submit-middle-order` `/api/submit-order` `/api/admin/check` `/api/admin/orders` `/api/admin/orders/[id]` |
 | `schema-version` | 12 | — | — | 28 | — |
 | `seller-bank-account` | 3 | — | — | 1 | `/api/admin/seller-bank-accounts` |
-| `setup-checklist` | 5 | `stores` | `tenant_hosts` | 2 | `/admin/dashboard` `/admin/products/new` `/admin/setup` `/admin/status` |
+| `setup-checklist` | 5 | `stores` | `tenant_hosts` | 3 | `/admin/dashboard` `/admin/products/new` `/admin/setup` `/admin/status` |
 | `shipping-fallback` | 2 | — | — | 1 | — |
 | `shipping-queue` | 3 | — | — | 1 | `/api/admin/shipping` |
 | `shipping-quote` | 6 | `courier_rules` `product_variants` `products` `warehouses` | — | 3 | `/api/shipping-rates` `/api/submit-order` `/api/v1/checkout` `/api/v1/geo/shipping-rates` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` |
@@ -479,7 +480,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/domain-poll` | 6 | — | `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]/recheck` |
 | `platform/gate` | 4 | — | — | 2 | — |
 | `platform/handoff` | 14 | — | `handoff_tokens` | 1 | `/api/handoff` |
-| `platform/host` | 8 | — | — | 3 | `/api/handoff` |
+| `platform/host` | 16 | — | — | 3 | `/api/handoff` `/platform/site/robots.txt` |
 | `platform/hostnames` | 28 | — | `plans` `tenant_hosts` `tenants` | 5 | `/admin/settings/domains` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/platform/masuk` `/platform/signup` `/platform/site` |
 | `platform/identities` | 7 | `admin_credentials` | `platform_identities` `tenant_hosts` `tenants` | 1 | `/api/admin/access` `/api/admin/profile` |
 | `platform/jobs` | 7 | — | `handoff_tokens` `tenant_events` `tenant_hosts` `tenant_usage_daily` `tenants` | 3 | — |
@@ -494,9 +495,9 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/request-log` | 6 | — | — | 1 | — |
 | `platform/shared-areas` | 5 | — | `shared_mengantar_areas` | 1 | `/api/locations` |
 | `platform/signup` | 12 | `stores` | `platform_identities` `tenant_events` `tenant_hosts` `tenants` | 2 | `/api/platform/signup` |
-| `platform/site/content` | 16 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/coba` `/platform/site/faq` `/platform/site/harga` |
+| `platform/site/content` | 16 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/faq` `/platform/site/harga` |
 | `platform/site/kinetic-stage` | 1 | — | — | **none** | — |
-| `platform/site/site` | 17 | — | — | 1 | `/platform/masuk` `/platform/signup` `/platform/site` `/platform/site/cara-kerja` `/platform/site/coba` `/platform/site/faq` `/platform/site/fitur` `/platform/site/harga` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/api/platform/signup` |
+| `platform/site/site` | 22 | — | — | 1 | `/platform/masuk` `/platform/signup` `/platform/site` `/platform/site/cara-kerja` `/platform/site/faq` `/platform/site/fitur` `/platform/site/harga` `/platform/site/kontak` `/platform/site/llms.txt` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/api/platform/signup` |
 | `platform/slugs` | 6 | — | `tenants` | 1 | `/api/platform/slug` |
 | `platform/state-pages` | 2 | — | — | 1 | `/kebijakan-privasi` |
 | `platform/store-core` | 20 | — | — | 3 | — |

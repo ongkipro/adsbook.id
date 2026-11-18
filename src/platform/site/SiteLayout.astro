@@ -10,7 +10,7 @@ import { getRuntimeEnv } from '../../lib/env';
 import { tenantHostSuffix } from '../hostnames';
 import PlatformPixel from './PlatformPixel.astro';
 import SiteHeader from './SiteHeader.astro';
-import { SITE_NAME, canonicalUrl, siteJsonLd, type SitePage } from './site.ts';
+import { SITE_NAME, canonicalUrl, ogImageFor, siteJsonLd, type SitePage } from './site.ts';
 
 interface Props {
   page: SitePage;
@@ -23,6 +23,7 @@ interface Props {
 const { page, quietHeader = false, heroHeader = false } = Astro.props;
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 const canonical = canonicalUrl(env, page.path);
+const og = ogImageFor(env, page);
 const year = new Date().getFullYear();
 ---
 
@@ -33,7 +34,7 @@ const year = new Date().getFullYear();
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{page.title}</title>
     <meta name="description" content={page.description} />
-    {page.noindex && <meta name="robots" content="noindex, nofollow" />}
+    {page.noindex ? <meta name="robots" content="noindex, nofollow" /> : <meta name="robots" content="max-image-preview:large" />}
     <link rel="canonical" href={canonical} />
     <slot name="head" />
     <meta property="og:type" content="website" />
@@ -42,13 +43,22 @@ const year = new Date().getFullYear();
     <meta property="og:title" content={page.title} />
     <meta property="og:description" content={page.description} />
     <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content={og.url} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={og.alt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={page.title} />
+    <meta name="twitter:description" content={page.description} />
+    <meta name="twitter:image" content={og.url} />
+    <meta name="twitter:image:alt" content={og.alt} />
     <meta name="theme-color" content="#F8FAFC" />
     <link rel="icon" type="image/svg+xml" href="/platform/brand/adsbook-id-mark-on-accent.svg" />
     <link rel="icon" href={FAVICON_PNG} sizes="32x32" />
     <link rel="apple-touch-icon" href={FAVICON_192} />
     <link rel="preload" href="/platform/fonts/plus-jakarta-sans-800.woff2" as="font" type="font/woff2" crossorigin />
-    <script type="application/ld+json" set:html={siteJsonLd(env)} />
+    <script type="application/ld+json" set:html={siteJsonLd(env, page)} />
     <PlatformPixel />
   </head>
   <body>
@@ -69,7 +79,6 @@ const year = new Date().getFullYear();
           <a href="/fitur">Fitur</a>
           <a href="/cara-kerja">Cara kerja</a>
           <a href="/harga">Harga</a>
-          <a href="/coba">Mengapa adsbook.id</a>
         </nav>
         <nav aria-label="Bantuan" class="footer-col">
           <p class="footer-head">Bantuan</p>

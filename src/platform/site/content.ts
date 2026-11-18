@@ -115,9 +115,9 @@ export const PLAN_POINTS = [
 
 export const PREVIEW = {
   title: "Gratis sampai siap beriklan",
-  text: "Daftar tanpa kartu. Di Mode Preview Anda bisa menyiapkan produk, landing page, gudang, dan pengaturan pixel, lalu melihat toko seperti pembeli melihatnya. Pesanan pembeli, sinyal iklan, AI, dan domain sendiri aktif begitu langganan dibayar.",
+  text: "Daftar tanpa biaya awal. Mode Preview tidak dibatasi waktu: di sana Anda bisa menyiapkan produk, landing page, gudang, dan pengaturan pixel, lalu melihat toko seperti pembeli melihatnya. Pesanan pembeli, sinyal iklan, AI, dan domain sendiri aktif begitu langganan dibayar.",
   payment: "Bayar langganan dengan QRIS atau Virtual Account (BCA, Mandiri, BNI, BRI, Permata). Perpanjangan menambah hari dari tanggal berakhir, jadi sisa hari tidak hilang.",
-  grace: "Lewat jatuh tempo, toko tetap jalan 48 jam agar iklan tidak terhenti mendadak. Setelah itu pesanan dan iklan dijeda, data toko tetap aman, dan Anda tetap bisa masuk ke admin untuk memperpanjang.",
+  grace: "Masa tenggang 48 jam berlaku setelah langganan berbayar jatuh tempo: toko tetap jalan agar iklan aktif tidak terhenti mendadak. Setelah itu pesanan dan iklan dijeda, data toko tetap aman, dan Anda tetap bisa masuk ke admin untuk memperpanjang.",
   fees: "Biaya kurir dan pembayaran pembeli ditagih Mengantar dan AutoLaris langsung ke akun Anda.",
 };
 
@@ -127,7 +127,7 @@ export const FAQ_SHORT: Faq[] = [
   { q: "Bagaimana Hybrid Form menangani klik dari provinsi di luar area COD?", a: "Saat Hybrid Form aktif, pembeli di provinsi tempat COD tersedia mendapat form COD singkat. Pengunjung dari provinsi yang Anda kecualikan (bawaannya antara lain Papua, Maluku, dan NTT; daftarnya bisa Anda ubah) mendapat form lengkap non-COD dengan QRIS atau Virtual Account dan ongkir per kecamatan, dan COD ke provinsi itu juga ditolak di server. Dari area tersebut, event Purchase hanya terkirim untuk pesanan yang sudah lunas." },
   { q: "Apa bedanya tracking 1:1 di sini dengan memasang Pixel atau CAPI biasa?", a: "Pixel di browser sering terhalang ad blocker, privasi iOS, atau pembeli yang langsung menutup halaman. CAPI tanpa event_id yang sama dengan Pixel bisa membuat satu pesanan terhitung dua konversi. Di adsbook.id, click ID disimpan 90 hari sebagai data first-party (tidak terhapus oleh link follow-up WhatsApp dari CS), setiap pesanan membawa 8 kunci pencocokan yang di-hash SHA-256, dan event dari browser serta server memakai satu ID pesanan ke Meta Ads, Google Ads, dan TikTok Ads. Tidak perlu server GTM atau aplikasi tracker tambahan." },
   { q: "Benarkah 0% potongan transaksi QRIS/VA dan tanpa kuota order bulanan?", a: "Benar. COD dicairkan oleh Mengantar, sedangkan QRIS dan Virtual Account oleh AutoLaris, langsung ke akun milik Anda sendiri. adsbook.id tidak memegang dana penjualan, tidak memotong persentase per transaksi, dan tidak membatasi jumlah order maupun produk." },
-  { q: "Bisa menyiapkan dan review tampilan toko gratis sebelum bayar?", a: "Bisa, tanpa kartu, di Mode Preview. Setelah toko siap menerima pesanan dari iklan, aktifkan langganan mulai Rp149.000 per bulan atau Rp1.490.000 per tahun (bayar 10 bulan, gratis 2 bulan)." },
+  { q: "Bisa menyiapkan dan review tampilan toko gratis sebelum bayar?", a: "Bisa, tanpa biaya awal dan tanpa batas waktu persiapan, di Mode Preview. Setelah toko siap menerima pesanan dari iklan, aktifkan langganan mulai Rp149.000 per bulan atau Rp1.490.000 per tahun (bayar 10 bulan, gratis 2 bulan)." },
   { q: "Apakah satu toko dapat domain sendiri, dan bagaimana tracking TikTok Ads?", a: "Setiap langganan mencakup satu toko dan satu domain sendiri dengan SSL otomatis. Untuk TikTok Ads, isi Pixel ID dan Events API Access Token di admin: ttclid disimpan 90 hari, dan CompletePayment dikirim dari browser dan server dengan event_id yang sama, yaitu nomor pesanan. Untuk platform iklan lain, buat link campaign di menu Link UTM." },
 ];
 
@@ -146,7 +146,8 @@ export const FAQ_MORE: Faq[] = [
 ];
 
 /** The setup steps a new store sees (the readiness predicate, T-38), for the closing band. */
-export const SETUP_STEPS = ["Tambah produk pertama dengan harga dan berat", "Lengkapi gudang utama dan alamat pickup", "Simpan API key Mengantar Anda"];
+// The required steps a physical store still owes after signup (src/lib/setup-checklist.ts, Entry 333).
+export const SETUP_STEPS = ["Tambah produk pertama", "Lengkapi gudang utama", "Simpan API key Mengantar", "Tambahkan rekening bank"];
 /** What signup already completes (identity, couriers on, COD on): the other three of six. */
 export const SETUP_DONE = "Nama toko, kurir, dan COD sudah siap sejak Anda mendaftar.";
 
@@ -226,13 +227,13 @@ export const PILLARS: Pillar[] = [
   {
     id: "mulai",
     label: "Setup gratis",
-    title: "Siapkan toko tanpa biaya, dengan masa tenggang 48 jam",
-    summary: "Atur produk dan review tampilan di HP tanpa kartu; berlangganan mulai Rp149.000 saat siap menjalankan iklan.",
+    title: "Siapkan toko gratis tanpa batas waktu persiapan",
+    summary: "Atur katalog dan review tampilan di HP sepuasnya sebelum membayar; saat sudah berlangganan, tersedia masa tenggang 48 jam setelah jatuh tempo agar campaign tidak terhenti mendadak.",
     points: [
-      "Toko aktif di nama-toko.adsbook.my.id sejak mendaftar, tanpa kartu",
+      "Toko aktif di nama-toko.adsbook.my.id sejak mendaftar, tanpa biaya awal",
       "Mode Review Pemilik: Anda mengecek tampilan asli toko di HP seperti pembeli, sementara pengunjung melihat toko sedang disiapkan",
-      "Checklist menunjukkan tiga langkah yang tersisa",
-      "Lewat jatuh tempo, toko tetap jalan 48 jam agar iklan tidak berhenti mendadak",
+      "Checklist menunjukkan langkah yang tersisa",
+      "Setelah berlangganan: masa tenggang 48 jam setelah jatuh tempo agar iklan aktif tidak terhenti mendadak",
     ],
     shot: SHOTS.setup,
   },

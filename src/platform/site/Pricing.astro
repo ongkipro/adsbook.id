@@ -7,7 +7,7 @@
  * script; a few lines below mark the chosen readout too, for a browser without `:has()` (it would
  * otherwise keep showing 1 Tahun's link whatever was clicked). Each plan's label, price, note and
  * `/daftar?paket=<code>` link are real markup. 1 Tahun is chosen first.
- * `compact` (home, /coba) stops there; the full version (/harga) adds payment and grace notes.
+ * `compact` (home) stops there; the full version (/harga) adds payment and grace notes.
  */
 import { PLANS, PLAN_POINTS, PREVIEW } from './content.ts';
 import { SIGNUP_LABEL, SIGNUP_PATH } from './site.ts';
@@ -28,7 +28,8 @@ const INCLUDED = [
   '0% potongan transaksi dari adsbook.id untuk QRIS, VA, dan COD',
   'Tanpa kuota order dan tanpa batas produk',
   'Server tracking 1:1 untuk Meta, Google, dan TikTok',
-  'Siapkan dan review gratis di Mode Preview, lalu masa tenggang 48 jam',
+  'Siapkan & review toko gratis di Mode Preview tanpa batas waktu persiapan',
+  'Masa tenggang 48 jam setelah jatuh tempo langganan agar iklan aktif tidak terputus',
 ];
 const best = PLANS.find((plan) => 'best' in plan && plan.best)?.code ?? '12m';
 ---

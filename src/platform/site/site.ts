@@ -16,7 +16,20 @@ export const SIGNUP_LABEL = "Coba buat toko gratis";
 /** The header's small button: the same action, short enough for a 360px header. */
 export const SIGNUP_LABEL_SHORT = "Coba gratis";
 
-export type SitePage = { path: string; nav?: string; title: string; description: string; noindex?: boolean };
+export type SitePage = {
+  path: string;
+  /** The header label; on an inner page also the visible breadcrumb and its BreadcrumbList. */
+  nav?: string;
+  title: string;
+  description: string;
+  noindex?: boolean;
+  /** 1200×630 PNG under public/, made by `npm run platform-visuals` (PLATFORM-SEO-AND-VISUAL-BANNERS-SPEC §4). */
+  ogImage?: string;
+  ogImageAlt?: string;
+};
+
+/** The share card a page without its own uses (sign-up, sign-in). */
+export const DEFAULT_OG = { image: "/og/og-home.png", alt: "adsbook.id: satu pesanan, satu konversi ke Meta, Google, dan TikTok" } as const;
 
 export const SIGNUP_PAGE: SitePage = {
   path: "/daftar",
@@ -35,57 +48,67 @@ export const LOGIN_PAGE: SitePage = {
 };
 
 /** One entry per indexable page; titles ≤ 70 and descriptions 120–155 characters (copy QA gate). */
-export const SITE_PAGES: Record<"home" | "coba" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
+export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
   home: {
     path: "/",
     title: "Toko COD Presisi untuk Iklan di Semua Platform - adsbook.id",
-    description: "Toko COD untuk pengiklan Meta, Google, TikTok, dan lainnya: setiap pesanan tercatat ke campaign asalnya, konversi 1:1 ke tiga platform, 0% potongan.",
-  },
-  // The long-form sales page for ad traffic (content/adsbook-id-sales-lp/features.md, 2026-11-17).
-  coba: {
-    path: "/coba",
-    title: "Berhenti Menebak Hasil Iklan COD di Semua Platform - adsbook.id",
-    description: "Satu pesanan, satu konversi: event 1:1 ke Meta, Google, dan TikTok, form COD cepat di HP, cek RTS sebelum kirim, dan uang langsung ke akun Anda.",
+    description: "Toko produk fisik COD dan produk digital untuk pengiklan: setiap pesanan tercatat ke campaign asalnya, konversi 1:1 ke Meta, Google, dan TikTok.",
+    ogImage: DEFAULT_OG.image,
+    ogImageAlt: DEFAULT_OG.alt,
   },
   fitur: {
     path: "/fitur",
     nav: "Fitur",
     title: "Fitur: Server Tracking, Form COD, Kontrol RTS - adsbook.id",
-    description: "Enam pilar toko COD yang presisi: semua platform iklan tercatat, form cepat di HP, kontrol RTS, uang ke akun sendiri, mulai gratis, infrastruktur cepat.",
+    description: "Enam pilar toko yang presisi: produk fisik COD dan digital, sinyal 1:1 ke Meta, Google, dan TikTok, form cepat di HP, kontrol RTS, uang ke akun sendiri.",
+    ogImage: "/og/og-fitur.png",
+    ogImageAlt: "Fitur adsbook.id: produk fisik COD, produk digital, dan sinyal 1:1 ke tiga platform iklan",
   },
   caraKerja: {
     path: "/cara-kerja",
     nav: "Cara kerja",
     title: "Cara Kerja: dari Klik Iklan sampai Konversi - adsbook.id",
     description: "Lima langkah satu pesanan di adsbook.id, dari platform iklan mana pun: ad click, form COD, pesanan masuk, kirim kurir, lalu konversi tercatat dari server.",
+    ogImage: "/og/og-cara-kerja.png",
+    ogImageAlt: "Cara kerja adsbook.id: lima langkah dari klik iklan sampai konversi tercatat",
   },
   harga: {
     path: "/harga",
     nav: "Harga",
     title: "Harga: Gratis Sampai Siap Beriklan, Mulai Rp149.000 - adsbook.id",
     description: "Coba buat toko gratis di Mode Preview, lalu berlangganan saat siap beriklan: Rp149.000 per bulan atau Rp1.490.000 per tahun, tanpa potongan transaksi.",
+    ogImage: "/og/og-harga.png",
+    ogImageAlt: "Harga adsbook.id: Rp149.000 per bulan per toko, 0% potongan transaksi",
   },
   faq: {
     path: "/faq",
     nav: "FAQ",
-    title: "Pertanyaan Umum Seller tentang adsbook.id - adsbook.id",
+    title: "Pertanyaan Umum Seller tentang Toko adsbook.id - adsbook.id",
     description: "Jawaban singkat soal biaya, akun kurir dan pembayaran milik Anda sendiri, domain sendiri, data pembeli, dan cara mulai jualan di adsbook.id.",
+    ogImage: "/og/og-faq.png",
+    ogImageAlt: "Pusat jawaban adsbook.id untuk seller dan pengiklan",
   },
   kontak: {
     path: "/kontak",
     nav: "Kontak",
     title: "Kontak Tim adsbook.id untuk Seller dan Pembeli - adsbook.id",
     description: "Hubungi tim adsbook.id untuk pertanyaan akun, toko, atau privasi. Permintaan data pembeli kami teruskan ke toko yang bersangkutan.",
+    ogImage: "/og/og-kontak.png",
+    ogImageAlt: "Kontak adsbook.id: dukungan seller dan perlindungan data pembeli",
   },
   syarat: {
     path: "/syarat",
     title: "Syarat Layanan Seller - adsbook.id",
     description: "Syarat penggunaan adsbook.id bagi pemilik toko: layanan, akun, penyedia pihak ketiga milik Anda sendiri, data, penangguhan, dan perubahan syarat.",
+    ogImage: "/og/og-legal.png",
+    ogImageAlt: "Dokumen syarat layanan dan kebijakan privasi adsbook.id",
   },
   privasi: {
     path: "/privasi",
     title: "Kebijakan Privasi Platform - adsbook.id",
     description: "Data apa yang diproses adsbook.id untuk seller dan pengunjung, untuk apa, di mana disimpan, dan cara meminta salinan atau penghapusan data.",
+    ogImage: "/og/og-legal.png",
+    ogImageAlt: "Dokumen syarat layanan dan kebijakan privasi adsbook.id",
   },
 };
 
@@ -103,13 +126,21 @@ export function canonicalUrl(env: Record<string, unknown> | null | undefined, pa
   return new URL(path, siteOrigin(env)).href;
 }
 
-/** `Organization` and `SoftwareApplication` JSON-LD. No rating, review or customer count: we have none. */
-export function siteJsonLd(env: Record<string, unknown> | null | undefined): string {
+/**
+ * JSON-LD per page: `WebSite` (site name, the home only), `Organization` with a
+ * 192 px logo, `SoftwareApplication`, and on an inner page with a visible
+ * breadcrumb (`nav`) its `BreadcrumbList`. No rating, review or customer
+ * count: we have none.
+ */
+export function siteJsonLd(env: Record<string, unknown> | null | undefined, page: SitePage = SITE_PAGES.home): string {
   const origin = siteOrigin(env);
+  const crumb = breadcrumbName(page);
   const graph = {
     "@context": "https://schema.org",
     "@graph": [
-      { "@type": "Organization", "@id": `${origin}/#organization`, name: SITE_NAME, url: `${origin}/` },
+      ...(page.path === "/" ? [{ "@type": "WebSite", "@id": `${origin}/#website`, name: SITE_NAME, url: `${origin}/`, inLanguage: "id-ID", publisher: { "@id": `${origin}/#organization` } }] : []),
+      // 192 × 192 PNG: above Google's 112 px minimum, readable on white.
+      { "@type": "Organization", "@id": `${origin}/#organization`, name: SITE_NAME, url: `${origin}/`, logo: `${origin}/favicon-192.png` },
       {
         "@type": "SoftwareApplication",
         name: SITE_NAME,
@@ -127,10 +158,53 @@ export function siteJsonLd(env: Record<string, unknown> | null | undefined): str
           { "@type": "Offer", name: "1 Tahun", price: "1490000", priceCurrency: "IDR" },
         ],
       },
+      ...(crumb
+        ? [{
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: BREADCRUMB_HOME, item: `${origin}/` },
+              { "@type": "ListItem", position: 2, name: crumb, item: canonicalUrl(env, page.path) },
+            ],
+          }]
+        : []),
     ],
   };
   // `</` cannot close the script element it is embedded in.
   return JSON.stringify(graph).replace(/</g, "\\u003c");
+}
+
+export const BREADCRUMB_HOME = "Beranda";
+
+/** The visible breadcrumb's last item (PageHead), or null on the home and pages outside the header. */
+export function breadcrumbName(page: SitePage): string | null {
+  return page.path !== "/" && page.nav && !page.noindex ? page.nav : null;
+}
+
+/** The share image of a page as an absolute URL, with its alt text. */
+export function ogImageFor(env: Record<string, unknown> | null | undefined, page: SitePage): { url: string; alt: string } {
+  return page.ogImage
+    ? { url: canonicalUrl(env, page.ogImage), alt: page.ogImageAlt ?? DEFAULT_OG.alt }
+    : { url: canonicalUrl(env, DEFAULT_OG.image), alt: DEFAULT_OG.alt };
+}
+
+/** `/llms.txt` of the site (llmstxt.org): honest facts and the public pages, never sign-in, admin or APIs. */
+export function platformLlmsTxt(env: Record<string, unknown> | null | undefined): string {
+  const pages = Object.values(SITE_PAGES).map((page) => `- [${page.title.replace(/ - adsbook\.id$/, "")}](${canonicalUrl(env, page.path)}): ${page.description}`);
+  return [
+    `# ${SITE_NAME}`,
+    "",
+    "> Platform toko online untuk pengiklan di Indonesia: produk fisik dengan COD, produk digital dengan akses otomatis setelah lunas, dan konversi 1:1 dari server ke Meta, Google, dan TikTok.",
+    "",
+    "- Satu toko per langganan, di alamat nama-toko.adsbook.my.id atau domain sendiri.",
+    "- Mode Preview gratis tanpa batas waktu persiapan; langganan mulai Rp149.000 per bulan per toko (Rp1.490.000 per tahun), dibayar via QRIS atau Virtual Account.",
+    "- 0% potongan transaksi: ongkir dan pembayaran memakai akun kurir dan payment gateway milik seller sendiri.",
+    "- Masa tenggang 48 jam setelah langganan jatuh tempo, agar iklan aktif tidak terhenti mendadak.",
+    "",
+    "## Halaman",
+    "",
+    ...pages,
+    "",
+  ].join("\n");
 }
 
 /** The platform Pixel id, or null when unset or not a Pixel-shaped id. */

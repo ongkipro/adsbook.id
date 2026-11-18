@@ -1,17 +1,25 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import PageHead from '../../../platform/site/PageHead.astro';
+import VisualBanner from '../../../platform/site/VisualBanner.astro';
 import TopCampaignsShowcase from '../../../platform/site/TopCampaignsShowcase.astro';
 import PillarRows from '../../../platform/site/PillarRows.astro';
 import CapabilityList from '../../../platform/site/CapabilityList.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
-import { SITE_PAGES } from '../../../platform/site/site.ts';
+import { SITE_PAGES, breadcrumbName } from '../../../platform/site/site.ts';
 
 export const prerender = false;
 ---
 
 <SiteLayout page={SITE_PAGES.fitur}>
-  <PageHead eyebrow="Fitur platform" title="Fitur yang membuat setiap pesanan presisi" lead="Enam pilar, dari server tracking untuk semua platform iklan sampai infrastruktur, lalu semua yang Anda perlukan setiap hari. Gambar adalah layar produk yang sebenarnya, dengan data dari toko contoh." />
+  <PageHead crumb={breadcrumbName(SITE_PAGES.fitur)} eyebrow="Fitur platform" title="Fitur yang membuat setiap pesanan presisi" lead="Enam pilar, dari server tracking untuk semua platform iklan sampai infrastruktur, lalu semua yang Anda perlukan setiap hari. Gambar adalah layar produk yang sebenarnya, dengan data dari toko contoh." />
+  <VisualBanner
+    id="fitur-visual-title"
+    eager
+    title="Satu toko untuk barang COD dan produk digital"
+    text="Barang fisik memakai Hybrid Form per provinsi, produk digital membuka aksesnya otomatis saat lunas, dan setiap penjualan dikirim 1:1 dari server ke Meta, Google, dan TikTok."
+    image={{ src: '/visual/fitur.webp', width: 640, height: 440, alt: 'Ilustrasi 2.5D: produk fisik COD dan produk digital naik ke lapisan sinyal 1:1 Meta, Google, dan TikTok' }}
+  />
   <TopCampaignsShowcase id="fitur-campaigns-title" />
   <section class="section" aria-label="Enam pilar">
     <div class="wrap"><PillarRows /></div>

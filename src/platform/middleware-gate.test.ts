@@ -176,3 +176,78 @@ test("T-40: the marketing site's public paths render their /platform pages on a 
     assert.ok(!result.nextArgs.some((arg) => typeof arg === "string" && arg.startsWith("/platform")), `${path} on a seller host reached a platform page`);
   }
 });
+
+test("PLATFORM-SEO §1–2: /coba moves to the home for good; register, login, console and APIs carry noindex; the console host never shows the site", async () => {
+  // The retired page: 301 to the home, query kept for old ad links; only GET/HEAD move.
+  for (const [href, location] of [["https://adsbook.id/coba", "/"], ["https://adsbook.id/coba/?utm_source=meta&fbclid=abc", "/?utm_source=meta&fbclid=abc"]] as const) {
+    const moved = await run(href, "/");
+    assert.equal(moved.response.status, 301, href);
+    assert.equal(moved.response.headers.get("location"), location);
+    assert.equal(moved.nextCalls, 0);
+    assert.equal(moved.response.headers.get("x-robots-tag"), null, "the site's own redirect is not a noindex page");
+  }
+  // The console host: its root opens the console, and every answer is noindex.
+  const consoleRoot = await run("https://app.adsbook.id/", "/");
+  assert.equal(consoleRoot.response.status, 302);
+  assert.equal(consoleRoot.response.headers.get("location"), "/platform");
+  assert.equal(consoleRoot.response.headers.get("x-robots-tag"), "noindex, nofollow");
+  // Review P2-3: the console host is never the site — a marketing path moves to adsbook.id, anything else is a 404.
+  for (const path of ["/fitur", "/harga?utm_source=x", "/daftar", "/masuk", "/sitemap.xml", "/llms.txt", "/coba"]) {
+    const moved = await run(`https://app.adsbook.id${path}`, "/");
+    assert.equal(moved.response.status, 301, `app.adsbook.id${path}`);
+    assert.equal(moved.response.headers.get("location"), `https://adsbook.id${path === "/coba" ? "/" : path}`);
+    assert.equal(moved.response.headers.get("x-robots-tag"), "noindex, nofollow");
+    assert.equal(moved.nextCalls, 0);
+  }
+  for (const [path, method] of [["/fitur", "POST"], ["/api/v1/products", "GET"], ["/produk/x", "GET"]] as const) {
+    const refused = await (async () => {
+      const previous = console.log;
+      console.log = () => undefined;
+      try {
+        return await onRequest({ request: new Request(`https://app.adsbook.id${path}`, { method }), url: new URL(`https://app.adsbook.id${path}`), locals: { runtimeEnv: { PLATFORM_DB: platformDb } }, routePattern: "/", redirect: () => new Response(null, { status: 302 }) } as never, (async () => new Response("route")) as never);
+      } finally {
+        console.log = previous;
+      }
+    })() as Response;
+    assert.equal(refused.status, 404, `${method} app.adsbook.id${path}`);
+  }
+  for (const [path, status] of [["/robots.txt", 200], ["/platform/login", 200], ["/platform/health", 302]] as const) {
+    const response = (await run(`https://app.adsbook.id${path}`, "/")).response;
+    assert.equal(response.status, status, `app.adsbook.id${path}`);
+    assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow", `app.adsbook.id${path}`);
+    if (status === 302) assert.equal(response.headers.get("location"), "/platform/login");
+  }
+  // The site: register, sign-in, console and APIs are noindex; the marketing pages are not.
+  for (const path of ["/daftar", "/masuk", "/masuk/", "/platform", "/platform/login", "/platform/signup", "/platform/health", "/api/platform/masuk"]) {
+    const response = (await run(`https://adsbook.id${path}`, "/")).response;
+    assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow", `adsbook.id${path} (${response.status})`);
+  }
+  for (const path of ["/", "/fitur", "/cara-kerja", "/harga", "/faq", "/kontak", "/syarat", "/privasi", "/llms.txt"]) {
+    const response = (await run(`https://adsbook.id${path}`, "/")).response;
+    assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get("x-robots-tag"), null, `adsbook.id${path} stays indexable`);
+  }
+});
+
+test("PLATFORM-SEO §2: robots.txt leaves /daftar and /masuk crawlable for every named agent; the console host disallows everything; the sitemap lists only indexable pages", async () => {
+  const robots = await import("../pages/platform/site/robots.txt.ts");
+  const sitemap = await import("../pages/platform/site/sitemap.xml.ts");
+  const { ROBOTS_NAMED_AGENTS } = await import("../lib/robots.ts");
+  const read = async (route: { GET: (context: never) => Response | Promise<Response> }, host: string) =>
+    (await route.GET({ locals: { platform: { host }, runtimeEnv: { PLATFORM_SITE_URL: "https://adsbook.id" } } } as never)).text();
+  const site = await read(robots, "adsbook.id");
+  const groups = site.split("\n\n").filter((block) => block.startsWith("User-agent:"));
+  assert.deepEqual(groups.map((block) => block.split("\n")[0].slice("User-agent: ".length)), ["*", ...ROBOTS_NAMED_AGENTS]);
+  for (const block of groups) {
+    assert.match(block, /^Disallow: \/platform\/$/m, block.split("\n")[0]);
+    assert.match(block, /^Disallow: \/api\/$/m);
+    assert.doesNotMatch(block, /Disallow: \/(daftar|masuk)/, "a noindex page stays crawlable so its noindex is read");
+  }
+  assert.match(site, /^Sitemap: https:\/\/adsbook\.id\/sitemap\.xml$/m);
+  // Review P2-2: images and fonts under /platform/ stay readable by image and share crawlers.
+  for (const block of groups) for (const ext of ["webp", "png", "svg", "woff2"]) assert.match(block, new RegExp(`^Allow: /platform/\\*\\.${ext}\\$$`, "m"));
+  // The console host stays crawlable so its noindex headers are read; only its APIs are disallowed.
+  assert.equal(await read(robots, "app.adsbook.id"), "User-agent: *\nDisallow: /api/\n");
+  const urls = [...(await read(sitemap, "adsbook.id")).matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]).pathname);
+  assert.deepEqual(urls, ["/", "/fitur", "/cara-kerja", "/harga", "/faq", "/kontak", "/syarat", "/privasi"]);
+});

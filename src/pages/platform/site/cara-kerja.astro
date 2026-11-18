@@ -1,16 +1,24 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import PageHead from '../../../platform/site/PageHead.astro';
+import VisualBanner from '../../../platform/site/VisualBanner.astro';
 import StepFlow from '../../../platform/site/StepFlow.astro';
 import SignalPipelineStrip from '../../../platform/site/SignalPipelineStrip.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
-import { SITE_PAGES } from '../../../platform/site/site.ts';
+import { SITE_PAGES, breadcrumbName } from '../../../platform/site/site.ts';
 
 export const prerender = false;
 ---
 
 <SiteLayout page={SITE_PAGES.caraKerja}>
-  <PageHead eyebrow="Alur transaksi" title="Dari ad click sampai konversi tercatat" lead="Lima langkah yang sama untuk setiap pesanan, dari platform iklan mana pun: apa yang dilihat pembeli dan apa yang Anda kerjakan. Kapan pesanan dikirim selalu keputusan Anda, dan langkah terakhir mengirim penjualan ke platform iklan tepat satu kali." />
+  <PageHead crumb={breadcrumbName(SITE_PAGES.caraKerja)} eyebrow="Alur transaksi" title="Dari ad click sampai konversi tercatat" lead="Lima langkah yang sama untuk setiap pesanan, dari platform iklan mana pun: apa yang dilihat pembeli dan apa yang Anda kerjakan. Kapan pesanan dikirim selalu keputusan Anda, dan langkah terakhir mengirim penjualan ke platform iklan tepat satu kali." />
+  <VisualBanner
+    id="alur-visual-title"
+    eager
+    title="Satu jalur untuk pesanan COD dan akses digital"
+    text="Paket dan akses digital melewati lima gerbang yang sama, dan di gerbang terakhir penjualan dikirim ke Ads Manager tepat satu kali."
+    image={{ src: '/visual/cara-kerja.webp', width: 640, height: 440, alt: 'Ilustrasi 2.5D: pesanan melewati lima gerbang dari ad click sampai Ads Manager' }}
+  />
   <section class="section" aria-label="Lima langkah satu pesanan">
     <div class="wrap"><StepFlow headingLevel="h2" detail /></div>
   </section>

@@ -1,9 +1,10 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import PageHead from '../../../platform/site/PageHead.astro';
+import VisualBanner from '../../../platform/site/VisualBanner.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
 import { getRuntimeEnv } from '../../../lib/env';
-import { SITE_PAGES } from '../../../platform/site/site.ts';
+import { SITE_PAGES, breadcrumbName } from '../../../platform/site/site.ts';
 
 export const prerender = false;
 // The contact addresses are set by the operator (PLATFORM_SUPPORT_EMAIL,
@@ -14,7 +15,14 @@ const whatsapp = typeof env.PLATFORM_SUPPORT_WHATSAPP === 'string' && /^62\d{8,1
 ---
 
 <SiteLayout page={SITE_PAGES.kontak}>
-  <PageHead eyebrow="Hubungi kami" title="Kontak" lead="Untuk pertanyaan akun, toko, atau privasi. Pembeli di salah satu toko: lihat kolom berikutnya." />
+  <PageHead crumb={breadcrumbName(SITE_PAGES.kontak)} eyebrow="Hubungi kami" title="Kontak" lead="Untuk pertanyaan akun, toko, atau privasi. Pembeli di salah satu toko: lihat kolom berikutnya." />
+  <VisualBanner
+    id="kontak-visual-title"
+    eager
+    title="Dua jalur, satu tim"
+    text="Seller dan calon seller dibantu langsung untuk akun, toko, dan langganan. Permintaan pembeli tentang data pesanan kami teruskan ke toko yang mengelolanya."
+    image={{ src: '/visual/kontak.webp', width: 640, height: 440, alt: 'Ilustrasi 2.5D: jalur dukungan seller dan jalur perlindungan data pembeli' }}
+  />
   <section class="section section-white">
     <div class="wrap contact">
       <section aria-labelledby="tim-title">

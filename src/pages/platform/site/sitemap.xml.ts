@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { getRuntimeEnv } from "../../../lib/env";
+import { getRuntimeEnv } from "../../../lib/env.ts";
 import { SITE_PAGES, canonicalUrl } from "../../../platform/site/site.ts";
 
 export const prerender = false;

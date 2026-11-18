@@ -65,7 +65,6 @@ export function platformHosts(extra?: string | null): ReadonlySet<string> {
 export const PLATFORM_SITE_ROUTES: Readonly<Record<string, string>> = {
   "/": "/platform/site",
   "/fitur": "/platform/site/fitur",
-  "/coba": "/platform/site/coba",
   "/cara-kerja": "/platform/site/cara-kerja",
   "/harga": "/platform/site/harga",
   "/faq": "/platform/site/faq",
@@ -76,7 +75,73 @@ export const PLATFORM_SITE_ROUTES: Readonly<Record<string, string>> = {
   "/privasi": "/platform/privasi",
   "/robots.txt": "/platform/site/robots.txt",
   "/sitemap.xml": "/platform/site/sitemap.xml",
+  "/llms.txt": "/platform/site/llms.txt",
 };
+
+/** The operator console's host (DOM-2): it shares the Worker with the site but is never the site. */
+export const PLATFORM_CONSOLE_HOST = "app.adsbook.id";
+
+const withoutTrailingSlash = (pathname: string) => (pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname);
+const under = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
+
+/**
+ * PLATFORM-SEO-AND-VISUAL-BANNERS-SPEC §1–2: the retired `/coba` moves for
+ * good to the home (301, query kept so an old ad link keeps its UTMs and click
+ * ids), and the console host's root opens the console (302). GET/HEAD only.
+ */
+export function platformRedirect(url: URL, method: string, host: string): { status: 301 | 302; location: string } | null {
+  if (method !== "GET" && method !== "HEAD") return null;
+  const path = withoutTrailingSlash(url.pathname);
+  if (host === PLATFORM_CONSOLE_HOST) {
+    if (path === "/") return { status: 302, location: "/platform" };
+    // The console host is never the site: a marketing path moves to the site's own host.
+    if (consoleHostRefuses(url.pathname)) return platformSitePath(url.pathname) || path === "/coba" ? { status: 301, location: `https://${SITE_HOST}${path === "/coba" ? "/" : url.pathname}${url.search}` } : null;
+  }
+  if (path === "/coba") return { status: 301, location: `/${url.search}` };
+  return null;
+}
+
+/** The site's host, where the console host sends a marketing path. */
+export const SITE_HOST = "adsbook.id";
+
+/** On the console host only the console, its APIs, its root and its robots.txt answer (PLATFORM-SEO review P2-3). */
+export function consoleHostRefuses(pathname: string): boolean {
+  const path = withoutTrailingSlash(pathname);
+  return !(path === "/" || path === "/robots.txt" || isPlatformRoute(pathname));
+}
+
+/**
+ * Platform responses that must never be indexed (Paduka, 2026-11-19: "halaman
+ * register, login, admin, dan backend operator jangan sampai ke index"):
+ * everything on the console host, /daftar, /masuk, /platform* and /api/*.
+ * They stay crawlable (robots.txt never disallows /daftar or /masuk) so the
+ * header is read.
+ */
+export function platformNoindex(host: string, pathname: string): boolean {
+  if (host === PLATFORM_CONSOLE_HOST) return true;
+  const path = withoutTrailingSlash(pathname);
+  return path === "/daftar" || path === "/masuk" || isPlatformRoute(pathname) || under(pathname, "/api");
+}
+
+/** Tenant paths that must never be indexed: the owner's way in, the admin, APIs and embeds. */
+export function tenantNoindex(pathname: string): boolean {
+  const path = withoutTrailingSlash(pathname);
+  return path === "/hello" || path === "/pemulihan" || under(pathname, "/admin") || under(pathname, "/api") || under(pathname, "/embed");
+}
+
+export const NOINDEX_HEADER = "noindex, nofollow";
+
+/** The response with `X-Robots-Tag: noindex, nofollow`, copied first when its headers are immutable. */
+export function withNoindex(response: Response): Response {
+  try {
+    response.headers.set("X-Robots-Tag", NOINDEX_HEADER);
+    return response;
+  } catch {
+    const copy = new Response(response.body, response);
+    copy.headers.set("X-Robots-Tag", NOINDEX_HEADER);
+    return copy;
+  }
+}
 
 /** The page a public marketing path renders, or null (exact match; one trailing slash allowed). */
 export function platformSitePath(pathname: string): string | null {
