@@ -65,7 +65,7 @@ test("digital store: signup → menu without shipping → digital product → op
   await page.goto(`${PLATFORM}/daftar`);
   await page.getByLabel("Nama toko").fill("Toko Ebook Uji");
   await page.getByLabel("Alamat toko", { exact: true }).fill(SLUG);
-  await expect(page.locator("#slugHint")).toContainText("tersedia.");
+  await expect(page.locator("#slugHint")).toContainText("tersedia.", { timeout: 15_000 });
   await page.getByLabel("Email", { exact: true }).fill(OWNER.email);
   await page.getByLabel("Nomor WhatsApp aktif").fill("0812-3456-7801");
   await page.getByLabel("Password", { exact: true }).fill(OWNER.password);

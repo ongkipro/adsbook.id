@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { getAdminCredential, isDefaultAdminCredential } from "../../lib/admin-credentials.ts";
+import { getAdminCredentialById, isDefaultAdminCredential } from "../../lib/admin-credentials.ts";
 import { storeAdminSession } from "../../lib/admin-session.ts";
 import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS, signJwt } from "../../lib/auth.ts";
 import { resolveAuthSecret } from "../../lib/auth-secret.ts";
@@ -57,16 +57,22 @@ export const POST: APIRoute = async ({ request, locals, cookies, redirect }) => 
   const consumed = await consumeSessionHandoff(platformDb, form?.get("token"), tenant.host);
   if (!consumed || consumed.tenantId !== tenant.tenantId) return refused();
 
-  const owner = await platformDb
-    .prepare("SELECT owner_email FROM tenants WHERE id = ? AND status = 'active'")
+  const active = await platformDb
+    .prepare("SELECT 1 AS yes FROM tenants WHERE id = ? AND status = 'active'")
     .bind(consumed.tenantId)
-    .first<{ owner_email: string }>();
-  if (!owner) return refused();
-  // A signup signs in its owner; a login the user whose password was checked on adsbook.id.
-  const username = consumed.purpose === "login" ? consumed.username : owner.owner_email;
-  const credential = username ? await getAdminCredential(database, username) : null;
+    .first<{ yes: number }>();
+  if (!active || !consumed.credential) return refused();
+  // Exactly the credential revision the token was issued for: a password reset, a
+  // role change, or a credential deleted and made again since then voids it.
+  const credential = await getAdminCredentialById(database, consumed.credential.id);
   const secret = await resolveAuthSecret(database, consumed.tenantId);
-  if (!credential || isDefaultAdminCredential(credential) || secret.length < 32) return refused();
+  if (
+    !credential ||
+    credential.username !== consumed.credential.username ||
+    credential.updatedAt !== consumed.credential.updatedAt ||
+    isDefaultAdminCredential(credential) ||
+    secret.length < 32
+  ) return refused();
   if (consumed.purpose === "signup" && credential.role !== "owner") return refused();
 
   const { token, session } = await signJwt({ username: credential.username, role: credential.role }, secret);

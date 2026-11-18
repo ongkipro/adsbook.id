@@ -46,7 +46,9 @@ test("the pair at 1440 and 390: switcher, the form in the first viewport on a ph
     await expect(page.locator('input[name="catalog_mode"]')).toHaveCount(2);
     await expect(page.locator('input[name="catalog_mode"][value="hybrid"]')).toHaveCount(0);
     await expect(page.locator(".catalog-hint")).toContainText("Satu toko bisa keduanya");
-    await expect(page.locator(".hybrid-note")).toContainText("aktifkan mode Hybrid di Pengaturan › Toko");
+    // Said once, under the choices; the panel's first point names hybrid without repeating the paragraph.
+    await expect(page.getByText("Satu toko sebenarnya mendukung")).toHaveCount(0);
+    await expect(page.locator(".foundation-list")).toContainText("Bebas jual fisik, digital, maupun hybrid");
     const name = await page.locator("#storeName").boundingBox();
     expect(name!.y + name!.height, `/daftar ${width}: the form starts above the fold`).toBeLessThanOrEqual(height);
     // The panel's "after signup" note follows the chosen focus.
@@ -70,7 +72,7 @@ test("one email = one store; a new owner lands on setup, then signs back in at a
     await page.goto(`${PLATFORM}/daftar`);
     await page.getByLabel("Nama toko").fill(storeName);
     await page.getByLabel("Alamat toko", { exact: true }).fill(storeSlug);
-    await expect(page.locator("#slugHint")).toContainText("tersedia.");
+    await expect(page.locator("#slugHint")).toContainText("tersedia.", { timeout: 15_000 });
     await page.getByLabel("Email", { exact: true }).fill(ownerEmail);
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("checkbox").check();

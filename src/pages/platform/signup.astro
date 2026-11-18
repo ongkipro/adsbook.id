@@ -230,10 +230,6 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         <li><span aria-hidden="true">03</span><div><strong>1 email = 1 toko mandiri 10 GB, 0% komisi</strong><p>Uang penjualan cair langsung ke akun Mengantar &amp; AutoLaris milik Anda sendiri, tanpa kuota order bulanan.</p></div></li>
       </ol>
 
-      <div class="hybrid-note" role="note">
-        <strong>Fisik + digital dalam 1 toko</strong>
-        <p>Satu toko sebenarnya mendukung penjualan Produk Fisik sekaligus Produk Digital (Hybrid). Pilihan di formulir hanya mengatur tampilan menu awal dashboard Anda — kapan pun Anda ingin menjual keduanya sekaligus, cukup aktifkan mode Hybrid di Pengaturan › Toko.</p>
-      </div>
       <!-- What the first minutes after signup ask, for the focus chosen in the form. -->
       <div class="next-steps" data-next-steps="physical">
         <strong>Setelah daftar (Produk Fisik)</strong>
@@ -606,8 +602,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   .foundation-list span { font: 600 0.75rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
   .foundation-list strong { display: block; font-size: 0.95rem; color: var(--ink); }
   .foundation-list p { margin-top: 0.15rem; font-size: 0.88rem; line-height: 1.5; color: var(--ink-muted); }
-  .hybrid-note, .next-steps { display: grid; gap: 0.3rem; padding: 1rem 1.1rem; border-radius: 14px; background: #fff; font-size: 0.88rem; line-height: 1.5; color: var(--ink-muted); }
-  .hybrid-note strong, .next-steps strong { color: var(--ink); font-size: 0.92rem; }
+  .next-steps { display: grid; gap: 0.3rem; padding: 1rem 1.1rem; border-radius: 14px; background: #fff; font-size: 0.88rem; line-height: 1.5; color: var(--ink-muted); }
+  .next-steps strong { color: var(--ink); font-size: 0.92rem; }
   .next-steps { border-left: 3px solid var(--accent); }
   .catalog-hint strong { color: var(--ink); }
   .lead-copy { color: var(--ink-muted); font-size: 1.05rem; }

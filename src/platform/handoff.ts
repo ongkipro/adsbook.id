@@ -3,9 +3,11 @@
  * session on the seller host, which it cannot set a cookie for. 32 random
  * bytes, kept only as a SHA-256 in `PLATFORM_DB.handoff_tokens`, bound to one
  * tenant, one purpose and the tenant's platform subdomain, valid 10 minutes
- * (signup), 2 minutes (login, adsbook.id/masuk: it names the user it signs in)
- * or 24 hours (owner recovery), consumed atomically once. The token travels
- * only in a POST body (never a URL that is logged or cached).
+ * (signup), 2 minutes (login, adsbook.id/masuk) or 24 hours (owner recovery),
+ * consumed atomically once. A signup or login token names the credential
+ * revision it signs in (id, username, updated_at): a password reset, a role
+ * change or a deleted credential voids it before it is spent. The token
+ * travels only in a POST body (never a URL that is logged or cached).
  */
 export type HandoffPurpose = "signup" | "owner_recovery" | "login";
 
@@ -80,20 +82,35 @@ export async function spendHandoff(
     .bind(now.toISOString(), await sha256Hex(token), now.toISOString(), host, purpose);
 }
 
+/** The credential revision a signup or login token signs in. */
+export type HandoffCredential = { id: number; username: string; updatedAt: string };
+
 export async function issueHandoff(
   platformDb: D1Database,
   tenantId: string,
   host: string,
   purpose: HandoffPurpose,
   now = new Date(),
-  /** `login` only: the credential the session is for, owner or staff. */
-  username: string | null = null,
+  /** `signup` and `login`: the exact credential revision the session is for. */
+  credential: HandoffCredential | null = null,
 ): Promise<string> {
-  if ((purpose === "login") !== Boolean(username)) throw new Error("a login handoff names its user; no other does");
+  const bound = purpose === "signup" || purpose === "login";
+  if (bound !== Boolean(credential)) throw new Error("a signup or login handoff names its credential; no other does");
   const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
   await platformDb
-    .prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at, username) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(await sha256Hex(token), tenantId, purpose, host, new Date(now.getTime() + LIFETIME_MS[purpose]).toISOString(), username)
+    .prepare(
+      "INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at, username, credential_id, credential_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(
+      await sha256Hex(token),
+      tenantId,
+      purpose,
+      host,
+      new Date(now.getTime() + LIFETIME_MS[purpose]).toISOString(),
+      credential?.username ?? null,
+      credential?.id ?? null,
+      credential?.updatedAt ?? null,
+    )
     .run();
   return token;
 }
@@ -109,17 +126,22 @@ export async function consumeSessionHandoff(
   token: unknown,
   host: string,
   now = new Date(),
-): Promise<{ tenantId: string; purpose: "signup" | "login"; username: string | null } | null> {
+): Promise<{ tenantId: string; purpose: "signup" | "login"; credential: HandoffCredential | null } | null> {
   if (typeof token !== "string" || !TOKEN.test(token)) return null;
   const row = await platformDb
     .prepare(
       `UPDATE handoff_tokens SET used_at = ?
        WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? AND host = ? AND purpose IN ('signup', 'login')
-       RETURNING tenant_id, purpose, username`,
+       RETURNING tenant_id, purpose, username, credential_id, credential_updated_at`,
     )
     .bind(now.toISOString(), await sha256Hex(token), now.toISOString(), host)
-    .first<{ tenant_id: string; purpose: "signup" | "login"; username: string | null }>();
-  return row ? { tenantId: row.tenant_id, purpose: row.purpose, username: row.username } : null;
+    .first<{ tenant_id: string; purpose: "signup" | "login"; username: string | null; credential_id: number | null; credential_updated_at: string | null }>();
+  if (!row) return null;
+  const credential =
+    row.username && row.credential_id !== null && row.credential_updated_at
+      ? { id: Number(row.credential_id), username: row.username, updatedAt: row.credential_updated_at }
+      : null;
+  return { tenantId: row.tenant_id, purpose: row.purpose, credential };
 }
 
 /**

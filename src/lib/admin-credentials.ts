@@ -107,6 +107,23 @@ export async function getAdminCredential(
     WHERE username = ?
     LIMIT 1
   `).bind(normalizedUsername).first<AdminCredentialRow>();
+  return credentialFromRow(row);
+}
+
+/** One credential by its id: adsbook.id/masuk signs in the credential its identifier names. */
+export async function getAdminCredentialById(database: D1Database, id: number): Promise<AdminCredential | null> {
+  if (!Number.isSafeInteger(id) || id < 1) return null;
+  const row = await database.prepare(`
+    SELECT id, username, display_name, email, role, password_hash,
+      must_change_password, updated_at
+    FROM admin_credentials
+    WHERE id = ?
+    LIMIT 1
+  `).bind(id).first<AdminCredentialRow>();
+  return credentialFromRow(row);
+}
+
+function credentialFromRow(row: AdminCredentialRow | null): AdminCredential | null {
   if (!row || !isAdminRole(row.role)) return null;
   return {
     id: row.id,

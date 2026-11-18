@@ -4,12 +4,13 @@ import {
   normalizeAdminUsername,
   updateAdminCredential,
 } from '../../../lib/admin-credentials';
+import { verifyPasswordHash } from '../../../lib/auth';
+import { getRuntimeEnv } from '../../../lib/env.ts';
+import { checkIdentitiesAvailable, syncTenantIdentities } from '../../../platform/identities.ts';
 import { revokeAdminSessions } from '../../../lib/admin-session';
 import { jsonError, jsonOk } from '../../../lib/api';
 import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../../../lib/auth';
 import { tenantDatabase } from '../../../lib/tenant-database.ts';
-import { getRuntimeEnv } from '../../../lib/env.ts';
-import { claimPlatformIdentity, releasePlatformIdentity, type IdentityKind } from '../../../platform/identities.ts';
 
 export const prerender = false;
 
@@ -66,18 +67,20 @@ export const PUT: APIRoute = async ({ request, locals, cookies }) => {
 
   try {
     const actorUsername = locals.admin?.username || '';
-    // AUTH-LOGIN-REGISTER-UX-SPEC §1.2: a username signs in on adsbook.id/masuk, so a
-    // new one must be free on the whole platform. Claimed first, the old one released after.
+    // AUTH-LOGIN-REGISTER-UX-SPEC §1.2: a username signs in on adsbook.id/masuk, so a new
+    // one must be free on the whole platform. The password is checked first: a wrong one
+    // learns nothing about which names are taken and touches nothing.
     const env = getRuntimeEnv(locals);
     const tenantId = locals.tenantContext?.tenantId;
-    const kind: IdentityKind = locals.admin?.role === 'owner' ? 'owner_email' : 'staff_username';
     const nextUsername = normalizeAdminUsername(username);
-    const renaming = nextUsername !== '' && nextUsername !== actorUsername;
-    let claimedNew = false;
-    if (renaming) {
-      const claim = await claimPlatformIdentity(env, tenantId, nextUsername, kind);
-      if (claim === 'taken') return jsonError('Username atau email ini sudah digunakan. Pilih yang lain.', 409);
-      claimedNew = claim === 'claimed';
+    if (nextUsername && nextUsername !== actorUsername) {
+      const current = await getAdminCredential(database, actorUsername);
+      if (!current || !(await verifyPasswordHash(currentPassword, current.passwordHash))) {
+        return jsonError('Password saat ini salah.', 400);
+      }
+      if (!(await checkIdentitiesAvailable(env, tenantId, current.id, [nextUsername]))) {
+        return jsonError('Username atau email ini sudah digunakan. Pilih yang lain.', 409);
+      }
     }
     const result = await updateAdminCredential(
       database,
@@ -85,15 +88,11 @@ export const PUT: APIRoute = async ({ request, locals, cookies }) => {
       currentPassword,
       username,
       newPassword,
-    ).catch(async (error) => {
-      if (claimedNew) await releasePlatformIdentity(env, tenantId, nextUsername, kind).catch(() => undefined);
-      throw error;
-    });
-    if (!result.ok) {
-      if (claimedNew) await releasePlatformIdentity(env, tenantId, nextUsername, kind).catch(() => undefined);
-      return jsonError(result.error, 400);
-    }
-    if (renaming) await releasePlatformIdentity(env, tenantId, actorUsername, kind);
+    );
+    if (!result.ok) return jsonError(result.error, 400);
+    // The registry follows the store: the new name is added; the owner email and an
+    // unchanged email stay the person's. Logged, never fatal: the next sync repairs it.
+    await syncTenantIdentities(env, tenantId, database).catch((error) => console.error('admin-profile-identity-sync', error));
 
     await revokeAdminSessions(database, actorUsername);
     cookies.delete(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);

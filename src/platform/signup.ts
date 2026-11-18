@@ -21,13 +21,14 @@
  * exists (src/platform/purge.ts). Nothing half-made is ever active.
  */
 import { resolveAuthSecret } from "../lib/auth-secret.ts";
-import { EMAIL_USERNAME_PATTERN } from "../lib/admin-credentials.ts";
+import { EMAIL_USERNAME_PATTERN, getAdminCredential } from "../lib/admin-credentials.ts";
 import { runInstall } from "../lib/install.ts";
 import { checkRateLimit } from "../lib/rate-limit.ts";
 import { isValidWa62, normalizePhone } from "../lib/validation.ts";
 import { CMS_VERSION } from "../lib/version.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { issueHandoff } from "./handoff.ts";
+import { syncTenantIdentities } from "./identities.ts";
 import { tenantHostSuffix } from "./hostnames.ts";
 import { checkSlug, suggestFreeSlugs } from "./slugs.ts";
 import { openTenantDb } from "./tenant-db.ts";
@@ -142,7 +143,7 @@ async function emailTaken(platformDb: D1Database, email: string): Promise<boolea
   const row = await platformDb
     .prepare(
       `SELECT 1 AS yes FROM platform_identities WHERE identifier = ?
-       UNION ALL SELECT 1 FROM tenants WHERE lower(owner_email) = ? AND status <> 'purged'
+       UNION ALL SELECT 1 FROM tenants WHERE lower(trim(owner_email)) = ? AND status NOT IN ('purging', 'purged')
        LIMIT 1`,
     )
     .bind(email, email)
@@ -250,7 +251,16 @@ export async function signup(
     // failure here goes through cleanup like any other. The route only
     // redeems a token of an active tenant.
     step = "handoff";
-    const handoffToken = await issueHandoff(platformDb, tenantId, host, "signup", now());
+    // The owner's sign-in names now point at the owner's credential, and the
+    // token names that credential revision (a reset before it is spent voids it).
+    const ownerCredential = await getAdminCredential(database, plan.email);
+    if (!ownerCredential) throw new Error("owner credential missing");
+    await syncTenantIdentities(env, tenantId, database, now());
+    const handoffToken = await issueHandoff(platformDb, tenantId, host, "signup", now(), {
+      id: ownerCredential.id,
+      username: ownerCredential.username,
+      updatedAt: ownerCredential.updatedAt,
+    });
     await deps.checkpoint?.("handoff", tenantId);
 
     // The host and the `signup` event follow the tenant's own transition in

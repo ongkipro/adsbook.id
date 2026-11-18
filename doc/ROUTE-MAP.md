@@ -299,7 +299,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-202 modules under `src/lib` and `src/platform`; 11 that no test imports.
+202 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -310,7 +310,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `abandoned-lead` | 9 | `order_items` `orders` `product_variants` `products` `stores` | — | 3 | `/api/admin/abandoned-orders` |
 | `ad-channel` | 5 | — | — | 3 | — |
 | `ad-taxonomy` | 4 | — | — | 1 | `/admin/ads/google` |
-| `admin-credentials` | 12 | `admin_credentials` | — | 3 | `/api/handoff` `/hello` `/api/admin/access` `/api/admin/profile` |
+| `admin-credentials` | 13 | `admin_credentials` | — | 3 | `/api/handoff` `/hello` `/api/admin/access` `/api/admin/profile` |
 | `admin-date-filter` | 26 | — | — | 1 | — |
 | `admin-orders-initial` | 3 | — | — | 1 | `/admin/orders` |
 | `admin-session` | 6 | `admin_credentials` `admin_sessions` | — | 3 | `/[slug]` `/api/handoff` `/hello` `/api/admin/access` `/api/admin/logout` `/api/admin/profile` |
@@ -478,15 +478,15 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/demo` | 2 | — | — | **none** | — |
 | `platform/domain-poll` | 6 | — | `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]/recheck` |
 | `platform/gate` | 4 | — | — | 2 | — |
-| `platform/handoff` | 13 | — | `handoff_tokens` | 1 | `/api/handoff` |
+| `platform/handoff` | 14 | — | `handoff_tokens` | 1 | `/api/handoff` |
 | `platform/host` | 8 | — | — | 3 | `/api/handoff` |
 | `platform/hostnames` | 28 | — | `plans` `tenant_hosts` `tenants` | 5 | `/admin/settings/domains` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/platform/masuk` `/platform/signup` `/platform/site` |
-| `platform/identities` | 7 | — | `platform_identities` `tenant_hosts` `tenants` | **none** | `/api/admin/access` `/api/admin/profile` |
+| `platform/identities` | 7 | `admin_credentials` | `platform_identities` `tenant_hosts` `tenants` | 1 | `/api/admin/access` `/api/admin/profile` |
 | `platform/jobs` | 7 | — | `handoff_tokens` `tenant_events` `tenant_hosts` `tenant_usage_daily` `tenants` | 3 | — |
 | `platform/keys` | 13 | — | — | 1 | `/assets/[...key]` `/media/[...key]` `/api/form-config` `/api/admin/expeditions` `/api/admin/media` `/api/admin/upload-r2` |
 | `platform/legal-texts` | 3 | — | — | 1 | — |
 | `platform/legal` | 7 | `plugins` `stores` | — | 2 | `/kebijakan-privasi` `/admin/settings/privacy` `/api/admin/settings/privacy` |
-| `platform/login` | 6 | `admin_credentials` | — | 1 | `/api/platform/masuk` |
+| `platform/login` | 6 | `admin_credentials` `rate_limits` | `rate_limits` | 1 | `/api/platform/masuk` |
 | `platform/notify` | 7 | — | `operator_notices` `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]` `/api/admin/domains/[host]/recheck` `/api/platform/signup` |
 | `platform/plans` | 7 | `rate_limits` | `plans` `rate_limits` `tenant_hosts` `tenant_usage_daily` `tenants` | 2 | `/api/admin/content` `/api/admin/media` `/api/admin/upload-r2` |
 | `platform/purge` | 12 | — | `handoff_tokens` `migration_bookmarks` `operator_notices` `platform_identities` `purge_sweeps` `tenant_events` `tenant_health` `tenant_hosts` `tenant_usage_daily` `tenants` `webhook_secrets` | 1 | `/api/admin/store-removal` |

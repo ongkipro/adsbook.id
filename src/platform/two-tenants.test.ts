@@ -966,79 +966,81 @@ test("T-26: a failure at each provisioning step leaves no active tenant, its hos
 
 // ---- AUTH-LOGIN-REGISTER-UX-SPEC: one email = one store, one login door ----
 
-test("AUTH §1.2: one email signs up one store — in any case, racing or not; a purge frees it, a failed provisioning releases its claim", async () => {
+const identityRows = (platformDb: { sqlite: { prepare(sql: string): { all(...args: unknown[]): unknown[] } } }, tenantId?: string) =>
+  platformDb.sqlite
+    .prepare(`SELECT identifier, kind, credential_id FROM platform_identities${tenantId ? " WHERE tenant_id = ?" : ""} ORDER BY identifier`)
+    .all(...(tenantId ? [tenantId] : []))
+    .map((row) => ({ ...(row as object) }));
+
+test("AUTH §1.2: one email signs up one store — in any case, racing or not; a failed signup retries at once; a purge frees it", async () => {
   const { platformDb, env, run, tenant } = await signupHarness();
   const first = await run("toko-satu", {}, "pemilik@contoh.example");
   assert.equal(first.status, 201);
+  if (first.status !== 201) return;
   for (const email of ["pemilik@contoh.example", "PEMILIK@Contoh.example"]) {
     const again = await run(`toko-dua-${email.length}`, {}, email);
     assert.equal(again.status, 409, email);
     if (again.status === 409) assert.match(again.errors?.email ?? "", /sudah terdaftar untuk sebuah toko/);
     assert.equal(tenant(`toko-dua-${email.length}`), undefined, "no store reserved for a taken email");
   }
-  assert.deepEqual(
-    platformDb.sqlite.prepare("SELECT identifier, kind FROM platform_identities").all().map((row) => ({ ...(row as object) })),
-    [{ identifier: "pemilik@contoh.example", kind: "owner_email" }],
-  );
-  // The database itself refuses a second store for the email (a race past the check).
+  assert.deepEqual(identityRows(platformDb), [{ identifier: "pemilik@contoh.example", kind: "owner_email", credential_id: 1 }], "tied to the owner's credential");
+  // The database itself refuses a second live store for the email (a race past the check).
   assert.throws(
-    () => platformDb.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES ('t_balap', 'balap', 'Pemilik@contoh.example', 'provisioning', '2026-11-18')").run(),
+    () => platformDb.sqlite.prepare("INSERT INTO tenants (id, slug, owner_email, status, created_at) VALUES ('t_balap', 'balap', ' Pemilik@contoh.example', 'provisioning', '2026-11-18')").run(),
     /tenants_owner_email_unique/,
   );
-  // A purged store's email is free again.
-  if (first.status !== 201) return;
-  platformDb.sqlite.prepare("UPDATE tenants SET status = 'purging' WHERE id = ?").run(first.tenantId);
   const original = { error: console.error, log: console.log, info: console.info };
   console.error = console.log = console.info = () => undefined;
   try {
+    // Review finding 4: a provisioning that fails releases the email at once — the seller retries now, not after the purge.
+    const failed = await run("toko-gagal", { checkpoint: (step) => { if (step === "store") throw new Error("injected"); } }, "baru@contoh.example");
+    assert.equal(failed.status, 500);
+    assert.equal(tenant("toko-gagal")?.status, "purging");
+    assert.equal((await run("toko-gagal-lagi", {}, "baru@contoh.example")).status, 201, "the same email, straight away");
+    // A removal the owner requested can still be cancelled: the store keeps its email until the purge ends.
+    platformDb.sqlite.prepare("UPDATE tenants SET status = 'purging' WHERE id = ?").run(first.tenantId);
+    assert.equal((await run("toko-tiga", {}, "pemilik@contoh.example")).status, 409, "a cancellable removal keeps the email");
     await runPurges(env, new Date());
     await runPurges(env, new Date(Date.now() + PURGE_DRAIN_MS + 1000));
     assert.equal(tenant("toko-satu")?.status, "purged");
-    assert.equal(platformDb.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_identities").get()?.n, 0, "the purge released the email");
-    assert.equal((await run("toko-tiga", {}, "pemilik@contoh.example")).status, 201, "a purged store's email signs up again");
-    // A provisioning that fails releases its claim at once.
-    const failed = await run("toko-gagal", { checkpoint: (step) => { if (step === "store") throw new Error("injected"); } }, "baru@contoh.example");
-    assert.equal(failed.status, 500);
-    assert.equal(platformDb.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_identities WHERE identifier = 'baru@contoh.example'").get()?.n, 0);
+    assert.equal(platformDb.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_identities WHERE tenant_id = ?").get(first.tenantId)?.n, 0, "the purge released its names");
+    assert.equal((await run("toko-tiga", {}, "pemilik@contoh.example")).status, 201, "a purged store's email is free again");
   } finally {
     Object.assign(console, original);
   }
 });
 
-test("AUTH §1.3: adsbook.id/masuk signs an owner or a staff member into the right store, refuses alike, and limits attempts", async () => {
-  const { storeLogin, LOGIN_REFUSED, PLATFORM_LOGIN_LIMITS } = await import("./login.ts");
+test("AUTH §1.3: adsbook.id/masuk signs an owner or a staff member into the right store, refuses alike, and a guesser cannot lock the owner out", async () => {
+  const { storeLogin, LOGIN_REFUSED, LOGIN_RATE_LIMITED, PLATFORM_LOGIN_LIMITS } = await import("./login.ts");
   const { consumeSessionHandoff } = await import("./handoff.ts");
   const accessRoute = await import("../pages/api/admin/access.ts");
   const { platformDb, stores, env, run } = await signupHarness();
   const a = await run("toko-alfa-masuk", {}, "alfa@contoh.example");
   const b = await run("toko-beta-masuk", {}, "beta@contoh.example");
-  assert.ok(a.status === 201 && b.status === 201);
-  if (a.status !== 201 || b.status !== 201) return;
+  if (a.status !== 201 || b.status !== 201) return assert.fail("signup");
   const deps = { openStore: async (tenantId: string) => createTenantDb(stores.get(tenantId).stub) };
-  let address = 0;
-  const login = (identifier: string, password: string) => storeLogin(env, { identifier, password }, `198.51.100.${(address += 1) % 250}`, deps);
+  const login = (identifier: string, password: string, ip = "198.51.100.10") => storeLogin(env, { identifier, password }, ip, deps);
 
-  // The owner: email + password, in any case, lands on the owner's store with a two-minute login token.
+  // The owner: email + password, in any case, lands on the owner's store with a two-minute token for that credential revision.
   const owner = await login("  ALFA@contoh.example ", "kata-sandi-panjang-1");
   assert.equal(owner.status, 200);
   if (owner.status !== 200) return;
   assert.equal(owner.host, "toko-alfa-masuk.adsbook.my.id");
   assert.equal(owner.next, "/admin/dashboard");
-  const row = platformDb.sqlite.prepare("SELECT tenant_id, purpose, username, host, expires_at FROM handoff_tokens WHERE purpose = 'login'").get() as Record<string, string>;
-  assert.deepEqual({ tenant: row.tenant_id, username: row.username, host: row.host }, { tenant: a.tenantId, username: "alfa@contoh.example", host: owner.host });
-  assert.ok(Date.parse(row.expires_at) - Date.now() <= 2 * 60 * 1000 + 1000, "two minutes");
-  // Redeemed once, on that host only.
+  const row = platformDb.sqlite.prepare("SELECT tenant_id, username, credential_id, credential_updated_at, host, expires_at FROM handoff_tokens WHERE purpose = 'login'").get() as Record<string, string | number>;
+  assert.deepEqual({ tenant: row.tenant_id, username: row.username, credential: row.credential_id, host: row.host }, { tenant: a.tenantId, username: "alfa@contoh.example", credential: 1, host: owner.host });
+  assert.ok(row.credential_updated_at);
+  assert.ok(Date.parse(String(row.expires_at)) - Date.now() <= 2 * 60 * 1000 + 1000, "two minutes");
   assert.equal(await consumeSessionHandoff(platformDb, owner.token, "toko-beta-masuk.adsbook.my.id"), null, "another store's host");
-  assert.deepEqual(await consumeSessionHandoff(platformDb, owner.token, owner.host), { tenantId: a.tenantId, purpose: "login", username: "alfa@contoh.example" });
+  assert.equal((await consumeSessionHandoff(platformDb, owner.token, owner.host))?.credential?.id, 1);
   assert.equal(await consumeSessionHandoff(platformDb, owner.token, owner.host), null, "single use");
 
   // One message for every refusal: unknown identifier, wrong password, empty input.
   for (const [identifier, password] of [["siapa@contoh.example", "kata-sandi-panjang-1"], ["alfa@contoh.example", "salah-salah-salah"], ["", ""]]) {
-    const refused = await login(identifier, password);
-    assert.deepEqual(refused, { status: 401, error: LOGIN_REFUSED }, identifier);
+    assert.deepEqual(await login(identifier, password, "198.51.100.20"), { status: 401, error: LOGIN_REFUSED }, identifier);
   }
 
-  // Staff: unique across stores; signs in with the username or the email it was given.
+  // Staff: unique across stores and within one; signs in with the username or the email it was given.
   const owners = { [a.tenantId]: "alfa@contoh.example", [b.tenantId]: "beta@contoh.example" };
   const addStaff = async (tenantId: string, body: Record<string, unknown>) => {
     const request = new Request("https://x.adsbook.my.id/api/admin/access", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -1053,29 +1055,35 @@ test("AUTH §1.3: adsbook.id/masuk signs an owner or a staff member into the rig
   assert.match(clash.body.error, /sudah digunakan/);
   assert.equal((await addStaff(b.tenantId, { ...staff, username: "cs_rina_b" })).status, 409, "so is the email");
   assert.equal((await addStaff(b.tenantId, { ...staff, username: "cs_rina_b", email: "alfa@contoh.example" })).status, 409, "and another store's owner email");
+  // Review finding 2: two people in one store never share an email.
+  assert.equal((await addStaff(a.tenantId, { ...staff, username: "cs_rina_dua" })).status, 409, "the same email, the same store");
   assert.equal((await addStaff(b.tenantId, { ...staff, username: "cs_rina_b", email: "" })).status, 201, "a free username is fine");
   for (const identifier of ["cs_rina", "rina@contoh.example"]) {
-    const signedIn = await login(identifier, "rina-password-123");
+    const signedIn = await login(identifier, "rina-password-123", "198.51.100.30");
     assert.equal(signedIn.status, 200, identifier);
     if (signedIn.status === 200) {
       assert.equal(signedIn.host, "toko-alfa-masuk.adsbook.my.id");
       assert.equal(signedIn.next, "/admin/profile", "a new staff member changes the password first");
     }
   }
-  const staffToken = platformDb.sqlite.prepare("SELECT username FROM handoff_tokens WHERE purpose = 'login' ORDER BY rowid DESC LIMIT 1").get() as { username: string };
-  assert.equal(staffToken.username, "cs_rina", "the email signs in the staff member it belongs to");
 
   // A suspended store signs nobody in, and says nothing more.
   platformDb.sqlite.prepare("UPDATE tenants SET status = 'suspended' WHERE id = ?").run(b.tenantId);
-  assert.deepEqual(await login("beta@contoh.example", "kata-sandi-panjang-1"), { status: 401, error: LOGIN_REFUSED });
+  assert.deepEqual(await login("beta@contoh.example", "kata-sandi-panjang-1", "198.51.100.40"), { status: 401, error: LOGIN_REFUSED });
 
-  // The identifier limit holds whatever the address.
-  const limited: number[] = [];
-  for (let attempt = 0; attempt <= PLATFORM_LOGIN_LIMITS.perIdentifier; attempt += 1) limited.push((await login("tebak@contoh.example", "x")).status);
-  assert.equal(limited.at(-1), 429);
+  // Review finding 3: a guesser on 1.1.1.1 meets its pair limit; the owner on 2.2.2.2 is untouched,
+  // and a known and an unknown identifier hit the same limit after the same number of tries.
+  for (const identifier of ["alfa@contoh.example", "tidak-ada@contoh.example"]) {
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt <= PLATFORM_LOGIN_LIMITS.perPair; attempt += 1) statuses.push((await login(identifier, "tebakan-salah", "1.1.1.1")).status);
+    assert.deepEqual(statuses, [...Array(PLATFORM_LOGIN_LIMITS.perPair).fill(401), 429], identifier);
+  }
+  assert.deepEqual(await login("alfa@contoh.example", "x", "1.1.1.1"), { status: 429, error: LOGIN_RATE_LIMITED });
+  assert.equal((await login("alfa@contoh.example", "kata-sandi-panjang-1", "2.2.2.2")).status, 200, "the owner from another network");
 });
 
-test("AUTH §1.2: removing a staff member frees the name everywhere; renaming yourself claims the new name first", async () => {
+test("AUTH §1.2 (review finding 2): the registry follows the store's credentials — removals free names, renames keep the owner email", async () => {
+  const { storeLogin } = await import("./login.ts");
   const accessRoute = await import("../pages/api/admin/access.ts");
   const profileRoute = await import("../pages/api/admin/profile.ts");
   const { platformDb, stores, env, run } = await signupHarness();
@@ -1092,23 +1100,56 @@ test("AUTH §1.2: removing a staff member frees the name everywhere; renaming yo
   const ownerA = { username: "ga@contoh.example", role: "owner" };
   const created = await call(accessRoute, "POST", a.tenantId, ownerA, { username: "tim_satu", display_name: "Tim", email: "tim@contoh.example", password: "tim-password-123", role: "admin" });
   assert.equal(created.status, 201);
-  // The email moves: the new one is claimed, the old one released.
-  assert.equal((await call(accessRoute, "PATCH", a.tenantId, ownerA, { id: created.body.data.id, email: "tim2@contoh.example" })).status, 200);
-  const identifiers = () => platformDb.sqlite.prepare("SELECT identifier FROM platform_identities ORDER BY identifier").all().map((row) => (row as { identifier: string }).identifier);
-  assert.deepEqual(identifiers(), ["ga@contoh.example", "gb@contoh.example", "tim2@contoh.example", "tim_satu"]);
-  // Removed: both names are free for another store.
-  assert.equal((await call(accessRoute, "DELETE", a.tenantId, ownerA, { id: created.body.data.id })).status, 200);
-  assert.deepEqual(identifiers(), ["ga@contoh.example", "gb@contoh.example"]);
-  // The owner of B cannot rename to A's owner email; a free name moves the claim.
+  const staffId = created.body.data.id;
+  assert.deepEqual(identityRows(platformDb, a.tenantId), [
+    { identifier: "ga@contoh.example", kind: "owner_email", credential_id: 1 },
+    { identifier: "tim@contoh.example", kind: "staff_email", credential_id: staffId },
+    { identifier: "tim_satu", kind: "staff_username", credential_id: staffId },
+  ]);
+  // The email moves; the old one is free, the new one is the same person's.
+  assert.equal((await call(accessRoute, "PATCH", a.tenantId, ownerA, { id: staffId, email: "tim2@contoh.example" })).status, 200);
+  assert.deepEqual(identityRows(platformDb, a.tenantId).map((row) => (row as { identifier: string }).identifier), ["ga@contoh.example", "tim2@contoh.example", "tim_satu"]);
+  // Removed: both names are free for anyone.
+  assert.equal((await call(accessRoute, "DELETE", a.tenantId, ownerA, { id: staffId })).status, 200);
+  assert.deepEqual(identityRows(platformDb, a.tenantId).map((row) => (row as { identifier: string }).identifier), ["ga@contoh.example"]);
+
+  // The owner of B: a wrong password learns nothing and changes nothing; another store's name is refused.
   const ownerB = { username: "gb@contoh.example", role: "owner" };
-  const taken = await call(profileRoute, "PUT", b.tenantId, ownerB, { username: "ga@contoh.example", current_password: "kata-sandi-panjang-1", new_password: "kata-sandi-baru-123", confirm_password: "kata-sandi-baru-123" });
-  assert.equal(taken.status, 409);
-  const wrongPassword = await call(profileRoute, "PUT", b.tenantId, ownerB, { username: "gb-baru@contoh.example", current_password: "salah-salah-1", new_password: "kata-sandi-baru-123", confirm_password: "kata-sandi-baru-123" });
-  assert.equal(wrongPassword.status, 400);
-  assert.deepEqual(identifiers(), ["ga@contoh.example", "gb@contoh.example"], "a refused rename releases its claim");
-  const renamed = await call(profileRoute, "PUT", b.tenantId, ownerB, { username: "gb-baru@contoh.example", current_password: "kata-sandi-panjang-1", new_password: "kata-sandi-baru-123", confirm_password: "kata-sandi-baru-123" });
-  assert.equal(renamed.status, 200, JSON.stringify(renamed.body));
-  assert.deepEqual(identifiers(), ["ga@contoh.example", "gb-baru@contoh.example"]);
+  const rename = (username: string, current: string) =>
+    call(profileRoute, "PUT", b.tenantId, ownerB, { username, current_password: current, new_password: "kata-sandi-baru-123", confirm_password: "kata-sandi-baru-123" });
+  assert.equal((await rename("ga@contoh.example", "salah-salah-1")).status, 400, "the password is checked first");
+  assert.equal((await rename("ga@contoh.example", "kata-sandi-panjang-1")).status, 409);
+  const before = identityRows(platformDb);
+  assert.equal((await rename("budi_owner", "salah-salah-1")).status, 400);
+  assert.deepEqual(identityRows(platformDb), before, "a refused rename leaves the registry as it was");
+  assert.equal((await rename("budi_owner", "kata-sandi-panjang-1")).status, 200);
+  assert.deepEqual(identityRows(platformDb, b.tenantId), [
+    { identifier: "budi_owner", kind: "staff_username", credential_id: 1 },
+    { identifier: "gb@contoh.example", kind: "owner_email", credential_id: 1 },
+  ], "the owner email stays the owner's; the new username joins it");
+  // Both names sign the owner in on adsbook.id/masuk.
+  const deps = { openStore: async (tenantId: string) => createTenantDb(stores.get(tenantId).stub) };
+  for (const identifier of ["gb@contoh.example", "budi_owner"]) {
+    const signedIn = await storeLogin(env, { identifier, password: "kata-sandi-baru-123" }, "198.51.100.50", deps);
+    assert.equal(signedIn.status, 200, identifier);
+  }
+
+  // A store's staff made before 0010 join the registry on the next sync (the hourly alarm).
+  const { syncTenantIdentities } = await import("./identities.ts");
+  const { hashAdminPassword } = await import("../lib/admin-credentials.ts");
+  stores.get(a.tenantId).storage.db.prepare(
+    "INSERT INTO admin_credentials (username, display_name, email, role, password_hash, must_change_password, updated_at) VALUES ('lama_cs', 'Lama', 'lama@contoh.example', 'customer_service', ?, 0, '2026-11-01')",
+  ).run(await hashAdminPassword("lama-password-1"));
+  // Another store already holds this person's email: the sync never takes it.
+  platformDb.sqlite.prepare("INSERT INTO platform_identities (identifier, tenant_id, kind, credential_id, created_at) VALUES ('lama@contoh.example', ?, 'staff_email', 99, '2026-11-01')").run(b.tenantId);
+  const synced = await syncTenantIdentities(env, a.tenantId, createTenantDb(stores.get(a.tenantId).stub));
+  assert.deepEqual(synced.blocked, ["lama@contoh.example"]);
+  assert.ok(identityRows(platformDb, a.tenantId).some((row) => (row as { identifier: string }).identifier === "lama_cs"));
+  assert.deepEqual(
+    { ...(platformDb.sqlite.prepare("SELECT tenant_id, kind, credential_id FROM platform_identities WHERE identifier = 'lama@contoh.example'").get() as object) },
+    { tenant_id: b.tenantId, kind: "staff_email", credential_id: 99 },
+    "the other store's row is untouched, its credential included",
+  );
 });
 
 test("T-26/IAM-10: a provisioning whose claim updates no seeded row ends in purging, never active", async () => {
@@ -1187,7 +1228,10 @@ test("T-26/IAM-8: a handoff redeems once on its own host and purpose; replay, ex
 
   const recovery = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "owner_recovery");
   assert.equal((await redeem("serah-a.adsbook.my.id", recovery)).status, 401, "wrong purpose");
-  const expired = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "signup", new Date(Date.now() - 11 * 60_000));
+  const { getAdminCredential: credentialOf } = await import("../lib/admin-credentials.ts");
+  const ownerA = (await credentialOf(createTenantDb(stores.get(a.tenantId).stub), "owner@serah-a.example"))!;
+  const revision = (credential: { id: number; username: string; updatedAt: string }) => ({ id: credential.id, username: credential.username, updatedAt: credential.updatedAt });
+  const expired = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "signup", new Date(Date.now() - 11 * 60_000), revision(ownerA));
   assert.equal((await redeem("serah-a.adsbook.my.id", expired)).status, 401, "expired");
 
   for (const token of [a.handoffToken, b.handoffToken, recovery, expired]) {
@@ -1197,23 +1241,42 @@ test("T-26/IAM-8: a handoff redeems once on its own host and purpose; replay, ex
   const secretA = await resolveAuthSecret(createTenantDb(stores.get(a.tenantId).stub), a.tenantId);
   assert.ok(await verifyJwt(first.cookie!.value, secretA));
 
-  // AUTH §1.3: a login token opens a session for exactly the user it names — here a staff member, in that role.
+  // AUTH §1.3: a login token opens a session for exactly the credential revision it names — here a staff member, in that role.
   const { hashAdminPassword } = await import("../lib/admin-credentials.ts");
+  const storeA = createTenantDb(stores.get(a.tenantId).stub);
   stores.get(a.tenantId).storage.db.prepare(
-    "INSERT INTO admin_credentials (username, display_name, role, password_hash, must_change_password, updated_at) VALUES ('cs_serah', 'CS', 'customer_service', ?, 0, '2026-11-18')",
+    "INSERT INTO admin_credentials (username, display_name, role, password_hash, must_change_password, updated_at) VALUES ('cs_serah', 'CS', 'customer_service', ?, 0, '2026-11-18T00:00:00.000Z')",
   ).run(await hashAdminPassword("cs-password-123"));
-  const staffToken = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "login", new Date(), "cs_serah");
+  const staffCredential = (await credentialOf(storeA, "cs_serah"))!;
+  const staffToken = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "login", new Date(), revision(staffCredential));
   const staff = await redeem("serah-a.adsbook.my.id", staffToken);
   assert.equal(staff.status, 303);
   assert.equal(staff.location, "/admin/dashboard");
   const staffSession = await verifyJwt(staff.cookie!.value, secretA);
   assert.deepEqual(staffSession && { username: staffSession.username, role: staffSession.role }, { username: "cs_serah", role: "customer_service" });
   assert.equal((await redeem("serah-a.adsbook.my.id", staffToken)).status, 401, "a login token is single use");
-  const ghost = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "login", new Date(), "tidak_ada");
-  assert.equal((await redeem("serah-a.adsbook.my.id", ghost)).status, 401, "a user the store does not have");
-  await assert.rejects(issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "login"), /names its user/);
-  await assert.rejects(issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "signup", new Date(), "cs_serah"), /names its user/);
-  for (const token of [staffToken, ghost]) assert.equal(logged.some((line) => line.includes(token)), false);
+
+  // Review finding 1: a reset password, or a credential deleted and made again under the same name, voids an unspent token.
+  const beforeReset = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "login", new Date(), revision(staffCredential));
+  stores.get(a.tenantId).storage.db.prepare("UPDATE admin_credentials SET password_hash = ?, updated_at = '2026-11-18T01:00:00.000Z' WHERE username = 'cs_serah'").run(await hashAdminPassword("reset-password-456"));
+  assert.equal((await redeem("serah-a.adsbook.my.id", beforeReset)).status, 401, "a password reset voids the token");
+  const reset = (await credentialOf(storeA, "cs_serah"))!;
+  const beforeRecreate = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "login", new Date(), revision(reset));
+  stores.get(a.tenantId).storage.db.exec("DELETE FROM admin_credentials WHERE username = 'cs_serah'");
+  // As the access API makes it: same name, possibly the same reused id (no AUTOINCREMENT), a new revision time.
+  stores.get(a.tenantId).storage.db.prepare(
+    "INSERT INTO admin_credentials (username, display_name, role, password_hash, must_change_password, updated_at) VALUES ('cs_serah', 'CS', 'admin', ?, 0, ?)",
+  ).run(await hashAdminPassword("other-password-789"), new Date().toISOString());
+  assert.equal((await redeem("serah-a.adsbook.my.id", beforeRecreate)).status, 401, "a credential made again under the same name is another credential");
+  const signupAfterReset = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "signup", new Date(), revision(ownerA));
+  stores.get(a.tenantId).storage.db.exec("UPDATE admin_credentials SET updated_at = '2026-11-18T02:00:00.000Z' WHERE role = 'owner'");
+  assert.equal((await redeem("serah-a.adsbook.my.id", signupAfterReset)).status, 401, "a signup token is bound the same way");
+
+  const ghost = await issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "login", new Date(), { id: 9999, username: "tidak_ada", updatedAt: "2026-11-18" });
+  assert.equal((await redeem("serah-a.adsbook.my.id", ghost)).status, 401, "a credential the store does not have");
+  await assert.rejects(issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "login"), /names its credential/);
+  await assert.rejects(issueHandoff(platformDb, a.tenantId, "serah-a.adsbook.my.id", "owner_recovery", new Date(), revision(ownerA)), /names its credential/);
+  for (const token of [staffToken, ghost, beforeReset, beforeRecreate, signupAfterReset]) assert.equal(logged.some((line) => line.includes(token)), false);
 });
 
 test("T-26/PRIV-4: removal is requested for 30 days, cancellable, then the purge leaves nothing of the tenant", async () => {

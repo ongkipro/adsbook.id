@@ -10,11 +10,15 @@ import { jsonError, jsonOk } from "../../../lib/api";
 import { isAdminRole } from "../../../lib/auth";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
 import { getRuntimeEnv } from "../../../lib/env.ts";
-import { claimPlatformIdentity, releasePlatformIdentity } from "../../../platform/identities.ts";
+import { checkIdentitiesAvailable, syncTenantIdentities } from "../../../platform/identities.ts";
 
 export const prerender = false;
 
-/** AUTH-LOGIN-REGISTER-UX-SPEC §1.2: a staff username or email signs in on adsbook.id/masuk, so it is unique across stores. */
+/**
+ * AUTH-LOGIN-REGISTER-UX-SPEC §1.2: a username or email signs in on
+ * adsbook.id/masuk, so it is unique across stores. Checked before the store
+ * writes, then the store's registry rows are synced from its credentials.
+ */
 const IDENTITY_TAKEN = "Username atau email ini sudah digunakan. Pilih yang lain.";
 
 function runtime(locals: App.Locals) {
@@ -23,6 +27,11 @@ function runtime(locals: App.Locals) {
     env: getRuntimeEnv(locals),
     tenantId: locals.tenantContext?.tenantId,
   };
+}
+
+/** After the store's write: its registry follows its credentials. Logged, never fatal — the next sync repairs it. */
+async function syncIdentities(env: unknown, tenantId: string | undefined, database: D1Database) {
+  await syncTenantIdentities(env, tenantId, database).catch((error) => console.error("admin-access-identity-sync", error));
 }
 
 export const GET: APIRoute = async ({ locals }) => {
@@ -86,19 +95,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   const passwordError = validateNewAdminPassword(password, username);
   if (passwordError) return jsonError(passwordError, 422);
-
-  // Claimed on the platform before the store writes the credential, released if that write fails.
-  const claimed: Array<[string, "staff_username" | "staff_email"]> = [];
-  const release = () => Promise.all(claimed.map(([identifier, kind]) => releasePlatformIdentity(env, tenantId, identifier, kind).catch(() => undefined)));
-  const wanted: Array<[string, "staff_username" | "staff_email"]> = [[username, "staff_username"]];
-  if (email && email !== username) wanted.push([email, "staff_email"]);
-  for (const [identifier, kind] of wanted) {
-    const claim = await claimPlatformIdentity(env, tenantId, identifier, kind);
-    if (claim === "taken") {
-      await release();
-      return jsonError(IDENTITY_TAKEN, 409);
-    }
-    if (claim === "claimed") claimed.push([identifier, kind]);
+  // A new credential may take no name anybody holds: another store, or another person here.
+  if (!(await checkIdentitiesAvailable(env, tenantId, null, [username, email]))) {
+    return jsonError(IDENTITY_TAKEN, 409);
+  }
+  // Two people in one store never share an email (a sync could give its login to only one).
+  if (email && (await database.prepare("SELECT 1 AS yes FROM admin_credentials WHERE email = ? OR username = ? LIMIT 1").bind(email, email).first())) {
+    return jsonError(IDENTITY_TAKEN, 409);
   }
 
   try {
@@ -115,6 +118,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       .bind(username, displayName, email || null, role, passwordHash, now)
       .run();
     if (!result.success) throw new Error("D1 rejected user creation.");
+    await syncIdentities(env, tenantId, database);
     return jsonOk(
       {
         message: `Pengguna ${username} berhasil dibuat sebagai ${role}.`,
@@ -131,7 +135,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
       201,
     );
   } catch (error) {
-    await release();
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("admin_credentials.username")) {
       return jsonError("Username sudah digunakan.", 409);
@@ -163,10 +166,10 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
   try {
     const existing = await database
       .prepare(
-        "SELECT id, username, role, email FROM admin_credentials WHERE id = ? LIMIT 1",
+        "SELECT id, username, role FROM admin_credentials WHERE id = ? LIMIT 1",
       )
       .bind(id)
-      .first<{ id: number; username: string; role: string; email: string | null }>();
+      .first<{ id: number; username: string; role: string }>();
 
     if (!existing) return jsonError("Pengguna tidak ditemukan.", 404);
     if (existing.role === "owner") {
@@ -199,8 +202,6 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
       params.push(displayName);
     }
 
-    // A changed email moves its platform claim: the new one first, the old one after the write.
-    let emailClaim: { next: string; previous: string } | null = null;
     if (body.email !== undefined) {
       const email = String(body.email || "")
         .trim()
@@ -209,10 +210,16 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return jsonError("Email pengguna tidak valid.", 422);
       }
+      if (email) {
+        if (!(await checkIdentitiesAvailable(env, tenantId, existing.id, [email]))) return jsonError(IDENTITY_TAKEN, 409);
+        const sibling = await database
+          .prepare("SELECT 1 AS yes FROM admin_credentials WHERE (email = ? OR username = ?) AND id <> ? LIMIT 1")
+          .bind(email, email, existing.id)
+          .first();
+        if (sibling) return jsonError(IDENTITY_TAKEN, 409);
+      }
       updates.push("email = ?");
       params.push(email || null);
-      const previous = (existing.email ?? "").toLowerCase();
-      if (email !== previous) emailClaim = { next: email, previous };
     }
 
     let passwordReset = false;
@@ -232,34 +239,20 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
       return jsonError("Tidak ada perubahan data.", 400);
     }
 
-    let claimedEmail = "";
-    if (emailClaim?.next && emailClaim.next !== existing.username) {
-      const claim = await claimPlatformIdentity(env, tenantId, emailClaim.next, "staff_email");
-      if (claim === "taken") return jsonError(IDENTITY_TAKEN, 409);
-      if (claim === "claimed") claimedEmail = emailClaim.next;
-    }
-
     const now = new Date().toISOString();
     updates.push("updated_at = ?");
     params.push(now);
     params.push(id);
 
-    try {
-      await database
-        .prepare(
-          `UPDATE admin_credentials SET ${updates.join(", ")} WHERE id = ? AND role != 'owner'`,
-        )
-        .bind(...params)
-        .run();
-    } catch (error) {
-      if (claimedEmail) await releasePlatformIdentity(env, tenantId, claimedEmail, "staff_email").catch(() => undefined);
-      throw error;
-    }
-    if (emailClaim?.previous && emailClaim.previous !== existing.username) {
-      await releasePlatformIdentity(env, tenantId, emailClaim.previous, "staff_email");
-    }
+    await database
+      .prepare(
+        `UPDATE admin_credentials SET ${updates.join(", ")} WHERE id = ? AND role != 'owner'`,
+      )
+      .bind(...params)
+      .run();
 
     await revokeAdminSessions(database, existing.username);
+    await syncIdentities(env, tenantId, database);
 
     const updatedUser = await database
       .prepare(
@@ -298,10 +291,10 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
   try {
     const row = await database
       .prepare(
-        "SELECT username, role, email FROM admin_credentials WHERE id = ? LIMIT 1",
+        "SELECT username, role FROM admin_credentials WHERE id = ? LIMIT 1",
       )
       .bind(id)
-      .first<{ username: string; role: string; email: string | null }>();
+      .first<{ username: string; role: string }>();
     if (!row) return jsonError("Pengguna tidak ditemukan.", 404);
     if (row.role === "owner") {
       return jsonError("Akun owner tidak dapat dihapus dari halaman ini.", 409);
@@ -314,9 +307,8 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
       return jsonError("Pengguna tidak ditemukan.", 404);
     }
     await revokeAdminSessions(database, row.username);
-    // The removed user's sign-in names are free again, here and in every other store.
-    await releasePlatformIdentity(env, tenantId, row.username, "staff_username");
-    if (row.email) await releasePlatformIdentity(env, tenantId, row.email, "staff_email");
+    // The removed user's names are free again, here and in every other store.
+    await syncIdentities(env, tenantId, database);
     return jsonOk({ message: `Akses ${row.username} dicabut.` });
   } catch (error) {
     console.error("admin-access-delete", error);
