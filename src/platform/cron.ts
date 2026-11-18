@@ -3,14 +3,14 @@ import { CMS_VERSION } from "../lib/version.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { armTenantAlarm, openTenantDb, TenantUnavailableError } from "./tenant-db.ts";
 import { runPlatformJobs } from "./jobs.ts";
-import { noticeDomainIfActive, noticeStuckDomains, notifyOperator } from "./notify.ts";
+import { noticeDomainIfActive, noticeStuckDomains, notifyOperator, notifyPlatform } from "./notify.ts";
 import { pollPendingDomains } from "./domain-poll.ts";
 import { checkTrustPositif } from "./trust-watch.ts";
 import { pollOpenInvoices, subscriptionCalendar } from "./billing.ts";
 import { resolveAuthSecret } from "../lib/auth-secret.ts";
 import { runPurges } from "./purge.ts";
 import { deleteHostnameRef, hostnameApiFromEnv, probeHost } from "./hostnames.ts";
-import { runDailyPlatformBackup } from "./backup.ts";
+import { BACKUP_ALERT_UTC_HOUR, backupKey, runDailyPlatformBackup } from "./backup.ts";
 
 /** MIG-1: tenants migrated by the cron per run, oldest schema first. */
 export const CRON_MIGRATION_BATCH = 50;
@@ -29,8 +29,9 @@ export const CRON_ARM_BATCH = 200;
  *    behind this release and that received no request, each through the T-18
  *    protocol (bookmark first; `openTenantDb` records the new version);
  * 2. arms the hourly alarm of every active tenant that has none;
- * 3. runs the platform's own retention job (`src/platform/jobs.ts`);
- * 4. writes the day's `PLATFORM_DB` backup to R2 once (`src/platform/backup.ts`).
+ * 3. runs the platform's own retention job (`src/platform/jobs.ts`).
+ * Before all of it, the day's `PLATFORM_DB` backup goes to R2 once
+ * (`src/platform/backup.ts`).
  * One tenant's failure is logged with its id and the next tenant runs.
  */
 export async function runPlatformCron(
@@ -42,6 +43,25 @@ export async function runPlatformCron(
   if (!platformDb) {
     console.error("scheduled-no-platform-bindings");
     return { migrated: [], armed: 0, failed: [] };
+  }
+  // T-30: first, in its own try — a broken migration or job below never costs the day's backup.
+  try {
+    const backup = await runDailyPlatformBackup(env.BACKUP_BUCKET, platformDb, new Date(scheduledTime));
+    if (backup.status !== "exists") console.info("scheduled-platform-backup", backup);
+  } catch (error) {
+    console.error("scheduled-platform-backup-failed", String(error));
+    const at = new Date(scheduledTime);
+    // Retried every hour; the operator hears once a day, after a morning of failures.
+    if (at.getUTCHours() >= BACKUP_ALERT_UTC_HOUR) {
+      context.waitUntil(
+        notifyPlatform(
+          env as unknown as Record<string, unknown>,
+          platformDb,
+          `platform_backup_failed:${backupKey(at)}`,
+          `Backup harian PLATFORM_DB gagal (${backupKey(at)}); dicoba lagi tiap jam. Cek log scheduled-platform-backup-failed.`,
+        ),
+      );
+    }
   }
   await ensureControlPlane(platformDb);
   const target = CMS_VERSION.schemaVersion;
@@ -141,13 +161,6 @@ export async function runPlatformCron(
     }
   } catch (error) {
     console.error("scheduled-platform-jobs-failed", String(error));
-  }
-  // T-30: its own try, so a failing job above never costs the day's backup.
-  try {
-    const backup = await runDailyPlatformBackup(env.BACKUP_BUCKET, platformDb, new Date(scheduledTime));
-    if (backup.status !== "exists") console.info("scheduled-platform-backup", backup);
-  } catch (error) {
-    console.error("scheduled-platform-backup-failed", String(error));
   }
   return { migrated, armed, failed };
 }

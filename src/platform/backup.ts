@@ -11,7 +11,8 @@
  * 1. `PRAGMA defer_foreign_keys = ON` (what `wrangler d1 export` emits too);
  * 2. every table's `CREATE TABLE` from `sqlite_master`, parents before
  *    children by their foreign keys;
- * 3. the rows, in the same order, each value a SQLite `quote()` literal
+ * 3. the rows, in the same order, read in one D1 batch (one transaction,
+ *    so one consistent snapshot), each value a SQLite `quote()` literal
  *    (exact for NULL, integers of any size, reals, text with quotes or
  *    newlines, and blobs; text holding a NUL goes as `CAST(X'…' AS TEXT)`);
  * 4. indexes, then triggers (the `tenant_events` append-only guards), so the
@@ -33,11 +34,11 @@
 /** Tables whose rows are never written to a backup (their `CREATE TABLE` is). */
 export const EPHEMERAL_TABLES: ReadonlySet<string> = new Set(["platform_sessions", "handoff_tokens", "rate_limits"]);
 
-/** Rows read per query: the export stays light however large a table grows. */
-export const BACKUP_PAGE_ROWS = 500;
-
 /** The UTC hour from which the cron writes the day's file (01:07 UTC, 08:07 WIB). */
 export const BACKUP_FROM_UTC_HOUR = 1;
+
+/** A backup still failing at this UTC hour (13:00 WIB) reaches the operator, once that day. */
+export const BACKUP_ALERT_UTC_HOUR = 6;
 
 export const backupKey = (now: Date) => `platform-db/${now.toISOString().slice(0, 10)}.sql`;
 
@@ -63,55 +64,38 @@ function foreignKeyOrder(tables: string[], parentsOf: Map<string, Set<string>>):
   return ordered;
 }
 
-/** Every row of one table as `INSERT` statements, read in bounded keyset pages. */
-async function tableInserts(db: D1Database, table: string, createSql: string): Promise<string[]> {
+/** One table's rows as `INSERT` text: the SELECT that reads them and how to print a row. */
+async function tableReader(db: D1Database, table: string) {
   const columns = (
-    await db.prepare("SELECT name, pk FROM pragma_table_info(?) ORDER BY cid").bind(table).all<{ name: string; pk: number }>()
-  ).results;
-  if (!columns.length) return [];
+    await db.prepare("SELECT name FROM pragma_table_info(?) ORDER BY cid").bind(table).all<{ name: string }>()
+  ).results.map((column) => ident(column.name));
   // quote() stops a text value at an embedded NUL; such a value goes as its UTF-8 bytes cast back to text.
   const literal = (name: string) =>
     `CASE WHEN typeof(${name}) = 'text' AND instr(CAST(${name} AS BLOB), x'00') > 0 THEN 'CAST(' || quote(CAST(${name} AS BLOB)) || ' AS TEXT)' ELSE quote(${name}) END`;
-  const literals = columns.map((column, index) => `${literal(ident(column.name))} AS c${index}`).join(", ");
-  const head = `INSERT INTO ${ident(table)} (${columns.map((column) => ident(column.name)).join(", ")}) VALUES (`;
-  const toInsert = (row: Record<string, unknown>) => `${head}${columns.map((_, index) => String(row[`c${index}`])).join(", ")});`;
-  const statements: string[] = [];
-
-  if (/\bWITHOUT\s+ROWID\b/i.test(createSql)) {
-    // No rowid to page on: the primary key orders the pages instead.
-    const key = columns.filter((column) => column.pk > 0).sort((a, b) => a.pk - b.pk).map((column) => ident(column.name)).join(", ");
-    for (let offset = 0; ; offset += BACKUP_PAGE_ROWS) {
-      const page = (
-        await db.prepare(`SELECT ${literals} FROM ${ident(table)} ORDER BY ${key} LIMIT ? OFFSET ?`).bind(BACKUP_PAGE_ROWS, offset).all<Record<string, unknown>>()
-      ).results;
-      statements.push(...page.map(toInsert));
-      if (page.length < BACKUP_PAGE_ROWS) return statements;
-    }
-  }
-
-  let after: number | null = null;
-  for (;;) {
-    const page: Array<Record<string, unknown>> = (
-      await db
-        .prepare(`SELECT rowid AS __backup_rowid, ${literals} FROM ${ident(table)} WHERE ?1 IS NULL OR rowid > ?1 ORDER BY rowid LIMIT ?2`)
-        .bind(after, BACKUP_PAGE_ROWS)
-        .all<Record<string, unknown>>()
-    ).results;
-    statements.push(...page.map(toInsert));
-    if (page.length < BACKUP_PAGE_ROWS) return statements;
-    after = Number(page[page.length - 1].__backup_rowid);
-  }
+  const head = `INSERT INTO ${ident(table)} (${columns.join(", ")}) VALUES (`;
+  return {
+    select: db.prepare(`SELECT ${columns.map((column, index) => `${literal(column)} AS c${index}`).join(", ")} FROM ${ident(table)}`),
+    toInsert: (row: Record<string, unknown>) => `${head}${columns.map((_, index) => String(row[`c${index}`])).join(", ")});`,
+  };
 }
 
 export type PlatformDbSnapshot = { sql: string; tables: number; rows: number };
 
+/** A statement's SQL text and its terminator; a text ending in a `--` comment gets its `;` on a line of its own. */
+const statement = (sql: string) => {
+  const text = sql.trim().replace(/;\s*$/, "");
+  return /--[^\n]*$/.test(text) ? `${text}\n;` : `${text};`;
+};
+
 /**
  * The control plane as SQL that replays on an empty SQLite or D1 database.
- * D1 has no read snapshot across queries, so a write during the export can
- * land in it partly; child tables are read before their parents so such a
- * write can leave a parent without its new child, never a child without its
- * parent. // lazy: consistent to within one cron run of writes; D1 Time
- * Travel stays the exact point-in-time copy (30 days).
+ * Every table's rows are read in ONE `batch`, which D1 runs as one
+ * transaction: a consistent snapshot, so a write during the export (a host
+ * promoted to primary, a tenant and its first event) can never yield a file
+ * that breaks a UNIQUE index or a foreign key on replay.
+ * // lazy: the whole control plane is held in memory once as rows and once as
+ * text — 233 kB on 2026-11-18. Past some tens of MB, page per table and
+ * stream to an R2 multipart upload (and accept per-page consistency).
  */
 export async function exportPlatformDbSql(db: D1Database): Promise<PlatformDbSnapshot> {
   const schema = (
@@ -133,24 +117,22 @@ export async function exportPlatformDbSql(db: D1Database): Promise<PlatformDbSna
     parentsOf.set(table, new Set(keys.map((key) => key.parent)));
   }
   const order = foreignKeyOrder(tables, parentsOf);
+  const kept = order.filter((table) => !EPHEMERAL_TABLES.has(table));
+  const readers = await Promise.all(kept.map((table) => tableReader(db, table)));
+  const results = readers.length ? await db.batch(readers.map((reader) => reader.select)) : [];
+  const inserts = kept.flatMap((_, index) => ((results[index]?.results ?? []) as Record<string, unknown>[]).map(readers[index].toInsert));
 
-  const inserts = new Map<string, string[]>();
-  for (const table of [...order].reverse()) {
-    inserts.set(table, EPHEMERAL_TABLES.has(table) ? [] : await tableInserts(db, table, tableSql.get(table) as string));
-  }
-  const rows = [...inserts.values()].reduce((sum, list) => sum + list.length, 0);
-  const statement = (sql: string) => `${sql.trim().replace(/;\s*$/, "")};`;
   const lines = [
     "-- adsbook.id PLATFORM_DB backup (src/platform/backup.ts). Replay on an EMPTY database: PLATFORM-RUNBOOK §9.",
     `-- Rows of ${[...EPHEMERAL_TABLES].sort().join(", ")} are deliberately omitted (schema kept).`,
     "PRAGMA defer_foreign_keys = ON;",
     ...order.map((table) => statement(tableSql.get(table) as string)),
-    ...order.flatMap((table) => inserts.get(table) ?? []),
+    ...inserts,
     ...schema.filter((row) => row.type === "index").map((row) => statement(row.sql as string)),
     ...schema.filter((row) => row.type === "view").map((row) => statement(row.sql as string)),
     ...schema.filter((row) => row.type === "trigger").map((row) => statement(row.sql as string)),
   ];
-  return { sql: `${lines.join("\n")}\n`, tables: tables.length, rows };
+  return { sql: `${lines.join("\n")}\n`, tables: tables.length, rows: inserts.length };
 }
 
 /** The slice of R2 this job uses; the in-memory stand-in in the test implements the same. */

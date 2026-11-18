@@ -69,6 +69,13 @@ test("T-20: no code outside src/platform names the shared ASSET_BUCKET, BACKUP_B
   assert.deepEqual(offenders(/\b(?:ASSET_BUCKET|BACKUP_BUCKET|SESSION)\b/), [], "use tenantR2 / tenantKv from src/platform/keys.ts");
 });
 
+test("T-30: inside src/platform only the cron hands BACKUP_BUCKET to backup.ts: no route reads the backups", () => {
+  const naming = files("src/platform")
+    .filter((path) => !path.endsWith(".test.ts") && !path.endsWith(".d.ts"))
+    .filter((path) => /\bBACKUP_BUCKET\b/.test(readFileSync(join(ROOT, path), "utf8")));
+  assert.deepEqual(naming.sort(), ["src/platform/backup.ts", "src/platform/cron.ts"]);
+});
+
 test("the scan itself covers the code it guards", () => {
   assert.ok(SCANNED.includes("src/middleware.ts"));
   assert.ok(SCANNED.some((path) => path.startsWith("src/pages/api/v1/")));

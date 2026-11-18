@@ -3,32 +3,17 @@ import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { splitMigrationStatements } from "../lib/schema-version.ts";
-import { BACKUP_PAGE_ROWS, EPHEMERAL_TABLES, exportPlatformDbSql, runDailyPlatformBackup, type BackupBucket } from "./backup.ts";
+import { EPHEMERAL_TABLES, exportPlatformDbSql, runDailyPlatformBackup, type BackupBucket } from "./backup.ts";
+import { createSqliteD1 } from "./testing/sqlite-d1.ts";
 import { HostCache, resolveTenantHost } from "./control-plane.ts";
-
-/** A D1-shaped handle over node:sqlite (the calls backup.ts and the gate make). */
-function asD1(sqlite: DatabaseSync): D1Database {
-  return {
-    prepare: (sql: string) => {
-      const bound: unknown[] = [];
-      const statement = {
-        bind: (...values: unknown[]) => { bound.push(...values); return statement; },
-        run: async () => ({ meta: { changes: Number(sqlite.prepare(sql).run(...(bound as never[])).changes) } }),
-        first: async () => sqlite.prepare(sql).get(...(bound as never[])) ?? null,
-        all: async () => ({ results: sqlite.prepare(sql).all(...(bound as never[])) }),
-      };
-      return statement;
-    },
-  } as unknown as D1Database;
-}
 
 const MIGRATIONS = new URL("./migrations/", import.meta.url);
 const MIGRATION_FILES = readdirSync(MIGRATIONS).filter((file) => file.endsWith(".sql")).sort();
 
 /** The production control plane: the chain applied and recorded in the ledger wrangler keeps. */
 function controlPlane() {
-  const sqlite = new DatabaseSync(":memory:");
-  sqlite.exec("PRAGMA foreign_keys = ON");
+  const db = createSqliteD1();
+  const { sqlite } = db;
   sqlite.exec(`CREATE TABLE d1_migrations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE,
@@ -38,7 +23,7 @@ function controlPlane() {
     for (const statement of splitMigrationStatements(readFileSync(new URL(name, MIGRATIONS), "utf8"))) sqlite.exec(statement);
     sqlite.prepare("INSERT INTO d1_migrations (name, applied_at) VALUES (?, '2026-11-16 08:54:29')").run(name);
   }
-  return sqlite;
+  return db;
 }
 
 const TRICKY = "Toko O'Brien \"kutip\"\nbaris dua; DROP TABLE tenants; -- bukan komentar\t☕ 🌶️ é";
@@ -108,9 +93,9 @@ const rowsOf = (sqlite: DatabaseSync, table: string) => {
 };
 
 test("the cron writes one file per UTC day from 01:00, keyed like the T-30 drill, with its counts", async () => {
-  const sqlite = controlPlane();
+  const db = controlPlane();
+  const { sqlite } = db;
   seed(sqlite);
-  const db = asD1(sqlite);
   const r2 = memoryBucket();
 
   assert.deepEqual(await runDailyPlatformBackup(undefined, db, new Date("2026-11-18T01:07:00Z")), { status: "skipped", reason: "no-bucket" });
@@ -144,9 +129,18 @@ test("the cron writes one file per UTC day from 01:00, keyed like the T-30 drill
 });
 
 test("the file replays on an empty database with foreign keys on: same schema, same rows, the gate resolves, no live session", async () => {
-  const source = controlPlane();
+  const db = controlPlane();
+  const source = db.sqlite;
   seed(source);
-  const { sql, rows } = await exportPlatformDbSql(asD1(source));
+  // Every row is read inside one batch: D1 runs it as one transaction, one snapshot.
+  const batches: string[][] = [];
+  const batch = db.batch.bind(db);
+  db.batch = (async (statements: Array<{ sql: string }>) => (batches.push(statements.map((item) => item.sql)), batch(statements as never))) as never;
+  const { sql, rows } = await exportPlatformDbSql(db);
+  assert.equal(batches.length, 1, "one batch");
+  const rowReads = db.queries.filter((query) => /\bquote\(/.test(query));
+  assert.equal(rowReads.length, batches[0].length, "no row read outside the batch");
+  assert.deepEqual(new Set(batches[0]), new Set(rowReads));
 
   assert.doesNotMatch(sql, /sess-hash|handoff-hash|203\.0\.113\.9/, "no session, handoff token or rate window is written");
   // A trigger body's BEGIN … END is not a transaction statement.
@@ -177,32 +171,34 @@ test("the file replays on an empty database with foreign keys on: same schema, s
   );
 
   // The gate's own read answers from the restored control plane.
-  const resolution = await resolveTenantHost(asD1(restored), "toko-a.adsbook.my.id", new Date("2026-11-18T05:00:00Z"), new HostCache());
+  const resolution = await resolveTenantHost(createSqliteD1(restored), "toko-a.adsbook.my.id", new Date("2026-11-18T05:00:00Z"), new HostCache());
   assert.equal(resolution.kind, "tenant");
   assert.equal(resolution.kind === "tenant" && resolution.tenant.tenantId, "t_a");
   // The append-only guard came back with the schema.
   assert.throws(() => restored.exec("DELETE FROM tenant_events"));
 });
 
-test("values and shapes beyond today's schema replay exactly: reals, 64-bit integers, blobs, NUL, paging, a child named before its parent", async () => {
-  const source = new DatabaseSync(":memory:");
-  source.exec("PRAGMA foreign_keys = ON");
+test("values and shapes beyond today's schema replay exactly: reals, 64-bit integers, blobs, NUL, many rows, a trailing comment, a child named before its parent", async () => {
+  const db = createSqliteD1();
+  const source = db.sqlite;
   source.exec(`
     CREATE TABLE z_parent (id TEXT PRIMARY KEY, "we""ird col" TEXT);
     CREATE TABLE a_child (id INTEGER PRIMARY KEY, parent TEXT NOT NULL REFERENCES z_parent (id), ratio REAL, big INTEGER, data BLOB, note TEXT, loose);
     CREATE TABLE keyed (k1 TEXT NOT NULL, k2 INTEGER NOT NULL, v TEXT, PRIMARY KEY (k1, k2)) WITHOUT ROWID;
     CREATE VIEW child_view AS SELECT id, note FROM a_child;
+    CREATE INDEX keyed_v ON keyed (v) -- a comment the schema keeps
+    ;
   `);
   source.prepare(`INSERT INTO z_parent (id, "we""ird col") VALUES ('p', 'q')`).run();
   const insert = source.prepare("INSERT INTO a_child (id, parent, ratio, big, data, note, loose) VALUES (?, 'p', ?, ?, ?, ?, ?)");
   insert.run(1, 0.1 + 0.2, 9223372036854775807n, new Uint8Array([0, 1, 254, 255]), "nul\u0000inside", 1.0);
   insert.run(2, -1e-300, -9223372036854775808n, new Uint8Array([]), "", "42");
   insert.run(3, 1.0, 0, null, null, null);
-  const rows = BACKUP_PAGE_ROWS * 2 + 7;
+  const rows = 1207;
   const many = source.prepare("INSERT INTO keyed (k1, k2, v) VALUES (?, ?, ?)");
   for (let i = 0; i < rows; i += 1) many.run(`k${i % 3}`, i, `v'${i}`);
 
-  const { sql } = await exportPlatformDbSql(asD1(source));
+  const { sql } = await exportPlatformDbSql(db);
   assert.ok(sql.indexOf('CREATE TABLE z_parent') < sql.indexOf('CREATE TABLE a_child'), "parent created first");
   assert.ok(sql.indexOf('INSERT INTO "z_parent"') < sql.indexOf('INSERT INTO "a_child"'), "parent rows first");
 
@@ -212,7 +208,7 @@ test("values and shapes beyond today's schema replay exactly: reals, 64-bit inte
   assert.deepEqual(schemaOf(restored), schemaOf(source));
   for (const table of ["z_parent", "a_child"]) assert.deepEqual(rowsOf(restored, table), rowsOf(source, table), table);
   const keyed = (db: DatabaseSync) => db.prepare("SELECT k1, k2, v FROM keyed ORDER BY k1, k2").all();
-  assert.equal(keyed(restored).length, rows, "every page of a WITHOUT ROWID table");
+  assert.equal(keyed(restored).length, rows, "every row of a WITHOUT ROWID table");
   assert.deepEqual(keyed(restored), keyed(source));
   const bytes = "SELECT hex(note) AS h, typeof(note) AS t FROM a_child WHERE id = 1";
   assert.deepEqual(restored.prepare(bytes).get(), source.prepare(bytes).get());
