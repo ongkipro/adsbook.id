@@ -1,9 +1,11 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import KineticHero3D from '../../../platform/site/KineticHero3D.astro';
-import ShotFrame from '../../../platform/site/ShotFrame.astro';
+import HybridGeoSim from '../../../platform/site/HybridGeoSim.astro';
 import SignalBand from '../../../platform/site/SignalBand.astro';
-import PillarGrid from '../../../platform/site/PillarGrid.astro';
+import HomeBentoGrid from '../../../platform/site/HomeBentoGrid.astro';
+import CompetitorCompare from '../../../platform/site/CompetitorCompare.astro';
+import ShotFrame from '../../../platform/site/ShotFrame.astro';
 import Pricing from '../../../platform/site/Pricing.astro';
 import FaqList from '../../../platform/site/FaqList.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
@@ -13,10 +15,9 @@ import { getRuntimeEnv } from '../../../lib/env';
 import { tenantHostSuffix } from '../../../platform/hostnames';
 
 export const prerender = false;
-// The home (Paduka, 2026-11-18): a 100dvh 3D hero where three ad channels lock
-// into one order, then the former hero as the product proof (the real form on
-// a phone), then the promise in the logo, the six pillars short, price,
-// questions. One job per section.
+// Homepage (Paduka, 2026-11-18): 100dvh 3D hero -> Hybrid Geo-Form interactive
+// mind-map -> clean 1:1 Signal & Ad-Dashboard deck -> 6 visual Bento cards ->
+// Head-to-Head comparison + flat pricing -> real mobile checkout proof & FAQ.
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 ---
 
@@ -25,49 +26,57 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
     <h1 slot="title" id="hero-title" class="dot-end">Dari klik iklan ke pesanan terkirim — <span class="accent">terkunci di satu titik</span></h1>
   </KineticHero3D>
 
-  <section class="section section-white proof" aria-labelledby="bukti-produk-title">
+  <HybridGeoSim />
+
+  <SignalBand />
+
+  <section class="section" aria-labelledby="bento-title">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Enam Keunggulan Inti</p>
+        <h2 id="bento-title">Dirancang untuk seller yang beriklan di semua kanal</h2>
+        <p class="lead">Ringan di HP pembeli, ketat menyaring paket berisiko retur, dan bersih mengirim konversi ke dashboard iklan Anda.</p>
+      </div>
+      <HomeBentoGrid />
+    </div>
+  </section>
+
+  <section class="section section-white" aria-labelledby="harga-title">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Perbandingan &amp; Biaya Langganan</p>
+        <h2 id="harga-title">Satu biaya flat per toko — 0% potongan QRIS/VA dan tanpa kuota order</h2>
+        <p class="lead">Tidak perlu membayar komisi persentase setiap kali penjualan naik atau menyewa aplikasi pelacak sinyal terpisah.</p>
+      </div>
+      <CompetitorCompare />
+      <Pricing compact />
+      <p class="more"><a class="text-link" href="/harga">Rincian paket &amp; masa tenggang 48 jam</a></p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="bukti-produk-title">
     <div class="wrap proof-grid">
       <div class="proof-text">
-        <p class="proof-kicker">Toko COD dan mesin sinyal server untuk semua kanal iklan</p>
-        <h2 id="bukti-produk-title">Berhenti mematikan iklan yang sebenarnya laris, dan berhenti men-scale iklan yang angkanya dobel</h2>
-        <p class="lead">Pemblokir iklan, privasi iOS, dan pembeli COD yang langsung menutup browser membuat banyak penjualan tidak sampai ke jaringan iklan. Sebaliknya, laporan ganda membuat iklan boncos tampak untung. adsbook.id menyatukan form order yang ringan di HP dengan sinyal server first-party: setiap pesanan nyata sampai ke Meta dan Google tepat satu kali, jadi budget Anda mendorong kampanye yang benar-benar menjual.</p>
+        <p class="sec-kicker"><span class="sq" aria-hidden="true"></span>Tampilan Nyata di HP Pembeli</p>
+        <h2 id="bukti-produk-title">Form checkout bersih tanpa gangguan, siap dibuka dalam hitungan detik</h2>
+        <p class="lead">Pilih varian, ketik kecamatan langsung muncul instan, dan pesanan masuk ke antrean verifikasi tim CS Anda.</p>
         <ul class="proof-facts" aria-label="Ringkasan">
-          <li>Siap jalan dalam hitungan menit, tanpa ngoding</li>
-          <li>Bebas rakit dan review toko dulu tanpa biaya</li>
+          <li>Siap jalan tanpa koding</li>
+          <li>Bebas rakit &amp; review toko dulu</li>
           <li>0% potongan per transaksi</li>
         </ul>
         <div class="proof-actions">
           <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
-          <a class="text-link" href="/cara-kerja">Lihat alur kerjanya</a>
+          <a class="text-link" href="/cara-kerja">Lihat 5 langkah pesanan</a>
         </div>
       </div>
       <div class="proof-shot"><ShotFrame shot={SHOTS.form} caption /></div>
     </div>
   </section>
 
-  <SignalBand />
-
-  <section class="section section-white" aria-labelledby="pilar-title">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="pilar-title">Satu kendali penuh dari klik iklan sampai dana cair</h2>
-        <p class="lead">Dirancang untuk ritme seller iklan Indonesia: ringan di HP pembeli, ketat menjaga margin Anda. Enam pilar, semuanya sudah berjalan hari ini.</p>
-      </div>
-      <PillarGrid />
-    </div>
-  </section>
-
-  <section class="section" aria-labelledby="harga-title">
-    <div class="wrap">
-      <div class="section-head"><h2 id="harga-title">Satu biaya langganan rata, tanpa komisi per order dan tanpa aplikasi tracker tambahan</h2></div>
-      <Pricing compact />
-      <p class="more"><a class="text-link" href="/harga">Rincian paket</a></p>
-    </div>
-  </section>
-
   <section class="section section-white" aria-labelledby="faq-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="faq-title">Yang paling sering ditanyakan pengiklan</h2></div>
+      <div class="section-head"><h2 id="faq-title">Pertanyaan yang sering ditanyakan pengiklan</h2></div>
       <FaqList items={FAQ_SHORT} />
       <p class="more"><a class="text-link" href="/faq">Semua pertanyaan</a></p>
     </div>
@@ -77,19 +86,18 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 </SiteLayout>
 
 <style>
-  /* The hero ends on the canvas; the proof section opens on white with one hairline between them. */
-  .proof { border-top: 1px solid var(--line); }
+  .sec-kicker { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.84rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+  .sq { display: inline-block; width: 7px; height: 7px; background: var(--accent); flex-shrink: 0; }
   .proof-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
-  .proof-text { display: grid; gap: 1.35rem; justify-items: start; }
-  .proof-kicker { font-weight: 700; color: var(--accent); font-size: 0.97rem; }
-  .proof-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; }
-  .proof-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; color: var(--ink-muted); font-size: 0.95rem; }
+  .proof-text { display: grid; gap: 1.2rem; justify-items: start; }
+  .proof-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; margin-top: 0.25rem; }
+  .proof-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; color: var(--ink-muted); font-size: 0.94rem; font-weight: 600; }
   .proof-facts li { display: flex; align-items: center; gap: 0.5rem; }
   .proof-facts li::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
-  .proof-shot :global(.frame-phone) { max-width: 290px; }
+  .proof-shot :global(.frame-phone) { max-width: 280px; }
   .more { margin-top: 1.75rem; }
   @media (max-width: 760px) {
-    .proof-grid { grid-template-columns: 1fr; gap: 2.5rem; }
-    .proof-shot :global(.frame-phone) { max-width: 260px; }
+    .proof-grid { grid-template-columns: 1fr; gap: 2.25rem; }
+    .proof-shot :global(.frame-phone) { max-width: 255px; }
   }
 </style>

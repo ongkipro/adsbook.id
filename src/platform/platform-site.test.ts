@@ -211,7 +211,11 @@ test("home 3D hero (Paduka, 2026-11-18): three loads on the home alone, from our
   const stage = readFileSync("src/platform/site/kinetic-stage.ts", "utf8");
   assert.doesNotMatch(hero + stage, /https?:\/\//, "no CDN, font service or remote asset");
   assert.match(hero, /href=\{SIGNUP_PATH\}/, "the CTA is a real /daftar link");
-  assert.match(hero, /id="btn-user-auth"[^>]*href="\/masuk"|href="\/masuk"[^>]*id="btn-user-auth"/, "the account button is a real /masuk link");
+  // The account button and its dialog live in the shared header, which the hero renders too.
+  const header = readFileSync("src/platform/site/SiteHeader.astro", "utf8");
+  assert.match(hero, /<SiteHeader variant="hero"/, "the hero uses the shared header");
+  assert.doesNotMatch(header, /https?:\/\//, "the header loads nothing remote");
+  assert.match(header, /id="btn-user-auth"[^>]*href="\/masuk"|href="\/masuk"[^>]*id="btn-user-auth"/, "the account button is a real /masuk link");
   assert.match(hero, /touch-action: pan-y/, "a swipe on the stage still scrolls the page");
   assert.match(stage, /prefers-reduced-motion: reduce/);
   assert.match(stage, /IntersectionObserver/, "no frame is drawn while the hero is off screen");
@@ -229,13 +233,18 @@ test("home 3D hero (Paduka, 2026-11-18): three loads on the home alone, from our
 test("tracking proof (pagecopy v3): simulations are captioned illustrations of mechanisms the code has, and calm in motion", async () => {
   const band = readFileSync("src/platform/site/SignalBand.astro", "utf8");
   const strip = readFileSync("src/platform/site/SignalPipelineStrip.astro", "utf8");
-  for (const [name, source] of [["SignalBand", band], ["SignalPipelineStrip", strip]] as const) {
+  const geo = readFileSync("src/platform/site/HybridGeoSim.astro", "utf8");
+  const bento = readFileSync("src/platform/site/HomeBentoGrid.astro", "utf8");
+  const compare = readFileSync("src/platform/site/CompetitorCompare.astro", "utf8");
+  for (const [name, source] of [["SignalBand", band], ["SignalPipelineStrip", strip], ["HybridGeoSim", geo], ["HomeBentoGrid", bento]] as const) {
     assert.match(source, /@media \(prefers-reduced-motion: reduce\)/, `${name}: CSS holds still under reduced motion`);
     assert.match(source, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/, `${name}: the script never starts the loop under reduced motion`);
     assert.match(source, /IntersectionObserver/, `${name}: plays only on screen`);
     assert.doesNotMatch(source, /https?:\/\//, `${name}: no remote asset`);
   }
+  assert.doesNotMatch(compare, /https?:\/\//, "CompetitorCompare: no remote asset");
   assert.equal((band.match(/class="sim-caption">Ilustrasi /g) ?? []).length, 2, "both simulations say they are illustrations");
+  assert.match(geo, /class="geo-caption">Ilustrasi /, "HybridGeoSim says it is an illustration");
   assert.ok(band.includes('class="signal-logo"'), "the animated logo stays");
 
   // The 8 keys the simulation shows are exactly the keys the store hashes and sends.
@@ -245,16 +254,17 @@ test("tracking proof (pagecopy v3): simulations are captioned illustrations of m
   assert.deepEqual(shown.sort(), Object.keys(sent).filter((key) => key !== "client_user_agent").sort());
   assert.equal(shown.length, 8);
 
-  // Rendered copy across the site: no stiff "pratinjau", no promise of a ROAS number, no tracker
-  // or infrastructure brand, no product domain of anyone else, no server signal claimed for TikTok.
+  // Rendered copy across the site: no stiff "pratinjau", no sloppy "angkanya dobel", no promise of a
+  // ROAS number, no competitor/tracker/infra brand, no server signal claimed for TikTok.
   const pages = readdirSync("src/pages/platform/site").filter((name) => name.endsWith(".astro")).map((name) => `src/pages/platform/site/${name}`);
   const components = readdirSync("src/platform/site").filter((name) => name.endsWith(".astro")).map((name) => `src/platform/site/${name}`);
   const markupOf = (path: string) => readFileSync(path, "utf8").split("---").slice(2).join("---").replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, " ");
   const strings = [...readFileSync("src/platform/site/content.ts", "utf8").matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
-  // The band's own copy is its single-quoted data (rows, notes, benefits), one line each.
-  const bandData = [band, strip].flatMap((source) => [...source.matchAll(/'([^'\n]*)'/g)].map((m) => m[1]));
+  const bandData = [band, strip, geo, bento, compare].flatMap((source) => [...source.matchAll(/'([^'\n]*)'/g)].map((m) => m[1]));
   const copy = [...strings, ...bandData, ...[...pages, ...components].map(markupOf), readFileSync("src/platform/state-pages.ts", "utf8")].join("\n");
   assert.doesNotMatch(copy, /pratinjau/i);
+  assert.doesNotMatch(copy, /angkanya dobel/i, "accurate ad terminology: konversi ganda, never angkanya dobel");
+  assert.doesNotMatch(copy, /\b(scalev|orderonline|berdu|wetracked)\b/i, "head-to-head compares capabilities without naming rival brands");
   assert.doesNotMatch(copy, /\bROAS (naik|meningkat|dijamin)\s*\d|\bdijamin\b|\d+\s*%\s*lebih (untung|tinggi)/i, "no promised result");
   assert.doesNotMatch(copy, /Cloudflare|\bAstro\b|Durable Object|AdsBookCMS/);
   assert.doesNotMatch(copy, /\b[a-z0-9-]+\.(io|co)\b/i, "no other product's domain");

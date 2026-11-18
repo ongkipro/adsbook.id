@@ -6,19 +6,20 @@
  * signals converge on the logo's square dot, and the order locks 1:1. It
  * carries its own header (SiteLayout's `heroHeader`), so the stage starts at 0.
  *
- * Every action is a real link: the CTA is /daftar, the account button is
- * /masuk and opens a Daftar / Masuk dialog when scripts run. The 3D stage is
- * kinetic-stage.ts, bundled into a chunk only this page loads.
+ * Every action is a real link: the CTA is /daftar; the header (SiteHeader,
+ * the same on every page) carries the /masuk account button and its Daftar /
+ * Masuk dialog. The 3D stage is kinetic-stage.ts, bundled into a chunk only
+ * this page loads.
  * The page passes its single <h1> in the `title` slot.
  */
-import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from './site.ts';
+import SiteHeader from './SiteHeader.astro';
+import { SIGNUP_LABEL, SIGNUP_PATH } from './site.ts';
 
 interface Props { suffix: string }
 const { suffix } = Astro.props;
-const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
 ---
 
-<section id="hero-root" class="hero3d" aria-labelledby="hero-title" data-suffix={suffix}>
+<section id="hero-root" class="hero3d" aria-labelledby="hero-title">
   <div class="topline" aria-hidden="true"></div>
 
   <div class="layer layer-canvas">
@@ -67,29 +68,7 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
   </div>
 
   <div class="layer layer-ui">
-    <header class="hero-head">
-      <a class="hero-wordmark" href="/" aria-label="adsbook.id, beranda"><img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="151" height="24" loading="eager" decoding="async" /></a>
-      <nav class="hero-nav" aria-label="Utama">
-        {nav.map((entry) => <a href={entry.path}>{entry.nav}</a>)}
-      </nav>
-      <div class="hero-tools">
-        <details class="hero-menu">
-          <summary aria-label="Menu">
-            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 6.5H16M4 13.5H16" stroke="currentColor" stroke-width="1.65" stroke-linecap="square"/></svg>
-          </summary>
-          <nav aria-label="Utama (ringkas)">
-            {nav.map((entry) => <a href={entry.path}>{entry.nav}</a>)}
-            <a href="/masuk">Masuk toko</a>
-          </nav>
-        </details>
-        <a id="btn-user-auth" class="icon-auth" href="/masuk" aria-label="Masuk atau Daftar" aria-haspopup="dialog" title="Daftar / Masuk">
-          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <circle cx="10" cy="6.6" r="3.1" stroke="currentColor" stroke-width="1.65"/>
-            <path d="M4.4 16.4C5.1 13.7 7.25 12.1 10 12.1C12.75 12.1 14.9 13.7 15.6 16.4" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>
-          </svg>
-        </a>
-      </div>
-    </header>
+    <SiteHeader variant="hero" currentPath="/" suffix={suffix} />
 
     <div id="hero-body">
       <div id="stage-slot"></div>
@@ -115,103 +94,8 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
   </div>
 </section>
 
-<dialog id="auth-dialog" class="auth-dialog" aria-labelledby="auth-title" aria-describedby="auth-desc">
-  <div class="auth-head">
-    <img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="126" height="20" loading="lazy" decoding="async" />
-    <form method="dialog"><button class="auth-close" aria-label="Tutup">
-      <svg viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/></svg>
-    </button></form>
-  </div>
-  <div class="auth-tabs" role="tablist" aria-label="Daftar atau masuk">
-    <button type="button" role="tab" id="tab-daftar" aria-selected="true" aria-controls="panel-daftar">Daftar</button>
-    <button type="button" role="tab" id="tab-masuk" aria-selected="false" aria-controls="panel-masuk" tabindex="-1">Masuk</button>
-  </div>
-  <h2 id="auth-title" class="auth-title">Mulai toko konversi 1:1</h2>
-  <p id="auth-desc" class="auth-desc">Kunci sinyal TikTok Ads, Meta Ads, dan Google Ads di satu ID pesanan.</p>
-
-  <form id="panel-daftar" role="tabpanel" aria-labelledby="tab-daftar" class="auth-form" action={SIGNUP_PATH} method="get" novalidate>
-    <label for="hero-email">Email</label>
-    <input id="hero-email" type="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="email@brandkamu.id" aria-describedby="hero-email-error" data-msg-missing="Masukkan alamat email Anda terlebih dahulu." data-msg-invalid="Format email belum benar (contoh: nama@toko.id)." />
-    <p id="hero-email-error" class="auth-error" hidden></p>
-    <button type="submit" class="cta-modern cta-block">Lanjutkan gratis →</button>
-  </form>
-
-  <form id="panel-masuk" role="tabpanel" aria-labelledby="tab-masuk" class="auth-form" action={SIGNUP_PATH} method="get" hidden novalidate>
-    <input type="hidden" name="masuk" value="1" />
-    <label for="hero-store">Alamat atau slug toko</label>
-    <input id="hero-store" type="text" required autocomplete="url" autocapitalize="none" spellcheck="false" placeholder="namatoko atau tokoanda.com" aria-describedby="hero-store-error" />
-    <p id="hero-store-error" class="auth-error" hidden></p>
-    <button type="submit" class="cta-modern cta-block">Masuk ke toko →</button>
-  </form>
-</dialog>
-
 <script>
-  import { HERO_EMAIL_KEY, storeLoginUrl } from '../store-finder.ts';
-  import { bindInlineValidation, setFieldError, validateInline } from '../../lib/form-validation-id.ts';
-
   const root = document.getElementById('hero-root');
-  const dialog = document.getElementById('auth-dialog') as HTMLDialogElement | null;
-
-  // The account button: a real /masuk link, a Daftar / Masuk dialog when the browser has <dialog>.
-  if (root && dialog && typeof dialog.showModal === 'function') {
-    const tabs = { daftar: document.getElementById('tab-daftar')!, masuk: document.getElementById('tab-masuk')! };
-    const panels = { daftar: document.getElementById('panel-daftar') as HTMLFormElement, masuk: document.getElementById('panel-masuk') as HTMLFormElement };
-    const title = document.getElementById('auth-title')!;
-    const desc = document.getElementById('auth-desc')!;
-    const copy = {
-      daftar: ['Mulai toko konversi 1:1', 'Kunci sinyal TikTok Ads, Meta Ads, dan Google Ads di satu ID pesanan.'],
-      masuk: ['Masuk ke toko Anda', 'Ketik alamat toko Anda; halaman masuk toko terbuka di alamatnya sendiri.'],
-    } as const;
-    const show = (mode: 'daftar' | 'masuk', focus = false) => {
-      for (const key of ['daftar', 'masuk'] as const) {
-        const on = key === mode;
-        tabs[key].setAttribute('aria-selected', String(on));
-        tabs[key].tabIndex = on ? 0 : -1;
-        panels[key].hidden = !on;
-      }
-      [title.textContent, desc.textContent] = copy[mode];
-      if (focus) panels[mode].querySelector<HTMLInputElement>('input:not([type=hidden])')?.focus();
-    };
-    tabs.daftar.addEventListener('click', () => show('daftar', true));
-    tabs.masuk.addEventListener('click', () => show('masuk', true));
-    for (const tab of Object.values(tabs)) {
-      tab.addEventListener('keydown', (event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        const next = tab === tabs.daftar ? 'masuk' : 'daftar';
-        show(next);
-        tabs[next].focus();
-      });
-    }
-    document.getElementById('btn-user-auth')?.addEventListener('click', (event) => {
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-      event.preventDefault();
-      show('masuk');
-      dialog.showModal();
-      panels.masuk.querySelector<HTMLInputElement>('input:not([type=hidden])')?.focus();
-    });
-    dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
-
-    bindInlineValidation(panels.daftar);
-    bindInlineValidation(panels.masuk);
-    panels.daftar.addEventListener('submit', (event) => {
-      event.preventDefault();
-      if (!validateInline(panels.daftar)) return;
-      const email = (document.getElementById('hero-email') as HTMLInputElement).value.trim();
-      try { if (email) sessionStorage.setItem(HERO_EMAIL_KEY, email); } catch { /* the seller types it again on /daftar */ }
-      window.location.assign(panels.daftar.action);
-    });
-    panels.masuk.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const input = document.getElementById('hero-store') as HTMLInputElement;
-      const login = storeLoginUrl(input.value, root.dataset.suffix || 'adsbook.my.id', window.location);
-      if ('error' in login) {
-        setFieldError(input, login.error);
-        input.focus();
-        return;
-      }
-      window.location.assign(login.url);
-    });
-  }
 
   // The stage loads after the text is on screen, and waits briefly for the brand face its "a" is traced from.
   if (root) {
@@ -271,29 +155,6 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
   .sq { display: inline-block; width: 6px; height: 6px; background: var(--accent); flex-shrink: 0; }
   .sq-sky { background: #60a5fa; }
 
-  .hero-head {
-    flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 1rem;
-    padding: 0.875rem 1.25rem 0.25rem;
-  }
-  .hero-wordmark { pointer-events: auto; justify-self: start; display: inline-flex; align-items: center; min-height: 44px; border-radius: 6px; }
-  .hero-wordmark img { height: 21px; width: auto; }
-  .hero-nav { pointer-events: auto; display: none; gap: 1.75rem; }
-  .hero-nav a { color: #475569; text-decoration: none; font-weight: 600; font-size: 0.9rem; letter-spacing: -0.005em; }
-  .hero-nav a:hover { color: var(--accent); }
-  .hero-tools { pointer-events: auto; justify-self: end; display: flex; align-items: center; gap: 0.5rem; }
-  .icon-auth, .hero-menu summary {
-    width: 44px; height: 44px; border-radius: 999px; display: flex; align-items: center; justify-content: center; cursor: pointer;
-    background: rgb(255 255 255 / 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border: 1px solid var(--line); color: #0f172a; transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .icon-auth:hover, .hero-menu summary:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; transform: translateY(-1px); box-shadow: 0 8px 20px -6px rgb(37 99 235 / 0.22); }
-  .icon-auth svg, .hero-menu summary svg { width: 18px; height: 18px; }
-  .hero-menu { position: relative; }
-  .hero-menu summary { list-style: none; }
-  .hero-menu summary::-webkit-details-marker { display: none; }
-  .hero-menu nav { position: absolute; right: 0; top: calc(100% + 0.5rem); display: grid; min-width: 12rem; padding: 0.5rem; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgb(15 23 42 / 0.1); }
-  .hero-menu nav a { padding: 0.65rem 0.75rem; color: var(--ink); text-decoration: none; font-weight: 600; font-size: 0.95rem; border-radius: 8px; }
-  .hero-menu nav a:hover { background: #eff6ff; color: var(--accent); }
 
   #hero-body { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; justify-content: space-between; }
   #stage-slot { position: relative; flex: 1; min-height: 195px; width: 100%; }
@@ -326,8 +187,6 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
   .cta-arrow svg { width: 0.75rem; height: 0.75rem; }
 
   @media (min-width: 640px) {
-    .hero-head { padding: 1.25rem 2.5rem 0.25rem; }
-    .hero-wordmark img { height: 24px; }
     #copy-zone { padding: 0 2rem 1.75rem; }
     .pill { margin-bottom: 0.625rem; font-size: 10.5px; }
     .hero-sub { margin-top: 0.5rem; max-width: 62ch; }
@@ -340,10 +199,6 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
     .stage-tag { font-size: 9.5px; }
   }
   @media (min-width: 1024px) {
-    .hero-head { padding-inline: 3.5rem; }
-    .hero-head { display: grid; grid-template-columns: 1fr auto 1fr; }
-    .hero-nav { display: flex; }
-    .hero-menu { display: none; }
     #copy-zone { padding-bottom: 2rem; }
   }
   /* A phone on its side: stage and copy side by side. */
@@ -354,31 +209,8 @@ const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
     #copy-inner { align-items: flex-start; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .ad-token, .icon-auth, .hero-menu summary, .cta-modern, .layer-projected, .pill, .pill .sq { transition: none; }
-    .cta-modern:hover, .icon-auth:hover, .hero-menu summary:hover { transform: none; }
+    .ad-token, .cta-modern, .layer-projected, .pill, .pill .sq { transition: none; }
+    .cta-modern:hover { transform: none; }
   }
 
-  .auth-dialog { width: min(360px, 100% - 2rem); padding: 1.5rem; border: 1px solid var(--line); border-radius: 16px; background: #fff; color: var(--ink); box-shadow: 0 24px 48px -12px rgb(23 37 84 / 0.18); }
-  .auth-dialog::backdrop { background: rgb(15 23 42 / 0.2); backdrop-filter: blur(4px); }
-  .auth-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-  .auth-head img { height: 20px; width: auto; }
-  .auth-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid var(--line); background: var(--canvas); color: #64748b; cursor: pointer; }
-  .auth-close:hover { background: #eff6ff; color: var(--accent); }
-  .auth-close svg { width: 14px; height: 14px; }
-  .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; margin-bottom: 1rem; border-radius: 999px; background: var(--canvas); border: 1px solid var(--line); }
-  .auth-tabs button { min-height: 36px; border: 0; border-radius: 999px; background: transparent; color: #64748b; font: 700 0.8125rem/1 var(--display); cursor: pointer; }
-  .auth-tabs button:hover { color: var(--ink); }
-  .auth-tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
-  .auth-title { font-size: 1rem; letter-spacing: -0.02em; }
-  .auth-desc { margin-top: 0.25rem; font-size: 0.8125rem; line-height: 1.5; color: #64748b; }
-  .auth-form { margin-top: 1rem; display: grid; gap: 0.5rem; }
-  .auth-form[hidden] { display: none; }
-  .auth-form label { font-size: 0.8125rem; font-weight: 600; color: #475569; }
-  .auth-form input { width: 100%; min-height: 44px; padding: 0 0.875rem; border-radius: 12px; border: 1px solid var(--line); background: var(--canvas); color: var(--ink); font: inherit; font-size: 1rem; }
-  .auth-form input:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15); }
-  .auth-error { display: flex; align-items: flex-start; gap: 0.375rem; font-size: 0.8125rem; font-weight: 500; line-height: 1.4; color: #be123c; }
-  .auth-error::before { content: ""; width: 6px; height: 6px; margin-top: 0.35em; flex-shrink: 0; background: #e11d48; }
-  .auth-error[hidden] { display: none; }
-  .auth-form input[aria-invalid="true"] { border-color: #e11d48; background: #fff; box-shadow: 0 0 0 3px rgb(225 29 72 / 0.14); }
-  .cta-block { width: 100%; margin-top: 0.25rem; }
 </style>

@@ -2,6 +2,8 @@
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import ShotFrame from '../../../platform/site/ShotFrame.astro';
 import SignalBand from '../../../platform/site/SignalBand.astro';
+import HybridGeoSim from '../../../platform/site/HybridGeoSim.astro';
+import CompetitorCompare from '../../../platform/site/CompetitorCompare.astro';
 import PillarRows from '../../../platform/site/PillarRows.astro';
 import StepFlow from '../../../platform/site/StepFlow.astro';
 import SignalPipelineStrip from '../../../platform/site/SignalPipelineStrip.astro';
@@ -23,13 +25,15 @@ export const prerender = false;
       <div class="hero-text">
         <p class="hero-kicker">Untuk seller COD yang beriklan di Meta, Google, TikTok, dan jaringan lain</p>
         <h1 id="hero-title" class="dot-end">Berhenti menebak hasil iklan COD Anda</h1>
-        <p class="lead">Purchase dobel membuat iklan terlihat untung. Purchase yang hilang membuat iklan yang menjual terlihat rugi. adsbook.id mencatat setiap pesanan ke kanal iklannya, dan mengirimnya ke Meta dan Google tepat satu kali, dari browser dan dari server.</p>
+        <p class="lead">Konversi yang terhitung ganda membuat iklan boncos tampak untung. Sinyal yang bocor membuat iklan laris tampak rugi. adsbook.id mencatat setiap pesanan ke kampanye asalnya, menyaring wilayah luar jangkauan otomatis, dan mengirim konversi 1:1 ke dashboard iklan Meta dan Google.</p>
         <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
         <p class="hero-note">Bebas rakit dan review toko dulu tanpa biaya · mulai Rp149.000/bulan saat siap beriklan · 0% potongan transaksi</p>
       </div>
       <div class="hero-shot"><ShotFrame shot={SHOTS.form} eager caption /></div>
     </div>
   </section>
+
+  <HybridGeoSim id="coba-hybrid-title" />
 
   <SignalBand />
 
@@ -61,7 +65,8 @@ export const prerender = false;
 
   <section class="section" aria-labelledby="harga-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="harga-title">Satu harga, semua fitur, per toko</h2></div>
+      <div class="section-head"><h2 id="harga-title">Satu biaya flat per toko, 0% komisi transaksi</h2></div>
+      <CompetitorCompare />
       <Pricing compact />
     </div>
   </section>
