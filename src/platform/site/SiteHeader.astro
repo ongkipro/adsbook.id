@@ -144,7 +144,10 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
     dropdown.classList.toggle('is-open', open);
     backdrop.classList.toggle('is-open', open);
     lockScroll(open);
-    if (open) dropdown.querySelector<HTMLElement>('a')?.focus({ preventScroll: true });
+    if (open) {
+      dropdown.scrollTop = 0; // a reopened short-screen menu starts at its first row
+      dropdown.querySelector<HTMLElement>('a')?.focus({ preventScroll: true });
+    }
     else if (returnFocus) menuButton.focus();
   };
   const isOpen = () => menuButton?.getAttribute('aria-expanded') === 'true';

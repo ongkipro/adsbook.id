@@ -170,4 +170,11 @@ test("a short phone screen: the menu scrolls inside itself, never past the scree
   await panel.evaluate((el) => { el.scrollTop = el.scrollHeight; });
   await expect(panel.locator("[data-auth-open]")).toBeInViewport();
   expect(await page.evaluate(() => [document.documentElement.style.overflow, window.scrollY])).toEqual(["hidden", 0]);
+  // Reopened, the panel starts at its first row again, never with the focused link above its top.
+  await page.locator("#btn-mobile-menu").click();
+  await expect(panel).toBeHidden();
+  await page.locator("#btn-mobile-menu").click();
+  await expect(panel).toBeVisible();
+  expect(await panel.evaluate((el) => el.scrollTop)).toBe(0);
+  await expect(panel.locator("li a").first()).toBeInViewport();
 });
