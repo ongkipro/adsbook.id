@@ -5,6 +5,7 @@ import {
   type PaymentFeeBearer,
 } from "./payment-fee-policy.ts";
 import { paymentBrandLabel } from "./payment-brand.ts";
+import { physicalShippingReady, readReadiness } from "../platform/readiness.ts";
 import { buildOrderNotification, recordNotification } from "./notifications.ts";
 import { isValidWa62, normalizePhone } from "./validation.ts";
 
@@ -489,20 +490,55 @@ export async function findOrderVariant(database: D1Database, variantKey: string)
     .first<{ id: number; price: number; product_type?: string | null }>();
 }
 
-/** The placeholder address of a digital order (DIGITAL-PRODUCTS-SPEC §2.3): the columns are NOT NULL and nothing ships. */
+/**
+ * What a digital order stores in its NOT NULL address columns (DIGITAL-PRODUCTS-SPEC
+ * §2.3): '-', never a made-up place. "Digital" was hashed into Meta's city and
+ * state as if it were the buyer's (review finding 3); '-' normalises to nothing.
+ */
 export const DIGITAL_ORDER_ADDRESS = {
-  address: "Produk digital (tanpa pengiriman)",
-  province: "Digital",
-  city: "Digital",
-  district: "Digital",
+  address: "-",
+  province: "-",
+  city: "-",
+  district: "-",
 } as const;
+
+/**
+ * Stand-in values a digital checkout body is *parsed* with: the shared checkout
+ * schema wants an address, and a digital buyer has none. Never stored —
+ * `persistOrder` writes `DIGITAL_ORDER_ADDRESS` for a digital variant.
+ */
+export const DIGITAL_PARSE_ADDRESS = {
+  address: "Produk digital tanpa pengiriman",
+  province: "Digital",
+  district: "Digital",
+  postal_code: "",
+} as const;
+
+/** Whether this variant key names an active digital product (the checkout routes branch on it). */
+export async function isDigitalVariant(database: D1Database, variantKey: string): Promise<boolean> {
+  if (!variantKey) return false;
+  return (await findOrderVariant(database, variantKey))?.product_type === "digital";
+}
+
+/** Raised when a physical order cannot ship yet (a hybrid store without its warehouse, Mengantar key or courier). */
+export class PhysicalShippingNotReadyError extends OrderInputError {
+  constructor() {
+    super("Pengiriman produk fisik belum siap di toko ini. Produk digital tetap bisa dibeli.");
+    this.name = "PhysicalShippingNotReadyError";
+  }
+}
 
 export async function persistOrder(
   database: D1Database,
-  input: PersistOrderInput,
+  submitted: PersistOrderInput,
 ): Promise<PersistedOrder> {
-  const variant = await findOrderVariant(database, input.variantKey);
+  const variant = await findOrderVariant(database, submitted.variantKey);
   if (!variant) throw new OrderInputError("Varian produk tidak ditemukan.");
+  // A digital order ships nothing: whatever the request said, it stores no address,
+  // destination, courier or warehouse (§2.3).
+  const input: PersistOrderInput = variant.product_type === "digital"
+    ? { ...submitted, ...DIGITAL_ORDER_ADDRESS, postalCode: undefined, destinationAreaId: undefined, courierCode: undefined, courierService: undefined, warehouseId: undefined }
+    : submitted;
   // DIGITAL-PRODUCTS-SPEC §2.3/§6.3: the product decides, never the request. A
   // digital product is paid before access — never COD — and ships nothing. Every
   // order path (checkout, middle form, headless, CS conversion) passes here.
@@ -518,9 +554,25 @@ export async function persistOrder(
   // never spent (ADR-023). Price, weight and identity still come from D1.
 
   const store = await database
-    .prepare("SELECT id, cod_fee_bearer FROM stores ORDER BY id LIMIT 1")
-    .first<{ id: number; cod_fee_bearer: string | null }>();
+    .prepare("SELECT id, cod_fee_bearer, catalog_mode FROM stores ORDER BY id LIMIT 1")
+    .first<{ id: number; cod_fee_bearer: string | null; catalog_mode?: string | null }>();
   if (!store) throw new Error("Store belum dikonfigurasi.");
+  // Review findings 1-2 (§3): the catalog mode decides what is for sale, and a
+  // physical order needs shipping. A digital store sells no physical product and
+  // a physical store no digital one, whatever page or POST asks. A hybrid store
+  // with a digital product on sale may be open without shipping (either track
+  // opens it), so its physical products wait until it can ship them while the
+  // digital ones keep selling. Any other store is open only when it can ship
+  // (the storefront gate), so the check would only repeat that.
+  // A row with no mode predates 0084: a purely physical store (0084 itself sets 'hybrid', NOT NULL).
+  const catalogMode = store.catalog_mode === "digital" || store.catalog_mode === "hybrid" ? store.catalog_mode : "physical";
+  if (catalogMode !== "hybrid" && catalogMode !== fulfillmentType) {
+    throw new OrderInputError("Produk ini tidak dijual di toko ini.");
+  }
+  if (catalogMode === "hybrid" && fulfillmentType === "physical") {
+    const facts = await readReadiness(database);
+    if (facts.digitalProduct && !physicalShippingReady(facts)) throw new PhysicalShippingNotReadyError();
+  }
   const sellerBankAccount =
     input.paymentMethod === "manual_transfer"
       ? await database

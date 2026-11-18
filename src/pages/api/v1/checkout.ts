@@ -6,7 +6,7 @@ import { parseOrderSubmit } from '../../../lib/order-schema';
 import { checkRateLimit, getClientIp } from '../../../lib/rate-limit';
 import { loadStoreCodDisabledProvinceCodes } from '../../../lib/form-mode';
 import { isProvinceExcluded, normalizeProvinceCode } from '../../../lib/province';
-import { persistOrder, DuplicateSubmissionError, OrderInputError } from '../../../lib/order-persistence';
+import { persistOrder, DuplicateSubmissionError, OrderInputError, DIGITAL_PARSE_ADDRESS, isDigitalVariant } from '../../../lib/order-persistence';
 import { resolveEligibleShippingRates } from '../../../lib/shipping-quote';
 import { readClickIdCookie, hasClickId, serializeClickIds } from '../../../lib/click-ids';
 import { isShippingQuoteFailure, resolveTrustedHeadlessShipping } from '../../../lib/headless-checkout';
@@ -49,7 +49,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }, validation.corsHeaders));
     }
 
-    const parsed = parseOrderSubmit(body);
+    // Review finding 4 (DIGITAL-PRODUCTS-SPEC §5.1): a digital variant checks out
+    // with contact and a prepaid rail only — no address, destination or courier.
+    const digital = database?.prepare ? await isDigitalVariant(database, String(body.variant_id ?? '').trim().slice(0, 120)) : false;
+    const parsed = parseOrderSubmit(digital ? { ...body, ...DIGITAL_PARSE_ADDRESS } : body);
     if (!parsed.success) {
       return validation.finalize(headlessError(parsed.error.issues[0]?.message || 'Data order tidak valid.', 422, {
         code: 'VALIDATION_ERROR',
@@ -58,6 +61,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     const data = parsed.data;
+    if (digital && data.payment_method === 'cod') {
+      return validation.finalize(headlessError('Produk digital dibayar di muka: gunakan QRIS, Virtual Account, atau transfer bank.', 422, {
+        code: 'DIGITAL_REQUIRES_PREPAID',
+      }, validation.corsHeaders));
+    }
     if (!database?.prepare) {
       return validation.finalize(headlessError('Database order belum dikonfigurasi.', 503, {
         code: 'DATABASE_UNAVAILABLE',
@@ -92,9 +100,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    const shipping = await resolveTrustedHeadlessShipping(body, data, (input) =>
-      resolveEligibleShippingRates(database, locals, input),
-    );
+    const shipping = digital
+      ? { shippingCost: 0, warehouseId: undefined, destinationId: '', courierCode: undefined, courierService: undefined }
+      : await resolveTrustedHeadlessShipping(body, data, (input) =>
+          resolveEligibleShippingRates(database, locals, input),
+        );
 
     const clickIds = readClickIdCookie(request);
     const storedClickIds = hasClickId(clickIds) ? serializeClickIds(clickIds) : undefined;

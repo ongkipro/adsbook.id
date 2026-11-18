@@ -113,7 +113,8 @@ class SqliteD1Database {
 
       CREATE TABLE stores (
         id INTEGER PRIMARY KEY,
-        cod_fee_bearer TEXT
+        cod_fee_bearer TEXT,
+        catalog_mode TEXT NOT NULL DEFAULT 'physical'
       );
 
       CREATE TABLE products (

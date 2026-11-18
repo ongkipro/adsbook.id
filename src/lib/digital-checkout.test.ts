@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { digitalOrderBody, digitalPaymentOptions } from "./digital-checkout.ts";
+import { readFileSync } from "node:fs";
+import { digitalEventId, digitalOrderBody, digitalPaymentOptions, digitalSubmitToken } from "./digital-checkout.ts";
+import { parseOrderSubmit } from "./order-schema.ts";
+import { DIGITAL_PARSE_ADDRESS } from "./order-persistence.ts";
 
 const methods = {
   success: true,
@@ -32,3 +35,19 @@ test("the digital order body carries contact, variant and rail; no address, cour
   assert.equal(withEmail.seller_bank_account_id, 3);
   assert.equal("payment_channel" in withEmail, false);
 });
+
+test("review finding 5: a 150-character slug still checks out — the minted ids have a fixed ceiling", () => {
+  const slug = `ebook-${"panduan-lengkap-".repeat(9)}`.slice(0, 150);
+  assert.equal(slug.length, 150);
+  const token = digitalSubmitToken();
+  assert.ok(token.length <= 64, `${token.length}`);
+  for (const prefix of ["addtocart", "initiatecheckout", "order"]) assert.ok(digitalEventId(prefix, slug).length <= 64, prefix);
+  const [option] = digitalPaymentOptions(methods);
+  const body = digitalOrderBody({ submitToken: token, honeypot: "", customerName: "Budi Pembeli", customerPhone: "081234567801", customerEmail: "", variantId: "70", option, sourcePagePath: `/produk/${slug}` });
+  const parsed = parseOrderSubmit({ ...body, ...DIGITAL_PARSE_ADDRESS });
+  assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.issues[0]?.message);
+  // The form never builds a token from the slug again.
+  const script = readFileSync(new URL("../scripts/form-digital.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(script, /submitToken: `[^`]*productSlug/);
+});
+

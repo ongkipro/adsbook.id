@@ -13,7 +13,7 @@ import { formatIdr } from "../lib/format-idr";
 import { isValidWa62, normalizePhone } from "../lib/validation";
 import { pushGtmEcomEvent } from "../lib/gtm";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
-import { digitalOrderBody, digitalPaymentOptions, type DigitalPaymentOption } from "../lib/digital-checkout.ts";
+import { digitalEventId, digitalOrderBody, digitalPaymentOptions, digitalSubmitToken, type DigitalPaymentOption } from "../lib/digital-checkout.ts";
 import {
   AbandonedLeadCaptureGate,
   createAbandonedLeadFingerprint,
@@ -24,7 +24,6 @@ import {
 type DigitalConfig = { instanceId: string; productSlug: string; productId: string; productName: string };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const createId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const cookie = (name: string) =>
   document.cookie.split("; ").find((row) => row.startsWith(`${name}=`))?.split("=")[1] || "";
 
@@ -61,7 +60,7 @@ function initOne(root: HTMLElement) {
   const track = (eventName: "AddToCart" | "InitiateCheckout") => {
     if (tracked.has(eventName)) return;
     tracked.add(eventName);
-    const eventId = createId(`${eventName.toLowerCase()}_${config.productSlug}`);
+    const eventId = digitalEventId(eventName.toLowerCase(), config.productSlug);
     const value = price() || 1;
     const contentName = variant()?.dataset.label || config.productName;
     const phone = normalizePhone(phoneInput.value || "");
@@ -208,13 +207,13 @@ function initOne(root: HTMLElement) {
     submit.disabled = true;
     submitLabel.textContent = "Membuat pesanan…";
     try {
-      const eventId = createId(`order_${config.productSlug}`);
+      const eventId = digitalEventId("order", config.productSlug);
       const response = await fetch("/api/submit-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           digitalOrderBody({
-            submitToken: `dig_${eventId}`,
+            submitToken: digitalSubmitToken(),
             honeypot: String(new FormData(form).get("contact_url_confirm") || ""),
             customerName: name,
             customerPhone: phone,

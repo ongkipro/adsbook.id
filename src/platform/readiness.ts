@@ -13,13 +13,16 @@
  * At least one courier must be on (no courier, no quote). Optional steps
  * (custom domain, ad signals) never affect it.
  *
- * Digital products (DIGITAL-PRODUCTS-SPEC §3): a store on the **digital track**
- * — catalog mode `digital`, or `hybrid` with no active physical product yet —
- * is ready with its name, one active digital product (a priced variant and an
+ * Digital products (DIGITAL-PRODUCTS-SPEC §3): the **digital track** is ready
+ * with the store's name, one active digital product (a priced variant and an
  * `https://` access link) and one prepaid rail (AutoLaris as above, or an
- * active bank account for manual transfer). No warehouse, Mengantar key or
- * courier: nothing it sells ships. A hybrid store's first active physical
- * product puts it back on the physical predicate.
+ * active bank account for manual transfer) — no warehouse, Mengantar key or
+ * courier, since nothing it sells ships. A `digital` store needs that track, a
+ * `physical` store the physical one, and a `hybrid` store **either**: adding a
+ * physical product before the warehouse is set up never closes a store that is
+ * already selling digital (review finding 1). The physical products of such a
+ * store are refused at the order boundary until it can ship them
+ * (`physicalShippingReady`, `persistOrder`).
  *
  * The one demo store (PR-26) is the only exception: the middleware lets it
  * browse without this predicate and refuses its provider routes and writes
@@ -119,18 +122,37 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
   };
 }
 
-/** Which predicate holds this store: digital for a digital store, and for a hybrid one with no physical product yet. */
-export function readinessTrack(facts: Pick<ReadinessFacts, "catalogMode" | "physicalCatalog">): "physical" | "digital" {
+/** What a physical order needs to ship: the primary warehouse, a Mengantar key and a courier. */
+export function physicalShippingReady(facts: Pick<ReadinessFacts, "primaryWarehouse" | "mengantar" | "enabledCouriers">): boolean {
+  // `enabledCouriers` is PR-23's "a shipping quote is possible": with every
+  // courier switched off no buyer can be quoted.
+  return facts.primaryWarehouse && facts.mengantar && facts.enabledCouriers > 0;
+}
+
+function physicalReady(facts: ReadinessFacts): boolean {
+  return facts.storeName && facts.product && physicalShippingReady(facts) && facts.payment;
+}
+
+function digitalReady(facts: ReadinessFacts): boolean {
+  return facts.storeName && facts.digitalProduct && facts.prepaid;
+}
+
+/**
+ * The steps the setup checklist owes (UX-2 = PR-23): a digital store the
+ * digital ones; a hybrid store the digital ones once that track is ready or
+ * while it has no physical product, the physical ones otherwise. The required
+ * steps are then all done exactly when `isStoreReady` holds.
+ */
+export function readinessTrack(facts: ReadinessFacts): "physical" | "digital" {
   if (facts.catalogMode === "digital") return "digital";
-  if (facts.catalogMode === "hybrid" && !facts.physicalCatalog) return "digital";
-  return "physical";
+  if (facts.catalogMode === "physical") return "physical";
+  return digitalReady(facts) || !facts.physicalCatalog ? "digital" : "physical";
 }
 
 export function isStoreReady(facts: ReadinessFacts): boolean {
-  if (readinessTrack(facts) === "digital") return facts.storeName && facts.digitalProduct && facts.prepaid;
-  // `enabledCouriers` is PR-23's "a shipping quote is possible": with every
-  // courier switched off no buyer can be quoted, so the store is not ready.
-  return facts.storeName && facts.product && facts.primaryWarehouse && facts.mengantar && facts.enabledCouriers > 0 && facts.payment;
+  if (facts.catalogMode === "digital") return digitalReady(facts);
+  if (facts.catalogMode === "physical") return physicalReady(facts);
+  return digitalReady(facts) || physicalReady(facts);
 }
 
 /**

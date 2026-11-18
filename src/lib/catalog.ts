@@ -11,11 +11,19 @@ import {
 import { catalogProductIdOrNull } from "./catalog-feed.ts";
 import { tenantDatabase } from "./tenant-database.ts";
 
+/**
+ * Review finding 2 (DIGITAL-PRODUCTS-SPEC §1): a digital store shows its digital
+ * products only and a physical store its physical ones; a hybrid store both.
+ * Hidden, never deleted: switching the mode back shows them again.
+ */
+export const CATALOG_MODE_FILTER_SQL = `COALESCE((SELECT catalog_mode FROM stores ORDER BY id LIMIT 1), 'hybrid') IN ('hybrid', product_type)`;
+
 async function loadCatalogRows(database: D1Database) {
   const [products, variants] = await database.batch([
     database.prepare(`
       SELECT id, title, slug, category, brand, description, google_category_id, google_category_path, image_url, is_active, created_at, product_type
       FROM products
+      WHERE ${CATALOG_MODE_FILTER_SQL}
       ORDER BY created_at DESC, id DESC
     `),
     database.prepare(`

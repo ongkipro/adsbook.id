@@ -22,9 +22,9 @@ import { scheduleReceiverPerformanceRefresh } from "../../lib/rts-scoring";
 import { scheduleOrderCreated } from "../../plugins/registry";
 import { scheduleCodPurchase } from "../../lib/paid-order-purchase";
 import {
-  DIGITAL_ORDER_ADDRESS,
+  DIGITAL_PARSE_ADDRESS,
   DuplicateSubmissionError,
-  findOrderVariant,
+  isDigitalVariant,
   OrderInputError,
   persistOrder,
 } from "../../lib/order-persistence";
@@ -106,11 +106,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // the honest placeholder), and is never COD; `persistOrder` enforces both again.
   const variantKey = String(body.variant_id ?? "").trim().slice(0, 120);
   const lookupDatabase = tenantDatabase(locals);
-  const digital =
-    variantKey && lookupDatabase?.prepare
-      ? (await findOrderVariant(lookupDatabase, variantKey))?.product_type === "digital"
-      : false;
-  const parsed = parseOrderSubmit(digital ? { ...body, ...DIGITAL_ORDER_ADDRESS, postal_code: "" } : body);
+  const digital = lookupDatabase?.prepare ? await isDigitalVariant(lookupDatabase, variantKey) : false;
+  const parsed = parseOrderSubmit(digital ? { ...body, ...DIGITAL_PARSE_ADDRESS } : body);
   if (!parsed.success) {
     return json(
       {
@@ -332,11 +329,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
           : undefined),
       address: data.address,
       province: data.province,
-      city: digital
-        ? DIGITAL_ORDER_ADDRESS.city
-        : String(body.city || "")
-            .trim()
-            .slice(0, 120),
+      city: String(body.city || "")
+        .trim()
+        .slice(0, 120),
       district: data.district,
       postalCode: data.postal_code || undefined,
       variantKey: data.variant_id,

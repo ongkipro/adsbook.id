@@ -65,6 +65,14 @@ export function buildSetupChecklist(facts: SetupFacts): SetupStep[] {
         done: facts.prepaid,
         required: true,
       },
+      // A hybrid store selling digital with physical products waiting: what those still owe.
+      ...(facts.catalogMode === "hybrid" && facts.physicalCatalog
+        ? ([
+            { id: "warehouse", label: "Lengkapi gudang utama", hint: "Wajib untuk menjual produk fisik. Produk digital tetap jualan tanpa gudang.", href: "/admin/settings/warehouse", done: facts.primaryWarehouse, required: false },
+            { id: "mengantar", label: "Simpan API key Mengantar", hint: "Wajib untuk ongkir dan resi produk fisik.", href: "/admin/profile", done: facts.mengantar, required: false },
+            { id: "couriers", label: "Aktifkan minimal satu kurir", hint: "Wajib untuk mengirim produk fisik.", href: "/admin/expeditions", done: facts.enabledCouriers > 0, required: false },
+          ] satisfies SetupStep[])
+        : []),
       ...optional,
     ];
   }

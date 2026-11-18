@@ -36,7 +36,8 @@ for (const [width, height] of [[1366, 900], [390, 844]] as const) {
     await expect(form.locator("[data-developer-token]")).toBeHidden();
 
     await page.getByRole("button", { name: "Uji koneksi server" }).click();
-    await expect(page.locator("#testOfflineStatus")).toHaveText(/Lengkapi dan simpan semua kolom wajib/);
+    // A provider-shaped round trip; under the full suite it can outlast the 5 s default.
+    await expect(page.locator("#testOfflineStatus")).toHaveText(/Lengkapi dan simpan semua kolom wajib/, { timeout: 15_000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
     if (shotDir) {
       await form.scrollIntoViewIfNeeded();

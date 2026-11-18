@@ -58,6 +58,7 @@ function purchaseDatabase() {
       'Jawa Barat', 'Bandung', '40111', 214000, 'cod', 'unpaid', 'tok-41',
       NULL, NULL, 'pending'
     );
+    ALTER TABLE orders ADD COLUMN fulfillment_type TEXT NOT NULL DEFAULT 'physical';
     -- 135000 of goods; the 214000 invoice also carries shipping and the COD fee.
     INSERT INTO order_items VALUES (1, 41, 45000, 3, 1);
   `);

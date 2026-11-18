@@ -28,6 +28,7 @@ type PaidOrderRow = {
   province: string;
   city: string;
   postal_code: string | null;
+  fulfillment_type?: string | null;
   payment_status: string;
   shipping_status: string;
   stock_restored_at: string | null;
@@ -113,7 +114,7 @@ async function enqueueMetaPurchaseForPaidOrder(
   const order = await database
     .prepare(
       `SELECT o.order_number, o.payment_method, o.customer_name, o.customer_phone, o.customer_email,
-              o.province, o.city, o.postal_code, o.payment_status,
+              o.province, o.city, o.postal_code, o.payment_status, o.fulfillment_type,
               o.shipping_status, o.stock_restored_at,
               o.ad_click_ids, o.meta_request_context,
               (SELECT COALESCE(SUM(oi.unit_price * oi.quantity), 0)
@@ -171,9 +172,10 @@ async function enqueueMetaPurchaseForPaidOrder(
       name: order.customer_name,
       // See `/api/meta-event`: a minted provider address is not a match key.
       email: matchableCustomerEmail(order.customer_email, siteUrl),
-      city: order.city,
-      province: order.province,
-      postalCode: order.postal_code || undefined,
+      // A digital order has no place (review finding 3): no city, state or postal code is sent.
+      city: order.fulfillment_type === "digital" ? undefined : order.city,
+      province: order.fulfillment_type === "digital" ? undefined : order.province,
+      postalCode: order.fulfillment_type === "digital" ? undefined : order.postal_code || undefined,
       // Meta treats a missing country as a missing match key, not as a default.
       country: "id",
       externalId: requestContext.externalId || toE164Digits(order.customer_phone),

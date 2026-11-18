@@ -77,3 +77,18 @@ export function digitalOrderBody(input: {
     source_page_path: input.sourcePagePath.slice(0, 500),
   };
 }
+
+/**
+ * Review finding 5: ids minted in the browser have a fixed ceiling whatever
+ * the product's slug (up to 200 characters). `submit_token` is capped at 120 by
+ * the checkout schema; a slug-built token made every long-slug product
+ * uncheckoutable.
+ */
+export function digitalSubmitToken(uuid: string = crypto.randomUUID()): string {
+  return `dig_${uuid}`;
+}
+
+/** A funnel event id: the slug only as a short hint, never its whole length. */
+export function digitalEventId(prefix: string, slug: string, now = Date.now(), random = Math.random()): string {
+  return `${prefix}_${slug.slice(0, 24)}_${now}_${random.toString(36).slice(2, 8)}`;
+}

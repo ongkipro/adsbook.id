@@ -20,6 +20,8 @@ export type MetaPurchaseOrder = {
   province: string;
   city: string;
   postal_code: string | null;
+  /** DIGITAL-PRODUCTS-SPEC: a digital order has no place to send (review finding 3). */
+  fulfillment_type?: string | null;
   total_amount: number;
   shipping_status: string;
   /** `products.id` of every line, comma-joined by D1. The catalog identity. */
@@ -89,7 +91,7 @@ export function resolveMetaPurchaseContentIds(
 const PURCHASE_ORDER_SELECT = `
   SELECT
     o.order_number, o.customer_name, o.customer_phone, o.customer_email,
-    o.province, o.city, o.postal_code, o.total_amount,
+    o.province, o.city, o.postal_code, o.total_amount, o.fulfillment_type,
     o.payment_method, o.payment_status, o.shipping_status,
     o.ad_click_ids, o.meta_request_context,
     (

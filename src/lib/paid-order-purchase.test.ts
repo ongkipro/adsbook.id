@@ -13,6 +13,8 @@ function createDatabase__raw(options: {
   alreadyQueued?: boolean;
   /** What the checkout stored on the order, if anything. */
   metaRequestContext?: string;
+  fulfillmentType?: string;
+  customerEmail?: string;
 }) {
   const outbox: Row[] = [];
   const database = {
@@ -34,7 +36,8 @@ function createDatabase__raw(options: {
               order_number: "INV-10041",
               customer_name: "Siti Rahayu",
               customer_phone: "081234567890",
-              customer_email: null,
+              customer_email: options.customerEmail ?? null,
+              ...(sql.includes("o.fulfillment_type") ? { fulfillment_type: options.fulfillmentType ?? "physical" } : {}),
               province: "Jawa Barat",
               city: "Bogor",
               postal_code: "16111",
@@ -615,3 +618,36 @@ function createDatabase(...args: Parameters<typeof createDatabase__raw>): Return
 function sweepDatabase(...args: Parameters<typeof sweepDatabase__raw>): ReturnType<typeof sweepDatabase__raw> {
   return bindTestCredentialsIn(sweepDatabase__raw(...args));
 }
+
+test("review finding 3: a paid digital order's server Purchase carries the buyer, never a place", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async () => Response.json({ events_received: 1 });
+  // The row still holds address values (an older placeholder, a stray value): the type decides.
+  const { database, outbox } = createDatabase({ paymentStatus: "paid", pixel: true, fulfillmentType: "digital", customerEmail: "budi@example.test" });
+  assert.equal((await enqueuePurchaseForPaidOrder(database, locals(database), 41)).status, "queued");
+  const userData = (outbox[0].payload as { userData: Row }).userData;
+  assert.equal(userData.phone, "081234567890");
+  assert.equal(userData.name, "Siti Rahayu");
+  assert.equal(userData.email, "budi@example.test");
+  assert.equal(userData.country, "id");
+  assert.ok(userData.externalId);
+  assert.equal(userData.city, undefined, "ct");
+  assert.equal(userData.province, undefined, "st");
+  assert.equal(userData.postalCode, undefined, "zp");
+  // A physical order keeps its place.
+  const physical = createDatabase({ paymentStatus: "paid", pixel: true });
+  await enqueuePurchaseForPaidOrder(physical.database, locals(physical.database), 41);
+  const physicalUser = (physical.outbox[0].payload as { userData: Row }).userData;
+  assert.deepEqual([physicalUser.city, physicalUser.province, physicalUser.postalCode], ["Bogor", "Jawa Barat", "16111"]);
+});
+
+test("review finding 3: the browser's Purchase leg drops a digital order's place too", () => {
+  const source = readFileSync(new URL("../pages/api/meta-event.ts", import.meta.url), "utf8");
+  for (const field of ["city", "province", "postalCode"]) {
+    assert.match(source, new RegExp(`${field}: purchaseOrder\\?\\.fulfillment_type === 'digital' \\? undefined`), field);
+  }
+});
+

@@ -64,18 +64,26 @@ test("DIGITAL-PRODUCTS-SPEC §3: a digital store owes name, a digital product wi
   assert.equal(isStoreReady({ ...done, prepaid: false, payment: true }), false);
 });
 
-test("a hybrid store sells digital first; its first active physical product brings the full physical predicate back", () => {
+test("review finding 1: a hybrid store is ready on either track; a physical product never closes a store selling digital", () => {
   const hybrid: SetupFacts = { ...fresh, catalogMode: "hybrid", digitalProduct: true, prepaid: true };
   assert.equal(readinessTrack(hybrid), "digital");
   assert.equal(isStoreReady(hybrid), true, "a hybrid creator opens before any warehouse");
-  const withPhysical = { ...hybrid, physicalCatalog: true };
-  assert.equal(readinessTrack(withPhysical), "physical");
-  assert.equal(isStoreReady(withPhysical), false, "now it owes product weight, warehouse and Mengantar");
-  assert.equal(isStoreReady({ ...withPhysical, product: true, primaryWarehouse: true, mengantar: true }), true);
+  const withPhysical = { ...hybrid, physicalCatalog: true, product: true };
+  assert.equal(isStoreReady(withPhysical), true, "adding a physical product keeps the digital store open");
+  assert.equal(readinessTrack(withPhysical), "digital");
+  const steps = buildSetupChecklist(withPhysical);
+  assert.ok(steps.filter((step) => step.required).every((step) => step.done), "the checklist says ready exactly when the store is");
+  assert.deepEqual(steps.filter((step) => !step.required && !step.done).map((step) => step.id), ["warehouse", "mengantar", "domain", "signals"], "what the physical products still owe, as optional steps");
+  // No digital track: the physical one decides, with its steps required.
+  const physicalOnly: SetupFacts = { ...fresh, catalogMode: "hybrid", physicalCatalog: true, product: true };
+  assert.equal(readinessTrack(physicalOnly), "physical");
+  assert.equal(isStoreReady(physicalOnly), false);
+  assert.equal(isStoreReady({ ...physicalOnly, primaryWarehouse: true, mengantar: true }), true);
   // An existing store migrated to 'hybrid' keeps exactly today's predicate.
   const existing: SetupFacts = { ...fresh, catalogMode: "hybrid", physicalCatalog: true, product: true, primaryWarehouse: true, mengantar: true };
   assert.equal(isStoreReady(existing), true);
   assert.equal(isStoreReady({ ...existing, mengantar: false }), false);
-  assert.equal(readinessTrack({ catalogMode: "physical", physicalCatalog: false }), "physical", "a physical store never takes the digital predicate");
+  assert.equal(readinessTrack({ ...fresh, catalogMode: "physical", digitalProduct: true, prepaid: true }), "physical", "a physical store never takes the digital predicate");
+  assert.equal(isStoreReady({ ...fresh, catalogMode: "physical", digitalProduct: true, prepaid: true }), false);
 });
 
