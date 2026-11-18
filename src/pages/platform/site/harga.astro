@@ -1,7 +1,6 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import PageHead from '../../../platform/site/PageHead.astro';
-import VisualBanner from '../../../platform/site/VisualBanner.astro';
 import CompetitorCompare from '../../../platform/site/CompetitorCompare.astro';
 import Pricing from '../../../platform/site/Pricing.astro';
 import FaqList from '../../../platform/site/FaqList.astro';
@@ -14,18 +13,6 @@ const pricingFaq = FAQ_GROUPS[0].items;
 
 <SiteLayout page={SITE_PAGES.harga}>
   <PageHead crumb={breadcrumbName(SITE_PAGES.harga)} eyebrow="Paket berlangganan" title="Gratis sampai siap beriklan" lead="Satu biaya flat per toko: 0% potongan QRIS/VA, tanpa kuota order, dengan Hybrid Form per provinsi dan konversi 1:1 ke Meta, Google, dan TikTok sudah termasuk." />
-  <VisualBanner
-    id="promo-harga-title"
-    eager
-    title="Mulai gratis, bayar saat siap beriklan"
-    text="Tiga hal yang menjaga biaya Anda tetap masuk akal sejak hari pertama."
-    points={[
-      'Mode Preview gratis tanpa batas waktu persiapan',
-      'Paket tahunan: bayar 10 bulan, gratis 2 bulan',
-      'Masa tenggang 48 jam setelah jatuh tempo agar iklan aktif tidak terputus',
-    ]}
-    image={{ src: '/visual/harga.webp', width: 640, height: 440, alt: 'Ilustrasi 2.5D tiga plinth: Mode Preview tanpa batas waktu; hemat 2 bulan; masa tenggang 48 jam' }}
-  />
   <section class="section section-white" aria-labelledby="paket-title">
     <div class="wrap">
       <div class="section-head">

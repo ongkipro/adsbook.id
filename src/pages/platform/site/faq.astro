@@ -1,11 +1,10 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import PageHead from '../../../platform/site/PageHead.astro';
-import VisualBanner from '../../../platform/site/VisualBanner.astro';
 import FaqList from '../../../platform/site/FaqList.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
 import { FAQ_GROUPS } from '../../../platform/site/content.ts';
-import { SIGNUP_PATH, SITE_PAGES, breadcrumbName } from '../../../platform/site/site.ts';
+import { SITE_PAGES, breadcrumbName } from '../../../platform/site/site.ts';
 
 export const prerender = false;
 const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -17,13 +16,6 @@ const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').
       {FAQ_GROUPS.map((group) => <a href={`#${slug(group.title)}`}>{group.title}</a>)}
     </nav>
   </PageHead>
-  <VisualBanner
-    id="faq-visual-title"
-    title="Masih ragu sebelum pindah?"
-    text="Uji langsung di Mode Preview gratis: siapkan produk, form, dan pixel, lalu lihat toko Anda seperti pembeli melihatnya, sebelum membayar apa pun."
-    link={{ href: SIGNUP_PATH, label: 'Coba buat toko gratis' }}
-    image={{ src: '/visual/faq.webp', width: 640, height: 420, alt: 'Ilustrasi 2.5D: tracking 1:1, COD dan produk digital, serta domain sendiri' }}
-  />
   <section class="section section-white">
     <div class="wrap groups">
       {FAQ_GROUPS.map((group) => (

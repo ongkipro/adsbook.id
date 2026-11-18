@@ -1,6 +1,8 @@
 // The adsbook.id marketing site's visuals (PLATFORM-SEO-AND-VISUAL-BANNERS-SPEC §4):
-// seven 1200×630 share cards (public/og/*.png, each ≤ 120 KB) and the
-// in-page 2.5D banners (public/visual/*.webp, drawn at 2× DPR).
+// seven 1200×630 share cards (public/og/*.png, each ≤ 120 KB) and the one
+// 2.5D illustration still in use (public/visual/home-closing.webp, drawn at 2×
+// DPR; the sign-in studio's panel). The in-page banners were retired (Paduka,
+// 2026-11-19); their scenes live on in the share cards.
 //
 //   npm run platform-visuals            # writes every file, prints sizes
 //   npm run platform-visuals -- --sheet /tmp/seo-og-sheet.png   # also a contact sheet
@@ -190,11 +192,6 @@ const bannerFrame = (width, height, scene, pad = 36) => `<svg xmlns="http://www.
   <rect width="${width}" height="${height}" fill="${PORCELAIN}"/>${fit(pad, pad, width - pad * 2, height - pad * 2, scene)}</svg>`;
 
 export const BANNERS = {
-  fitur: { width: 640, height: 440, svg: bannerFrame(640, 440, `${sceneSteps()}${chip(150, -300, "Meta Ads", { k: 1.8 })}${chip(150, -215, "Google Ads", { k: 1.8 })}${chip(150, -130, "TikTok Ads", { k: 1.8 })}`, 28) },
-  "cara-kerja": { width: 640, height: 440, svg: bannerFrame(640, 440, sceneGates(["Ad click", "Form COD / QRIS", "Pesanan masuk", "Kirim / akses", "Ads Manager"], 0.62), 20) },
-  harga: { width: 640, height: 440, svg: bannerFrame(640, 440, sceneShields(), 28) },
-  faq: { width: 640, height: 420, svg: bannerFrame(640, 420, sceneTiles(), 28) },
-  kontak: { width: 640, height: 440, svg: bannerFrame(640, 440, sceneLanes(), 28) },
   "home-closing": { width: 640, height: 460, svg: bannerFrame(640, 460, sceneSignal(), 28) },
 };
 
