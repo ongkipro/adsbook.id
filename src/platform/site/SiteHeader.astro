@@ -214,11 +214,12 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
 
 <style>
   .site-header { --sh-ease: cubic-bezier(0.22, 1, 0.36, 1); color: var(--ink); }
-  .sh-page { background: var(--canvas); }
-  .sh-row { display: flex; align-items: center; gap: 1rem; }
-  .sh-page .sh-row { width: min(1120px, 100% - 2rem); margin-inline: auto; min-height: 72px; }
-  /* Inside the hero the header floats on the stage: only its controls take pointer events. */
-  .sh-hero { flex-shrink: 0; pointer-events: none; padding: 0.875rem 1.25rem 0.25rem; }
+  .sh-page { background: var(--canvas); border-bottom: 1px solid var(--line); }
+  .sh-row { width: min(1120px, 100% - 2rem); margin-inline: auto; display: flex; align-items: center; gap: 1rem; }
+  .sh-page .sh-row { min-height: 72px; }
+  /* Inside the hero the header floats on the stage with the exact same 1120px container width! */
+  .sh-hero { flex-shrink: 0; pointer-events: none; padding: 0.75rem 0 0.25rem; }
+  .sh-hero .sh-row { min-height: 56px; }
   .sh-hero .sh-wordmark, .sh-hero .sh-nav, .sh-hero .sh-tools { pointer-events: auto; }
 
   /* The logo is outlines (logo/make-logo.mjs in the content folder): a one-module square dot. */
@@ -304,7 +305,7 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
   .auth-error[hidden] { display: none; }
 
   @media (min-width: 640px) {
-    .sh-hero { padding: 1.25rem 2.5rem 0.25rem; }
+    .sh-hero { padding: 1.1rem 0 0.25rem; }
     .sh-wordmark img { height: 24px; }
   }
   @media (min-width: 901px) {
@@ -313,9 +314,6 @@ const current = (path: string) => (path === currentPath ? 'page' : undefined);
     .sh-tools { justify-self: end; }
     .sh-try { display: inline-flex; }
     .sh-burger, .sh-backdrop, .sh-dropdown { display: none; }
-  }
-  @media (min-width: 1024px) {
-    .sh-hero { padding-inline: 3.5rem; }
   }
   @media (prefers-reduced-motion: reduce) {
     .sh-round, .sh-burger .bar, .sh-backdrop, .sh-dropdown, .sh-dropdown.is-open, .sh-pill { transition: none; }

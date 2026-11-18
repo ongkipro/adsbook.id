@@ -162,7 +162,8 @@ test("sign-in, recovery and the home dialog validate inline (novalidate, a messa
     "src/pages/hello.astro": ["username", "password"],
     "src/pages/pemulihan.astro": ["token", "password"],
     "src/pages/platform/login.astro": ["email", "password", "totp"],
-    "src/platform/site/KineticHero3D.astro": ["hero-email", "hero-store"],
+    // The home dialog moved into the shared header (SiteHeader.astro), the same on every page.
+    "src/platform/site/SiteHeader.astro": ["hero-email", "hero-store"],
   };
   for (const [path, ids] of Object.entries(inline)) {
     const text = readFileSync(path, "utf8");

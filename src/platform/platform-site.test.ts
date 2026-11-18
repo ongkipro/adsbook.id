@@ -211,7 +211,11 @@ test("home 3D hero (Paduka, 2026-11-18): three loads on the home alone, from our
   const stage = readFileSync("src/platform/site/kinetic-stage.ts", "utf8");
   assert.doesNotMatch(hero + stage, /https?:\/\//, "no CDN, font service or remote asset");
   assert.match(hero, /href=\{SIGNUP_PATH\}/, "the CTA is a real /daftar link");
-  assert.match(hero, /id="btn-user-auth"[^>]*href="\/masuk"|href="\/masuk"[^>]*id="btn-user-auth"/, "the account button is a real /masuk link");
+  // The account button and its dialog live in the shared header, which the hero renders too.
+  const header = readFileSync("src/platform/site/SiteHeader.astro", "utf8");
+  assert.match(hero, /<SiteHeader variant="hero"/, "the hero uses the shared header");
+  assert.doesNotMatch(header, /https?:\/\//, "the header loads nothing remote");
+  assert.match(header, /id="btn-user-auth"[^>]*href="\/masuk"|href="\/masuk"[^>]*id="btn-user-auth"/, "the account button is a real /masuk link");
   assert.match(hero, /touch-action: pan-y/, "a swipe on the stage still scrolls the page");
   assert.match(stage, /prefers-reduced-motion: reduce/);
   assert.match(stage, /IntersectionObserver/, "no frame is drawn while the hero is off screen");

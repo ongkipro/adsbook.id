@@ -75,12 +75,12 @@ const ROWS = [
   .c-ours { background: #eff6ff; color: var(--ink); font-weight: 700; gap: 0.55rem; border-left: 1px solid #dbeafe; }
   .sq { width: 7px; height: 7px; background: var(--accent); flex-shrink: 0; }
 
-  @media (max-width: 860px) {
+    @media (max-width: 860px) {
     .c-row.c-head { display: none; }
     .c-row { grid-template-columns: 1fr; padding: 1rem; gap: 0.45rem; }
-    .c-row > span { padding: 0; }
-    .c-feat { font-family: var(--display); font-weight: 800; font-size: 0.98rem; margin-bottom: 0.2rem; }
-    .c-other::before, .c-ours::before { content: attr(data-col) ": "; font-weight: 700; margin-right: 0.35rem; color: var(--ink-muted); }
+    .c-row > span { padding: 0; display: grid; grid-template-columns: 118px 1fr; align-items: baseline; gap: 0.5rem; }
+    .c-row > span.c-feat { display: block; font-family: var(--display); font-weight: 800; font-size: 0.98rem; margin-bottom: 0.2rem; }
+    .c-other::before, .c-ours::before { content: attr(data-col) ":"; font-weight: 700; font-size: 0.8rem; color: var(--ink-muted); }
     .c-ours { padding: 0.55rem 0.75rem !important; border-radius: 8px; border: 1px solid #bfdbfe; margin-top: 0.15rem; }
     .c-ours::before { color: var(--accent); }
     .c-ours .sq { display: none; }
