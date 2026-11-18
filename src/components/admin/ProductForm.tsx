@@ -114,7 +114,18 @@ const taxonomyOption = ([id, path]: TaxonomyRow): DistrictOption => ({
 const searchGoogleCategory = async (query: string) =>
   searchTaxonomy(await loadTaxonomy(), query).map(taxonomyOption);
 
-export function ProductForm({ productId, storeName = "", catalogMode = "hybrid" }: { productId?: string; storeName?: string; catalogMode?: CatalogMode }) {
+export function ProductForm({
+  productId,
+  storeName = "",
+  catalogMode = "hybrid",
+  setupGuide = null,
+}: {
+  productId?: string;
+  storeName?: string;
+  catalogMode?: CatalogMode;
+  /** ONBOARDING-BANK-WAREHOUSE-SPEC §3.1: what a physical product still waits on (new products only). */
+  setupGuide?: { warehouse: boolean; mengantar: boolean; couriers: boolean; payment: boolean } | null;
+}) {
   // DIGITAL-PRODUCTS-SPEC §4.2: the store's mode decides a new product's type; only hybrid offers the switch.
   const [productType, setProductType] = useState<ProductType>(catalogMode === "digital" ? "digital" : "physical");
   const [accessUrl, setAccessUrl] = useState("");
@@ -383,6 +394,40 @@ export function ProductForm({ productId, storeName = "", catalogMode = "hybrid" 
       noValidate
     >
       <div className="space-y-6">
+        {setupGuide && !productId && !digital && (
+          <section
+            className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-sm text-slate-700 shadow-sm"
+            aria-labelledby="product-setup-guide-title"
+            data-product-setup-guide
+          >
+            <h2 id="product-setup-guide-title" className="font-semibold text-slate-950">Langkah setelah simpan produk</h2>
+            <p className="mt-1 text-xs leading-5">
+              Produk tetap bisa disimpan sekarang. Agar pembeli bisa memesan, lengkapi:
+            </p>
+            <ul className="mt-2 space-y-1 text-xs leading-5">
+              {setupGuide.warehouse && (
+                <li data-guide-step="warehouse">
+                  <a href="/admin/settings/warehouse" className="font-semibold text-blue-700 underline underline-offset-2">Alamat Pickup Gudang Utama</a> — titik jemput kurir dan dasar hitung ongkir.
+                </li>
+              )}
+              {setupGuide.mengantar && (
+                <li data-guide-step="mengantar">
+                  <a href="/admin/profile" className="font-semibold text-blue-700 underline underline-offset-2">API Key Mengantar</a> — untuk menghitung ongkir dan membuat resi.
+                </li>
+              )}
+              {setupGuide.couriers && (
+                <li data-guide-step="couriers">
+                  <a href="/admin/expeditions" className="font-semibold text-blue-700 underline underline-offset-2">Kurir aktif</a> — minimal satu kurir agar ongkir bisa dihitung.
+                </li>
+              )}
+              {setupGuide.payment && (
+                <li data-guide-step="payment">
+                  <a href="/admin/payments" className="font-semibold text-blue-700 underline underline-offset-2">Rekening Bank</a> — untuk melayani pembeli dari provinsi non-COD via transfer.
+                </li>
+              )}
+            </ul>
+          </section>
+        )}
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" aria-labelledby="product-type-title">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>

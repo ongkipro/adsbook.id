@@ -169,7 +169,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/check` | GET | admin session | owner, admin, customer_service | `src/pages/admin/check.astro` | `tenant-database` | `warehouses` | — | `platform/two-tenants.test.ts` |
 | `/admin/content` | GET | admin session | owner, admin, advertiser | `src/pages/admin/content.astro` | — | — | — | — |
 | `/admin/couriers` | GET | admin session | owner, admin | `src/pages/admin/couriers.astro` | — | — | — | — |
-| `/admin/dashboard` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/admin/dashboard.astro` | `auth` `setup-checklist` `tenant-database` | — | `tenant_hosts` | `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/setup-checklist.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/dashboard` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/admin/dashboard.astro` | `auth` `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/setup-checklist.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/docs` | GET | admin session | owner, admin | `src/pages/admin/docs/index.astro` | — | — | — | — |
 | `/admin/docs/[chapter]` | GET | admin session | owner, admin | `src/pages/admin/docs/[chapter].astro` | — | — | — | — |
 | `/admin/expeditions` | GET | admin session | owner, admin | `src/pages/admin/expeditions.astro` | — | — | — | — |
@@ -179,10 +179,10 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/orders` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/index.astro` | `admin-orders-initial` | — | — | `lib/admin-orders-initial.test.ts` |
 | `/admin/orders/[invoice]` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/[invoice].astro` | — | — | — | — |
 | `/admin/orders/abandoned` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/abandoned.astro` | — | — | — | — |
-| `/admin/payments` | GET | admin session | owner, admin | `src/pages/admin/payments.astro` | `autolaris-client` `payment-fee-policy` | — | — | `lib/autolaris-client.test.ts` `lib/autolaris-payment.test.ts` `lib/dev-providers.test.ts` `lib/payment-fee-policy.test.ts` |
+| `/admin/payments` | GET | admin session | owner, admin | `src/pages/admin/payments.astro` | `autolaris-client` `payment-fee-policy` | — | — | `lib/autolaris-client.test.ts` `lib/autolaris-payment.test.ts` `lib/dev-providers.test.ts` `lib/payment-fee-policy.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/products` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products.astro` | `tenant-database` | `product_variants` `products` | — | `platform/two-tenants.test.ts` |
 | `/admin/products/edit` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products/edit.astro` | — | — | — | — |
-| `/admin/products/new` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products/new.astro` | — | — | — | — |
+| `/admin/products/new` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products/new.astro` | `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/profile` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/admin/profile.astro` | — | — | — | — |
 | `/admin/settings` | GET | admin session | owner, admin | `src/pages/admin/settings.astro` | — | — | — | — |
 | `/admin/settings/access` | GET | admin session | owner | `src/pages/admin/settings/access.astro` | — | — | — | — |
@@ -195,9 +195,9 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/settings/store` | GET | admin session | owner, admin | `src/pages/admin/settings/store.astro` | `brand-assets` | — | — | — |
 | `/admin/settings/warehouse` | GET | admin session | owner, admin | `src/pages/admin/settings/warehouse.astro` | — | — | — | — |
 | `/admin/settings/whatsapp` | GET | admin session | owner, admin | `src/pages/admin/settings/whatsapp.astro` | — | — | — | — |
-| `/admin/setup` | GET | admin session | owner, admin | `src/pages/admin/setup.astro` | `setup-checklist` `tenant-database` | — | `tenant_hosts` | `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/setup` | GET | admin session | owner, admin | `src/pages/admin/setup.astro` | `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/shipping` | GET | admin session | owner, admin, customer_service | `src/pages/admin/shipping.astro` | — | — | — | — |
-| `/admin/status` | GET | admin session | owner, admin | `src/pages/admin/status.astro` | `health-snapshot` `setup-checklist` `tenant-database` | `ops_health_snapshot` | `tenant_hosts` | `lib/health-snapshot.test.ts` `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/status` | GET | admin session | owner, admin | `src/pages/admin/status.astro` | `health-snapshot` `setup-checklist` `tenant-database` | `ops_health_snapshot` `stores` | `tenant_hosts` | `lib/health-snapshot.test.ts` `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
 
 ## Admin API (50)
 
@@ -320,7 +320,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `auth-secret` | 1 | `install_secrets` | — | 3 | `/[slug]` `/api/handoff` `/hello` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/logout` |
 | `auth` | 17 | — | — | 12 | `/api/handoff` `/hello` `/admin/dashboard` `/api/admin/access` `/api/admin/logout` `/api/admin/profile` |
 | `auto-load-more` | 2 | — | — | 1 | `/produk` |
-| `autolaris-client` | 20 | — | — | 3 | `/api/order-status` `/api/payment-methods` `/admin/payments` `/api/admin/settings` |
+| `autolaris-client` | 20 | — | — | 4 | `/api/order-status` `/api/payment-methods` `/admin/payments` `/api/admin/settings` |
 | `autolaris-payment` | 23 | `autolaris_callbacks` `order_items` `orders` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `stores` `warehouses` | — | 2 | `/api/meta-event` `/api/order-status` `/api/submit-order` `/api/v1/checkout` `/api/v1/tracking/events` `/api/admin/orders/[id]` |
 | `brand-assets` | 6 | — | — | **none** | `/thanks` `/api/handoff` `/hello` `/pemulihan` `/admin/settings/store` `/platform/login` |
 | `bundled-migrations` | 1 | — | — | **none** | — |
@@ -427,7 +427,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `rts-scoring` | 10 | `orders` | — | 1 | `/api/submit-middle-order` `/api/submit-order` `/api/admin/check` `/api/admin/orders` `/api/admin/orders/[id]` |
 | `schema-version` | 12 | — | — | 28 | — |
 | `seller-bank-account` | 3 | — | — | 1 | `/api/admin/seller-bank-accounts` |
-| `setup-checklist` | 4 | — | `tenant_hosts` | 2 | `/admin/dashboard` `/admin/setup` `/admin/status` |
+| `setup-checklist` | 5 | `stores` | `tenant_hosts` | 2 | `/admin/dashboard` `/admin/products/new` `/admin/setup` `/admin/status` |
 | `shipping-fallback` | 2 | — | — | 1 | — |
 | `shipping-queue` | 3 | — | — | 1 | `/api/admin/shipping` |
 | `shipping-quote` | 6 | `courier_rules` `product_variants` `products` `warehouses` | — | 3 | `/api/shipping-rates` `/api/submit-order` `/api/v1/checkout` `/api/v1/geo/shipping-rates` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` |
@@ -446,7 +446,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `storefront-template` | 9 | `storefront_templates` `stores` | — | 1 | `/` `/api/admin/settings` |
 | `tenant-content` | 3 | — | — | 1 | `/` `/api/v1/storefront` |
 | `tenant-contract` | 3 | — | — | 1 | — |
-| `tenant-database` | 1 | — | — | 1 | `/` `/produk/[slug]` `/kebijakan-privasi` `/[slug]` `/hybrid-form` `/api/handoff` `/api/owner-recovery` `/hello` `/api/form-config` `/api/geo-province` `/api/locations` `/api/meta-event` `/api/order-status` `/api/payment-methods` `/api/record-abandoned-order` `/api/shipping-rates` `/api/submit-middle-order` `/api/submit-order` `/api/tiktok-event` `/api/v1/checkout` `/api/v1/geo/shipping-rates` `/api/v1/orders/status` `/api/v1/storefront` `/api/v1/tracking/events` `/api/ops/v1/orders` `/api/ops/v1/orders/[number]` `/api/webhooks/autolaris/[token]` `/admin/check` `/admin/dashboard` `/admin/products` `/admin/settings/plugins/kelola` `/admin/settings/privacy` `/admin/setup` `/admin/status` `/api/admin/abandoned-orders` `/api/admin/access` `/api/admin/ads` `/api/admin/analytics` `/api/admin/billing` `/api/admin/check` `/api/admin/content` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/health` `/api/admin/health/check` `/api/admin/health/status` `/api/admin/logout` `/api/admin/notifications` `/api/admin/ongkir` `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/orders/[id]/follow-up` `/api/admin/orders/attention` `/api/admin/orders/export` `/api/admin/orders/retention` `/api/admin/payment-reconciliation` `/api/admin/plugins` `/api/admin/plugins/kelola` `/api/admin/products` `/api/admin/profile` `/api/admin/rules` `/api/admin/seller-bank-accounts` `/api/admin/settings` `/api/admin/settings/developer` `/api/admin/settings/privacy` `/api/admin/shipping` `/api/admin/warehouses` `/api/admin/whatsapp-numbers` |
+| `tenant-database` | 1 | — | — | 1 | `/` `/produk/[slug]` `/kebijakan-privasi` `/[slug]` `/hybrid-form` `/api/handoff` `/api/owner-recovery` `/hello` `/api/form-config` `/api/geo-province` `/api/locations` `/api/meta-event` `/api/order-status` `/api/payment-methods` `/api/record-abandoned-order` `/api/shipping-rates` `/api/submit-middle-order` `/api/submit-order` `/api/tiktok-event` `/api/v1/checkout` `/api/v1/geo/shipping-rates` `/api/v1/orders/status` `/api/v1/storefront` `/api/v1/tracking/events` `/api/ops/v1/orders` `/api/ops/v1/orders/[number]` `/api/webhooks/autolaris/[token]` `/admin/check` `/admin/dashboard` `/admin/products` `/admin/products/new` `/admin/settings/plugins/kelola` `/admin/settings/privacy` `/admin/setup` `/admin/status` `/api/admin/abandoned-orders` `/api/admin/access` `/api/admin/ads` `/api/admin/analytics` `/api/admin/billing` `/api/admin/check` `/api/admin/content` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/health` `/api/admin/health/check` `/api/admin/health/status` `/api/admin/logout` `/api/admin/notifications` `/api/admin/ongkir` `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/orders/[id]/follow-up` `/api/admin/orders/attention` `/api/admin/orders/export` `/api/admin/orders/retention` `/api/admin/payment-reconciliation` `/api/admin/plugins` `/api/admin/plugins/kelola` `/api/admin/products` `/api/admin/profile` `/api/admin/rules` `/api/admin/seller-bank-accounts` `/api/admin/settings` `/api/admin/settings/developer` `/api/admin/settings/privacy` `/api/admin/shipping` `/api/admin/warehouses` `/api/admin/whatsapp-numbers` |
 | `tenant` | 14 | `stores` | — | 4 | `/kebijakan-privasi` `/kontak` `/pengiriman` `/syarat-ketentuan` `/api/admin/settings` |
 | `thanks-whatsapp` | 6 | — | — | 2 | `/thanks` |
 | `tiktok-browser` | 3 | — | — | 1 | — |

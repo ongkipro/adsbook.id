@@ -2,7 +2,12 @@
 import { ProductForm } from '../../../components/admin/ProductForm';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
+import { physicalProductGuide, readSetupFacts } from '../../../lib/setup-checklist';
 export const prerender = false;
+
+// ONBOARDING-BANK-WAREHOUSE-SPEC §3.1: what a physical product still waits on.
+const setupGuide = Astro.locals.tenant.catalogMode === 'digital' ? null : physicalProductGuide(await readSetupFacts(tenantDatabase(Astro.locals), Astro.locals));
 ---
 
 <AdminLayout title="Tambah produk" activeMenu="products">
@@ -13,6 +18,6 @@ export const prerender = false;
       backHref="/admin/products"
       backLabel="Katalog produk"
     />
-    <ProductForm storeName={Astro.locals.tenant.name} catalogMode={Astro.locals.tenant.catalogMode} client:load />
+    <ProductForm storeName={Astro.locals.tenant.name} catalogMode={Astro.locals.tenant.catalogMode} setupGuide={setupGuide} client:load />
   </div>
 </AdminLayout>

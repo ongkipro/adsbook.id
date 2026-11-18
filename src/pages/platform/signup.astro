@@ -36,6 +36,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           <div id="errorSummary" class="error-banner" hidden role="alert" tabindex="-1"></div>
 
           <form
+            method="post"
             id="signupForm"
             class="signup-form"
             novalidate
@@ -58,7 +59,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
                   <span class="catalog-sub">Tanpa gudang · link akses otomatis saat lunas</span>
                 </label>
               </div>
-              <p class="field-hint catalog-hint"><strong>Satu toko bisa keduanya.</strong> Pilihan ini hanya mengatur tampilan menu awal dashboard Anda. Kapan pun Anda ingin menjual produk fisik sekaligus digital, aktifkan mode Hybrid di Pengaturan › Toko.</p>
+              <p class="field-hint catalog-hint"><strong>Satu toko bisa keduanya.</strong> Pilihan ini mengatur jenis produk dan langkah persiapan awal dashboard Anda. Kapan pun ingin menjual produk fisik sekaligus digital, aktifkan mode Hybrid di Pengaturan › Toko.</p>
             </fieldset>
 
             <div class="field">
@@ -233,7 +234,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       <!-- What the first minutes after signup ask, for the focus chosen in the form. -->
       <div class="next-steps" data-next-steps="physical">
         <strong>Setelah daftar (Produk Fisik)</strong>
-        <p>Halaman Setup menuntun 3 langkah: tambah produk fisik, isi alamat pickup / gudang awal, lalu simpan API key Mengantar. Tidak perlu diisi sekarang.</p>
+        <p>Halaman Setup menuntun 4 langkah: tambah produk fisik, isi alamat pickup / gudang awal, simpan API key Mengantar, lalu tambahkan rekening bank untuk pembeli di provinsi non-COD. Tidak perlu diisi sekarang.</p>
       </div>
       <div class="next-steps" data-next-steps="digital" hidden>
         <strong>Setelah daftar (Produk Digital)</strong>

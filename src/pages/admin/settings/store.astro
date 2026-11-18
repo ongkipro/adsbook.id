@@ -37,7 +37,7 @@ const isOwner = Astro.locals.admin?.role === 'owner';
         <label class="block">
           <span class="mb-1.5 block text-xs font-semibold text-slate-700">Alamat usaha</span>
           <textarea id="businessAddress" maxlength="300" rows="2" autocomplete="street-address" class="admin-input-flat min-h-20 py-2"></textarea>
-          <span class="mt-1.5 block text-xs text-slate-500">Opsional. Alamat pengelola toko untuk halaman Kontak dan kebijakan. Kosongkan bila tidak ingin dipublikasikan.</span>
+          <span class="mt-1.5 block text-xs text-slate-500" data-business-address-hint>Opsional, tampil publik. Ditampilkan di halaman Kontak &amp; Kebijakan Privasi toko agar pembeli dari iklan lebih percaya. Ini berbeda dari titik penjemputan kurir, yang diatur di menu <a href="/admin/settings/warehouse" class="font-semibold text-blue-700 underline underline-offset-2">Gudang</a>. Kosongkan bila tidak ingin dipublikasikan.</span>
         </label>
         <div class="block">
           <span class="mb-1.5 block text-xs font-semibold text-slate-700">Alamat storefront</span>

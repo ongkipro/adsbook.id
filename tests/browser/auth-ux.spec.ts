@@ -35,6 +35,7 @@ test("the pair at 1440 and 390: switcher, the form in the first viewport on a ph
   for (const [width, height] of [[1440, 900], [390, 844]] as const) {
     await page.setViewportSize({ width, height });
     await page.goto(`${PLATFORM}/masuk`);
+    await expect(page.locator("#loginForm"), "a form without JavaScript posts").toHaveAttribute("method", "post");
     await expect(page.locator(".auth-switch a[aria-current=page]")).toHaveText("Masuk ke Toko");
     const field = await page.locator("#loginPassword").boundingBox();
     expect(field!.y + field!.height, `/masuk ${width}: both fields above the fold`).toBeLessThanOrEqual(height);

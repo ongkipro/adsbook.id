@@ -3,7 +3,8 @@ import test from "node:test";
 import { isStoreReady, readinessTrack } from "../platform/readiness.ts";
 import { buildSetupChecklist, type SetupFacts } from "./setup-checklist.ts";
 
-// A fresh signup: the name comes from the form, COD and the default couriers start on.
+// A fresh signup: the name comes from the form, COD and the default couriers start on,
+// COD excludes the default 15 provinces and no bank account exists yet.
 const fresh: SetupFacts = {
   catalogMode: "physical",
   physicalCatalog: false,
@@ -13,22 +14,25 @@ const fresh: SetupFacts = {
   product: false,
   primaryWarehouse: false,
   mengantar: false,
-  payment: true,
+  payment: false,
+  codDisabledProvinces: 15,
   enabledCouriers: 4,
   signals: false,
   customDomain: false,
+  businessAddress: false,
 };
 
-test("a fresh signup owes product, primary warehouse and Mengantar; domain and signals are optional", () => {
+test("a fresh signup owes product, primary warehouse, Mengantar and a non-COD rail; domain and signals are optional", () => {
   const steps = buildSetupChecklist(fresh);
-  assert.deepEqual(steps.map((step) => step.id), ["store", "product", "warehouse", "mengantar", "couriers", "payment", "domain", "signals"]);
-  assert.deepEqual(steps.filter((step) => step.required && !step.done).map((step) => step.id), ["product", "warehouse", "mengantar"]);
-  assert.deepEqual(steps.filter((step) => !step.required).map((step) => step.id), ["domain", "signals"]);
+  assert.deepEqual(steps.map((step) => step.id), ["store", "product", "warehouse", "mengantar", "couriers", "payment", "address", "domain", "signals"]);
+  assert.deepEqual(steps.filter((step) => step.required && !step.done).map((step) => step.id), ["product", "warehouse", "mengantar", "payment"]);
+  assert.equal(steps.find((step) => step.id === "payment")?.label, "Tambahkan rekening bank (atau AutoLaris QRIS/VA)");
+  assert.deepEqual(steps.filter((step) => !step.required).map((step) => step.id), ["address", "domain", "signals"]);
   assert.ok(steps.every((step) => step.href.startsWith("/admin/")));
 });
 
 test("the required steps are exactly the ready predicate, fact by fact (UX-2 = PR-23)", () => {
-  const done: SetupFacts = { ...fresh, product: true, primaryWarehouse: true, mengantar: true };
+  const done: SetupFacts = { ...fresh, product: true, primaryWarehouse: true, mengantar: true, prepaid: true, payment: true };
   assert.equal(isStoreReady(done), true);
   assert.ok(buildSetupChecklist(done).filter((step) => step.required).every((step) => step.done));
   const cases: Array<[Partial<SetupFacts>, string]> = [
@@ -50,7 +54,7 @@ test("the required steps are exactly the ready predicate, fact by fact (UX-2 = P
 
 test("DIGITAL-PRODUCTS-SPEC §3: a digital store owes name, a digital product with its link, and a prepaid rail — nothing that ships", () => {
   const digital: SetupFacts = { ...fresh, catalogMode: "digital", payment: true, enabledCouriers: 0 };
-  assert.deepEqual(buildSetupChecklist(digital).map((step) => step.id), ["store", "product", "payment", "domain", "signals"]);
+  assert.deepEqual(buildSetupChecklist(digital).map((step) => step.id), ["store", "product", "payment", "address", "domain", "signals"]);
   assert.deepEqual(buildSetupChecklist(digital).filter((step) => step.required && !step.done).map((step) => step.id), ["product", "payment"]);
   assert.equal(isStoreReady(digital), false);
   const done = { ...digital, digitalProduct: true, prepaid: true };
@@ -73,17 +77,38 @@ test("review finding 1: a hybrid store is ready on either track; a physical prod
   assert.equal(readinessTrack(withPhysical), "digital");
   const steps = buildSetupChecklist(withPhysical);
   assert.ok(steps.filter((step) => step.required).every((step) => step.done), "the checklist says ready exactly when the store is");
-  assert.deepEqual(steps.filter((step) => !step.required && !step.done).map((step) => step.id), ["warehouse", "mengantar", "domain", "signals"], "what the physical products still owe, as optional steps");
+  assert.deepEqual(steps.filter((step) => !step.required && !step.done).map((step) => step.id), ["warehouse", "mengantar", "address", "domain", "signals"], "what the physical products still owe, as optional steps");
   // No digital track: the physical one decides, with its steps required.
   const physicalOnly: SetupFacts = { ...fresh, catalogMode: "hybrid", physicalCatalog: true, product: true };
   assert.equal(readinessTrack(physicalOnly), "physical");
   assert.equal(isStoreReady(physicalOnly), false);
-  assert.equal(isStoreReady({ ...physicalOnly, primaryWarehouse: true, mengantar: true }), true);
-  // An existing store migrated to 'hybrid' keeps exactly today's predicate.
-  const existing: SetupFacts = { ...fresh, catalogMode: "hybrid", physicalCatalog: true, product: true, primaryWarehouse: true, mengantar: true };
+  assert.equal(isStoreReady({ ...physicalOnly, primaryWarehouse: true, mengantar: true, payment: true }), true);
+  // An existing store migrated to 'hybrid' keeps exactly the physical predicate.
+  const existing: SetupFacts = { ...fresh, catalogMode: "hybrid", physicalCatalog: true, product: true, primaryWarehouse: true, mengantar: true, payment: true };
   assert.equal(isStoreReady(existing), true);
   assert.equal(isStoreReady({ ...existing, mengantar: false }), false);
   assert.equal(readinessTrack({ ...fresh, catalogMode: "physical", digitalProduct: true, prepaid: true }), "physical", "a physical store never takes the digital predicate");
   assert.equal(isStoreReady({ ...fresh, catalogMode: "physical", digitalProduct: true, prepaid: true }), false);
+});
+
+test("ONBOARDING-BANK-WAREHOUSE-SPEC §3: the product form guides toward the warehouse and a non-COD rail; the public address is its own optional step", async () => {
+  const { physicalProductGuide } = await import("./setup-checklist.ts");
+  assert.deepEqual(physicalProductGuide(fresh), { warehouse: true, mengantar: true, couriers: false, payment: true });
+  assert.deepEqual(physicalProductGuide({ ...fresh, primaryWarehouse: true, mengantar: true }), { warehouse: false, mengantar: false, couriers: false, payment: true }, "a bank account still owed");
+  assert.deepEqual(physicalProductGuide({ ...fresh, payment: true }), { warehouse: true, mengantar: true, couriers: false, payment: false });
+  const shipping = { ...fresh, primaryWarehouse: true, payment: true, mengantar: true };
+  assert.equal(physicalProductGuide(shipping), null, "nothing the banner names is owed");
+  // Review: any one missing physical prerequisite shows the guide, the Mengantar key or the couriers alone included.
+  assert.deepEqual(physicalProductGuide({ ...shipping, mengantar: false }), { warehouse: false, mengantar: true, couriers: false, payment: false });
+  assert.deepEqual(physicalProductGuide({ ...shipping, enabledCouriers: 0 }), { warehouse: false, mengantar: false, couriers: true, payment: false });
+  assert.equal(physicalProductGuide(null), null);
+  const address = (facts: SetupFacts) => buildSetupChecklist(facts).find((step) => step.id === "address");
+  assert.deepEqual([address(fresh)?.required, address(fresh)?.done, address(fresh)?.href], [false, false, "/admin/settings/store#businessAddress"]);
+  assert.match(address(fresh)?.hint ?? "", /Kontak & Kebijakan Privasi/);
+  assert.equal(address({ ...fresh, businessAddress: true })?.done, true);
+  assert.equal(isStoreReady({ ...fresh, product: true, primaryWarehouse: true, mengantar: true, payment: true }), true, "the address never gates readiness");
+  const digitalPayment = buildSetupChecklist({ ...fresh, catalogMode: "digital" }).find((step) => step.id === "payment");
+  assert.equal(digitalPayment?.label, "Tambahkan rekening bank (atau AutoLaris QRIS/VA)");
+  assert.match(digitalPayment?.hint ?? "", /^Pilih salah satu: rekening bank transfer manual/);
 });
 

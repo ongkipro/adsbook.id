@@ -4,8 +4,10 @@
  * own data on every request — never from stored clicks.
  *
  * Ready = store name set; at least one active product with a variant that
- * has a price and a weight; at least one enabled payment method (COD, or
- * AutoLaris with everything its order rail validates); a Mengantar API key;
+ * has a price and a weight; a way for every buyer to pay
+ * (ONBOARDING-BANK-WAREHOUSE-SPEC §2: an active bank account or AutoLaris with
+ * everything its order rail validates — COD alone only when it is on and
+ * excludes no province, since the default excludes 15); a Mengantar API key;
  * and the **primary** warehouse active with origin area and pickup address
  * (`isWarehouseReady`). A secondary warehouse never stands in for it: checkout
  * falls back to the primary whatever its readiness.
@@ -30,6 +32,8 @@
  */
 import { openCredential } from "../lib/credential-crypto.ts";
 import { autoLarisOrderRailGap } from "../lib/provider-config.ts";
+import { AUTOLARIS_CHANNEL_OPTIONS, resolveDisabledAutoLarisChannels } from "../lib/autolaris-client.ts";
+import { getCodDisabledProvinceCodes } from "../lib/form-mode.ts";
 
 export type CatalogMode = "physical" | "digital" | "hybrid";
 
@@ -49,7 +53,14 @@ export type ReadinessFacts = {
   product: boolean;
   primaryWarehouse: boolean;
   mengantar: boolean;
+  /**
+   * ONBOARDING-BANK-WAREHOUSE-SPEC §2: every buyer of a physical store can pay.
+   * A prepaid rail (bank account or AutoLaris), or COD open to every province;
+   * COD alone does not do when a province is excluded from it (15 by default).
+   */
   payment: boolean;
+  /** Provinces excluded from COD (the store's list, or the default 15); 0 = COD everywhere. */
+  codDisabledProvinces: number;
   enabledCouriers: number;
   signals: boolean;
 };
@@ -64,7 +75,9 @@ type Row = {
   primary_warehouse: number;
   mengantar_api_key: string | null;
   cod: number | null;
+  cod_disabled_province_codes: string | null;
   autolaris_on: number | null;
+  disabled_autolaris_channels: string | null;
   autolaris_key: string | null;
   couriers: number;
   signals: number;
@@ -86,7 +99,7 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
          s.catalog_mode,
          EXISTS (SELECT 1 FROM warehouses WHERE is_primary = 1 AND is_active = 1
                  AND TRIM(COALESCE(origin_area_id, '')) <> '' AND TRIM(COALESCE(pickup_address_id, '')) <> '') AS primary_warehouse,
-         s.mengantar_api_key, s.is_cod_enabled AS cod, s.is_autolaris_enabled AS autolaris_on,
+         s.mengantar_api_key, s.is_cod_enabled AS cod, s.cod_disabled_province_codes, s.is_autolaris_enabled AS autolaris_on, s.disabled_autolaris_channels,
          s.autolaris_api_key AS autolaris_key,
          (SELECT COUNT(*) FROM courier_rules WHERE is_enabled = 1) AS couriers,
          (TRIM(COALESCE(s.meta_pixel_id, '')) <> '' OR TRIM(COALESCE(s.google_ads_conversion_id, '')) <> '') AS signals
@@ -103,20 +116,27 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
   ]);
   // The same inputs /api/payment-methods offers AutoLaris on, so "enabled"
   // here means exactly what a buyer would be offered.
+  // ...and with at least one channel the store left on: every channel off offers the buyer nothing.
+  const disabledChannels: readonly string[] = resolveDisabledAutoLarisChannels(row.disabled_autolaris_channels);
   const autolaris =
     row.autolaris_on !== 0 &&
-    autoLarisOrderRailGap({ apiKey: text(autolarisKey) }) === null;
+    autoLarisOrderRailGap({ apiKey: text(autolarisKey) }) === null &&
+    AUTOLARIS_CHANNEL_OPTIONS.some((channel) => !disabledChannels.includes(channel.code));
+  const prepaid = autolaris || Boolean(row.bank_account);
+  const codOn = row.store_name !== null && row.cod !== 0;
+  const codDisabledProvinces = getCodDisabledProvinceCodes(row.cod_disabled_province_codes).length;
   return {
     catalogMode: normalizeCatalogMode(row.catalog_mode),
     physicalCatalog: Boolean(row.physical_catalog),
     digitalProduct: Boolean(row.digital_product),
-    prepaid: autolaris || Boolean(row.bank_account),
+    prepaid,
     storeName: Boolean(row.store_name),
     product: Boolean(row.product),
     primaryWarehouse: Boolean(row.primary_warehouse),
     mengantar: text(mengantarKey) !== "",
-    // A store row with COD left on (the default) offers COD.
-    payment: (row.store_name !== null && row.cod !== 0) || autolaris,
+    // A buyer outside COD's provinces (or every buyer, with COD off) pays by transfer or AutoLaris.
+    payment: prepaid || (codOn && codDisabledProvinces === 0),
+    codDisabledProvinces,
     enabledCouriers: Number(row.couriers) || 0,
     signals: Boolean(row.signals),
   };
