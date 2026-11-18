@@ -204,7 +204,7 @@ export async function runTenantMaintenance(
   });
   const queuedGoogleAdsConversions = googleAdsOffline
     ? await housekeeping("scheduled-google-ads-reconcile-failed", () =>
-        reconcileGoogleAdsConversions(database, googleAdsOffline, new Date(scheduledTime)),
+        reconcileGoogleAdsConversions(database, googleAdsOffline, new Date(scheduledTime), scheduledLocals.tenant.siteUrl),
       )
     : 0;
   const drainedGoogleAdsConversions = googleAdsOffline

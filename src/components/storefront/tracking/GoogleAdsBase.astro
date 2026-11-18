@@ -1,5 +1,6 @@
 ---
 import { getStoreAdsConfig, hasValidGoogleAdsConversion } from '../../../lib/store-ads';
+import { EEA_UK_CH_REGIONS } from '../../../lib/google-consent-regions.ts';
 
 interface Props {
   googleAdsId?: string;
@@ -24,7 +25,7 @@ const shouldRenderGoogleAds = hasValidGoogleAdsConversion(
 
 {shouldRenderGoogleAds && (
   <>
-    <script is:inline define:vars={{ googleAdsId, googleAdsLabel }}>
+    <script is:inline define:vars={{ googleAdsId, googleAdsLabel, consentDeniedRegions: [...EEA_UK_CH_REGIONS] }}>
       (() => {
         if (typeof window === 'undefined') return;
         window.dataLayer = window.dataLayer || [];
@@ -41,10 +42,8 @@ const shouldRenderGoogleAds = hasValidGoogleAdsConversion(
           ad_user_data: 'denied',
           ad_personalization: 'denied',
           analytics_storage: 'denied',
-          region: [
-            'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IS','IE','IT',
-            'LV','LI','LT','LU','MT','NL','NO','PL','PT','RO','SK','SI','ES','SE','GB','CH',
-          ],
+          // The one list the server conversion also uses (google-consent-regions.ts).
+          region: consentDeniedRegions,
           wait_for_update: 500,
         });
         window.gtag('consent', 'default', {

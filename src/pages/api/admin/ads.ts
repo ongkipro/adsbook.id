@@ -19,8 +19,11 @@ import {
   requeueRecoverableTikTokEvents,
 } from '../../../lib/tiktok-outbox.ts';
 import {
+  normalizeGoogleAdsApiMode,
+  normalizeGoogleAdsCodTrigger,
   planGoogleAdsOfflineSave,
   readGoogleAdsOfflineConfig,
+  testGoogleAdsOfflineConnection,
   openGoogleAdsOfflineSecrets,
   sealGoogleAdsOfflineSecrets,
   type GoogleAdsOfflineRow,
@@ -35,7 +38,7 @@ const GTM_ID_PATTERN = /^GTM-[A-Z0-9]{4,20}$/;
 const META_TEST_CODE_PATTERN = /^TEST\d{3,20}$/;
 
 type AdsConfigPayload = {
-  action?: 'save-meta' | 'save-google' | 'save-google-offline' | 'test-capi' | 'requeue-capi' | 'save-tiktok' | 'test-tiktok' | 'requeue-tiktok';
+  action?: 'save-meta' | 'save-google' | 'save-google-offline' | 'test-google-offline' | 'test-capi' | 'requeue-capi' | 'save-tiktok' | 'test-tiktok' | 'requeue-tiktok';
   meta_pixel_id?: string;
   meta_capi_token?: string;
   meta_test_event_code?: string;
@@ -57,6 +60,8 @@ type AdsConfigPayload = {
     client_id?: string;
     client_secret?: string;
     refresh_token?: string;
+    api_mode?: string;
+    cod_trigger?: string;
   };
 };
 
@@ -102,7 +107,7 @@ async function readAdsRow(database: D1Database) {
     SELECT meta_pixel_id, meta_capi_token, google_tag_manager_id, google_ads_conversion_id, google_ads_conversion_label,
       google_ads_customer_id, google_ads_offline_conversion_action_id, google_ads_login_customer_id,
       google_ads_offline_start_at, google_ads_developer_token, google_ads_client_id, google_ads_client_secret,
-      google_ads_refresh_token,
+      google_ads_refresh_token, google_ads_api_mode, google_ads_cod_trigger,
       tiktok_pixel_id, tiktok_access_token, tiktok_test_event_code, tiktok_cod_trigger
     FROM stores
     ORDER BY id
@@ -131,6 +136,8 @@ function publicConfig(row: AdsRow) {
       client_id_masked: maskSecretValue(row.google_ads_client_id ?? ''),
       client_secret_set: Boolean(row.google_ads_client_secret?.trim()),
       refresh_token_set: Boolean(row.google_ads_refresh_token?.trim()),
+      api_mode: normalizeGoogleAdsApiMode(row.google_ads_api_mode),
+      cod_trigger: normalizeGoogleAdsCodTrigger(row.google_ads_cod_trigger),
     },
     // ADR-040: the token leaves as a flag and a mask, never in full.
     tiktok: {
@@ -210,6 +217,16 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
     if (body.action === 'save-tiktok' || body.action === 'test-tiktok' || body.action === 'requeue-tiktok') {
       return await handleTikTok(database, body, current, request);
+    }
+
+    if (body.action === 'test-google-offline') {
+      // validateOnly on the Data Manager API: Google checks everything and records nothing.
+      const config = readGoogleAdsOfflineConfig(current);
+      if (!config) {
+        return json({ success: false, error: 'Lengkapi dan simpan semua kolom wajib upload offline dulu.' }, 400);
+      }
+      const result = await testGoogleAdsOfflineConnection(config);
+      return json({ success: result.ok, message: result.message, data: result.warnings ? { warnings: result.warnings } : undefined }, result.ok ? 200 : 400);
     }
 
     if (body.action === 'requeue-capi') {
@@ -335,6 +352,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           clientId: offline.client_id,
           clientSecret: offline.client_secret,
           refreshToken: offline.refresh_token,
+          apiMode: offline.api_mode,
+          codTrigger: offline.cod_trigger,
         },
         current,
         new Date(),

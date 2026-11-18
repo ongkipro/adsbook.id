@@ -16,7 +16,18 @@ export type MetaOrderContext = {
   userAgent?: string;
   /** TikTok's first-party `_ttp` cookie, for a CompletePayment sent after the buyer left. */
   ttp?: string;
+  /**
+   * The buyer's country at checkout (`CF-IPCountry`, ISO 3166-1 alpha-2). The Google server
+   * conversion sends user data only when this is known and outside the EEA/UK/CH
+   * (`google-consent-regions.ts`), the same rule the storefront's Consent Mode applies.
+   */
+  country?: string;
 };
+
+function cleanCountry(value: unknown): string | undefined {
+  const code = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return /^[A-Z]{2}$/.test(code) && code !== "XX" && code !== "T1" ? code : undefined;
+}
 
 const MAX_IP_LENGTH = 64;
 const MAX_USER_AGENT_LENGTH = 512;
@@ -45,12 +56,17 @@ export function captureMetaOrderContext(request: Request): MetaOrderContext {
     clientIp: cleanClientIp(getClientIp(request.headers)),
     userAgent: cleanUserAgent(request.headers.get("user-agent")),
     ...withTtp(readTikTokBrowserIds(request).ttp),
+    ...withCountry(cleanCountry(request.headers.get("cf-ipcountry"))),
   };
 }
 
 /** Present only when there is one, so a context without TikTok keeps its exact shape. */
 function withTtp(ttp: string | undefined): { ttp?: string } {
   return ttp ? { ttp } : {};
+}
+
+function withCountry(country: string | undefined): { country?: string } {
+  return country ? { country } : {};
 }
 
 export function serializeMetaOrderContext(
@@ -81,5 +97,7 @@ function normalizeMetaOrderContext(context: MetaOrderContext): MetaOrderContext 
   const userAgent = cleanUserAgent(context?.userAgent);
   if (userAgent) normalized.userAgent = userAgent;
   if (isValidTikTokTtp(context?.ttp)) normalized.ttp = context.ttp;
+  const country = cleanCountry(context?.country);
+  if (country) normalized.country = country;
   return normalized;
 }

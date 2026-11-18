@@ -24,7 +24,20 @@ const CONFIG = {
   refreshToken: "refresh-token",
   loginCustomerId: "1122334455",
   startAt: "2026-08-25T00:00:00.000Z",
+  // The legacy path these tests pin (migration 0083 keeps a store with a developer token on it).
+  mode: "ads_api" as const,
+  codTrigger: "delivered" as const,
 };
+
+/** A row queued before migration 0083: the Ads API ClickConversion shape. */
+const LEGACY_PAYLOAD = (id: number) => JSON.stringify({
+  conversionAction: "customers/1234567890/conversionActions/987654321",
+  conversionDateTime: "2026-08-26 00:00:00+00:00",
+  conversionValue: 100000,
+  currencyCode: "IDR",
+  orderId: `INV-${id}`,
+  gclid: "Cj0KCQ_click",
+});
 
 const ORDER = {
   id: 42,
@@ -46,6 +59,8 @@ const SAVED = {
   google_ads_client_secret: "client-secret",
   google_ads_refresh_token: "refresh-token",
   google_ads_offline_start_at: "2026-08-25T00:00:00.000Z",
+  google_ads_api_mode: "ads_api",
+  google_ads_cod_trigger: "delivered",
 };
 
 test("offline config is all-or-nothing and requires an explicit backfill boundary", () => {
@@ -68,6 +83,7 @@ test("an owner's save stamps the backfill boundary once, keeps stored secrets, a
       clientId: "client-id",
       clientSecret: "client-secret",
       refreshToken: "refresh-token",
+      apiMode: "ads_api",
     },
     null,
     now,
@@ -96,7 +112,10 @@ test("an owner's save stamps the backfill boundary once, keeps stored secrets, a
 
   const cleared = planGoogleAdsOfflineSave({ clear: true }, { ...SAVED }, now);
   assert.ok(cleared.ok);
-  assert.ok(Object.values(cleared.row).every((value) => value === null));
+  // Everything cleared; the two choices (NOT NULL columns, 0083) return to their defaults.
+  const { google_ads_api_mode, google_ads_cod_trigger, ...clearedRest } = cleared.row;
+  assert.ok(Object.values(clearedRest).every((value) => value === null));
+  assert.deepEqual([google_ads_api_mode, google_ads_cod_trigger], ["data_manager", "delivered"]);
 
   assert.equal(planGoogleAdsOfflineSave({ customerId: "12" }, null, now).ok, false);
   assert.equal(planGoogleAdsOfflineSave({ customerId: 1234567890 } as never, null, now).ok, false);
@@ -227,7 +246,9 @@ test("reconciliation advances past orders that carry no Google click", async () 
     CREATE TABLE orders (
       id INTEGER PRIMARY KEY, order_number TEXT NOT NULL, payment_method TEXT NOT NULL,
       payment_status TEXT NOT NULL, shipping_status TEXT NOT NULL,
-      created_at TEXT NOT NULL, ad_click_ids TEXT
+      created_at TEXT NOT NULL, ad_click_ids TEXT,
+      stock_restored_at TEXT, customer_phone TEXT, customer_email TEXT, customer_name TEXT,
+      postal_code TEXT, meta_request_context TEXT
     );
     CREATE TABLE order_items (
       id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL,
@@ -244,7 +265,8 @@ test("reconciliation advances past orders that carry no Google click", async () 
   const insertOrder = (id: number, clickIds: string | null) => {
     sqlite
       .prepare(
-        `INSERT INTO orders VALUES (?, ?, 'cod', 'unpaid', 'delivered', '2026-08-26T00:00:00.000Z', ?)`,
+        `INSERT INTO orders (id, order_number, payment_method, payment_status, shipping_status, created_at, ad_click_ids)
+         VALUES (?, ?, 'cod', 'unpaid', 'delivered', '2026-08-26T00:00:00.000Z', ?)`,
       )
       .run(id, `INV-${10000 + id}`, clickIds);
     sqlite.prepare(`INSERT INTO order_items VALUES (?, ?, 100000, 1)`).run(id, id);
@@ -296,9 +318,9 @@ test("an account-level 401/403 leaves the whole batch pending instead of termina
       .prepare(
         `INSERT INTO google_ads_conversion_outbox
            (order_id, order_number, qualification, payload, next_retry_at, created_at, updated_at)
-         VALUES (?, ?, 'cod_delivered', '{}', '2026-01-01T00:00:00.000Z', 't', 't')`,
+         VALUES (?, ?, 'cod_delivered', ?, '2026-01-01T00:00:00.000Z', 't', 't')`,
       )
-      .run(id, `INV-${id}`);
+      .run(id, `INV-${id}`, LEGACY_PAYLOAD(id));
   }
   const originalFetch = globalThis.fetch;
   context.after(() => {
@@ -354,9 +376,9 @@ test("the drain settles an already-recorded conversion and terminates a permanen
       .prepare(
         `INSERT INTO google_ads_conversion_outbox
            (order_id, order_number, qualification, payload, next_retry_at, created_at, updated_at)
-         VALUES (?, ?, 'cod_delivered', '{}', '2026-01-01T00:00:00.000Z', 't', 't')`,
+         VALUES (?, ?, 'cod_delivered', ?, '2026-01-01T00:00:00.000Z', 't', 't')`,
       )
-      .run(id, `INV-${id}`);
+      .run(id, `INV-${id}`, LEGACY_PAYLOAD(id));
   }
   const codes = ["CLICK_CONVERSION_ALREADY_EXISTS", "EXPIRED_EVENT", "TOO_RECENT_EVENT"];
   const originalFetch = globalThis.fetch;

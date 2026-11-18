@@ -205,7 +205,7 @@ under both headings wherever they are named; which database a statement meant is
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/api/admin/abandoned-orders` | GET, PATCH, POST | admin session | owner, admin, customer_service | `src/pages/api/admin/abandoned-orders.ts` | `abandoned-lead` `api` `courier-rules` `form-mode` `order-list-filter` `paid-order-purchase` `shipping-quote` `source-slug` `tenant-database` | `capi_event_outbox` `courier_rules` `landing_pages` `order_items` `orders` `payment_transactions` `product_variants` `products` `stores` `warehouses` | — | `lib/abandoned-lead.test.ts` `lib/admin-orders-initial.test.ts` `lib/api.test.ts` `lib/courier-rules.test.ts` `lib/form-mode.test.ts` `lib/insights.test.ts` `lib/order-item-weight.test.ts` `lib/paid-order-purchase.test.ts` `lib/shipping-quote.test.ts` `lib/source-slug.test.ts` `lib/tiktok-outbox.test.ts` `lib/warehouse-quote.test.ts` `platform/two-tenants.test.ts` |
 | `/api/admin/access` | DELETE, GET, PATCH, POST | admin session | owner | `src/pages/api/admin/access.ts` | `admin-credentials` `admin-session` `api` `auth` `tenant-database` | `admin_credentials` `admin_sessions` `notifications` | — | `lib/admin-bootstrap.test.ts` `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/api.test.ts` `lib/auth.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
-| `/api/admin/ads` | GET, PUT | admin session | owner, admin, advertiser | `src/pages/api/admin/ads.ts` | `capi-outbox` `credential-crypto` `env` `google-ads-offline` `meta-capi` `store-ads` `tenant-database` `tiktok-events` `tiktok-outbox` | `capi_event_outbox` `google_ads_conversion_outbox` `order_items` `orders` `product_variants` `products` `stores` `tiktok_event_outbox` | — | `lib/capi-outbox.test.ts` `lib/credential-crypto.test.ts` `lib/e2e-full-funnel.test.ts` `lib/env.test.ts` `lib/google-ads-offline.test.ts` `lib/meta-capi.test.ts` `lib/meta-purchase-dedup.test.ts` `lib/meta-purchase-order.test.ts` `lib/store-ads.test.ts` `lib/tiktok-events.test.ts` `lib/tiktok-outbox.test.ts` `platform/two-tenants.test.ts` `plugins/kelola/sync.test.ts` |
+| `/api/admin/ads` | GET, PUT | admin session | owner, admin, advertiser | `src/pages/api/admin/ads.ts` | `capi-outbox` `credential-crypto` `env` `google-ads-offline` `meta-capi` `store-ads` `tenant-database` `tiktok-events` `tiktok-outbox` | `capi_event_outbox` `google_ads_conversion_outbox` `order_items` `orders` `product_variants` `products` `stores` `tiktok_event_outbox` | — | `lib/capi-outbox.test.ts` `lib/credential-crypto.test.ts` `lib/e2e-full-funnel.test.ts` `lib/env.test.ts` `lib/google-ads-offline.test.ts` `lib/google-data-manager.test.ts` `lib/meta-capi.test.ts` `lib/meta-purchase-dedup.test.ts` `lib/meta-purchase-order.test.ts` `lib/store-ads.test.ts` `lib/tiktok-events.test.ts` `lib/tiktok-outbox.test.ts` `platform/two-tenants.test.ts` `plugins/kelola/sync.test.ts` |
 | `/api/admin/analytics` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/api/admin/analytics.ts` | `api` `dashboard-compare` `order-metrics` `tenant-database` | `orders` | — | `lib/api.test.ts` `lib/dashboard-compare.test.ts` `lib/insights.test.ts` `platform/two-tenants.test.ts` |
 | `/api/admin/billing` | GET, POST | admin session | owner, admin | `src/pages/api/admin/billing/index.ts` | `api` `env` `platform/billing` `tenant-database` | `stores` `warehouses` | `subscription_invoices` `tenant_events` `tenants` | `lib/api.test.ts` `lib/env.test.ts` `lib/store-closed.test.ts` `platform/billing.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/api/admin/billing/[id]/check` | POST | admin session | owner, admin | `src/pages/api/admin/billing/[id]/check.ts` | `api` `platform/billing` | — | `subscription_invoices` `tenant_events` `tenants` | `lib/api.test.ts` `lib/store-closed.test.ts` `platform/billing.test.ts` `platform/platform-site.test.ts` |
@@ -298,7 +298,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-196 modules under `src/lib` and `src/platform`; 10 that no test imports.
+198 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -351,7 +351,9 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `form-validation-id` | 9 | — | — | 1 | `/hello` `/pemulihan` `/platform/login` |
 | `format-idr` | 1 | — | — | 1 | `/payment` `/produk` |
 | `geo` | 4 | — | — | 1 | `/produk/[slug]` `/api/submit-middle-order` |
-| `google-ads-offline` | 22 | `google_ads_conversion_outbox` `order_items` `orders` `stores` | — | 2 | `/api/admin/ads` |
+| `google-ads-offline` | 32 | `google_ads_conversion_outbox` `order_items` `orders` `stores` | — | 3 | `/api/admin/ads` |
+| `google-consent-regions` | 2 | — | — | 1 | — |
+| `google-data-manager` | 13 | — | — | 1 | — |
 | `google-taxonomy` | 4 | — | — | 1 | — |
 | `gtm` | 4 | — | — | 1 | — |
 | `headless-api` | 20 | `developer_api_key_usage` `developer_api_keys` `headless_api_audit_events` `stores` | — | 3 | `/api/v1/checkout` `/api/v1/geo/districts` `/api/v1/geo/shipping-rates` `/api/v1/openapi.json` `/api/v1/orders/status` `/api/v1/products` `/api/v1/products/[slug]` `/api/v1/storefront` `/api/v1/tracking/events` `/api/admin/settings` |
@@ -420,7 +422,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `receiver-performance` | 5 | — | — | 2 | `/api/admin/orders/[id]` |
 | `route-map` | 26 | — | — | 1 | — |
 | `rts-scoring` | 10 | `orders` | — | 1 | `/api/submit-middle-order` `/api/submit-order` `/api/admin/check` `/api/admin/orders` `/api/admin/orders/[id]` |
-| `schema-version` | 12 | — | — | 27 | — |
+| `schema-version` | 12 | — | — | 28 | — |
 | `seller-bank-account` | 3 | — | — | 1 | `/api/admin/seller-bank-accounts` |
 | `setup-checklist` | 4 | — | `tenant_hosts` | 2 | `/admin/dashboard` `/admin/setup` `/admin/status` |
 | `shipping-fallback` | 2 | — | — | 1 | — |
