@@ -394,7 +394,7 @@ test("PLATFORM-SEO §4: every page has its own 1200×630 share card under 120 KB
     // Unique per page; the two legal pages share one card on purpose.
     if (seen.has(page.ogImage!)) assert.deepEqual([seen.get(page.ogImage!), key].sort(), ["privasi", "syarat"]);
     seen.set(page.ogImage!, key);
-    assert.match(ogImageFor({ PLATFORM_SITE_URL: "https://adsbook.id" }, page).url, /^https:\/\/adsbook\.id\/platform\/og\/og-[a-z-]+\.png$/);
+    assert.match(ogImageFor({ PLATFORM_SITE_URL: "https://adsbook.id" }, page).url, /^https:\/\/adsbook\.id\/og\/og-[a-z-]+\.png$/);
   }
   const layout = readFileSync("src/platform/site/SiteLayout.astro", "utf8");
   for (const tag of ['property="og:image"', 'property="og:image:width" content="1200"', 'property="og:image:height" content="630"', 'property="og:image:alt"', 'name="twitter:card" content="summary_large_image"', 'name="twitter:image"']) {
@@ -407,8 +407,8 @@ test("PLATFORM-SEO §4: each inner page and the home's closing band carry their 
   const sharp = (await import("sharp")).default;
   const pages = ["fitur", "cara-kerja", "harga", "faq", "kontak"];
   const sources = [...pages.map((name) => readFileSync(`src/pages/platform/site/${name}.astro`, "utf8")), readFileSync("src/platform/site/ClosingCta.astro", "utf8")];
-  const images = sources.flatMap((source) => [...source.matchAll(/src: '(\/platform\/visual\/[a-z-]+\.webp)', width: (\d+), height: (\d+), alt: '([^']+)'/g), ...source.matchAll(/src="(\/platform\/visual\/[a-z-]+\.webp)" width="(\d+)" height="(\d+)" alt="([^"]+)"/g)]);
-  assert.deepEqual(images.map((match) => match[1]).sort(), ["cara-kerja", "faq", "fitur", "harga", "home-closing", "kontak"].map((name) => `/platform/visual/${name}.webp`));
+  const images = sources.flatMap((source) => [...source.matchAll(/src: '(\/visual\/[a-z-]+\.webp)', width: (\d+), height: (\d+), alt: '([^']+)'/g), ...source.matchAll(/src="(\/visual\/[a-z-]+\.webp)" width="(\d+)" height="(\d+)" alt="([^"]+)"/g)]);
+  assert.deepEqual(images.map((match) => match[1]).sort(), ["cara-kerja", "faq", "fitur", "harga", "home-closing", "kontak"].map((name) => `/visual/${name}.webp`));
   for (const [, src, width, height, alt] of images) {
     assert.ok(alt.length >= 10 && alt.length <= 125, `${src} alt is ${alt.length} characters`);
     const meta = await sharp(`public${src}`).metadata();

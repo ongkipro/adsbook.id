@@ -147,7 +147,7 @@ export const FAQ_MORE: Faq[] = [
 
 /** The setup steps a new store sees (the readiness predicate, T-38), for the closing band. */
 // The required steps a physical store still owes after signup (src/lib/setup-checklist.ts, Entry 333).
-export const SETUP_STEPS = ["Tambah produk pertama dengan harga dan berat", "Lengkapi gudang utama dan alamat pickup", "Simpan API key Mengantar Anda", "Tambahkan rekening bank untuk provinsi non-COD"];
+export const SETUP_STEPS = ["Tambah produk pertama", "Lengkapi gudang utama", "Simpan API key Mengantar", "Tambahkan rekening bank"];
 /** What signup already completes (identity, couriers on, COD on): the other three of six. */
 export const SETUP_DONE = "Nama toko, kurir, dan COD sudah siap sejak Anda mendaftar.";
 

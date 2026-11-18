@@ -1,6 +1,6 @@
 // The adsbook.id marketing site's visuals (PLATFORM-SEO-AND-VISUAL-BANNERS-SPEC §4):
-// seven 1200×630 share cards (public/platform/og/*.png, each ≤ 120 KB) and the
-// in-page 2.5D banners (public/platform/visual/*.webp, drawn at 2× DPR).
+// seven 1200×630 share cards (public/og/*.png, each ≤ 120 KB) and the
+// in-page 2.5D banners (public/visual/*.webp, drawn at 2× DPR).
 //
 //   npm run platform-visuals            # writes every file, prints sizes
 //   npm run platform-visuals -- --sheet /tmp/seo-og-sheet.png   # also a contact sheet
@@ -17,8 +17,8 @@ import { chromium } from "playwright";
 import sharp from "sharp";
 
 const root = process.cwd();
-const OG_DIR = join(root, "public/platform/og");
-const VISUAL_DIR = join(root, "public/platform/visual");
+const OG_DIR = join(root, "public/og");
+const VISUAL_DIR = join(root, "public/visual");
 const OG_MAX_BYTES = 120 * 1024;
 const font = readFileSync(join(root, "public/platform/fonts/plus-jakarta-sans-800.woff2")).toString("base64");
 const wordmark = readFileSync(join(root, "public/platform/brand/adsbook-id-wordmark.svg"), "utf8").replace(/<title>.*?<\/title>/, "");

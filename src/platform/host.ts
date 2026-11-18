@@ -92,9 +92,22 @@ const under = (pathname: string, prefix: string) => pathname === prefix || pathn
 export function platformRedirect(url: URL, method: string, host: string): { status: 301 | 302; location: string } | null {
   if (method !== "GET" && method !== "HEAD") return null;
   const path = withoutTrailingSlash(url.pathname);
+  if (host === PLATFORM_CONSOLE_HOST) {
+    if (path === "/") return { status: 302, location: "/platform" };
+    // The console host is never the site: a marketing path moves to the site's own host.
+    if (consoleHostRefuses(url.pathname)) return platformSitePath(url.pathname) || path === "/coba" ? { status: 301, location: `https://${SITE_HOST}${path === "/coba" ? "/" : url.pathname}${url.search}` } : null;
+  }
   if (path === "/coba") return { status: 301, location: `/${url.search}` };
-  if (host === PLATFORM_CONSOLE_HOST && path === "/") return { status: 302, location: "/platform" };
   return null;
+}
+
+/** The site's host, where the console host sends a marketing path. */
+export const SITE_HOST = "adsbook.id";
+
+/** On the console host only the console, its APIs, its root and its robots.txt answer (PLATFORM-SEO review P2-3). */
+export function consoleHostRefuses(pathname: string): boolean {
+  const path = withoutTrailingSlash(pathname);
+  return !(path === "/" || path === "/robots.txt" || isPlatformRoute(pathname));
 }
 
 /**

@@ -26,10 +26,14 @@ export const ROBOTS_NAMED_AGENTS = [
   "PerplexityBot",
 ] as const;
 
-export function robotsTxt(disallow: readonly string[], sitemap?: string | null): string {
-  const group = (agent: string) => [`User-agent: ${agent}`, "Allow: /", ...disallow.map((path) => `Disallow: ${path}`)].join("\n");
+/** `allow`: longer paths carved out of a disallowed prefix (the longest match wins, RFC 9309 §2.2.2). */
+export function robotsTxt(disallow: readonly string[], sitemap?: string | null, allow: readonly string[] = []): string {
+  const group = (agent: string) => [`User-agent: ${agent}`, "Allow: /", ...allow.map((path) => `Allow: ${path}`), ...disallow.map((path) => `Disallow: ${path}`)].join("\n");
   return [group("*"), ...ROBOTS_NAMED_AGENTS.map(group), ...(sitemap ? [`Sitemap: ${sitemap}`] : []), ""].join("\n\n");
 }
 
-/** A host no crawler should read at all (the operator console). */
-export const ROBOTS_DISALLOW_ALL = "User-agent: *\nDisallow: /\n";
+/**
+ * The operator console's host: crawlable, so the `X-Robots-Tag: noindex` on
+ * every answer (and the sign-in redirect) is read; only its APIs are disallowed.
+ */
+export const ROBOTS_CONSOLE = "User-agent: *\nDisallow: /api/\n";

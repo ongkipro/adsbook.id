@@ -29,7 +29,7 @@ export type SitePage = {
 };
 
 /** The share card a page without its own uses (sign-up, sign-in). */
-export const DEFAULT_OG = { image: "/platform/og/og-home.png", alt: "adsbook.id: satu pesanan, satu konversi ke Meta, Google, dan TikTok" } as const;
+export const DEFAULT_OG = { image: "/og/og-home.png", alt: "adsbook.id: satu pesanan, satu konversi ke Meta, Google, dan TikTok" } as const;
 
 export const SIGNUP_PAGE: SitePage = {
   path: "/daftar",
@@ -61,7 +61,7 @@ export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq"
     nav: "Fitur",
     title: "Fitur: Server Tracking, Form COD, Kontrol RTS - adsbook.id",
     description: "Enam pilar toko yang presisi: produk fisik COD dan digital, sinyal 1:1 ke Meta, Google, dan TikTok, form cepat di HP, kontrol RTS, uang ke akun sendiri.",
-    ogImage: "/platform/og/og-fitur.png",
+    ogImage: "/og/og-fitur.png",
     ogImageAlt: "Fitur adsbook.id: produk fisik COD, produk digital, dan sinyal 1:1 ke tiga platform iklan",
   },
   caraKerja: {
@@ -69,7 +69,7 @@ export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq"
     nav: "Cara kerja",
     title: "Cara Kerja: dari Klik Iklan sampai Konversi - adsbook.id",
     description: "Lima langkah satu pesanan di adsbook.id, dari platform iklan mana pun: ad click, form COD, pesanan masuk, kirim kurir, lalu konversi tercatat dari server.",
-    ogImage: "/platform/og/og-cara-kerja.png",
+    ogImage: "/og/og-cara-kerja.png",
     ogImageAlt: "Cara kerja adsbook.id: lima langkah dari klik iklan sampai konversi tercatat",
   },
   harga: {
@@ -77,7 +77,7 @@ export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq"
     nav: "Harga",
     title: "Harga: Gratis Sampai Siap Beriklan, Mulai Rp149.000 - adsbook.id",
     description: "Coba buat toko gratis di Mode Preview, lalu berlangganan saat siap beriklan: Rp149.000 per bulan atau Rp1.490.000 per tahun, tanpa potongan transaksi.",
-    ogImage: "/platform/og/og-harga.png",
+    ogImage: "/og/og-harga.png",
     ogImageAlt: "Harga adsbook.id: Rp149.000 per bulan per toko, 0% potongan transaksi",
   },
   faq: {
@@ -85,7 +85,7 @@ export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq"
     nav: "FAQ",
     title: "Pertanyaan Umum Seller tentang Toko adsbook.id - adsbook.id",
     description: "Jawaban singkat soal biaya, akun kurir dan pembayaran milik Anda sendiri, domain sendiri, data pembeli, dan cara mulai jualan di adsbook.id.",
-    ogImage: "/platform/og/og-faq.png",
+    ogImage: "/og/og-faq.png",
     ogImageAlt: "Pusat jawaban adsbook.id untuk seller dan pengiklan",
   },
   kontak: {
@@ -93,21 +93,21 @@ export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq"
     nav: "Kontak",
     title: "Kontak Tim adsbook.id untuk Seller dan Pembeli - adsbook.id",
     description: "Hubungi tim adsbook.id untuk pertanyaan akun, toko, atau privasi. Permintaan data pembeli kami teruskan ke toko yang bersangkutan.",
-    ogImage: "/platform/og/og-kontak.png",
+    ogImage: "/og/og-kontak.png",
     ogImageAlt: "Kontak adsbook.id: dukungan seller dan perlindungan data pembeli",
   },
   syarat: {
     path: "/syarat",
     title: "Syarat Layanan Seller - adsbook.id",
     description: "Syarat penggunaan adsbook.id bagi pemilik toko: layanan, akun, penyedia pihak ketiga milik Anda sendiri, data, penangguhan, dan perubahan syarat.",
-    ogImage: "/platform/og/og-legal.png",
+    ogImage: "/og/og-legal.png",
     ogImageAlt: "Dokumen syarat layanan dan kebijakan privasi adsbook.id",
   },
   privasi: {
     path: "/privasi",
     title: "Kebijakan Privasi Platform - adsbook.id",
     description: "Data apa yang diproses adsbook.id untuk seller dan pengunjung, untuk apa, di mana disimpan, dan cara meminta salinan atau penghapusan data.",
-    ogImage: "/platform/og/og-legal.png",
+    ogImage: "/og/og-legal.png",
     ogImageAlt: "Dokumen syarat layanan dan kebijakan privasi adsbook.id",
   },
 };

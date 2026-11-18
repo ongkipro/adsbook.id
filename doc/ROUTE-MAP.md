@@ -480,7 +480,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/domain-poll` | 6 | — | `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]/recheck` |
 | `platform/gate` | 4 | — | — | 2 | — |
 | `platform/handoff` | 14 | — | `handoff_tokens` | 1 | `/api/handoff` |
-| `platform/host` | 14 | — | — | 3 | `/api/handoff` `/platform/site/robots.txt` |
+| `platform/host` | 16 | — | — | 3 | `/api/handoff` `/platform/site/robots.txt` |
 | `platform/hostnames` | 28 | — | `plans` `tenant_hosts` `tenants` | 5 | `/admin/settings/domains` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/platform/masuk` `/platform/signup` `/platform/site` |
 | `platform/identities` | 7 | `admin_credentials` | `platform_identities` `tenant_hosts` `tenants` | 1 | `/api/admin/access` `/api/admin/profile` |
 | `platform/jobs` | 7 | — | `handoff_tokens` `tenant_events` `tenant_hosts` `tenant_usage_daily` `tenants` | 3 | — |
