@@ -257,8 +257,8 @@ under both headings wherever they are named; which database a statement meant is
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/platform/masuk` ⇐ `/masuk` | GET | public | — | `src/pages/platform/masuk.astro` | — | — | — | — |
 | `/platform/privasi` ⇐ `/privasi` | GET | public | — | `src/pages/platform/privasi.astro` | — | — | — | — |
-| `/platform/signup` ⇐ `/daftar` | GET | public | — | `src/pages/platform/signup.astro` | `env` `platform/hostnames` `platform/site/content` `platform/site/site` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
-| `/platform/site` ⇐ `/` | GET | public | — | `src/pages/platform/site/index.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
+| `/platform/signup` ⇐ `/daftar` | GET | public | — | `src/pages/platform/signup.astro` | `env` `platform/hostnames` `platform/site/content` `platform/site/site` `platform/store-finder` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/store-finder.test.ts` `platform/two-tenants.test.ts` |
+| `/platform/site` ⇐ `/` | GET | public | — | `src/pages/platform/site/index.astro` | `env` `platform/hostnames` `platform/site/content` `platform/site/site` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/site/cara-kerja` ⇐ `/cara-kerja` | GET | public | — | `src/pages/platform/site/cara-kerja.astro` | `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/coba` ⇐ `/coba` | GET | public | — | `src/pages/platform/site/coba.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/faq` ⇐ `/faq` | GET | public | — | `src/pages/platform/site/faq.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
@@ -295,7 +295,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-190 modules under `src/lib` and `src/platform`; 9 that no test imports.
+192 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -341,7 +341,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `edge-cache` | 11 | — | — | 1 | `/assets/[...key]` |
 | `embed-markup` | 5 | — | — | 1 | `/embed/form` |
 | `embed-security` | 6 | — | — | 1 | `/api/admin/settings` |
-| `env` | 3 | — | — | 2 | `/assets/[...key]` `/media/[...key]` `/api/handoff` `/api/owner-recovery` `/api/form-config` `/api/locations` `/api/webhooks/autolaris/[token]` `/admin/settings/domains` `/admin/settings/plugins/kelola` `/api/admin/ads` `/api/admin/billing` `/api/admin/content` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/media` `/api/admin/orders/[id]` `/api/admin/plugins/kelola` `/api/admin/settings` `/api/admin/store-removal` `/api/admin/upload-r2` `/platform/signup` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/platform/[...section]` `/api/platform/health` `/api/platform/invoices/[id]/check` `/api/platform/login` `/api/platform/logout` `/api/platform/signup` `/api/platform/slug` `/api/platform/team` `/api/platform/team/[id]` `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` `/api/platform/webhooks/autolaris/[token]` |
+| `env` | 3 | — | — | 2 | `/assets/[...key]` `/media/[...key]` `/api/handoff` `/api/owner-recovery` `/api/form-config` `/api/locations` `/api/webhooks/autolaris/[token]` `/admin/settings/domains` `/admin/settings/plugins/kelola` `/api/admin/ads` `/api/admin/billing` `/api/admin/content` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/media` `/api/admin/orders/[id]` `/api/admin/plugins/kelola` `/api/admin/settings` `/api/admin/store-removal` `/api/admin/upload-r2` `/platform/signup` `/platform/site` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/platform/[...section]` `/api/platform/health` `/api/platform/invoices/[id]/check` `/api/platform/login` `/api/platform/logout` `/api/platform/signup` `/api/platform/slug` `/api/platform/team` `/api/platform/team/[id]` `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` `/api/platform/webhooks/autolaris/[token]` |
 | `excluded-area` | 1 | — | — | 1 | `/api/submit-middle-order` |
 | `form-config` | 7 | — | — | 1 | `/embed/form` `/full-form` `/hybrid-form` `/middle-form` `/api/form-config` |
 | `form-mode` | 8 | `stores` | — | 1 | `/produk/[slug]` `/geoipform` `/hybrid-form` `/api/form-config` `/api/geo-province` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/v1/storefront` `/api/admin/abandoned-orders` |
@@ -468,7 +468,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/gate` | 4 | — | — | 2 | — |
 | `platform/handoff` | 12 | — | `handoff_tokens` | 1 | `/api/handoff` |
 | `platform/host` | 8 | — | — | 3 | `/api/handoff` |
-| `platform/hostnames` | 28 | — | `plans` `tenant_hosts` `tenants` | 5 | `/admin/settings/domains` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/platform/signup` |
+| `platform/hostnames` | 28 | — | `plans` `tenant_hosts` `tenants` | 5 | `/admin/settings/domains` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/platform/signup` `/platform/site` |
 | `platform/jobs` | 7 | — | `handoff_tokens` `tenant_events` `tenant_hosts` `tenant_usage_daily` `tenants` | 3 | — |
 | `platform/keys` | 13 | — | — | 1 | `/assets/[...key]` `/media/[...key]` `/api/form-config` `/api/admin/expeditions` `/api/admin/media` `/api/admin/upload-r2` |
 | `platform/legal-texts` | 3 | — | — | 1 | — |
@@ -481,10 +481,12 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/shared-areas` | 5 | — | `shared_mengantar_areas` | 1 | `/api/locations` |
 | `platform/signup` | 12 | — | `tenant_events` `tenant_hosts` `tenants` | 2 | `/api/platform/signup` |
 | `platform/site/content` | 16 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/coba` `/platform/site/faq` `/platform/site/harga` |
+| `platform/site/kinetic-stage` | 1 | — | — | **none** | — |
 | `platform/site/site` | 15 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/cara-kerja` `/platform/site/coba` `/platform/site/faq` `/platform/site/fitur` `/platform/site/harga` `/platform/site/kontak` `/platform/site/robots.txt` `/platform/site/sitemap.xml` `/api/platform/signup` |
 | `platform/slugs` | 6 | — | `tenants` | 1 | `/api/platform/slug` |
 | `platform/state-pages` | 2 | — | — | 1 | `/kebijakan-privasi` |
 | `platform/store-core` | 20 | — | — | 3 | — |
+| `platform/store-finder` | 4 | — | — | 1 | `/platform/signup` |
 | `platform/tenant-alarm` | 7 | — | `tenant_health` `tenant_hosts` `tenants` | 1 | — |
 | `platform/tenant-db.conformance` | 1 | — | — | **none** | — |
 | `platform/tenant-db` | 14 | — | `migration_bookmarks` `tenant_events` `tenants` | 3 | — |

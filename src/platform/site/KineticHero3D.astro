@@ -1,0 +1,379 @@
+---
+/**
+ * The home's first viewport (Paduka, 2026-11-18; reference
+ * adsbook_id_precision_100vh_3d_hero.html): a 100dvh gallery stage where
+ * TikTok Ads, Meta Ads and Google Ads feed one splitter, browser and server
+ * signals converge on the logo's square dot, and the order locks 1:1. It
+ * carries its own header (SiteLayout's `heroHeader`), so the stage starts at 0.
+ *
+ * Every action is a real link: the CTA is /daftar, the account button is
+ * /masuk and opens a Daftar / Masuk dialog when scripts run. The 3D stage is
+ * kinetic-stage.ts, bundled into a chunk only this page loads.
+ * The page passes its single <h1> in the `title` slot.
+ */
+import { SIGNUP_LABEL, SIGNUP_PATH, SITE_PAGES } from './site.ts';
+
+interface Props { suffix: string }
+const { suffix } = Astro.props;
+const nav = Object.values(SITE_PAGES).filter((entry) => entry.nav);
+---
+
+<section id="hero-root" class="hero3d" aria-labelledby="hero-title" data-suffix={suffix}>
+  <div class="topline" aria-hidden="true"></div>
+
+  <div class="layer layer-canvas">
+    <canvas id="stage-canvas" role="img" aria-label="Animasi: TikTok Ads, Meta Ads, dan Google Ads menyatu di satu titik adsbook.id"></canvas>
+  </div>
+
+  <div id="projected-layer" class="layer layer-projected">
+    <button type="button" id="token-tiktok" class="orbital-anchor ad-token is-active" aria-pressed="true" aria-label="Tampilkan sinyal TikTok Ads">
+      <span class="token-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48Z" fill="#25F4EE" transform="translate(-0.95, -0.75)"/>
+          <path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48Z" fill="#FE2C55" transform="translate(0.95, 0.75)"/>
+          <path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48Z" fill="#0F172A"/>
+        </svg>
+      </span>
+      <span class="token-label">TikTok Ads</span>
+      <span id="ind-tiktok" class="token-ind is-on" aria-hidden="true"></span>
+    </button>
+    <button type="button" id="token-meta" class="orbital-anchor ad-token" aria-pressed="false" aria-label="Tampilkan sinyal Meta Ads">
+      <span class="token-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" class="icon-meta">
+          <defs>
+            <linearGradient id="metaInfinityGrad" x1="2" y1="16" x2="22" y2="8" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#0064E0"/><stop offset="55%" stop-color="#0081FB"/><stop offset="100%" stop-color="#3897F0"/>
+            </linearGradient>
+          </defs>
+          <path d="M6.6 7.6C4.0 7.6 2.2 10.1 2.2 13.1C2.2 15.6 3.7 17.3 5.9 17.3C8.2 17.3 9.9 15.4 12.0 12.2C14.1 9.0 15.8 7.6 17.8 7.6C20.1 7.6 21.8 9.6 21.8 12.6C21.8 15.4 20.1 17.3 17.8 17.3C15.6 17.3 13.9 15.5 12.0 12.2C10.1 8.9 8.6 7.6 6.6 7.6Z" stroke="url(#metaInfinityGrad)" stroke-width="2.55" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="token-label">Meta Ads</span>
+      <span id="ind-meta" class="token-ind" aria-hidden="true"></span>
+    </button>
+    <button type="button" id="token-google" class="orbital-anchor ad-token" aria-pressed="false" aria-label="Tampilkan sinyal Google Ads">
+      <span class="token-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <line x1="12" y1="5.0" x2="6.3" y2="17.4" stroke="#FBBC04" stroke-width="4.9" stroke-linecap="round"/>
+          <line x1="12" y1="5.0" x2="17.7" y2="17.4" stroke="#4285F4" stroke-width="4.9" stroke-linecap="round"/>
+          <circle cx="6.3" cy="17.4" r="2.45" fill="#34A853"/>
+        </svg>
+      </span>
+      <span class="token-label">Google Ads</span>
+      <span id="ind-google" class="token-ind" aria-hidden="true"></span>
+    </button>
+    <div id="tag-browser" class="orbital-anchor stage-tag" aria-hidden="true"><span class="sq sq-sky"></span><span>Browser</span></div>
+    <div id="tag-server" class="orbital-anchor stage-tag tag-server" aria-hidden="true"><span>Server</span><span class="sq"></span></div>
+  </div>
+
+  <div class="layer layer-ui">
+    <header class="hero-head">
+      <a class="hero-wordmark" href="/" aria-label="adsbook.id, beranda"><img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="151" height="24" loading="eager" decoding="async" /></a>
+      <nav class="hero-nav" aria-label="Utama">
+        {nav.map((entry) => <a href={entry.path}>{entry.nav}</a>)}
+      </nav>
+      <div class="hero-tools">
+        <details class="hero-menu">
+          <summary aria-label="Menu">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 6.5H16M4 13.5H16" stroke="currentColor" stroke-width="1.65" stroke-linecap="square"/></svg>
+          </summary>
+          <nav aria-label="Utama (ringkas)">
+            {nav.map((entry) => <a href={entry.path}>{entry.nav}</a>)}
+            <a href="/masuk">Masuk toko</a>
+          </nav>
+        </details>
+        <a id="btn-user-auth" class="icon-auth" href="/masuk" aria-label="Masuk atau Daftar" aria-haspopup="dialog" title="Daftar / Masuk">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <circle cx="10" cy="6.6" r="3.1" stroke="currentColor" stroke-width="1.65"/>
+            <path d="M4.4 16.4C5.1 13.7 7.25 12.1 10 12.1C12.75 12.1 14.9 13.7 15.6 16.4" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <div id="hero-body">
+      <div id="stage-slot"></div>
+      <div id="copy-zone">
+        <div id="copy-inner">
+          <div id="telemetry-pill" class="pill">
+            <span id="telemetry-dot" class="sq" aria-hidden="true"></span>
+            <span class="pill-label">Dua sinyal · satu titik</span>
+            <span class="pill-sep" aria-hidden="true">·</span>
+            <span id="telemetry-status" class="pill-status">1:1 #TT-8421</span>
+          </div>
+          <slot name="title" />
+          <p class="hero-sub">Form order cepat, ongkir instan, dan sinyal Browser + Server menyatu di satu ID pesanan tanpa terhitung ganda.</p>
+          <a class="cta-modern" href={SIGNUP_PATH}>
+            <span>{SIGNUP_LABEL}</span>
+            <span class="cta-arrow" aria-hidden="true">
+              <svg viewBox="0 0 14 14" fill="none"><path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="square"/></svg>
+            </span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<dialog id="auth-dialog" class="auth-dialog" aria-labelledby="auth-title" aria-describedby="auth-desc">
+  <div class="auth-head">
+    <img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="126" height="20" loading="lazy" decoding="async" />
+    <form method="dialog"><button class="auth-close" aria-label="Tutup">
+      <svg viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/></svg>
+    </button></form>
+  </div>
+  <div class="auth-tabs" role="tablist" aria-label="Daftar atau masuk">
+    <button type="button" role="tab" id="tab-daftar" aria-selected="true" aria-controls="panel-daftar">Daftar</button>
+    <button type="button" role="tab" id="tab-masuk" aria-selected="false" aria-controls="panel-masuk" tabindex="-1">Masuk</button>
+  </div>
+  <h2 id="auth-title" class="auth-title">Mulai toko konversi 1:1</h2>
+  <p id="auth-desc" class="auth-desc">Kunci sinyal TikTok Ads, Meta Ads, dan Google Ads di satu ID pesanan.</p>
+
+  <form id="panel-daftar" role="tabpanel" aria-labelledby="tab-daftar" class="auth-form" action={SIGNUP_PATH} method="get">
+    <label for="hero-email">Email</label>
+    <input id="hero-email" type="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="email@brandkamu.id" />
+    <button type="submit" class="cta-modern cta-block">Lanjutkan gratis →</button>
+  </form>
+
+  <form id="panel-masuk" role="tabpanel" aria-labelledby="tab-masuk" class="auth-form" action={SIGNUP_PATH} method="get" hidden novalidate>
+    <input type="hidden" name="masuk" value="1" />
+    <label for="hero-store">Alamat atau slug toko</label>
+    <input id="hero-store" type="text" required autocomplete="url" autocapitalize="none" spellcheck="false" placeholder="namatoko atau tokoanda.com" aria-describedby="hero-store-error" />
+    <p id="hero-store-error" class="auth-error" hidden></p>
+    <button type="submit" class="cta-modern cta-block">Masuk ke toko →</button>
+  </form>
+</dialog>
+
+<script>
+  import { HERO_EMAIL_KEY, storeLoginUrl } from '../store-finder.ts';
+
+  const root = document.getElementById('hero-root');
+  const dialog = document.getElementById('auth-dialog') as HTMLDialogElement | null;
+
+  // The account button: a real /masuk link, a Daftar / Masuk dialog when the browser has <dialog>.
+  if (root && dialog && typeof dialog.showModal === 'function') {
+    const tabs = { daftar: document.getElementById('tab-daftar')!, masuk: document.getElementById('tab-masuk')! };
+    const panels = { daftar: document.getElementById('panel-daftar') as HTMLFormElement, masuk: document.getElementById('panel-masuk') as HTMLFormElement };
+    const title = document.getElementById('auth-title')!;
+    const desc = document.getElementById('auth-desc')!;
+    const copy = {
+      daftar: ['Mulai toko konversi 1:1', 'Kunci sinyal TikTok Ads, Meta Ads, dan Google Ads di satu ID pesanan.'],
+      masuk: ['Masuk ke toko Anda', 'Ketik alamat toko Anda; halaman masuk toko terbuka di alamatnya sendiri.'],
+    } as const;
+    const show = (mode: 'daftar' | 'masuk', focus = false) => {
+      for (const key of ['daftar', 'masuk'] as const) {
+        const on = key === mode;
+        tabs[key].setAttribute('aria-selected', String(on));
+        tabs[key].tabIndex = on ? 0 : -1;
+        panels[key].hidden = !on;
+      }
+      [title.textContent, desc.textContent] = copy[mode];
+      if (focus) panels[mode].querySelector<HTMLInputElement>('input:not([type=hidden])')?.focus();
+    };
+    tabs.daftar.addEventListener('click', () => show('daftar', true));
+    tabs.masuk.addEventListener('click', () => show('masuk', true));
+    for (const tab of Object.values(tabs)) {
+      tab.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        const next = tab === tabs.daftar ? 'masuk' : 'daftar';
+        show(next);
+        tabs[next].focus();
+      });
+    }
+    document.getElementById('btn-user-auth')?.addEventListener('click', (event) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+      event.preventDefault();
+      show('masuk');
+      dialog.showModal();
+      panels.masuk.querySelector<HTMLInputElement>('input:not([type=hidden])')?.focus();
+    });
+    dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+
+    panels.daftar.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const email = (document.getElementById('hero-email') as HTMLInputElement).value.trim();
+      try { if (email) sessionStorage.setItem(HERO_EMAIL_KEY, email); } catch { /* the seller types it again on /daftar */ }
+      window.location.assign(panels.daftar.action);
+    });
+    panels.masuk.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const input = document.getElementById('hero-store') as HTMLInputElement;
+      const error = document.getElementById('hero-store-error')!;
+      const login = storeLoginUrl(input.value, root.dataset.suffix || 'adsbook.my.id', window.location);
+      if ('error' in login) {
+        error.textContent = login.error;
+        error.hidden = false;
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+        return;
+      }
+      window.location.assign(login.url);
+    });
+  }
+
+  // The stage loads after the text is on screen, and waits briefly for the brand face its "a" is traced from.
+  if (root) {
+    const fontReady = document.fonts?.load
+      ? Promise.race([document.fonts.load('800 240px "Plus Jakarta Sans"'), new Promise((resolve) => setTimeout(resolve, 700))]).catch(() => undefined)
+      : Promise.resolve();
+    fontReady.then(() => import('./kinetic-stage.ts')).then(({ startKineticStage }) => {
+      if (!startKineticStage(root)) root.classList.add('is-still');
+    }).catch(() => root.classList.add('is-still'));
+  }
+</script>
+
+<style>
+  .hero3d {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100svh;
+    height: 100dvh;
+    min-height: 520px;
+    overflow: hidden;
+    color: #0f172a;
+    background:
+      radial-gradient(ellipse 62% 48% at 50% 42%, rgb(219 234 254 / 0.48) 0%, rgb(239 246 255 / 0.18) 52%, rgb(255 255 255 / 0) 80%),
+      linear-gradient(180deg, #ffffff 0%, var(--canvas) 100%);
+  }
+  .hero3d ::selection { background: var(--accent); color: #fff; }
+  .topline { position: absolute; top: 0; left: 0; right: 0; height: 1.5px; z-index: 30; pointer-events: none; background: linear-gradient(90deg, transparent, rgb(37 99 235 / 0.6), transparent); }
+  .layer { position: absolute; inset: 0; }
+  .layer-canvas { z-index: 10; }
+  /* Vertical swipes still scroll the page on a phone; only horizontal drags tilt the stage. */
+  #stage-canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; }
+  .layer-projected { z-index: 20; pointer-events: none; overflow: hidden; opacity: 0; transition: opacity 0.4s ease-out; }
+  .hero3d.is-live .layer-projected { opacity: 1; }
+  .layer-ui { z-index: 30; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+
+  .orbital-anchor { position: absolute; top: 0; left: 0; will-change: transform, opacity; user-select: none; }
+  .ad-token {
+    pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 0.375rem;
+    height: 2rem; padding: 0 0.625rem 0 0.5rem; border-radius: 999px; font: inherit;
+    background: rgb(255 255 255 / 0.84); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgb(203 213 225 / 0.72); box-shadow: 0 4px 14px -4px rgb(15 23 42 / 0.06); opacity: 0.72;
+    transition: opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.28s ease, box-shadow 0.28s ease, background-color 0.28s ease;
+  }
+  .ad-token:hover { opacity: 0.96; border-color: #93c5fd; background: #fff; }
+  .ad-token.is-active { opacity: 1; background: #fff; border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.11), 0 12px 26px -8px rgb(37 99 235 / 0.28); }
+  .ad-token:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .token-icon { width: 1rem; height: 1rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .token-icon svg { width: 0.875rem; height: 0.875rem; }
+  .token-icon .icon-meta { width: 1rem; height: 1rem; }
+  /* The display face's word space is narrow: the site's own +0.06em keeps "TikTok Ads" two words. */
+  .token-label { font-family: var(--display); font-size: 10.5px; font-weight: 700; letter-spacing: -0.01em; word-spacing: 0.06em; color: #0f172a; white-space: nowrap; }
+  .token-ind { width: 6px; height: 6px; background: #cbd5e1; flex-shrink: 0; }
+  .token-ind.is-on { background: var(--accent); }
+  .stage-tag { display: flex; align-items: center; gap: 0.25rem; opacity: 0.5; transition: opacity 0.3s; font: 600 8.5px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+  .tag-server { color: #1d4ed8; }
+  .sq { display: inline-block; width: 6px; height: 6px; background: var(--accent); flex-shrink: 0; }
+  .sq-sky { background: #60a5fa; }
+
+  .hero-head {
+    flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+    padding: 0.875rem 1.25rem 0.25rem;
+  }
+  .hero-wordmark { pointer-events: auto; justify-self: start; display: inline-flex; align-items: center; min-height: 44px; border-radius: 6px; }
+  .hero-wordmark img { height: 21px; width: auto; }
+  .hero-nav { pointer-events: auto; display: none; gap: 1.75rem; }
+  .hero-nav a { color: #475569; text-decoration: none; font-weight: 600; font-size: 0.9rem; letter-spacing: -0.005em; }
+  .hero-nav a:hover { color: var(--accent); }
+  .hero-tools { pointer-events: auto; justify-self: end; display: flex; align-items: center; gap: 0.5rem; }
+  .icon-auth, .hero-menu summary {
+    width: 44px; height: 44px; border-radius: 999px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    background: rgb(255 255 255 / 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--line); color: #0f172a; transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .icon-auth:hover, .hero-menu summary:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; transform: translateY(-1px); box-shadow: 0 8px 20px -6px rgb(37 99 235 / 0.22); }
+  .icon-auth svg, .hero-menu summary svg { width: 18px; height: 18px; }
+  .hero-menu { position: relative; }
+  .hero-menu summary { list-style: none; }
+  .hero-menu summary::-webkit-details-marker { display: none; }
+  .hero-menu nav { position: absolute; right: 0; top: calc(100% + 0.5rem); display: grid; min-width: 12rem; padding: 0.5rem; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgb(15 23 42 / 0.1); }
+  .hero-menu nav a { padding: 0.65rem 0.75rem; color: var(--ink); text-decoration: none; font-weight: 600; font-size: 0.95rem; border-radius: 8px; }
+  .hero-menu nav a:hover { background: #eff6ff; color: var(--accent); }
+
+  #hero-body { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+  #stage-slot { position: relative; flex: 1; min-height: 195px; width: 100%; }
+  #copy-zone { flex-shrink: 0; width: 100%; padding: 0 1.25rem max(1.1rem, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; text-align: center; }
+  #copy-inner { pointer-events: auto; max-width: 540px; display: flex; flex-direction: column; align-items: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.625rem; margin-bottom: 0.5rem; border-radius: 999px;
+    background: rgb(255 255 255 / 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid #dbeafe; box-shadow: 0 1px 2px rgb(15 23 42 / 0.05); transition: all 0.3s;
+    font: 600 9.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  .pill .sq { transition: transform 0.2s; }
+  .pill-label { letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent); }
+  .pill-sep { color: #cbd5e1; }
+  .pill-status { color: #0f172a; letter-spacing: -0.01em; }
+  #copy-inner :global(#hero-title) { font-size: clamp(1.22rem, 3.1vw, 2.3rem); line-height: 1.14; letter-spacing: -0.035em; }
+  #copy-inner :global(#hero-title .accent) { color: var(--accent); }
+  .hero-sub { margin-top: 0.375rem; max-width: 48ch; text-wrap: balance; font-size: clamp(0.8rem, 1.25vw, 0.9rem); line-height: 1.52; font-weight: 500; color: #64748b; }
+
+  .cta-modern {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.625rem; min-height: 44px; margin-top: 0.75rem;
+    padding: 0 1rem 0 1.25rem; border: 0; border-radius: 999px; cursor: pointer;
+    font: 700 0.8125rem/1 var(--display); letter-spacing: -0.01em; word-spacing: 0.06em; color: #fff; text-decoration: none; background: var(--accent);
+    box-shadow: 0 10px 26px -6px rgb(37 99 235 / 0.46), inset 0 1px 0 rgb(255 255 255 / 0.22);
+    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .cta-modern:hover { color: #fff; background: var(--accent-hover); transform: translateY(-1.5px); box-shadow: 0 16px 32px -6px rgb(29 78 216 / 0.52), inset 0 1px 0 rgb(255 255 255 / 0.28); }
+  .cta-modern:active { transform: translateY(0); }
+  .cta-arrow { width: 1.25rem; height: 1.25rem; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: rgb(255 255 255 / 0.2); }
+  .cta-arrow svg { width: 0.75rem; height: 0.75rem; }
+
+  @media (min-width: 640px) {
+    .hero-head { padding: 1.25rem 2.5rem 0.25rem; }
+    .hero-wordmark img { height: 24px; }
+    #copy-zone { padding: 0 2rem 1.75rem; }
+    .pill { margin-bottom: 0.625rem; font-size: 10.5px; }
+    .hero-sub { margin-top: 0.5rem; }
+    .cta-modern { margin-top: 1rem; font-size: 0.84375rem; padding: 0 1.25rem 0 1.5rem; }
+    .ad-token { height: 2.25rem; padding: 0 0.875rem 0 0.625rem; gap: 0.5rem; }
+    .token-icon { width: 1.25rem; height: 1.25rem; }
+    .token-icon svg { width: 1rem; height: 1rem; }
+    .token-icon .icon-meta { width: 18px; height: 18px; }
+    .token-label { font-size: 12px; }
+    .stage-tag { font-size: 9.5px; }
+  }
+  @media (min-width: 1024px) {
+    .hero-head { padding-inline: 3.5rem; }
+    .hero-head { display: grid; grid-template-columns: 1fr auto 1fr; }
+    .hero-nav { display: flex; }
+    .hero-menu { display: none; }
+    #copy-zone { padding-bottom: 2rem; }
+  }
+  /* A phone on its side: stage and copy side by side. */
+  @media (max-height: 540px) and (min-width: 640px) {
+    #hero-body { flex-direction: row-reverse; align-items: center; padding-inline: 2rem; }
+    #stage-slot { width: 54%; height: 100%; }
+    #copy-zone { width: 46%; align-items: flex-start; text-align: left; padding-bottom: 0.5rem; }
+    #copy-inner { align-items: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ad-token, .icon-auth, .hero-menu summary, .cta-modern, .layer-projected, .pill, .pill .sq { transition: none; }
+    .cta-modern:hover, .icon-auth:hover, .hero-menu summary:hover { transform: none; }
+  }
+
+  .auth-dialog { width: min(360px, 100% - 2rem); padding: 1.5rem; border: 1px solid var(--line); border-radius: 16px; background: #fff; color: var(--ink); box-shadow: 0 24px 48px -12px rgb(23 37 84 / 0.18); }
+  .auth-dialog::backdrop { background: rgb(15 23 42 / 0.2); backdrop-filter: blur(4px); }
+  .auth-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .auth-head img { height: 20px; width: auto; }
+  .auth-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid var(--line); background: var(--canvas); color: #64748b; cursor: pointer; }
+  .auth-close:hover { background: #eff6ff; color: var(--accent); }
+  .auth-close svg { width: 14px; height: 14px; }
+  .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; margin-bottom: 1rem; border-radius: 999px; background: var(--canvas); border: 1px solid var(--line); }
+  .auth-tabs button { min-height: 36px; border: 0; border-radius: 999px; background: transparent; color: #64748b; font: 700 0.8125rem/1 var(--display); cursor: pointer; }
+  .auth-tabs button:hover { color: var(--ink); }
+  .auth-tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
+  .auth-title { font-size: 1rem; letter-spacing: -0.02em; }
+  .auth-desc { margin-top: 0.25rem; font-size: 0.8125rem; line-height: 1.5; color: #64748b; }
+  .auth-form { margin-top: 1rem; display: grid; gap: 0.5rem; }
+  .auth-form[hidden] { display: none; }
+  .auth-form label { font-size: 0.8125rem; font-weight: 600; color: #475569; }
+  .auth-form input { width: 100%; min-height: 44px; padding: 0 0.875rem; border-radius: 12px; border: 1px solid var(--line); background: var(--canvas); color: var(--ink); font: inherit; font-size: 1rem; }
+  .auth-form input:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15); }
+  .auth-error { font-size: 0.8125rem; color: #b91c1c; }
+  .cta-block { width: 100%; margin-top: 0.25rem; }
+</style>

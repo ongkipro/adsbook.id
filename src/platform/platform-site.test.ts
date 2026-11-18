@@ -194,3 +194,34 @@ test("one site: every marketing page uses the shared frame, ends its title on th
   assert.doesNotMatch([...strings, ...markup].join("\n"), /Cloudflare|\bAstro\b|Durable Object/);
 });
 
+
+test("home 3D hero (Paduka, 2026-11-18): three loads on the home alone, from our own bundle, with real links and calm motion", () => {
+  const files = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? files(path) : /\.(ts|tsx|astro|mjs|js)$/.test(name) && !name.endsWith(".test.ts") ? [path] : [];
+  });
+  const sources = [...files("src"), ...files("scripts")].map((path) => ({ path, text: readFileSync(path, "utf8") }));
+  const using = (pattern: RegExp) => sources.filter((file) => pattern.test(file.text)).map((file) => file.path).sort();
+  // Seller storefronts, the admin and the inner pages never fetch a byte of it.
+  assert.deepEqual(using(/from ["']three["']|import\(["']three["']\)/), ["src/platform/site/kinetic-stage.ts"]);
+  assert.deepEqual(using(/import\(?\s*["']\.\/kinetic-stage/), ["src/platform/site/KineticHero3D.astro"]);
+  assert.deepEqual(using(/import KineticHero3D|<KineticHero3D/), ["src/pages/platform/site/index.astro"]);
+
+  const hero = readFileSync("src/platform/site/KineticHero3D.astro", "utf8");
+  const stage = readFileSync("src/platform/site/kinetic-stage.ts", "utf8");
+  assert.doesNotMatch(hero + stage, /https?:\/\//, "no CDN, font service or remote asset");
+  assert.match(hero, /href=\{SIGNUP_PATH\}/, "the CTA is a real /daftar link");
+  assert.match(hero, /id="btn-user-auth"[^>]*href="\/masuk"|href="\/masuk"[^>]*id="btn-user-auth"/, "the account button is a real /masuk link");
+  assert.match(hero, /touch-action: pan-y/, "a swipe on the stage still scrolls the page");
+  assert.match(stage, /prefers-reduced-motion: reduce/);
+  assert.match(stage, /IntersectionObserver/, "no frame is drawn while the hero is off screen");
+  assert.match(stage, /visibilityState/);
+
+  const home = readFileSync("src/pages/platform/site/index.astro", "utf8");
+  assert.match(home, /<SiteLayout page=\{SITE_PAGES\.home\} heroHeader>/);
+  assert.equal(home.match(/<h1\b/g)?.length, 1, "one h1, the hero's");
+  assert.match(home, /<h2 id="bukti-produk-title">/, "the former hero is the second section");
+  assert.match(home, /<ShotFrame shot=\{SHOTS\.form\} caption \/>/, "below the fold the screenshot loads lazily");
+  // The email the hero dialog hands to /daftar never rides in a URL (the platform Pixel reports page URLs).
+  assert.doesNotMatch(hero, /name="email"/);
+});
