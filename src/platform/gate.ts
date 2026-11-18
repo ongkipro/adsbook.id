@@ -6,7 +6,7 @@
  * or tenant query. Nothing here reads or writes KV.
  */
 import { ensureControlPlane, resolveTenantHost, type HostCache, type TenantContext } from "./control-plane.ts";
-import { isPlatformRoute, isValidationPath, normalizeHost, platformHosts, platformSitePath } from "./host.ts";
+import { isPlatformRoute, isValidationPath, NOINDEX_HEADER, normalizeHost, platformHosts, platformNoindex, platformRedirect, platformSitePath } from "./host.ts";
 import { PLATFORM_DOMAIN, SELLER_ZONE } from "./hostnames.ts";
 import { statePage } from "./state-pages.ts";
 
@@ -67,6 +67,12 @@ export async function gateRequest(
 
   const extra = typeof env?.PLATFORM_HOSTS === "string" ? env.PLATFORM_HOSTS : null;
   if (platformHosts(extra).has(host)) {
+    const moved = platformRedirect(url, request.method, host);
+    if (moved) {
+      const headers: Record<string, string> = { Location: moved.location, "Cache-Control": moved.status === 301 ? "public, max-age=3600" : "no-store" };
+      if (platformNoindex(host, url.pathname)) headers["X-Robots-Tag"] = NOINDEX_HEADER;
+      return { kind: "refused", hostKind: "platform", response: new Response(null, { status: moved.status, headers }) };
+    }
     // Platform host: only platform routes and the marketing site's public paths
     // (T-40) exist here; every tenant route is a 404.
     if (!isPlatformRoute(url.pathname) && !platformSitePath(url.pathname)) {

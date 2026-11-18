@@ -1,26 +1,32 @@
 ---
 /**
  * The closing band (HOMEPAGE-DESIGN-SYSTEM v2 §6): one porcelain band inset in the page, the
- * three steps left after signup in a row, then the one action. `withShot` puts the real setup
+ * steps left after signup in a row, then the one action. `withShot` puts the real setup
  * checklist beside it on a white stage (inner pages); the home ends on the band alone.
  */
 import ShotFrame from './ShotFrame.astro';
 import { SETUP_DONE, SETUP_STEPS, SHOTS } from './content.ts';
 import { SIGNUP_LABEL, SIGNUP_PATH } from './site.ts';
 
-interface Props { withShot?: boolean }
-const { withShot = true } = Astro.props;
+/** `visual`: the home's 2.5D closing illustration in place of the setup screen (PLATFORM-SEO-AND-VISUAL-BANNERS-SPEC §4). */
+interface Props { withShot?: boolean; visual?: boolean }
+const { withShot = true, visual = false } = Astro.props;
 ---
 
 <section class="section closing" aria-labelledby="closing-title">
-  <div class:list={['wrap', 'band', { 'band-shot': withShot }]}>
+  <div class:list={['wrap', 'band', { 'band-shot': withShot || visual }]}>
     <div class="closing-text">
-      <h2 id="closing-title" class="dot-end">Siap dalam hitungan menit: selesaikan tiga langkah, lalu beriklan dengan data yang presisi</h2>
+      <h2 id="closing-title" class="dot-end">Siap dalam hitungan menit: selesaikan empat langkah, lalu beriklan dengan data yang presisi</h2>
       <p class="muted">{SETUP_DONE}</p>
       <ol class="steps">{SETUP_STEPS.map((step, index) => <li><span aria-hidden="true">{index + 1}</span>{step}</li>)}</ol>
       <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
     </div>
     {withShot && <div class="band-figure"><ShotFrame shot={SHOTS.setup} /></div>}
+    {!withShot && visual && (
+      <div class="band-figure">
+        <img class="band-visual" src="/platform/visual/home-closing.webp" width="640" height="460" alt="Ilustrasi 2.5D: Meta Ads, Google Ads, dan TikTok Ads mengunci satu pesanan menjadi satu konversi" loading="lazy" decoding="async" />
+      </div>
+    )}
   </div>
 </section>
 
@@ -37,6 +43,7 @@ const { withShot = true } = Astro.props;
   .band-shot .steps { justify-content: flex-start; }
   .band-figure { width: 100%; }
   .band-figure :global(.shot-stage) { background: #fff; }
+  .band-visual { width: 100%; height: auto; border-radius: 20px; }
   @media (max-width: 760px) {
     .band, .band-shot { grid-template-columns: 1fr; padding: 2.5rem 1.25rem; border-radius: 22px; }
   }

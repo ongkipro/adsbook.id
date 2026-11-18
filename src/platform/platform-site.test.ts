@@ -39,10 +39,13 @@ test("JSON-LD names the organization and the application, claims no rating, and 
   const raw = siteJsonLd({ PLATFORM_SITE_URL: "https://adsbook.id" });
   assert.doesNotMatch(raw, /</);
   const data = JSON.parse(raw) as { "@graph": Array<Record<string, unknown>> };
-  assert.deepEqual(data["@graph"].map((node) => node["@type"]), ["Organization", "SoftwareApplication"]);
+  // PLATFORM-SEO §3: the site name on the home only; a 192 px logo (Google's minimum is 112 px).
+  assert.deepEqual(data["@graph"].map((node) => node["@type"]), ["WebSite", "Organization", "SoftwareApplication"]);
+  assert.deepEqual([data["@graph"][0].name, data["@graph"][0].url], ["adsbook.id", "https://adsbook.id/"]);
+  assert.equal(data["@graph"][1].logo, "https://adsbook.id/favicon-192.png");
   assert.doesNotMatch(raw, /aggregateRating|review|ratingValue/);
   // ADR-041 Option A, per store, in IDR — the same numbers billing charges.
-  const offers = data["@graph"][1].offers as Array<{ name: string; price: string; priceCurrency: string }>;
+  const offers = data["@graph"][2].offers as Array<{ name: string; price: string; priceCurrency: string }>;
   assert.deepEqual(offers.map((offer) => [offer.name, offer.price, offer.priceCurrency]), [
     ["1 Bulan", "149000", "IDR"], ["3 Bulan", "399000", "IDR"], ["6 Bulan", "759000", "IDR"], ["1 Tahun", "1490000", "IDR"],
   ]);
@@ -166,14 +169,14 @@ test("brand: the site uses the blue wordmark files and blue tokens; the animated
 
 test("one site: every marketing page uses the shared frame, ends its title on the brand dot, and links to signup", async () => {
   const { PILLARS, CAPABILITIES, FAQ_GROUPS, FAQ_SHORT, FAQ_MORE } = await import("./site/content.ts");
-  const pages = ["index", "coba", "fitur", "cara-kerja", "harga", "faq", "kontak"];
+  const pages = ["index", "fitur", "cara-kerja", "harga", "faq", "kontak"];
   for (const name of pages) {
     const source = readFileSync(`src/pages/platform/site/${name}.astro`, "utf8");
     assert.match(source, /<SiteLayout page=\{SITE_PAGES\./, `${name}: the shared frame`);
     assert.match(source, /class="dot-end"|<PageHead /, `${name}: the h1 ends on the dot`);
     assert.match(source, /<ClosingCta|SIGNUP_PATH|<Pricing/, `${name}: a way to sign up`);
   }
-  // The home and /coba show the same pillars that /fitur details; every pillar has a screen or numbers.
+  // The home shows the same pillars that /fitur details; every pillar has a screen or numbers.
   assert.equal(PILLARS.length, 6);
   assert.equal(new Set(PILLARS.map((pillar) => pillar.id)).size, 6);
   for (const pillar of PILLARS) assert.ok(pillar.shot || pillar.specs?.length, pillar.id);
@@ -307,7 +310,7 @@ test("borderless gallery (HOMEPAGE-DESIGN-SYSTEM v2): no phone bezel, no eyebrow
   const page = (name: string) => readFileSync(`src/pages/platform/site/${name}.astro`, "utf8");
   // The 8px black phone bezel is retired everywhere; screenshots stand on the ShotFrame pedestal.
   const all = readdirSync("src/platform/site").filter((name) => name.endsWith(".astro")).map(site).join("\n")
-    + ["index", "coba", "fitur", "cara-kerja", "harga", "faq", "kontak"].map(page).join("\n");
+    + ["index", "fitur", "cara-kerja", "harga", "faq", "kontak"].map(page).join("\n");
   assert.doesNotMatch(all, /border:\s*8px solid/, "no heavy bezel");
   assert.match(site("ShotFrame.astro"), /class="shot-stage"/);
   // Sections below the hero open on their H2: no eyebrow pills, no per-section detail links.
@@ -315,7 +318,7 @@ test("borderless gallery (HOMEPAGE-DESIGN-SYSTEM v2): no phone bezel, no eyebrow
     assert.doesNotMatch(site(name), /pill-eyebrow|sec-kicker|signal-more|>Detail</, name);
   }
   assert.doesNotMatch(page("index"), /sec-kicker/, "the home has no kicker labels");
-  assert.match(page("index"), /<ClosingCta withShot=\{false\} \/>/, "the home ends on the band, not a second screenshot");
+  assert.match(page("index"), /<ClosingCta withShot=\{false\} visual \/>/, "the home ends on the band with its 2.5D visual, not a second screenshot");
   // One showcase: every plan stays real markup with its own signup link; 1 Tahun is chosen first.
   const pricing = site("Pricing.astro");
   assert.match(pricing, /type="radio" name="pricing-plan" value=\{plan\.code\} checked=\{plan\.code === best\}/);
@@ -323,4 +326,118 @@ test("borderless gallery (HOMEPAGE-DESIGN-SYSTEM v2): no phone bezel, no eyebrow
   assert.match(pricing, /Server tracking 1:1 untuk Meta, Google, dan TikTok/, "the three server legs, as built");
   // The comparison is an open table: no outer card, no dark header.
   assert.doesNotMatch(site("CompetitorCompare.astro"), /compare-card|background: var\(--ink\)/);
+});
+
+test("PLATFORM-SEO §1: /coba is retired — no page, no route, no link, not in the sitemap", async () => {
+  const { existsSync } = await import("node:fs");
+  assert.equal(existsSync("src/pages/platform/site/coba.astro"), false);
+  assert.equal(platformSitePath("/coba"), null);
+  assert.ok(!Object.values(SITE_PAGES).some((page) => page.path === "/coba"));
+  const sources = readdirSync("src/platform/site").map((name) => readFileSync(`src/platform/site/${name}`, "utf8")).join("\n");
+  assert.doesNotMatch(sources, /href="\/coba"/);
+});
+
+test("PLATFORM-SEO §5: no 'tanpa kartu', and Mode Preview (no deadline) is never run together with the 48-hour grace (after a paid term)", () => {
+  const files = [
+    ...readdirSync("src/pages/platform/site").filter((name) => name.endsWith(".astro")).map((name) => `src/pages/platform/site/${name}`),
+    ...readdirSync("src/platform/site").map((name) => `src/platform/site/${name}`),
+    "src/pages/platform/signup.astro",
+    "src/pages/platform/masuk.astro",
+  ];
+  const copy = files.map((file) => readFileSync(file, "utf8")).join("\n");
+  assert.doesNotMatch(copy, /tanpa kartu/i, "a Western 'no credit card' phrase; buyers here pay by QRIS or Virtual Account");
+  // One sentence (up to a quote, full stop or semicolon) naming both reads as "preview lasts 48 hours".
+  assert.doesNotMatch(copy, /Mode Preview[^.;"'`]*48 jam/, "Mode Preview and the 48-hour grace in one phrase");
+  const pricing = readFileSync("src/platform/site/Pricing.astro", "utf8");
+  assert.match(pricing, /Mode Preview tanpa batas waktu persiapan/);
+  assert.match(pricing, /Masa tenggang 48 jam setelah jatuh tempo langganan/);
+});
+
+test("PLATFORM-SEO §3: every indexable inner page shows the breadcrumb its BreadcrumbList describes; the home and legal pages have none", async () => {
+  const { breadcrumbName } = await import("./site/site.ts");
+  const files: Record<string, string> = { fitur: "fitur", caraKerja: "cara-kerja", harga: "harga", faq: "faq", kontak: "kontak" };
+  for (const [key, page] of Object.entries(SITE_PAGES)) {
+    const data = JSON.parse(siteJsonLd({ PLATFORM_SITE_URL: "https://adsbook.id" }, page)) as { "@graph": Array<Record<string, any>> };
+    const crumbs = data["@graph"].find((node) => node["@type"] === "BreadcrumbList");
+    assert.equal(data["@graph"].some((node) => node["@type"] === "WebSite"), page.path === "/", `${key}: site name on the home only`);
+    if (!files[key]) {
+      assert.equal(crumbs, undefined, `${key}: no breadcrumb`);
+      continue;
+    }
+    assert.deepEqual(crumbs?.itemListElement.map((item: Record<string, unknown>) => [item.position, item.name, item.item]), [
+      [1, "Beranda", "https://adsbook.id/"],
+      [2, page.nav, `https://adsbook.id${page.path}`],
+    ]);
+    // The page passes the same label to its visible breadcrumb.
+    assert.match(readFileSync(`src/pages/platform/site/${files[key]}.astro`, "utf8"), new RegExp(`<PageHead crumb=\\{breadcrumbName\\(SITE_PAGES\\.${key}\\)\\}`), key);
+    assert.equal(breadcrumbName(page), page.nav);
+  }
+  assert.match(readFileSync("src/platform/site/PageHead.astro", "utf8"), /aria-label="Breadcrumb"/);
+});
+
+/** Width and height from a PNG's IHDR chunk. */
+const pngSize = (buffer: Buffer) => [buffer.readUInt32BE(16), buffer.readUInt32BE(20)];
+
+test("PLATFORM-SEO §4: every page has its own 1200×630 share card under 120 KB, with alt text; the layout declares it and a large preview", async () => {
+  const { existsSync } = await import("node:fs");
+  const { ogImageFor } = await import("./site/site.ts");
+  const seen = new Map<string, string>();
+  for (const [key, page] of Object.entries(SITE_PAGES)) {
+    assert.ok(page.ogImage && page.ogImageAlt, key);
+    const file = `public${page.ogImage}`;
+    assert.ok(existsSync(file), file);
+    const bytes = readFileSync(file);
+    assert.equal(bytes.subarray(1, 4).toString(), "PNG", `${file} is a PNG every share preview reads`);
+    assert.deepEqual(pngSize(bytes), [1200, 630], file);
+    assert.ok(bytes.length <= 120 * 1024, `${file} is ${bytes.length} bytes`);
+    assert.ok(page.ogImageAlt!.length >= 10 && page.ogImageAlt!.length <= 125, `${key} alt`);
+    // Unique per page; the two legal pages share one card on purpose.
+    if (seen.has(page.ogImage!)) assert.deepEqual([seen.get(page.ogImage!), key].sort(), ["privasi", "syarat"]);
+    seen.set(page.ogImage!, key);
+    assert.match(ogImageFor({ PLATFORM_SITE_URL: "https://adsbook.id" }, page).url, /^https:\/\/adsbook\.id\/platform\/og\/og-[a-z-]+\.png$/);
+  }
+  const layout = readFileSync("src/platform/site/SiteLayout.astro", "utf8");
+  for (const tag of ['property="og:image"', 'property="og:image:width" content="1200"', 'property="og:image:height" content="630"', 'property="og:image:alt"', 'name="twitter:card" content="summary_large_image"', 'name="twitter:image"']) {
+    assert.ok(layout.includes(tag), tag);
+  }
+  assert.match(layout, /page\.noindex \? <meta name="robots" content="noindex, nofollow" \/> : <meta name="robots" content="max-image-preview:large" \/>/);
+});
+
+test("PLATFORM-SEO §4: each inner page and the home's closing band carry their own 2.5D illustration, sized, described and loaded on purpose", async () => {
+  const sharp = (await import("sharp")).default;
+  const pages = ["fitur", "cara-kerja", "harga", "faq", "kontak"];
+  const sources = [...pages.map((name) => readFileSync(`src/pages/platform/site/${name}.astro`, "utf8")), readFileSync("src/platform/site/ClosingCta.astro", "utf8")];
+  const images = sources.flatMap((source) => [...source.matchAll(/src: '(\/platform\/visual\/[a-z-]+\.webp)', width: (\d+), height: (\d+), alt: '([^']+)'/g), ...source.matchAll(/src="(\/platform\/visual\/[a-z-]+\.webp)" width="(\d+)" height="(\d+)" alt="([^"]+)"/g)]);
+  assert.deepEqual(images.map((match) => match[1]).sort(), ["cara-kerja", "faq", "fitur", "harga", "home-closing", "kontak"].map((name) => `/platform/visual/${name}.webp`));
+  for (const [, src, width, height, alt] of images) {
+    assert.ok(alt.length >= 10 && alt.length <= 125, `${src} alt is ${alt.length} characters`);
+    const meta = await sharp(`public${src}`).metadata();
+    // Drawn at 2×: the file is exactly twice the box the markup reserves.
+    assert.deepEqual([meta.format, meta.width, meta.height], ["webp", Number(width) * 2, Number(height) * 2], src);
+  }
+  const banner = readFileSync("src/platform/site/VisualBanner.astro", "utf8");
+  assert.match(banner, /width=\{image\.width\} height=\{image\.height\} alt=\{image\.alt\} loading=\{eager \? 'eager' : 'lazy'\}/);
+  assert.match(readFileSync("src/platform/site/ClosingCta.astro", "utf8"), /home-closing\.webp" width="640" height="460" alt="[^"]+" loading="lazy"/);
+  const markup = banner.split("---").slice(2).join("---");
+  assert.doesNotMatch(markup, /eyebrow|border:/, "a borderless tile, no eyebrow pill");
+});
+
+test("PLATFORM-SEO §3: /llms.txt summarises the site from its public pages and never names sign-in, admin or APIs", async () => {
+  const { platformLlmsTxt } = await import("./site/site.ts");
+  const text = platformLlmsTxt({ PLATFORM_SITE_URL: "https://adsbook.id" });
+  assert.match(text, /^# adsbook\.id\n\n> /);
+  for (const page of Object.values(SITE_PAGES)) assert.ok(text.includes(`(https://adsbook.id${page.path === "/" ? "/" : page.path})`), page.path);
+  assert.doesNotMatch(text, /\/daftar|\/masuk|\/platform|\/admin|\/api\/|\/hello|tanpa kartu/);
+  assert.match(text, /Mode Preview gratis tanpa batas waktu persiapan/);
+});
+
+
+test("the closing band counts the required setup steps a new physical store really owes (bank account included since Entry 333)", async () => {
+  const { SETUP_STEPS } = await import("./site/content.ts");
+  const { buildSetupChecklist } = await import("../lib/setup-checklist.ts");
+  const fresh = { catalogMode: "physical", physicalCatalog: false, digitalProduct: false, prepaid: false, storeName: true, product: false, primaryWarehouse: false, mengantar: false, payment: false, codDisabledProvinces: 15, enabledCouriers: 4, signals: false, customDomain: false, businessAddress: false } as const;
+  const owed = buildSetupChecklist(fresh).filter((step) => step.required && !step.done);
+  assert.equal(SETUP_STEPS.length, owed.length);
+  const words = ["", "satu", "dua", "tiga", "empat", "lima"];
+  assert.match(readFileSync("src/platform/site/ClosingCta.astro", "utf8"), new RegExp(`selesaikan ${words[owed.length]} langkah`));
 });

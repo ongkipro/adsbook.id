@@ -2238,6 +2238,23 @@ test("T-38: payment, product price/weight and couriers each gate readiness; opti
   ]);
 });
 
+test("PLATFORM-SEO §2: a store's sign-in, recovery, admin, APIs and embeds carry noindex; its shop pages do not", async () => {
+  const store = await readinessHarness("tanpa-indeks");
+  store.product();
+  store.warehouse(1, 1, "12345", "pickup-1");
+  store.mengantar();
+  store.bank();
+  for (const path of ["/hello", "/pemulihan", "/admin", "/admin/orders", "/api/admin/orders", "/api/payment-methods", "/api/handoff", "/embed/form"]) {
+    const response = await store.open(path);
+    assert.equal(response.robots, "noindex, nofollow", `${path} (${response.status})`);
+  }
+  for (const path of ["/", "/produk/kopi"]) {
+    const response = await store.open(path);
+    assert.equal(response.reached, true, path);
+    assert.equal(response.robots, null, `${path} stays indexable`);
+  }
+});
+
 test("T-38: an unreadable store fails closed (503, no route), never open", async () => {
   const store = await readinessHarness("tak-terbaca");
   store.product();

@@ -33,7 +33,7 @@ import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind 
 import { bumpsStorefrontCache, edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 import { scopeFromLocals } from './platform/keys.ts';
 import { PROBE_NONCE, PROBE_PATH, probeAnswer, tenantHostSuffix } from './platform/hostnames.ts';
-import { platformSitePath, primaryHostRedirect } from './platform/host.ts';
+import { platformNoindex, platformSitePath, primaryHostRedirect, tenantNoindex, withNoindex } from './platform/host.ts';
 import { platformGuard } from './platform/admin/guard.ts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -237,11 +237,15 @@ export function createMiddleware(
         }
         // The signup page posts the IAM-8 handoff to the new seller host.
         response.headers.set('Content-Security-Policy', platformCsp(getRuntimeEnv(context.locals)));
+        // PLATFORM-SEO-AND-VISUAL-BANNERS-SPEC §2: register, login, console and APIs never reach an index.
+        if (platformNoindex(result.host, context.url.pathname)) response = withNoindex(response);
       } else {
         hostKind = 'tenant';
         tenantId = result.tenant.tenantId;
         context.locals.tenantContext = result.tenant;
         response = await handleTenantRequest(context, next);
+        // The owner's way in, the admin, APIs and embeds never reach an index.
+        if (tenantNoindex(context.url.pathname)) response = withNoindex(response);
       }
       status = response.status;
       return response;

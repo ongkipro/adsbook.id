@@ -49,7 +49,7 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
     <div class="wrap">
       <div class="section-head">
         <h2 id="harga-title">Satu harga flat per toko, semua fitur terbuka</h2>
-        <p class="lead">Siapkan dan review toko gratis tanpa kartu di Mode Preview. Aktifkan langganan saat siap menjalankan iklan.</p>
+        <p class="lead">Siapkan katalog dan review tampilan toko gratis tanpa batas waktu di Mode Preview. Aktifkan langganan via QRIS atau Virtual Account saat siap menjalankan iklan.</p>
       </div>
       <Pricing compact />
       <div class="compare-head">
@@ -84,7 +84,7 @@ const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
     </div>
   </section>
 
-  <ClosingCta withShot={false} />
+  <ClosingCta withShot={false} visual />
 </SiteLayout>
 
 <style>
