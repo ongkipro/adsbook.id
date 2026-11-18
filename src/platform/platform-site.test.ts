@@ -182,7 +182,7 @@ test("one site: every marketing page uses the shared frame, ends its title on th
   for (const channel of [AD_CHANNEL_LABELS.meta, AD_CHANNEL_LABELS.google, AD_CHANNEL_LABELS.tiktok]) {
     assert.ok(signal.points.join(" ").includes(channel), `the signal pillar names ${channel}`);
   }
-  assert.match(readFileSync("src/pages/platform/site/index.astro", "utf8"), /semua kanal/, "the home hero says all channels");
+  assert.match(readFileSync("src/pages/platform/site/index.astro", "utf8"), /semua platform iklan|semua ad platform|semua kanal/i, "the home says every ad platform");
   // Every FAQ answer appears exactly once in the grouped FAQ.
   const grouped = FAQ_GROUPS.flatMap((group) => group.items);
   assert.equal(grouped.length, FAQ_SHORT.length + FAQ_MORE.length);
@@ -236,7 +236,8 @@ test("tracking proof (pagecopy v3): simulations are captioned illustrations of m
   const geo = readFileSync("src/platform/site/HybridGeoSim.astro", "utf8");
   const bento = readFileSync("src/platform/site/HomeBentoGrid.astro", "utf8");
   const compare = readFileSync("src/platform/site/CompetitorCompare.astro", "utf8");
-  for (const [name, source] of [["SignalBand", band], ["SignalPipelineStrip", strip], ["HybridGeoSim", geo], ["HomeBentoGrid", bento]] as const) {
+  const campaigns = readFileSync("src/platform/site/TopCampaignsShowcase.astro", "utf8");
+  for (const [name, source] of [["SignalBand", band], ["SignalPipelineStrip", strip], ["HybridGeoSim", geo], ["HomeBentoGrid", bento], ["TopCampaignsShowcase", campaigns]] as const) {
     assert.match(source, /@media \(prefers-reduced-motion: reduce\)/, `${name}: CSS holds still under reduced motion`);
     assert.match(source, /matchMedia\('\(prefers-reduced-motion: reduce\)'\)/, `${name}: the script never starts the loop under reduced motion`);
     assert.match(source, /IntersectionObserver/, `${name}: plays only on screen`);
@@ -245,6 +246,12 @@ test("tracking proof (pagecopy v3): simulations are captioned illustrations of m
   assert.doesNotMatch(compare, /https?:\/\//, "CompetitorCompare: no remote asset");
   assert.equal((band.match(/class="sim-caption">Ilustrasi /g) ?? []).length, 2, "both simulations say they are illustrations");
   assert.match(geo, /class="geo-caption">Ilustrasi /, "HybridGeoSim says it is an illustration");
+  // The product reports orders and revenue per campaign, never ad spend: no invented ROAS or spend figure.
+  assert.match(campaigns, /class="camp-caption">Ilustrasi /, "TopCampaignsShowcase says it is an illustration");
+  const campaignCopy = campaigns.replace(/\/\*\*[\s\S]*?\*\//g, "").replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, "");
+  assert.doesNotMatch(campaignCopy, /\bROAS\s*\d|\b\d+(?:[.,]\d+)?x\b|\bad spend\b/i, "no ROAS or spend figure the product cannot report");
+  // White gallery: no wireframe connector lines left in the homepage diagrams.
+  assert.doesNotMatch(geo + bento + band, /fork-line|map-stem|hub-rails|class="rail/, "layered UI cards, not boxes joined by lines");
   assert.ok(band.includes('class="signal-logo"'), "the animated logo stays");
 
   // The 8 keys the simulation shows are exactly the keys the store hashes and sends.
@@ -260,9 +267,11 @@ test("tracking proof (pagecopy v3): simulations are captioned illustrations of m
   const components = readdirSync("src/platform/site").filter((name) => name.endsWith(".astro")).map((name) => `src/platform/site/${name}`);
   const markupOf = (path: string) => readFileSync(path, "utf8").split("---").slice(2).join("---").replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, " ");
   const strings = [...readFileSync("src/platform/site/content.ts", "utf8").matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
-  const bandData = [band, strip, geo, bento, compare].flatMap((source) => [...source.matchAll(/'([^'\n]*)'/g)].map((m) => m[1]));
+  const bandData = [band, strip, geo, bento, compare, campaigns].flatMap((source) => [...source.matchAll(/'([^'\n]*)'/g)].map((m) => m[1]));
   const copy = [...strings, ...bandData, ...[...pages, ...components].map(markupOf), readFileSync("src/platform/state-pages.ts", "utf8")].join("\n");
   assert.doesNotMatch(copy, /pratinjau/i);
+  // Professional practitioner Indonesian (writer skill): no slang, no Malay that models leak in.
+  assert.doesNotMatch(copy, /\b(suapi|disuapi|nyelonong|boncos|ngebut|gantung|ngoding|rakit|percuma|kerana|tetapan|laman|senarai|ianya)\b/i, "no slang or Malayisms");
   assert.doesNotMatch(copy, /angkanya dobel/i, "accurate ad terminology: konversi ganda, never angkanya dobel");
   assert.doesNotMatch(copy, /\b(scalev|orderonline|berdu|wetracked)\b/i, "head-to-head compares capabilities without naming rival brands");
   assert.doesNotMatch(copy, /\bROAS (naik|meningkat|dijamin)\s*\d|\bdijamin\b|\d+\s*%\s*lebih (untung|tinggi)/i, "no promised result");
@@ -270,4 +279,15 @@ test("tracking proof (pagecopy v3): simulations are captioned illustrations of m
   assert.doesNotMatch(copy, /\b[a-z0-9-]+\.(io|co)\b/i, "no other product's domain");
   assert.doesNotMatch(copy, /server[^.]{0,80}TikTok|TikTok[^.]{0,40}(Conversions API|Events API|konversi offline)/, "TikTok is tracked by UTM, not sent from the server");
   assert.match(readFileSync("src/layouts/BaseLayout.astro", "utf8"), /Mode Review Pemilik/);
+});
+
+test("one clean header everywhere: the inner pages carry the home's header, no extra action, no rule under it", () => {
+  const header = readFileSync("src/platform/site/SiteHeader.astro", "utf8");
+  assert.doesNotMatch(header, /sh-try|SIGNUP_LABEL_SHORT/, "no second signup action in the header");
+  const css = header.slice(header.indexOf("<style>"));
+  assert.doesNotMatch(css, /\.sh-page\s*\{[^}]*border-bottom/, "no rule under the inner-page header");
+  assert.match(css, /\.sh-hero, \.sh-page \{/, "both variants share one padding");
+  const head = readFileSync("src/platform/site/PageHead.astro", "utf8");
+  assert.match(head, /eyebrow\?: string/);
+  assert.match(head, /mask-image/, "the dot grid fades out instead of ending on a line");
 });

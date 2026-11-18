@@ -1,333 +1,222 @@
 ---
 /**
- * Interactive Hybrid Geo-Form & Eastern Province Ad-Leak Filter mind-map
- * (Paduka, 2026-11-18). Shows the real mechanism in src/lib/form-mode.ts &
- * src/lib/province.ts: one ad URL adapts in real time by buyer province —
- * target areas open the fast 3-field COD form, while excluded high-RTS areas
- * (Papua, Maluku, NTT, NTB, etc.) lock COD server-side and switch to the full
- * Non-COD form (QRIS/VA + district shipping), keeping Pixel learning clean.
+ * Hybrid Form by province (Paduka, 2026-11-18: white gallery, no wireframe
+ * lines). The mechanism is src/lib/form-mode.ts: one ad link serves the short
+ * COD form where COD is allowed and the full non-COD form (QRIS / Virtual
+ * Account, district shipping) in the provinces the seller excludes; COD is
+ * also refused on the server for those provinces (isCodBlockedForProvince).
+ * The default list is DEFAULT_COD_DISABLED_PROVINCE_CODES (src/lib/province.ts),
+ * which the seller can change. No result figures: the tiles name mechanisms.
  */
 interface Props { id?: string }
 const { id = 'hybrid-geo-title' } = Astro.props;
+
+// A few rows of the 38-province list, with the default COD setting.
+const PROVINCES = [
+  { name: 'Jawa Barat', cod: true },
+  { name: 'Jawa Timur', cod: true },
+  { name: 'Sumatera Utara', cod: true },
+  { name: 'Bali', cod: true },
+  { name: 'Papua', cod: false },
+  { name: 'Maluku', cod: false },
+  { name: 'Nusa Tenggara Timur', cod: false },
+  { name: 'Kalimantan Utara', cod: false },
+] as const;
 ---
 
-<section class="section section-white geo-sec" aria-labelledby={id} data-hybrid-geo>
-  <div class="wrap">
-    <div class="geo-head">
-      <p class="geo-eyebrow"><span class="sq" aria-hidden="true"></span>Hybrid Form · Filter Wilayah Otomatis</p>
-      <h2 id={id}>Iklan bocor ke luar jangkauan? Saring otomatis sebelum merusak learning iklan dan memicu retur</h2>
-      <p class="geo-sub">Satu link iklan otomatis menyesuaikan tampilan form dan metode bayar sesuai provinsi pembeli secara real-time, tanpa pisah kampanye.</p>
+<section class="section section-white geo" aria-labelledby={id} data-hybrid-geo>
+  <div class="wrap geo-grid">
+    <div class="geo-copy">
+      <p class="pill-eyebrow"><span class="sq" aria-hidden="true"></span>Hybrid Form · filter wilayah</p>
+      <h2 id={id}>Jaga learning phase dari klik di luar area layanan COD</h2>
+      <p class="lead">Satu link iklan menyesuaikan form dan metode bayar dengan provinsi pembeli. Di provinsi yang Anda kecualikan, COD tidak tersedia: pembeli membayar lunas lewat QRIS atau Virtual Account, jadi Purchase dari area itu hanya terkirim untuk pembayaran yang benar-benar masuk.</p>
+
+      <div class="seg" role="tablist" aria-label="Pilih contoh lokasi pembeli">
+        <button type="button" role="tab" id="geo-tab-target" class="seg-btn is-on" aria-selected="true" aria-controls="geo-preview" data-branch="target">
+          <span class="seg-dot dot-cod" aria-hidden="true"></span>Area COD
+        </button>
+        <button type="button" role="tab" id="geo-tab-filter" class="seg-btn" aria-selected="false" aria-controls="geo-preview" data-branch="filter" tabindex="-1">
+          <span class="seg-dot dot-non" aria-hidden="true"></span>Area non-COD
+        </button>
+      </div>
+
+      <ul class="tiles">
+        <li><b>Form singkat COD</b><span>Tiga kolom di HP, untuk provinsi tempat COD aktif</span></li>
+        <li><b>COD dikunci di server</b><span>Order COD ke provinsi yang dikecualikan selalu ditolak</span></li>
+        <li><b>Purchase dari pembayaran lunas</b><span>Di area non-COD, Purchase menunggu QRIS atau VA terbayar</span></li>
+      </ul>
     </div>
 
-    <div class="geo-stage">
-      <!-- Left: Architectural Interactive Branching Mind-Map -->
-      <div class="geo-map" role="region" aria-label="Peta cabang Hybrid Form berdasarkan provinsi pembeli">
-        <div class="map-origin">
-          <span class="origin-dot" aria-hidden="true"></span>
-          <span class="origin-label">Klik iklan masuk</span>
-          <span class="origin-tags">Meta · Google · TikTok</span>
+    <figure class="geo-visual" id="geo-preview" role="tabpanel" aria-labelledby="geo-tab-target">
+      <div class="regions" aria-hidden="true">
+        <div class="regions-head">
+          <span class="rh-title">Filter wilayah</span>
+          <span class="rh-meta">38 provinsi · default bisa diubah</span>
         </div>
-
-        <div class="map-stem" aria-hidden="true"><span class="stem-pulse"></span></div>
-
-        <div class="map-gate">
-          <span class="gate-badge">Radar Filter 38 Provinsi</span>
-          <span class="gate-meta">Dicek di server toko Anda</span>
-        </div>
-
-        <div class="map-fork" aria-hidden="true">
-          <svg viewBox="0 0 400 44" preserveAspectRatio="none">
-            <path class="fork-line fork-target" d="M200 0 V18 H92 V44" fill="none" stroke-width="2" />
-            <path class="fork-line fork-filter" d="M200 0 V18 H308 V44" fill="none" stroke-width="2" />
-          </svg>
-        </div>
-
-        <div class="map-branches" role="tablist" aria-label="Pilih skenario lokasi pembeli">
-          <button
-            type="button"
-            role="tab"
-            id="tab-geo-target"
-            aria-selected="true"
-            aria-controls="panel-geo-preview"
-            data-branch="target"
-            class="branch-card is-active"
-          >
-            <div class="branch-top">
-              <span class="branch-ind ind-blue" aria-hidden="true"></span>
-              <span class="branch-zone">Area Target Utama</span>
-            </div>
-            <p class="branch-prov">Jawa · Sumatera · Bali · Sulsel</p>
-            <p class="branch-mode">Buka Form Singkat COD</p>
-            <ul class="branch-points">
-              <li>Isi 3 kolom cepat di HP</li>
-              <li>Sinyal Purchase 1:1 melatih algoritma di wilayah sehat</li>
-            </ul>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            id="tab-geo-filter"
-            aria-selected="false"
-            aria-controls="panel-geo-preview"
-            data-branch="filter"
-            class="branch-card"
-          >
-            <div class="branch-top">
-              <span class="branch-ind ind-slate" aria-hidden="true"></span>
-              <span class="branch-zone">Area Dikecualikan</span>
-            </div>
-            <p class="branch-prov">Papua · Maluku · NTT · NTB · Kaltara</p>
-            <p class="branch-mode">Alihkan ke Non-COD</p>
-            <ul class="branch-points">
-              <li>Opsi COD terkunci di server</li>
-              <li>0 konversi COD bocor · pembeli serius bayar QRIS/VA</li>
-            </ul>
-          </button>
-        </div>
+        <ul class="regions-list">
+          {PROVINCES.map((province) => (
+            <li class={province.cod ? 'r-cod' : 'r-non'}>
+              <span>{province.name}</span>
+              <b>{province.cod ? 'COD aktif' : 'Non-COD'}</b>
+            </li>
+          ))}
+        </ul>
       </div>
 
-      <!-- Right: Live Synchronized Phone Form Mockup -->
-      <div class="geo-phone-wrap" id="panel-geo-preview" role="tabpanel" aria-labelledby="tab-geo-target">
-        <div class="phone-shell">
-          <div class="phone-topbar">
-            <span class="phone-loc" data-geo-loc>Terdeteksi: Jawa Barat (Target COD)</span>
-            <span class="phone-chip" data-geo-chip>Mode Singkat</span>
+      <div class="phone">
+        <div class="phone-top">
+          <span class="phone-loc" data-geo-loc>Lokasi: Jawa Barat</span>
+          <span class="phone-chip" data-geo-chip>Form singkat</span>
+        </div>
+        <div class="phone-view" data-view="target">
+          <div class="prod">
+            <span class="prod-thumb" aria-hidden="true">a<i></i></span>
+            <div><p class="prod-name">Paket serum brightening</p><p class="prod-price">Rp149.000 <span class="tag tag-cod">Bisa COD</span></p></div>
           </div>
-
-          <!-- View 1: Target Area -> Fast 3-Field COD Form -->
-          <div class="phone-view view-target" data-view="target">
-            <div class="mock-prod">
-              <div class="mock-thumb" aria-hidden="true"><span>a<i></i></span></div>
-              <div>
-                <p class="mock-title">Paket Hemat Serum Brightening</p>
-                <p class="mock-price">Rp149.000 <span class="mock-badge-cod">Bisa COD</span></p>
-              </div>
-            </div>
-            <div class="mock-fields">
-              <div class="mock-input"><span>Nama penerima</span><b>Rina Lestari</b></div>
-              <div class="mock-input"><span>Nomor WhatsApp</span><b>0812-8890-4412</b></div>
-              <div class="mock-input"><span>Alamat lengkap</span><b>Jl. Dago No. 18, Bandung</b></div>
-            </div>
-            <div class="mock-cta">Pesan Sekarang — Bayar di Tempat</div>
-            <div class="mock-telemetry ok">
-              <span class="sq" aria-hidden="true"></span>
-              <span>Sinyal Purchase 1:1 dikirim — learning fokus di area target</span>
-            </div>
-          </div>
-
-          <!-- View 2: Excluded Area -> Non-COD Full Form + District Shipping -->
-          <div class="phone-view view-filter" data-view="filter" hidden>
-            <div class="mock-prod">
-              <div class="mock-thumb" aria-hidden="true"><span>a<i></i></span></div>
-              <div>
-                <p class="mock-title">Paket Hemat Serum Brightening</p>
-                <p class="mock-price">Rp149.000 <span class="mock-badge-lock">Non-COD</span></p>
-              </div>
-            </div>
-            <div class="mock-notice">
-              Wilayah ini menggunakan pembayaran langsung (QRIS / Virtual Account) + ongkir ekspedisi.
-            </div>
-            <div class="mock-fields">
-              <div class="mock-input"><span>Kecamatan tujuan</span><b>Jayapura Utara · Ongkir Rp78.000</b></div>
-              <div class="mock-pay-row">
-                <span class="pay-pill is-on">QRIS Instan</span>
-                <span class="pay-pill">BCA / Mandiri VA</span>
-                <span class="pay-pill is-off">COD Terkunci</span>
-              </div>
-            </div>
-            <div class="mock-cta cta-slate">Bayar Lunas Rp227.000 (0% Risiko Retur)</div>
-            <div class="mock-telemetry shield">
-              <span class="sq" aria-hidden="true"></span>
-              <span>0 konversi COD sampah ke Pixel — penjualan lunas tetap masuk</span>
-            </div>
-          </div>
+          <div class="field"><span>Nama penerima</span><b>Rina Lestari</b></div>
+          <div class="field"><span>Nomor WhatsApp</span><b>0812-8890-4412</b></div>
+          <div class="field"><span>Alamat lengkap</span><b>Jl. Dago No. 18, Bandung</b></div>
+          <div class="cta">Pesan sekarang, bayar di tempat</div>
         </div>
-        <p class="geo-caption">Ilustrasi peralihan otomatis Hybrid Form sesuai daftar provinsi yang Anda atur di menu Pengiriman.</p>
+        <div class="phone-view" data-view="filter" hidden>
+          <div class="prod">
+            <span class="prod-thumb" aria-hidden="true">a<i></i></span>
+            <div><p class="prod-name">Paket serum brightening</p><p class="prod-price">Rp149.000 <span class="tag tag-non">Non-COD</span></p></div>
+          </div>
+          <div class="notice">Untuk wilayah ini pembayaran dilakukan di muka, ongkir dihitung per kecamatan.</div>
+          <div class="field"><span>Kecamatan tujuan</span><b>Jayapura Utara</b></div>
+          <div class="pay">
+            <span class="pay-on">QRIS</span>
+            <span>Virtual Account</span>
+            <span class="pay-off">COD tidak tersedia</span>
+          </div>
+          <div class="cta cta-ink">Bayar sekarang</div>
+        </div>
       </div>
-    </div>
-
-    <div class="geo-metrics" aria-label="Dampak filter wilayah Hybrid Form">
-      <div class="geo-metric">
-        <strong>Learning Iklan Murni</strong>
-        <span>Algoritma tidak lagi tersedot mencari audiens di wilayah yang tidak Anda layani COD.</span>
-      </div>
-      <div class="geo-metric">
-        <strong>0% Retur Area Jauh</strong>
-        <span>Order dari provinsi luar jangkauan wajib lunas QRIS/VA beserta ongkir sebelum dikirim.</span>
-      </div>
-      <div class="geo-metric">
-        <strong>Pangkas Retur Salah Area</strong>
-        <span>Menutup celah kebocoran paket gagal kirim pada kampanye iklan berskala nasional.</span>
-      </div>
-    </div>
+      <figcaption class="geo-caption">Ilustrasi form checkout per provinsi. Daftar provinsi non-COD Anda atur sendiri di admin toko.</figcaption>
+    </figure>
   </div>
 </section>
 
 <script>
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  document.querySelectorAll<HTMLElement>('[data-hybrid-geo]').forEach((root) => {
+  for (const root of Array.from(document.querySelectorAll<HTMLElement>('[data-hybrid-geo]'))) {
     const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-branch]'));
     const views = Array.from(root.querySelectorAll<HTMLElement>('[data-view]'));
-    const locEl = root.querySelector<HTMLElement>('[data-geo-loc]');
-    const chipEl = root.querySelector<HTMLElement>('[data-geo-chip]');
-    const panel = root.querySelector<HTMLElement>('#panel-geo-preview');
-
-    let current: 'target' | 'filter' = 'target';
-    let userPicked = false;
-    let timer: number | null = null;
-
-    const apply = (mode: 'target' | 'filter') => {
-      current = mode;
-      root.dataset.mode = mode;
-      buttons.forEach((btn) => {
-        const on = btn.dataset.branch === mode;
-        btn.classList.toggle('is-active', on);
-        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    const loc = root.querySelector<HTMLElement>('[data-geo-loc]');
+    const chip = root.querySelector<HTMLElement>('[data-geo-chip]');
+    const panel = root.querySelector<HTMLElement>('#geo-preview');
+    let auto = !reduce;
+    let timer = 0;
+    const show = (branch: string, focus = false) => {
+      buttons.forEach((button) => {
+        const on = button.dataset.branch === branch;
+        button.classList.toggle('is-on', on);
+        button.setAttribute('aria-selected', String(on));
+        button.tabIndex = on ? 0 : -1;
+        if (on && focus) button.focus();
+        if (on) panel?.setAttribute('aria-labelledby', button.id);
       });
-      views.forEach((v) => {
-        v.hidden = v.dataset.view !== mode;
-      });
-      if (panel) panel.setAttribute('aria-labelledby', mode === 'target' ? 'tab-geo-target' : 'tab-geo-filter');
-      if (locEl) {
-        locEl.textContent = mode === 'target'
-          ? 'Terdeteksi: Jawa Barat (Target COD)'
-          : 'Terdeteksi: Papua (Filter Non-COD)';
-      }
-      if (chipEl) {
-        chipEl.textContent = mode === 'target' ? 'Form Singkat COD' : 'Full Form QRIS/VA';
-        chipEl.classList.toggle('is-filter', mode === 'filter');
-      }
+      views.forEach((view) => { view.hidden = view.dataset.view !== branch; });
+      root.dataset.branch = branch;
+      if (loc) loc.textContent = branch === 'target' ? 'Lokasi: Jawa Barat' : 'Lokasi: Papua';
+      if (chip) chip.textContent = branch === 'target' ? 'Form singkat' : 'Form lengkap';
     };
-
-    buttons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        userPicked = true;
-        if (timer) { window.clearInterval(timer); timer = null; }
-        apply(btn.dataset.branch === 'filter' ? 'filter' : 'target');
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => { auto = false; show(button.dataset.branch || 'target'); });
+      button.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        auto = false;
+        show(button.dataset.branch === 'target' ? 'filter' : 'target', true);
       });
     });
-
+    show('target');
+    // Alternates on its own only while on screen, until the visitor picks one.
     if (!reduce && 'IntersectionObserver' in window) {
-      const io = new IntersectionObserver((entries) => {
+      new IntersectionObserver((entries) => {
         for (const entry of entries) {
-          root.classList.toggle('is-playing', entry.isIntersecting);
-          if (entry.isIntersecting && !userPicked && !timer) {
-            timer = window.setInterval(() => {
-              apply(current === 'target' ? 'filter' : 'target');
-            }, 4200);
-          } else if (!entry.isIntersecting && timer) {
-            window.clearInterval(timer);
-            timer = null;
-          }
+          window.clearInterval(timer);
+          if (entry.isIntersecting && auto) timer = window.setInterval(() => { if (auto) show(root.dataset.branch === 'target' ? 'filter' : 'target'); }, 4200);
         }
-      }, { threshold: 0.3 });
-      io.observe(root);
+      }, { threshold: 0.35 }).observe(root);
     }
-  });
+  }
 </script>
 
 <style>
-  .geo-sec { border-top: 1px solid var(--line); }
-  .geo-head { max-width: 64ch; display: grid; gap: 0.75rem; margin-bottom: 2.75rem; }
-  .geo-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
-  .sq { display: inline-block; width: 7px; height: 7px; background: var(--accent); flex-shrink: 0; }
-  .geo-sub { color: var(--ink-muted); font-size: 1.05rem; line-height: 1.55; }
+  .geo-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 3.5rem; align-items: center; }
+  .geo-copy { display: grid; gap: 1.1rem; justify-items: start; }
+  .pill-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.8rem; border-radius: 999px; background: #eff6ff; border: 1px solid #dbeafe; font: 600 0.72rem/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+  .sq { width: 6px; height: 6px; background: var(--accent); flex-shrink: 0; }
 
-  .geo-stage { display: grid; grid-template-columns: minmax(0, 6.2fr) minmax(0, 5.8fr); gap: 2.25rem; align-items: center; }
+  .seg { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; border-radius: 999px; background: var(--canvas); border: 1px solid #e2e8f0; }
+  .seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 40px; padding: 0 1.1rem; border: 0; border-radius: 999px; background: transparent; color: #475569; font: 700 0.86rem/1 var(--display); cursor: pointer; transition: background-color 0.25s, color 0.25s, box-shadow 0.25s; }
+  .seg-btn.is-on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 4px 12px -4px rgb(15 23 42 / 0.12); }
+  .seg-dot { width: 7px; height: 7px; }
+  .dot-cod { background: var(--accent); }
+  .dot-non { background: var(--ink); }
 
-  /* Architectural Mind-Map */
-  .geo-map { background: #f8fafc; border: 1px solid var(--line); border-radius: 20px; padding: 1.5rem; display: grid; justify-items: center; }
-  .map-origin { display: inline-flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.95rem; border-radius: 999px; background: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgb(15 23 42 / 0.04); font-size: 0.84rem; }
-  .origin-dot { width: 7px; height: 7px; background: var(--accent); }
-  .origin-label { font-weight: 700; color: var(--ink); }
-  .origin-tags { color: var(--ink-muted); font-size: 0.78rem; padding-left: 0.5rem; border-left: 1px solid var(--line); }
+  .tiles { list-style: none; margin: 0.25rem 0 0; padding: 0; display: grid; gap: 0.6rem; width: 100%; }
+  .tiles li { display: grid; gap: 0.15rem; padding: 0.8rem 1rem; border-radius: 14px; background: var(--canvas); border: 1px solid #f1f5f9; }
+  .tiles b { font-family: var(--display); color: var(--ink); font-size: 0.95rem; }
+  .tiles span { font-size: 0.86rem; color: var(--ink-muted); }
 
-  .map-stem { position: relative; width: 2px; height: 22px; background: #cbd5e1; overflow: hidden; }
-  .stem-pulse { position: absolute; left: 0; top: -10px; width: 2px; height: 10px; background: var(--accent); }
-  .geo-sec.is-playing .stem-pulse { animation: stem-drop 1.8s linear infinite; }
-  @keyframes stem-drop { to { top: 24px; } }
-
-  .map-gate { display: grid; gap: 0.15rem; text-align: center; padding: 0.55rem 1.2rem; border-radius: 12px; background: var(--ink); color: #f8fafc; box-shadow: 0 10px 24px -8px rgb(15 23 42 / 0.28); }
-  .gate-badge { font-family: var(--display); font-weight: 800; font-size: 0.86rem; letter-spacing: -0.01em; word-spacing: 0.08em; }
-  .gate-meta { font-size: 0.74rem; color: #94a3b8; }
-
-  .map-fork { width: 100%; max-width: 380px; height: 34px; }
-  .map-fork svg { width: 100%; height: 100%; display: block; }
-  .fork-line { stroke: #cbd5e1; transition: stroke 0.25s ease; }
-  .geo-sec:not([data-mode="filter"]) .fork-target { stroke: var(--accent); }
-  .geo-sec[data-mode="filter"] .fork-filter { stroke: var(--ink); }
-
-  .map-branches { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem; }
-  .branch-card { appearance: none; font: inherit; text-align: left; cursor: pointer; background: #ffffff; border: 1.5px solid var(--line); border-radius: 14px; padding: 1rem; display: grid; gap: 0.45rem; align-content: start; transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
-  .branch-card:hover { border-color: #93c5fd; transform: translateY(-1px); }
-  .branch-card.is-active[data-branch="target"] { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1), 0 12px 24px -10px rgb(37 99 235 / 0.22); }
-  .branch-card.is-active[data-branch="filter"] { border-color: var(--ink); box-shadow: 0 0 0 3px rgb(15 23 42 / 0.08), 0 12px 24px -10px rgb(15 23 42 / 0.2); }
-  .branch-top { display: flex; align-items: center; gap: 0.45rem; }
-  .branch-ind { width: 7px; height: 7px; flex-shrink: 0; }
-  .ind-blue { background: var(--accent); }
-  .ind-slate { background: var(--ink); }
-  .branch-zone { font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-muted); }
-  .branch-prov { font-size: 0.78rem; color: var(--ink-muted); font-weight: 600; }
-  .branch-mode { font-family: var(--display); font-weight: 800; font-size: 0.98rem; color: var(--ink); margin-top: 0.1rem; }
-  .branch-points { list-style: none; margin: 0.2rem 0 0; padding: 0; display: grid; gap: 0.3rem; font-size: 0.8rem; line-height: 1.4; color: var(--ink-muted); }
-  .branch-points li { position: relative; padding-left: 0.85rem; }
-  .branch-points li::before { content: ""; position: absolute; left: 0; top: 0.45em; width: 4px; height: 4px; background: var(--accent); }
-
-  /* Right: Synchronized Phone Form Mockup */
-  .geo-phone-wrap { display: grid; gap: 0.65rem; justify-items: center; }
-  .phone-shell { width: 100%; max-width: 440px; background: #ffffff; border: 1px solid #dbeafe; border-radius: 20px; padding: 1.15rem; box-shadow: 0 20px 44px -16px rgb(15 23 42 / 0.12), 0 0 0 4px #f8fafc; }
-  .phone-topbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding-bottom: 0.85rem; margin-bottom: 0.95rem; border-bottom: 1px solid var(--line); font-size: 0.78rem; }
-  .phone-loc { font-weight: 700; color: var(--ink); }
-  .phone-chip { padding: 0.2rem 0.55rem; border-radius: 999px; background: #eff6ff; color: var(--accent); font-weight: 700; font-size: 0.73rem; white-space: nowrap; }
-  .phone-chip.is-filter { background: #f1f5f9; color: var(--ink); }
-
-  .phone-view { display: grid; gap: 0.85rem; }
-  .phone-view[hidden] { display: none; }
-  .mock-prod { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem; border-radius: 12px; background: #f8fafc; border: 1px solid var(--line); }
-  .mock-thumb { width: 42px; height: 42px; border-radius: 10px; background: var(--accent); color: #ffffff; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 1.1rem; flex-shrink: 0; }
-  .mock-thumb span { display: inline-flex; align-items: baseline; }
-  .mock-thumb i { display: inline-block; width: 4px; height: 4px; background: #bfdbfe; margin-left: 2px; }
-  .mock-title { font-weight: 700; font-size: 0.86rem; color: var(--ink); }
-  .mock-price { font-family: var(--display); font-weight: 800; font-size: 0.92rem; color: var(--ink); display: flex; align-items: center; gap: 0.45rem; margin-top: 0.1rem; }
-  .mock-badge-cod { font-family: var(--body); font-size: 0.7rem; font-weight: 700; padding: 0.12rem 0.45rem; border-radius: 4px; background: #dcfce7; color: #166534; }
-  .mock-badge-lock { font-family: var(--body); font-size: 0.7rem; font-weight: 700; padding: 0.12rem 0.45rem; border-radius: 4px; background: #e2e8f0; color: #0f172a; }
-
-  .mock-notice { font-size: 0.78rem; line-height: 1.45; padding: 0.55rem 0.75rem; border-radius: 10px; background: #f8fafc; border-left: 3px solid var(--ink); color: var(--ink-muted); }
-  .mock-fields { display: grid; gap: 0.5rem; }
-  .mock-input { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0.75rem; border-radius: 9px; border: 1px solid var(--line); font-size: 0.8rem; }
-  .mock-input span { color: var(--ink-muted); }
-  .mock-input b { color: var(--ink); font-weight: 600; text-align: right; }
-
-  .mock-pay-row { display: flex; flex-wrap: wrap; gap: 0.4rem; padding-top: 0.15rem; }
-  .pay-pill { font-size: 0.74rem; font-weight: 700; padding: 0.32rem 0.6rem; border-radius: 7px; border: 1px solid var(--line); color: var(--ink); background: #ffffff; }
-  .pay-pill.is-on { border-color: var(--accent); background: #eff6ff; color: var(--accent); }
-  .pay-pill.is-off { background: #f8fafc; color: #94a3b8; text-decoration: line-through; }
-
-  .mock-cta { text-align: center; padding: 0.68rem 1rem; border-radius: 10px; background: var(--accent); color: #ffffff; font-weight: 700; font-size: 0.85rem; }
-  .mock-cta.cta-slate { background: var(--ink); }
-  .mock-telemetry { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.7rem; border-radius: 8px; background: #eff6ff; color: #1e40af; font-size: 0.76rem; font-weight: 600; }
-  .mock-telemetry.shield { background: #f1f5f9; color: var(--ink); }
-  .geo-caption { font-size: 0.78rem; color: var(--ink-muted); text-align: center; max-width: 44ch; }
-
-  .geo-metrics { margin-top: 2rem; padding-top: 1.75rem; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
-  .geo-metric { display: grid; gap: 0.25rem; align-content: start; }
-  .geo-metric strong { font-family: var(--display); font-weight: 800; font-size: 1rem; color: var(--ink); }
-  .geo-metric span { font-size: 0.88rem; color: var(--ink-muted); line-height: 1.5; }
-
-  @media (max-width: 920px) {
-    .geo-stage { grid-template-columns: 1fr; }
-    .geo-metrics { grid-template-columns: 1fr; gap: 1rem; }
+  .geo-visual { position: relative; margin: 0; display: grid; justify-items: center; padding-top: 1rem; }
+  /* Back layer: the province list, fading into the page at its edges. */
+  .regions {
+    position: absolute; top: 0; left: 0; width: 62%; padding: 1.1rem; border-radius: 18px; background: var(--canvas); border: 1px solid #e2e8f0;
+    box-shadow: 0 24px 60px -15px rgb(15 23 42 / 0.08);
+    mask-image: linear-gradient(to bottom, #000 62%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
   }
-  @media (max-width: 560px) {
-    .geo-map { padding: 1.1rem; }
-    .map-branches { grid-template-columns: 1fr; }
-    .map-fork { display: none; }
-    .origin-tags { display: none; }
-    .mock-input { flex-direction: column; align-items: flex-start; gap: 0.15rem; }
-    .mock-input b { text-align: left; }
+  .regions-head { display: grid; gap: 0.15rem; margin-bottom: 0.75rem; }
+  .rh-title { font: 800 0.95rem/1.2 var(--display); color: var(--ink); }
+  .rh-meta { font-size: 0.72rem; color: #64748b; }
+  .regions-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+  .regions-list li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.65rem; border-radius: 10px; background: #fff; border: 1px solid #f1f5f9; font-size: 0.8rem; color: #334155; transition: border-color 0.3s, background-color 0.3s; }
+  .regions-list b { font-size: 0.68rem; padding: 0.05rem 0.45rem; border-radius: 999px; }
+  .r-cod b { background: #eff6ff; color: var(--accent); }
+  .r-non b { background: #f1f5f9; color: #334155; }
+  .geo[data-branch="target"] .r-cod, .geo[data-branch="filter"] .r-non { border-color: #bfdbfe; background: #f8fbff; }
+
+  /* Front layer: the phone the buyer sees. */
+  .phone { position: relative; z-index: 1; margin: 2.5rem 0 0 auto; width: min(100%, 300px); display: grid; gap: 0.7rem; padding: 1rem; border-radius: 28px; background: #fff; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 16px 32px -12px rgb(15 23 42 / 0.16), 0 40px 80px -30px rgb(15 23 42 / 0.22); }
+  .phone-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-bottom: 0.6rem; border-bottom: 1px solid #f1f5f9; }
+  .phone-loc { font-size: 0.74rem; font-weight: 700; color: var(--ink); }
+  .phone-chip { font-size: 0.66rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; background: #eff6ff; color: var(--accent); }
+  .geo[data-branch="filter"] .phone-chip { background: #f1f5f9; color: var(--ink); }
+  .phone-view { display: grid; gap: 0.55rem; animation: view-in 0.35s ease-out; }
+  .phone-view[hidden] { display: none; }
+  @keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .prod { display: flex; align-items: center; gap: 0.6rem; }
+  .prod-thumb { flex-shrink: 0; width: 44px; height: 44px; display: flex; align-items: flex-end; justify-content: center; gap: 2px; padding-bottom: 8px; border-radius: 12px; background: var(--canvas); border: 1px solid #e2e8f0; font: 800 1.2rem/1 var(--display); color: var(--ink); }
+  .prod-thumb i { width: 5px; height: 5px; background: var(--accent); }
+  .prod-name { font-weight: 700; font-size: 0.85rem; color: var(--ink); }
+  .prod-price { font-size: 0.8rem; color: #475569; display: flex; align-items: center; gap: 0.4rem; }
+  .tag { font-size: 0.64rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 999px; }
+  .tag-cod { background: #ecfdf5; color: #047857; }
+  .tag-non { background: #f1f5f9; color: var(--ink); }
+  .field { display: grid; gap: 0.1rem; padding: 0.5rem 0.65rem; border-radius: 10px; background: var(--canvas); border: 1px solid #e2e8f0; }
+  .field span { font-size: 0.66rem; color: #64748b; }
+  .field b { font-size: 0.8rem; color: var(--ink); }
+  .notice { font-size: 0.74rem; line-height: 1.45; padding: 0.5rem 0.65rem; border-radius: 10px; background: #f8fafc; border: 1px dashed #cbd5e1; color: #334155; }
+  .pay { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .pay span { font-size: 0.7rem; font-weight: 700; padding: 0.3rem 0.55rem; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; color: #334155; }
+  .pay .pay-on { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+  .pay .pay-off { color: #94a3b8; text-decoration: line-through; }
+  .cta { display: flex; align-items: center; justify-content: center; min-height: 42px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; font-size: 0.82rem; }
+  .cta-ink { background: var(--ink); }
+  .geo-caption { position: relative; z-index: 1; margin-top: 1rem; max-width: 44ch; font-size: 0.8rem; line-height: 1.5; color: #64748b; text-align: center; }
+
+  @media (max-width: 900px) {
+    .geo-grid { grid-template-columns: 1fr; gap: 2rem; }
+    .regions { position: relative; width: 100%; }
+    .phone { margin: -9rem auto 0; }
+  }
+  @media (max-width: 420px) {
+    .seg-btn { padding: 0 0.75rem; font-size: 0.8rem; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .stem-pulse, .branch-card { animation: none !important; transition: none !important; }
+    .seg-btn, .regions-list li { transition: none; }
+    .phone-view { animation: none; }
   }
 </style>

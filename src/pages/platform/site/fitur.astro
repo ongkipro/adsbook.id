@@ -1,6 +1,7 @@
 ---
 import SiteLayout from '../../../platform/site/SiteLayout.astro';
 import PageHead from '../../../platform/site/PageHead.astro';
+import TopCampaignsShowcase from '../../../platform/site/TopCampaignsShowcase.astro';
 import PillarRows from '../../../platform/site/PillarRows.astro';
 import CapabilityList from '../../../platform/site/CapabilityList.astro';
 import ClosingCta from '../../../platform/site/ClosingCta.astro';
@@ -10,15 +11,16 @@ export const prerender = false;
 ---
 
 <SiteLayout page={SITE_PAGES.fitur}>
-  <PageHead title="Fitur yang membuat setiap pesanan presisi" lead="Enam pilar, dari sinyal semua kanal iklan sampai infrastruktur, lalu semua yang Anda perlukan setiap hari. Gambar adalah layar produk yang sebenarnya, dengan data dari toko contoh." />
-  <section class="section section-white" aria-label="Enam pilar">
+  <PageHead eyebrow="Fitur platform" title="Fitur yang membuat setiap pesanan presisi" lead="Enam pilar, dari server tracking untuk semua platform iklan sampai infrastruktur, lalu semua yang Anda perlukan setiap hari. Gambar adalah layar produk yang sebenarnya, dengan data dari toko contoh." />
+  <TopCampaignsShowcase id="fitur-campaigns-title" />
+  <section class="section" aria-label="Enam pilar">
     <div class="wrap"><PillarRows /></div>
   </section>
-  <section class="section" aria-labelledby="lengkap-title">
+  <section class="section section-white" aria-labelledby="lengkap-title">
     <div class="wrap">
       <div class="section-head"><h2 id="lengkap-title">Dan yang Anda perlukan setiap hari</h2></div>
       <CapabilityList />
     </div>
   </section>
-  <ClosingCta tone="white" />
+  <ClosingCta />
 </SiteLayout>
