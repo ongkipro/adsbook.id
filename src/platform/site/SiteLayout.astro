@@ -61,7 +61,7 @@ const year = new Date().getFullYear();
     <footer class="site-footer">
       <div class="wrap footer-grid">
         <div class="footer-brand">
-          <img src="/platform/brand/adsbook-id-wordmark-on-dark.svg" alt="adsbook.id" width="151" height="24" loading="lazy" decoding="async" />
+          <img src="/platform/brand/adsbook-id-wordmark.svg" alt="adsbook.id" width="151" height="24" loading="lazy" decoding="async" />
           <p>Toko COD yang presisi untuk pengiklan di semua platform: satu pesanan, satu konversi.</p>
         </div>
         <nav aria-label="Produk" class="footer-col">
@@ -149,17 +149,18 @@ const year = new Date().getFullYear();
   @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 
   /* The footer is chrome, not a section: dark, so it never merges with the last band (C4). */
-  .site-footer { padding: 4rem 0 2rem; background: var(--ink); color: #cbd5e1; font-size: 0.95rem; }
+  /* A light porcelain footer (review, 2026-11-18: "1 kesatuan … clean, white"): the page stays
+     bright to its last pixel; a hairline, not a dark block, says where the content ends. */
+  .site-footer { padding: 4rem 0 2rem; background: var(--tile); border-top: var(--hairline); color: var(--ink-muted); font-size: 0.95rem; }
   .footer-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 2.5rem; }
   .footer-brand { display: grid; gap: 1rem; align-content: start; max-width: 30ch; }
   .footer-brand img { height: 24px; width: auto; }
   .footer-col { display: grid; gap: 0.6rem; align-content: start; }
-  .footer-head { color: #f8fafc; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 0.2rem; }
-  .footer-col a { color: #cbd5e1; text-decoration: none; min-height: 28px; display: inline-flex; align-items: center; }
-  .footer-col a:hover { color: #f8fafc; text-decoration: underline; }
-  .footer-base { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #1e293b; color: #94a3b8; font-size: 0.875rem; }
+  .footer-head { color: var(--ink); font-weight: 700; font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 0.2rem; }
+  .footer-col a { color: var(--ink-muted); text-decoration: none; min-height: 28px; display: inline-flex; align-items: center; }
+  .footer-col a:hover { color: var(--accent); text-decoration: underline; }
+  .footer-base { margin-top: 3rem; padding-top: 1.5rem; border-top: var(--hairline); color: var(--ink-muted); font-size: 0.875rem; }
   @media (max-width: 760px) { .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .footer-brand { grid-column: 1 / -1; } }
-  .site-footer :focus-visible { outline-color: #93c5fd; }
 
   /* The brand's square dot ends every page title: the one recurring mark (logo, 1 module = 0.15em). */
   .dot-end::after { content: ""; display: inline-block; width: 0.15em; height: 0.15em; margin-left: 0.06em; background: var(--accent); vertical-align: baseline; }

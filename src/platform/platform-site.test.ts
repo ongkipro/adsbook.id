@@ -148,7 +148,10 @@ test("brand: the site uses the blue wordmark files and blue tokens; the animated
     assert.ok(existsSync(`public/platform/brand/${file}`), file);
   }
   assert.match(layout, /\/platform\/brand\/adsbook-id-wordmark\.svg/, "header logo");
-  assert.match(layout, /\/platform\/brand\/adsbook-id-wordmark-on-dark\.svg/, "footer logo");
+  // The footer is light porcelain since the borderless gallery (2026-11-18): the ink wordmark, not the on-dark one.
+  assert.equal((layout.match(/\/platform\/brand\/adsbook-id-wordmark\.svg/g) ?? []).length >= 1, true, "footer logo");
+  assert.doesNotMatch(layout, /adsbook-id-wordmark-on-dark\.svg/, "no on-dark logo on a light footer");
+  assert.match(layout, /\.site-footer \{[^}]*background: var\(--tile\)/, "a light porcelain footer");
   assert.match(layout, /--accent: #2563eb;/i, "blue accent");
   assert.doesNotMatch(layout + readFileSync("src/pages/platform/signup.astro", "utf8"), /#c2410c|#9a3412|#fed7aa|#faf7f2/i, "no orange brand left");
   const animated = readFileSync("public/platform/brand/adsbook-id-wordmark-animated.svg", "utf8");

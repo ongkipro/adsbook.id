@@ -3,8 +3,10 @@
  * T-51 (ADR-041): Option A, one store and one own domain per subscription, as one asymmetric
  * showcase (HOMEPAGE-DESIGN-SYSTEM v2 §5): four selectable duration rows on the left, one
  * porcelain value panel on the right with the chosen plan's price, its signup link and what
- * every plan includes. Selection is native radios read by CSS `:has()`: no script, each plan's
- * label, price, note and `/daftar?paket=<code>` link are real markup. 1 Tahun is chosen first.
+ * every plan includes. Selection is native radios read by CSS `:has()`, so first paint needs no
+ * script; a few lines below mark the chosen readout too, for a browser without `:has()` (it would
+ * otherwise keep showing 1 Tahun's link whatever was clicked). Each plan's label, price, note and
+ * `/daftar?paket=<code>` link are real markup. 1 Tahun is chosen first.
  * `compact` (home, /coba) stops there; the full version (/harga) adds payment and grace notes.
  */
 import { PLANS, PLAN_POINTS, PREVIEW } from './content.ts';
@@ -31,7 +33,7 @@ const INCLUDED = [
 const best = PLANS.find((plan) => 'best' in plan && plan.best)?.code ?? '12m';
 ---
 
-<div class="pricing">
+<div class="pricing" data-pricing>
   <fieldset class="cycles">
     <legend>Pilih durasi langganan per toko</legend>
     {PLANS.map((plan) => (
@@ -48,7 +50,7 @@ const best = PLANS.find((plan) => 'best' in plan && plan.best)?.code ?? '12m';
 
   <div class="panel">
     {PLANS.map((plan) => (
-      <div class="readout" data-plan={plan.code}>
+      <div class="readout" data-plan={plan.code} data-active={plan.code === best ? 'true' : undefined}>
         <p class="r-label">{plan.label}</p>
         <p class="r-price"><span>{plan.price}</span> <small>/ {plan.period}</small></p>
         <p class="r-month">{plan.code === '1m' ? 'Dibayar per bulan' : `Setara ${perMonth(plan.price, plan.code)} per bulan`}</p>
@@ -76,6 +78,20 @@ const best = PLANS.find((plan) => 'best' in plan && plan.best)?.code ?? '12m';
   )}
 </div>
 
+<script>
+  // The readout follows the chosen radio without relying on :has() (review, 2026-11-18).
+  for (const root of document.querySelectorAll<HTMLElement>('[data-pricing]')) {
+    root.addEventListener('change', (event) => {
+      const input = event.target as HTMLInputElement;
+      if (input.name !== 'pricing-plan') return;
+      for (const readout of root.querySelectorAll<HTMLElement>('.readout')) {
+        if (readout.dataset.plan === input.value) readout.dataset.active = 'true';
+        else delete readout.dataset.active;
+      }
+    });
+  }
+</script>
+
 <style>
   .pricing { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 1.5rem 2.5rem; align-items: stretch; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -102,7 +118,11 @@ const best = PLANS.find((plan) => 'best' in plan && plan.best)?.code ?? '12m';
   .pricing:has(input[value="3m"]:checked) .readout[data-plan="3m"],
   .pricing:has(input[value="6m"]:checked) .readout[data-plan="6m"],
   .pricing:has(input[value="12m"]:checked) .readout[data-plan="12m"] { display: grid; }
-  @supports not selector(:has(*)) { .readout[data-plan="12m"] { display: grid; } }
+  /* Without :has(), the script's data-active decides; the native radio keeps its focus ring. */
+  @supports not selector(:has(*)) {
+    .readout[data-active="true"] { display: grid; }
+    .cycle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  }
   .r-label { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--slate); }
   .r-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
   .r-price span { font: 800 clamp(2.1rem, 1.6rem + 2vw, 2.9rem)/1 var(--display); letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -129,4 +149,9 @@ const best = PLANS.find((plan) => 'best' in plan && plan.best)?.code ?? '12m';
     .c-price { font-size: 1rem; }
   }
   @media (prefers-reduced-motion: reduce) { .cycle { transition: none; } }
+  /* High contrast strips box-shadow, which draws this radio: show the real one. */
+  @media (forced-colors: active) {
+    .cycle input { appearance: auto; width: 18px; height: 18px; box-shadow: none; }
+    .cycle:has(input:checked) { outline: 2px solid CanvasText; }
+  }
 </style>

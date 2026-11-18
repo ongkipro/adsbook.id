@@ -127,7 +127,8 @@ const SPAN: Record<string, string> = { sinyal: 'span-7', form: 'span-5', kirim: 
   .w-money dd.w-accent { font: 800 1.05rem/1 var(--display); color: var(--accent); }
 
   .w-start { display: grid; gap: 0.6rem; }
-  .w-mode { justify-self: start; padding: 0.15rem 0.55rem; border-radius: 6px; background: var(--ink); color: #fff; font-size: 0.72rem; font-weight: 700; }
+  .w-mode { justify-self: start; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.15rem 0.55rem; border-radius: 6px; background: #eff6ff; color: var(--accent); font-size: 0.72rem; font-weight: 700; }
+  .w-mode::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
   .w-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
   .w-steps li { display: flex; align-items: center; gap: 0.5rem; }
   .w-steps li::before { content: ""; width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px #cbd5e1; }
