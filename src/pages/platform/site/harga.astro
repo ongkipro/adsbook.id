@@ -12,12 +12,18 @@ const pricingFaq = FAQ_GROUPS[0].items;
 ---
 
 <SiteLayout page={SITE_PAGES.harga}>
-  <PageHead eyebrow="Paket berlangganan" title="Gratis sampai siap beriklan" lead="Satu biaya flat per toko: 0% potongan QRIS/VA, tanpa kuota order, dengan Hybrid Form per provinsi dan konversi 1:1 ke Meta dan Google sudah termasuk." />
+  <PageHead eyebrow="Paket berlangganan" title="Gratis sampai siap beriklan" lead="Satu biaya flat per toko: 0% potongan QRIS/VA, tanpa kuota order, dengan Hybrid Form per provinsi dan konversi 1:1 ke Meta, Google, dan TikTok sudah termasuk." />
   <section class="section section-white" aria-labelledby="paket-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="paket-title">Perbandingan nilai &amp; pilihan paket per toko</h2></div>
-      <CompetitorCompare />
+      <div class="section-head">
+        <h2 id="paket-title">Satu harga flat per toko, semua fitur terbuka</h2>
+        <p class="lead">Pilih durasi. Semua paket berisi fitur yang sama; yang berbeda hanya lamanya.</p>
+      </div>
       <Pricing />
+      <div class="compare-head">
+        <h2 class="compare-title">Dibanding form biasa dan aplikasi tracker terpisah</h2>
+      </div>
+      <CompetitorCompare />
     </div>
   </section>
   <section class="section" aria-labelledby="biaya-title">
@@ -31,4 +37,7 @@ const pricingFaq = FAQ_GROUPS[0].items;
 
 <style>
   .more { margin-top: 1.75rem; }
+  .compare-head { margin: 5rem 0 1.25rem; }
+  .compare-title { font-size: clamp(1.35rem, 1.15rem + 0.8vw, 1.7rem); max-width: 30ch; }
+  @media (max-width: 760px) { .compare-head { margin-top: 3.5rem; } }
 </style>

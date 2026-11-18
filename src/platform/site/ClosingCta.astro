@@ -1,29 +1,43 @@
 ---
-/** The closing band: the three steps left after signup, then the one action. */
+/**
+ * The closing band (HOMEPAGE-DESIGN-SYSTEM v2 §6): one porcelain band inset in the page, the
+ * three steps left after signup in a row, then the one action. `withShot` puts the real setup
+ * checklist beside it on a white stage (inner pages); the home ends on the band alone.
+ */
 import ShotFrame from './ShotFrame.astro';
 import { SETUP_DONE, SETUP_STEPS, SHOTS } from './content.ts';
 import { SIGNUP_LABEL, SIGNUP_PATH } from './site.ts';
 
-interface Props { withShot?: boolean; tone?: 'canvas' | 'white' }
-const { withShot = true, tone = 'canvas' } = Astro.props;
+interface Props { withShot?: boolean }
+const { withShot = true } = Astro.props;
 ---
 
-<section class={`section closing ${tone === 'white' ? 'section-white' : ''}`} aria-labelledby="closing-title">
-  <div class={`wrap closing-grid ${withShot ? '' : 'closing-single'}`}>
+<section class="section closing" aria-labelledby="closing-title">
+  <div class:list={['wrap', 'band', { 'band-shot': withShot }]}>
     <div class="closing-text">
       <h2 id="closing-title" class="dot-end">Siap dalam hitungan menit: selesaikan tiga langkah, lalu beriklan dengan data yang presisi</h2>
       <p class="muted">{SETUP_DONE}</p>
-      <ol>{SETUP_STEPS.map((step) => <li>{step}</li>)}</ol>
+      <ol class="steps">{SETUP_STEPS.map((step, index) => <li><span aria-hidden="true">{index + 1}</span>{step}</li>)}</ol>
       <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
     </div>
-    {withShot && <ShotFrame shot={SHOTS.setup} />}
+    {withShot && <div class="band-figure"><ShotFrame shot={SHOTS.setup} /></div>}
   </div>
 </section>
 
 <style>
-  .closing-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 3.5rem; align-items: center; }
-  .closing-single { grid-template-columns: minmax(0, 720px); }
-  .closing-text { display: grid; gap: 1.1rem; justify-items: start; }
-  .closing-text ol { margin: 0; padding-left: 1.3rem; display: grid; gap: 0.4rem; font-weight: 600; }
-  @media (max-width: 760px) { .closing-grid { grid-template-columns: 1fr; gap: 2rem; } }
+  .band { display: grid; justify-items: center; text-align: center; padding: 4rem 2rem; border-radius: 28px; background: var(--tile); }
+  .closing-text { display: grid; gap: 1.25rem; justify-items: center; max-width: 1000px; }
+  .closing-text h2 { max-width: 26ch; }
+  .steps { list-style: none; margin: 0.25rem 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+  .steps li { display: inline-flex; align-items: center; gap: 0.55rem; padding: 0.5rem 0.95rem 0.5rem 0.5rem; border-radius: 999px; background: #fff; font-weight: 600; font-size: 0.95rem; color: var(--ink); box-shadow: var(--shadow-float); }
+  .steps span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; background: #eff6ff; color: var(--accent); font: 700 0.78rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  /* With the setup screen: copy left, the screen on a white stage right. */
+  .band-shot { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 3rem; align-items: center; text-align: left; padding: 3rem; }
+  .band-shot .closing-text { justify-items: start; }
+  .band-shot .steps { justify-content: flex-start; }
+  .band-figure { width: 100%; }
+  .band-figure :global(.shot-stage) { background: #fff; }
+  @media (max-width: 760px) {
+    .band, .band-shot { grid-template-columns: 1fr; padding: 2.5rem 1.25rem; border-radius: 22px; }
+  }
 </style>

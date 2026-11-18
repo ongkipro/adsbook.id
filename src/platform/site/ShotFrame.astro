@@ -1,20 +1,61 @@
 ---
+/**
+ * A real product screenshot on a borderless porcelain pedestal (HOMEPAGE-DESIGN-SYSTEM §5.1).
+ * The 8px black phone bezel is retired: the screen floats on the stage with a hairline edge and
+ * a soft shadow. A tall capture (form, setup) is cropped at the bottom and fades out of the
+ * stage instead of towering; a compact admin crop sits centred with stage all round.
+ */
 import type { Shot } from './content.ts';
 
 interface Props { shot: Shot; eager?: boolean; caption?: boolean }
 // One caption where it is needed (the hero); sections say it once in their lead.
 const { shot, eager = false, caption = false } = Astro.props;
+const tall = shot.height > shot.width * 1.35;
 ---
 
-<figure class="shot">
-  <div class="frame frame-phone">
-    <img src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} loading={eager ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : undefined} />
+<figure class:list={['shot', tall ? 'is-tall' : 'is-compact']}>
+  <div class="shot-stage">
+    <div class="frame-phone">
+      <img src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} loading={eager ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : undefined} />
+    </div>
   </div>
-  {caption && <figcaption class="caption">Tangkapan layar produk, data dari toko contoh.</figcaption>}
+  {caption && <figcaption class="shot-caption">Tangkapan layar produk, data dari toko contoh.</figcaption>}
 </figure>
 
 <style>
-  .shot { margin: 0; }
-  .shot :global(.frame-phone) { margin-inline: auto; }
-  .shot figcaption { text-align: center; }
+  .shot { margin: 0; display: grid; gap: 0.75rem; }
+  .shot-stage {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    border-radius: 24px;
+    background: radial-gradient(circle at 50% 30%, rgb(37 99 235 / 0.06), transparent 70%), #f4f6fa;
+    padding: 2rem;
+  }
+  .frame-phone {
+    width: 100%;
+    max-width: 300px;
+    overflow: hidden;
+    border: 1px solid rgb(15 23 42 / 0.08);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 24px 48px -12px rgb(15 23 42 / 0.12), 0 4px 12px -2px rgb(15 23 42 / 0.04);
+  }
+  .is-compact .frame-phone { max-width: 400px; }
+  /* Tall captures: the stage crops them and the screen emerges from it. */
+  .is-tall .shot-stage {
+    align-items: flex-start;
+    padding: 2rem 2rem 0;
+    max-height: 430px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
+  }
+  .is-tall .frame-phone { border-radius: 16px 16px 0 0; }
+  .shot-caption { text-align: center; font-size: 0.78rem; line-height: 1.5; color: #64748b; }
+  @media (max-width: 760px) {
+    .shot-stage { padding: 1.25rem; border-radius: 20px; }
+    .is-tall .shot-stage { padding: 1.25rem 1.25rem 0; max-height: 360px; }
+    .frame-phone { max-width: 260px; }
+  }
 </style>

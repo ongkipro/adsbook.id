@@ -298,3 +298,26 @@ test("one clean header everywhere: the inner pages carry the home's header, no e
   assert.match(head, /eyebrow\?: string/);
   assert.match(head, /mask-image/, "the dot grid fades out instead of ending on a line");
 });
+
+test("borderless gallery (HOMEPAGE-DESIGN-SYSTEM v2): no phone bezel, no eyebrow pills or detail links below the hero, one pricing showcase", () => {
+  const site = (name: string) => readFileSync(`src/platform/site/${name}`, "utf8");
+  const page = (name: string) => readFileSync(`src/pages/platform/site/${name}.astro`, "utf8");
+  // The 8px black phone bezel is retired everywhere; screenshots stand on the ShotFrame pedestal.
+  const all = readdirSync("src/platform/site").filter((name) => name.endsWith(".astro")).map(site).join("\n")
+    + ["index", "coba", "fitur", "cara-kerja", "harga", "faq", "kontak"].map(page).join("\n");
+  assert.doesNotMatch(all, /border:\s*8px solid/, "no heavy bezel");
+  assert.match(site("ShotFrame.astro"), /class="shot-stage"/);
+  // Sections below the hero open on their H2: no eyebrow pills, no per-section detail links.
+  for (const name of ["TopCampaignsShowcase.astro", "SignalBand.astro", "HybridGeoSim.astro", "HomeBentoGrid.astro"]) {
+    assert.doesNotMatch(site(name), /pill-eyebrow|sec-kicker|signal-more|>Detail</, name);
+  }
+  assert.doesNotMatch(page("index"), /sec-kicker/, "the home has no kicker labels");
+  assert.match(page("index"), /<ClosingCta withShot=\{false\} \/>/, "the home ends on the band, not a second screenshot");
+  // One showcase: every plan stays real markup with its own signup link; 1 Tahun is chosen first.
+  const pricing = site("Pricing.astro");
+  assert.match(pricing, /type="radio" name="pricing-plan" value=\{plan\.code\} checked=\{plan\.code === best\}/);
+  assert.match(pricing, /href=\{`\$\{SIGNUP_PATH\}\?paket=\$\{plan\.code\}`\}/);
+  assert.match(pricing, /Server tracking 1:1 untuk Meta, Google, dan TikTok/, "the three server legs, as built");
+  // The comparison is an open table: no outer card, no dark header.
+  assert.doesNotMatch(site("CompetitorCompare.astro"), /compare-card|background: var\(--ink\)/);
+});

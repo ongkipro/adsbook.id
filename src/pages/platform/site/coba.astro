@@ -65,9 +65,12 @@ export const prerender = false;
 
   <section class="section" aria-labelledby="harga-title">
     <div class="wrap">
-      <div class="section-head"><h2 id="harga-title">Satu biaya flat per toko, 0% komisi transaksi</h2></div>
-      <CompetitorCompare />
+      <div class="section-head">
+        <h2 id="harga-title">Satu harga flat per toko, semua fitur terbuka</h2>
+        <p class="lead">Siapkan dan review toko gratis tanpa kartu di Mode Preview. Aktifkan langganan saat siap menjalankan iklan.</p>
+      </div>
       <Pricing compact />
+      <div class="compare-gap"><CompetitorCompare /></div>
     </div>
   </section>
 
@@ -79,7 +82,7 @@ export const prerender = false;
     </div>
   </section>
 
-  <ClosingCta />
+  <ClosingCta withShot={false} />
 </SiteLayout>
 
 <style>
@@ -88,12 +91,12 @@ export const prerender = false;
   .hero-text { display: grid; gap: 1.35rem; justify-items: start; }
   .hero-kicker { font-weight: 700; color: var(--accent); font-size: 0.97rem; }
   .hero-note { font-size: 0.95rem; color: var(--ink-muted); }
-  .hero-shot :global(.frame-phone) { max-width: 290px; }
   .more { margin-top: 1.75rem; }
+  .compare-gap { margin-top: 4.5rem; }
   @media (max-width: 760px) {
     .hero { padding: 1rem 0 3rem; }
     .hero-grid { grid-template-columns: 1fr; gap: 2rem; }
-    .hero-shot :global(.frame-phone) { max-height: 240px; max-width: 260px; }
     .hero-shot :global(figcaption) { display: none; }
+    .compare-gap { margin-top: 3rem; }
   }
 </style>

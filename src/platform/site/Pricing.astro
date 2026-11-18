@@ -1,32 +1,65 @@
 ---
+/**
+ * T-51 (ADR-041): Option A, one store and one own domain per subscription, as one asymmetric
+ * showcase (HOMEPAGE-DESIGN-SYSTEM v2 §5): four selectable duration rows on the left, one
+ * porcelain value panel on the right with the chosen plan's price, its signup link and what
+ * every plan includes. Selection is native radios read by CSS `:has()`: no script, each plan's
+ * label, price, note and `/daftar?paket=<code>` link are real markup. 1 Tahun is chosen first.
+ * `compact` (home, /coba) stops there; the full version (/harga) adds payment and grace notes.
+ */
 import { PLANS, PLAN_POINTS, PREVIEW } from './content.ts';
 import { SIGNUP_LABEL, SIGNUP_PATH } from './site.ts';
 
-// T-51 (ADR-041): Option A, one store and one own domain per subscription.
-// `compact` (home) shows the cards and the preview promise; the full version
-// (/harga) adds what every plan holds and what happens around payment.
 interface Props {
   compact?: boolean;
 }
 const { compact = false } = Astro.props;
+
+const MONTHS: Record<string, number> = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
+const rupiah = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 });
+const perMonth = (price: string, code: string) => {
+  const amount = Number(price.replace(/\D/g, ''));
+  return `Rp${rupiah.format(Math.round(amount / (MONTHS[code] ?? 1)))}`;
+};
+const INCLUDED = [
+  '1 langganan = 1 toko dan 1 domain sendiri',
+  '0% potongan transaksi dari adsbook.id untuk QRIS, VA, dan COD',
+  'Tanpa kuota order dan tanpa batas produk',
+  'Server tracking 1:1 untuk Meta, Google, dan TikTok',
+  'Siapkan dan review gratis di Mode Preview, lalu masa tenggang 48 jam',
+];
+const best = PLANS.find((plan) => 'best' in plan && plan.best)?.code ?? '12m';
 ---
 
 <div class="pricing">
-  <p class="preview"><strong>{PREVIEW.title}.</strong> {PREVIEW.text}</p>
-  <ul class="plans" aria-label="Paket langganan per toko">
+  <fieldset class="cycles">
+    <legend>Pilih durasi langganan per toko</legend>
     {PLANS.map((plan) => (
-      <li class:list={['plan', { best: 'best' in plan && plan.best }]}>
-        <p class="plan-name">{plan.label}{'best' in plan && plan.best && <span class="tag">Paling hemat</span>}</p>
-        <p class="plan-price">{plan.price}</p>
-        <p class="plan-note">{plan.period} · {plan.note}</p>
-        <a class="plan-pick" href={`${SIGNUP_PATH}?paket=${plan.code}`}>Pilih {plan.label} →</a>
-      </li>
+      <label class="cycle">
+        <input type="radio" name="pricing-plan" value={plan.code} checked={plan.code === best} />
+        <span class="c-main">
+          <span class="c-label">{plan.label}{'best' in plan && plan.best && <span class="c-best">Paling hemat</span>}</span>
+          <span class="c-note">{plan.period} · {plan.note}</span>
+        </span>
+        <span class="c-price">{plan.price}</span>
+      </label>
     ))}
-  </ul>
-  <div class="after">
-    <a class="btn" href={SIGNUP_PATH}>{SIGNUP_LABEL}</a>
-    <p class="muted">Harga per toko. 1 langganan = 1 toko dan 1 domain sendiri. 0% potongan per transaksi.</p>
+  </fieldset>
+
+  <div class="panel">
+    {PLANS.map((plan) => (
+      <div class="readout" data-plan={plan.code}>
+        <p class="r-label">{plan.label}</p>
+        <p class="r-price"><span>{plan.price}</span> <small>/ {plan.period}</small></p>
+        <p class="r-month">{plan.code === '1m' ? 'Dibayar per bulan' : `Setara ${perMonth(plan.price, plan.code)} per bulan`}</p>
+        <a class="btn r-cta" href={`${SIGNUP_PATH}?paket=${plan.code}`}>{SIGNUP_LABEL} <span aria-hidden="true">→</span><span class="sr-only"> dengan paket {plan.label}</span></a>
+      </div>
+    ))}
+    <ul class="included" aria-label="Sudah termasuk di setiap paket">
+      {INCLUDED.map((point) => <li>{point}</li>)}
+    </ul>
   </div>
+
   {!compact && (
     <div class="details">
       <div>
@@ -34,6 +67,7 @@ const { compact = false } = Astro.props;
         <ul class="points">{PLAN_POINTS.map((point) => <li>{point}</li>)}</ul>
       </div>
       <div class="notes">
+        <p>{PREVIEW.text}</p>
         <p>{PREVIEW.payment}</p>
         <p>{PREVIEW.grace}</p>
         <p class="muted">{PREVIEW.fees}</p>
@@ -43,23 +77,56 @@ const { compact = false } = Astro.props;
 </div>
 
 <style>
-  .pricing { display: grid; gap: 1.75rem; }
-  .preview { max-width: 64ch; }
-  .plans { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
-  .plan { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1.5rem; display: grid; gap: 0.4rem; align-content: start; }
-  .plan.best { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-  .plan-name { font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-  .tag { font-size: 0.8125rem; font-weight: 700; color: var(--accent); background: var(--accent-tint); border-radius: 999px; padding: 0.15rem 0.6rem; }
-  .plan-price { font-family: var(--display); font-weight: 800; font-size: 1.9rem; color: var(--ink); letter-spacing: -0.02em; }
-  .plan-note { font-size: 0.95rem; color: var(--ink-muted); }
-  .plan-pick { margin-top: 0.5rem; font-size: 0.92rem; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; min-height: 36px; }
-  .plan-pick:hover { text-decoration: underline; }
-  .after { display: grid; gap: 0.75rem; justify-items: start; }
-  .details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.5rem; padding-top: 0.5rem; }
+  .pricing { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 1.5rem 2.5rem; align-items: stretch; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .cycles { margin: 0; padding: 0; border: 0; display: grid; gap: 0.6rem; align-content: center; min-width: 0; }
+  .cycles legend { padding: 0; margin-bottom: 0.4rem; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--slate); }
+  .cycle { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.9rem; align-items: center; padding: 1rem 1.15rem; border-radius: 16px; background: #fff; box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.09); cursor: pointer; transition: box-shadow 150ms ease-out, background-color 150ms ease-out; }
+  .cycle:hover { box-shadow: inset 0 0 0 1px rgb(37 99 235 / 0.45); }
+  .cycle:has(input:checked) { background: #f8fbff; box-shadow: inset 0 0 0 2px var(--accent); }
+  .cycle:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .cycle input { appearance: none; margin: 0; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px #94a3b8; display: grid; place-items: center; }
+  .cycle input:checked { box-shadow: inset 0 0 0 5px var(--accent); }
+  .cycle input:focus-visible { outline: none; }
+  .c-main { display: grid; gap: 0.15rem; min-width: 0; }
+  .c-label { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-weight: 700; color: var(--ink); }
+  .c-best { padding: 0.1rem 0.5rem; border-radius: 999px; background: #eff6ff; color: var(--accent); font-size: 0.75rem; }
+  .c-note { font-size: 0.85rem; color: var(--slate); }
+  .c-price { font: 800 1.1rem/1 var(--display); color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* The porcelain value panel: the chosen plan, then what every plan holds. */
+  .panel { display: grid; gap: 1.75rem; align-content: start; padding: 2.25rem; border-radius: 24px; background: var(--tile); }
+  .readout { display: none; gap: 0.6rem; justify-items: start; }
+  .pricing:has(input[value="1m"]:checked) .readout[data-plan="1m"],
+  .pricing:has(input[value="3m"]:checked) .readout[data-plan="3m"],
+  .pricing:has(input[value="6m"]:checked) .readout[data-plan="6m"],
+  .pricing:has(input[value="12m"]:checked) .readout[data-plan="12m"] { display: grid; }
+  @supports not selector(:has(*)) { .readout[data-plan="12m"] { display: grid; } }
+  .r-label { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--slate); }
+  .r-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
+  .r-price span { font: 800 clamp(2.1rem, 1.6rem + 2vw, 2.9rem)/1 var(--display); letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .r-price small { font-size: 1rem; color: var(--slate); }
+  .r-month { color: var(--ink-muted); }
+  .r-cta { margin-top: 0.5rem; gap: 0.5rem; }
+  .included { list-style: none; margin: 0; padding: 1.5rem 0 0; display: grid; gap: 0.65rem; border-top: 1px solid rgb(15 23 42 / 0.08); }
+  .included li { position: relative; padding-left: 1.7rem; font-size: 0.97rem; color: var(--ink); }
+  .included li::before { content: ""; position: absolute; left: 0; top: 0.3rem; width: 16px; height: 16px; border-radius: 5px; background: #fff; }
+  .included li::after { content: ""; position: absolute; left: 5.5px; top: calc(0.3rem + 3px); width: 4px; height: 8px; border: solid var(--accent); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+  .details { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.5rem; margin-top: 1.5rem; padding-top: 2rem; border-top: var(--hairline); }
   .details h3 { margin-bottom: 0.75rem; }
-  .points { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; }
-  .notes { display: grid; gap: 1rem; }
-  @media (max-width: 960px) { .plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 760px) { .details { grid-template-columns: 1fr; gap: 1.5rem; } }
-  @media (max-width: 520px) { .plans { grid-template-columns: 1fr; } .plan { padding: 1.25rem; } }
+  .points { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.45rem; }
+  .notes { display: grid; gap: 1rem; color: var(--ink-muted); }
+
+  @media (max-width: 900px) {
+    .pricing { grid-template-columns: 1fr; }
+    .details { grid-template-columns: 1fr; gap: 1.5rem; }
+  }
+  @media (max-width: 520px) {
+    .panel { padding: 1.5rem; border-radius: 20px; }
+    .cycle { padding: 0.9rem 1rem; gap: 0.75rem; }
+    .c-price { font-size: 1rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { .cycle { transition: none; } }
 </style>

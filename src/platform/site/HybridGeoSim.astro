@@ -6,7 +6,7 @@
  * Account, district shipping) in the provinces the seller excludes; COD is
  * also refused on the server for those provinces (isCodBlockedForProvince).
  * The default list is DEFAULT_COD_DISABLED_PROVINCE_CODES (src/lib/province.ts),
- * which the seller can change. No result figures: the tiles name mechanisms.
+ * which the seller can change. No result figures: the points name mechanisms.
  */
 interface Props { id?: string }
 const { id = 'hybrid-geo-title' } = Astro.props;
@@ -27,7 +27,6 @@ const PROVINCES = [
 <section class="section section-white geo" aria-labelledby={id} data-hybrid-geo>
   <div class="wrap geo-grid">
     <div class="geo-copy">
-      <p class="pill-eyebrow"><span class="sq" aria-hidden="true"></span>Hybrid Form · filter wilayah</p>
       <h2 id={id}>Jaga learning phase dari klik di luar area layanan COD</h2>
       <p class="lead">Satu link iklan menyesuaikan form dan metode bayar dengan provinsi pembeli. Di provinsi yang Anda kecualikan, COD tidak tersedia: pembeli membayar lunas lewat QRIS atau Virtual Account, jadi Purchase dari area itu hanya terkirim untuk pembayaran yang benar-benar masuk.</p>
 
@@ -40,7 +39,7 @@ const PROVINCES = [
         </button>
       </div>
 
-      <ul class="tiles">
+      <ul class="points">
         <li><b>Form singkat COD</b><span>Tiga kolom di HP, untuk provinsi tempat COD aktif</span></li>
         <li><b>COD dikunci di server</b><span>Order COD ke provinsi yang dikecualikan selalu ditolak</span></li>
         <li><b>Purchase dari pembayaran lunas</b><span>Di area non-COD, Purchase menunggu QRIS atau VA terbayar</span></li>
@@ -146,62 +145,61 @@ const PROVINCES = [
 <style>
   .geo-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 3.5rem; align-items: center; }
   .geo-copy { display: grid; gap: 1.1rem; justify-items: start; }
-  .pill-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.8rem; border-radius: 999px; background: #eff6ff; border: 1px solid #dbeafe; font: 600 0.72rem/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
-  .sq { width: 6px; height: 6px; background: var(--accent); flex-shrink: 0; }
 
-  .seg { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; border-radius: 999px; background: var(--canvas); border: 1px solid #e2e8f0; }
+  .seg { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; padding: 0.25rem; border-radius: 999px; background: var(--tile); }
   .seg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 40px; padding: 0 1.1rem; border: 0; border-radius: 999px; background: transparent; color: #475569; font: 700 0.86rem/1 var(--display); cursor: pointer; transition: background-color 0.25s, color 0.25s, box-shadow 0.25s; }
   .seg-btn.is-on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 4px 12px -4px rgb(15 23 42 / 0.12); }
   .seg-dot { width: 7px; height: 7px; }
   .dot-cod { background: var(--accent); }
-  .dot-non { background: var(--ink); }
+  .dot-non { background: var(--slate-soft); }
 
-  .tiles { list-style: none; margin: 0.25rem 0 0; padding: 0; display: grid; gap: 0.6rem; width: 100%; }
-  .tiles li { display: grid; gap: 0.15rem; padding: 0.8rem 1rem; border-radius: 14px; background: var(--canvas); border: 1px solid #f1f5f9; }
-  .tiles b { font-family: var(--display); color: var(--ink); font-size: 0.95rem; }
-  .tiles span { font-size: 0.86rem; color: var(--ink-muted); }
+  /* Three open typographic rows: a hairline between, no boxes. */
+  .points { list-style: none; margin: 0.25rem 0 0; padding: 0; display: grid; width: 100%; }
+  .points li { display: grid; gap: 0.15rem; padding: 0.85rem 0; border-top: var(--hairline); }
+  .points li:last-child { border-bottom: var(--hairline); }
+  .points b { font-family: var(--display); color: var(--ink); font-size: 0.97rem; }
+  .points span { font-size: 0.9rem; color: var(--ink-muted); }
 
   .geo-visual { position: relative; margin: 0; display: grid; justify-items: center; padding-top: 1rem; }
   /* Back layer: the province list, fading into the page at its edges. */
   .regions {
-    position: absolute; top: 0; left: 0; width: 62%; padding: 1.1rem; border-radius: 18px; background: var(--canvas); border: 1px solid #e2e8f0;
-    box-shadow: 0 24px 60px -15px rgb(15 23 42 / 0.08);
-    mask-image: linear-gradient(to bottom, #000 62%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+    position: absolute; top: 0; left: 0; width: 62%; padding: 1.5rem; border-radius: 24px; background: var(--tile);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 62%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 62%, transparent 100%);
   }
   .regions-head { display: grid; gap: 0.15rem; margin-bottom: 0.75rem; }
   .rh-title { font: 800 0.95rem/1.2 var(--display); color: var(--ink); }
   .rh-meta { font-size: 0.72rem; color: #64748b; }
   .regions-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
-  .regions-list li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.65rem; border-radius: 10px; background: #fff; border: 1px solid #f1f5f9; font-size: 0.8rem; color: #334155; transition: border-color 0.3s, background-color 0.3s; }
+  .regions-list li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.65rem; border-radius: 10px; background: #fff; font-size: 0.8rem; color: #334155; transition: box-shadow 0.3s, background-color 0.3s; }
   .regions-list b { font-size: 0.68rem; padding: 0.05rem 0.45rem; border-radius: 999px; }
   .r-cod b { background: #eff6ff; color: var(--accent); }
-  .r-non b { background: #f1f5f9; color: #334155; }
-  .geo[data-branch="target"] .r-cod, .geo[data-branch="filter"] .r-non { border-color: #bfdbfe; background: #f8fbff; }
+  .r-non b { background: transparent; color: var(--slate); }
+  .geo[data-branch="target"] .r-cod, .geo[data-branch="filter"] .r-non { box-shadow: inset 3px 0 0 var(--accent); }
 
   /* Front layer: the phone the buyer sees. */
-  .phone { position: relative; z-index: 1; margin: 2.5rem 0 0 auto; width: min(100%, 300px); display: grid; gap: 0.7rem; padding: 1rem; border-radius: 28px; background: #fff; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 16px 32px -12px rgb(15 23 42 / 0.16), 0 40px 80px -30px rgb(15 23 42 / 0.22); }
-  .phone-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-bottom: 0.6rem; border-bottom: 1px solid #f1f5f9; }
+  .phone { position: relative; z-index: 1; margin: 2.5rem 0 0 auto; width: min(100%, 300px); display: grid; gap: 0.7rem; padding: 1rem; border-radius: 24px; background: #fff; border: 1px solid rgb(15 23 42 / 0.05); box-shadow: var(--shadow-float); }
+  .phone-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-bottom: 0.6rem; border-bottom: var(--hairline); }
   .phone-loc { font-size: 0.74rem; font-weight: 700; color: var(--ink); }
   .phone-chip { font-size: 0.66rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; background: #eff6ff; color: var(--accent); }
-  .geo[data-branch="filter"] .phone-chip { background: #f1f5f9; color: var(--ink); }
+  .geo[data-branch="filter"] .phone-chip { background: var(--tile); color: var(--ink-muted); }
   .phone-view { display: grid; gap: 0.55rem; animation: view-in 0.35s ease-out; }
   .phone-view[hidden] { display: none; }
   @keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   .prod { display: flex; align-items: center; gap: 0.6rem; }
-  .prod-thumb { flex-shrink: 0; width: 44px; height: 44px; display: flex; align-items: flex-end; justify-content: center; gap: 2px; padding-bottom: 8px; border-radius: 12px; background: var(--canvas); border: 1px solid #e2e8f0; font: 800 1.2rem/1 var(--display); color: var(--ink); }
+  .prod-thumb { flex-shrink: 0; width: 44px; height: 44px; display: flex; align-items: flex-end; justify-content: center; gap: 2px; padding-bottom: 8px; border-radius: 12px; background: var(--tile); font: 800 1.2rem/1 var(--display); color: var(--ink); }
   .prod-thumb i { width: 5px; height: 5px; background: var(--accent); }
   .prod-name { font-weight: 700; font-size: 0.85rem; color: var(--ink); }
   .prod-price { font-size: 0.8rem; color: #475569; display: flex; align-items: center; gap: 0.4rem; }
   .tag { font-size: 0.64rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 999px; }
-  .tag-cod { background: #ecfdf5; color: #047857; }
-  .tag-non { background: #f1f5f9; color: var(--ink); }
-  .field { display: grid; gap: 0.1rem; padding: 0.5rem 0.65rem; border-radius: 10px; background: var(--canvas); border: 1px solid #e2e8f0; }
+  .tag-cod { background: #eff6ff; color: var(--accent); }
+  .tag-non { background: var(--tile); color: var(--ink-muted); }
+  .field { display: grid; gap: 0.1rem; padding: 0.5rem 0.65rem; border-radius: 10px; background: #f8fafc; }
   .field span { font-size: 0.66rem; color: #64748b; }
   .field b { font-size: 0.8rem; color: var(--ink); }
-  .notice { font-size: 0.74rem; line-height: 1.45; padding: 0.5rem 0.65rem; border-radius: 10px; background: #f8fafc; border: 1px dashed #cbd5e1; color: #334155; }
+  .notice { font-size: 0.74rem; line-height: 1.45; padding: 0.5rem 0.65rem; border-radius: 10px; background: var(--tile); color: #334155; }
   .pay { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-  .pay span { font-size: 0.7rem; font-weight: 700; padding: 0.3rem 0.55rem; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; color: #334155; }
-  .pay .pay-on { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+  .pay span { font-size: 0.7rem; font-weight: 700; padding: 0.3rem 0.55rem; border-radius: 8px; background: #f8fafc; color: #334155; }
+  .pay .pay-on { color: var(--accent); background: #eff6ff; }
   .pay .pay-off { color: #94a3b8; text-decoration: line-through; }
   .cta { display: flex; align-items: center; justify-content: center; min-height: 42px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; font-size: 0.82rem; }
   .cta-ink { background: var(--ink); }

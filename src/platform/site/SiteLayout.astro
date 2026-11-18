@@ -119,9 +119,10 @@ const year = new Date().getFullYear();
   @media (max-width: 760px) { :root { --section: 4rem; } }
   *, *::before, *::after { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
-  /* White gallery (Paduka, 2026-11-18): one ice-blue wash at the top of every page, behind the header and
-     the page head alike, so the two read as one surface. The home's hero paints its own stage over it. */
-  body { margin: 0; color: var(--ink); font: 17px/1.6 var(--body); background: radial-gradient(ellipse 58% 520px at 50% 0, rgb(219 234 254 / 0.45), rgb(255 255 255 / 0) 75%) no-repeat, var(--canvas); }
+  /* Borderless gallery (HOMEPAGE-DESIGN-SYSTEM v2): pure white canvas, so the porcelain tiles
+     (--tile) read as surfaces without a single border. One ice-blue wash at the top of every page,
+     behind the header and the page head alike; the home's hero paints its own stage over it. */
+  body { margin: 0; color: var(--ink); font: 17px/1.6 var(--body); background: radial-gradient(ellipse 58% 520px at 50% 0, rgb(219 234 254 / 0.45), rgb(255 255 255 / 0) 75%) no-repeat, var(--surface); }
   img { max-width: 100%; height: auto; display: block; }
   a { color: var(--accent); text-underline-offset: 3px; }
   a:hover { color: var(--accent-hover); }
@@ -129,7 +130,8 @@ const year = new Date().getFullYear();
   /* The display face's space is 0.18em; with -0.02em tracking words ran together in long headings. */
   h1, h2, h3 { font-family: var(--display); color: var(--ink); line-height: 1.15; letter-spacing: -0.02em; word-spacing: 0.06em; text-wrap: balance; margin: 0; }
   h1 { font-size: clamp(2.1rem, 1.4rem + 3vw, 3.4rem); font-weight: 800; }
-  h2 { font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.25rem); font-weight: 800; }
+  /* Section openings (HOMEPAGE-DESIGN-SYSTEM v2 §2.2): a strong H2, no eyebrow pill above it. */
+  h2 { font-size: clamp(1.85rem, 1.35rem + 2vw, 2.65rem); font-weight: 800; letter-spacing: -0.028em; line-height: 1.12; }
   h3 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
   p { margin: 0; }
   .wrap { width: min(1120px, 100% - 2rem); margin-inline: auto; }
@@ -166,8 +168,12 @@ const year = new Date().getFullYear();
   .text-link:hover::after { transform: translateX(3px); }
   @media (prefers-reduced-motion: reduce) { .text-link::after { transition: none; } }
   .section-head { display: grid; gap: 0.9rem; margin-bottom: 3rem; max-width: 64ch; }
+  .section-head h2 { max-width: 24ch; }
+  .section-head .lead { max-width: 54ch; }
   @media (max-width: 760px) { .section-head { margin-bottom: 2rem; } }
   .section { padding-block: var(--section); }
+  /* The first band under an inner page's head: the head already gives the air above it. */
+  .page-head + .section { padding-top: calc(var(--section) * 0.4); }
   /* Inner pages: one head, on the same left edge as the content below it. */
   /* The legal pages' head; PageHead.astro (every other inner page) styles its own, centred. */
   .page-head { padding: 3rem 0 4rem; }
@@ -178,7 +184,13 @@ const year = new Date().getFullYear();
   .section-white { background: var(--surface); }
   .lead { font-size: 1.15rem; color: var(--ink-muted); }
 
-  .frame { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 12px 32px rgb(15 23 42 / 0.08); }
-  .frame-phone { max-width: 340px; border-radius: 28px; border: 8px solid var(--ink); }
-  .caption { margin-top: 0.6rem; font-size: 0.85rem; color: var(--ink-muted); }
+  /* Borderless gallery (HOMEPAGE-DESIGN-SYSTEM v2): one porcelain tile tone, one hairline, one
+     float shadow. Screenshots are framed by ShotFrame.astro alone; the 8px phone bezel is retired. */
+  :root {
+    --tile: #f4f6fa;
+    --hairline: 1px solid rgb(15 23 42 / 0.07);
+    --shadow-float: 0 20px 50px -12px rgb(15 23 42 / 0.09), 0 2px 6px -1px rgb(15 23 42 / 0.04);
+    --slate: #64748b;
+    --slate-soft: #94a3b8;
+  }
 </style>
