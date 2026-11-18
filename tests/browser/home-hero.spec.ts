@@ -19,7 +19,9 @@ test("home hero: real links, the account dialog, the stage on the home only", as
   const hero = page.locator("#hero-root");
   await expect(hero).toHaveClass(/is-live|is-still/, { timeout: 15_000 });
   await expect(page.locator("h1")).toHaveCount(1);
-  await expect(page.locator("header.site-header")).toHaveCount(0);
+  // One header on every page: the hero renders the shared SiteHeader, never a second one above it.
+  await expect(page.locator("header")).toHaveCount(1);
+  await expect(page.locator("#hero-root header.site-header")).toHaveCount(1);
   await expect(page.locator("#copy-inner a.cta-modern")).toHaveAttribute("href", "/daftar");
   await expect(page.locator("#btn-user-auth")).toHaveAttribute("href", "/masuk");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -45,7 +47,66 @@ test("home hero: real links, the account dialog, the stage on the home only", as
   problems.length = 0;
   requests.length = 0;
   await page.reload();
+  await expect(page.locator("header")).toHaveCount(1);
   await expect(page.locator("header.site-header")).toHaveCount(1);
   expect(requests.filter((url) => /kinetic|KineticHero/.test(url)), "an inner page loads none of it").toEqual([]);
   expect(problems).toEqual([]);
+});
+
+/** Paduka, 2026-11-18: on a phone the header ends [account] [menu], and the menu morphs into ×. */
+async function phoneMenu(page: import("@playwright/test").Page, path: string, current: string | null) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${PLATFORM}${path}`);
+  const order = await page.locator("header .sh-tools > :visible").evaluateAll((els) => els.map((el) => el.id));
+  expect(order).toEqual(["btn-user-auth", "btn-mobile-menu"]);
+  await expect(page.locator(".sh-nav")).toBeHidden();
+
+  const button = page.locator("#btn-mobile-menu");
+  const panel = page.locator("#mobile-nav-dropdown");
+  await expect(button).toHaveAttribute("aria-expanded", "false");
+  await expect(panel).toBeHidden();
+  await button.click();
+  await expect(button).toHaveAttribute("aria-expanded", "true");
+  await expect(button).toHaveAttribute("aria-label", "Tutup menu navigasi");
+  await expect(panel).toBeVisible();
+  await expect(panel.locator("li a")).toHaveCount(5);
+  await expect(panel.locator(".row-hint").first()).not.toBeEmpty();
+  if (current) await expect(panel.locator(`li a[href="${current}"]`)).toHaveAttribute("aria-current", "page");
+  // Aligned to the screen: 1rem from each edge, below the header.
+  const box = (await panel.boundingBox())!;
+  expect(Math.round(box.x)).toBe(16);
+  expect(Math.round(390 - box.x - box.width)).toBe(16);
+  const headerBottom = (await page.locator("header.site-header").boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(headerBottom.y + headerBottom.height);
+
+  await page.keyboard.press("Escape");
+  await expect(button).toHaveAttribute("aria-expanded", "false");
+  await expect(panel).toBeHidden();
+  await expect(button).toBeFocused();
+
+  await button.click();
+  await page.mouse.click(195, 820); // the backdrop, below the panel
+  await expect(button).toHaveAttribute("aria-expanded", "false");
+
+  // "Sudah punya toko?" opens the same dialog on Masuk, and closes the menu.
+  await button.click();
+  await panel.locator("[data-auth-open]").click();
+  await expect(page.locator("#auth-dialog")).toBeVisible();
+  await expect(page.locator("#auth-title")).toHaveText("Masuk ke toko Anda");
+  await expect(button).toHaveAttribute("aria-expanded", "false");
+}
+
+test("phone header on the home: [account] [menu ⇄ ×], a screen-aligned menu, the dialog from it", async ({ page }) => {
+  await phoneMenu(page, "/", null);
+});
+
+test("the inner pages carry the same header: /fitur at 390, and the desktop nav at 1280", async ({ page }) => {
+  await phoneMenu(page, "/fitur", "/fitur");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${PLATFORM}/fitur`);
+  await expect(page.locator("#btn-mobile-menu")).toBeHidden();
+  await expect(page.locator(".sh-nav a[aria-current=page]")).toHaveText("Fitur");
+  await expect(page.locator("header .sh-try")).toHaveAttribute("href", "/daftar");
+  await page.goto(`${PLATFORM}/daftar`);
+  await expect(page.locator("#btn-user-auth"), "the signup page keeps only the wordmark").toHaveCount(0);
 });
