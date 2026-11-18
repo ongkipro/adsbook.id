@@ -590,6 +590,17 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     slugEdit.disabled = locked;
     for (const panel of panels) panel.inert = locked;
   };
+  /**
+   * A token is single use: once a request carrying it may have reached the server,
+   * it is spent, whether the answer was a refusal or never arrived. The real widget
+   * is reset for a fresh one; the local stand-in token needs none.
+   */
+  const spendToken = () => {
+    if (form.dataset.standin) return;
+    turnstileToken = '';
+    setSecurity('pending', 'Memverifikasi koneksi aman…');
+    (window as unknown as { turnstile?: Turnstile }).turnstile?.reset(widgetId);
+  };
   const restoreSubmit = () => {
     lockForm(false);
     pending = false;
@@ -649,7 +660,9 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     const eventId = crypto.randomUUID();
 
     let succeeded = false;
+    let postAttempted = false;
     try {
+      postAttempted = true;
       const response = await fetch('/api/platform/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -674,12 +687,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           payload.errors || {},
           Array.isArray(payload.suggestions) ? payload.suggestions : [],
         );
-        // A token is single use: a refused attempt needs a fresh one.
-        if (!form.dataset.standin) {
-          turnstileToken = '';
-          setSecurity('pending', 'Memverifikasi koneksi aman…');
-          (window as unknown as { turnstile?: Turnstile }).turnstile?.reset(widgetId);
-        }
+        spendToken();
         return;
       }
 
@@ -721,8 +729,13 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         handoff.submit();
       }
     } catch {
-      restoreSubmit();
-      showErrors('Koneksi terputus. Coba lagi.', {});
+      // A lost answer after a successful signup leaves the page as it is (the launch and its
+      // manual sign-in link stay); before that, the request may have spent the token.
+      if (!succeeded) {
+        restoreSubmit();
+        if (postAttempted) spendToken();
+        showErrors('Koneksi terputus. Coba lagi.', {});
+      }
     } finally {
       window.clearInterval(stageTimer);
       if (!succeeded) restoreSubmit();

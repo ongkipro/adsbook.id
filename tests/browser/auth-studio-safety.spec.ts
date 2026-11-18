@@ -157,3 +157,38 @@ test("an address the server refuses stays refused until it changes; a suggestion
   await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
   await expect(page.locator("#stepNow")).toHaveText("2");
 });
+
+test("a lost answer spends the token: the check is reset, and a retry waits for a fresh token before it sends", async ({ page }) => {
+  await page.setExtraHTTPHeaders({ "cf-connecting-ip": "198.51.100.122" });
+  await withProvider(page, "manual");
+  const posts = signupPosts(page);
+  // The first request goes out and its answer never comes back (the server may have spent the token).
+  let lost = false;
+  await page.route(`${PLATFORM}/api/platform/signup`, (route) => {
+    if (lost) return route.continue();
+    lost = true;
+    return route.abort("connectionreset");
+  });
+  await page.goto(`${PLATFORM}/daftar`);
+  await ready(page);
+  await page.evaluate(() => (window as unknown as { __fakeTurnstile: { solve(): void } }).__fakeTurnstile.solve());
+  await expect(page.locator("#securityStatus")).toHaveAttribute("data-state", "ok");
+  const store = { storeName: "Toko Jawaban Hilang", slug: "toko-jawaban-hilang", email: "owner@jawaban-hilang.local.test", password: "password-hilang-123" };
+  await signUpThroughWizard(page, store);
+  await expect(page.locator("#errorSummary")).toContainText("Koneksi terputus");
+  await expect.poll(() => posts.length).toBe(1);
+  // The spent token is gone and the real widget was reset for a fresh one.
+  expect(await page.evaluate(() => (window as unknown as { __fakeTurnstile: { resets: number } }).__fakeTurnstile.resets)).toBe(1);
+  await expect(page.locator("#securityStatus")).toHaveAttribute("data-state", "pending");
+  await expect(page.locator("#submitSignup")).toBeEnabled();
+  // Retry: no second request until the fresh token arrives, then exactly one, which lands.
+  await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
+  await expect(page.locator("#submitSignup")).toHaveText("Menyelesaikan verifikasi keamanan…");
+  await page.waitForTimeout(500);
+  expect(posts, "the stale token is never resent").toHaveLength(1);
+  await page.evaluate(() => (window as unknown as { __fakeTurnstile: { solve(): void } }).__fakeTurnstile.solve());
+  await expect.poll(() => posts.length).toBe(2);
+  expect(posts[1]).toMatchObject({ slug: store.slug, email: store.email, turnstile_token: "local-stand-in" });
+  await page.waitForURL(`${origin(store.slug)}/admin/setup?welcome=1`, { timeout: 60_000 });
+});
+
