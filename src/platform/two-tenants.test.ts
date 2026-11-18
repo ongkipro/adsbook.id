@@ -2213,6 +2213,13 @@ test("T-38: payment, product price/weight and couriers each gate readiness; opti
   assert.equal((await store.facts()).payment, false, "COD off and AutoLaris without its key");
   store.sql.exec("UPDATE stores SET autolaris_api_key = 'k', autolaris_order_origin_id = '1', autolaris_order_destination_id = '2'");
   assert.equal(isStoreReady(await store.facts()), true, "AutoLaris with what its rail validates");
+  // Review: AutoLaris with every channel switched off offers the buyer nothing.
+  const { AUTOLARIS_CHANNEL_OPTIONS } = await import("../lib/autolaris-client.ts");
+  store.sql.prepare("UPDATE stores SET disabled_autolaris_channels = ?").run(AUTOLARIS_CHANNEL_OPTIONS.map((channel) => channel.code).join(","));
+  const allOff = await store.facts();
+  assert.deepEqual([allOff.prepaid, allOff.payment], [false, false], "every AutoLaris channel off");
+  store.sql.prepare("UPDATE stores SET disabled_autolaris_channels = ?").run(AUTOLARIS_CHANNEL_OPTIONS.slice(1).map((channel) => channel.code).join(","));
+  assert.equal(isStoreReady(await store.facts()), true, "one channel left on is enough");
   store.sql.exec("UPDATE product_variants SET weight_grams = 0");
   assert.equal(isStoreReady(await store.facts()), false, "a product without weight");
   store.sql.exec("UPDATE product_variants SET weight_grams = 300; UPDATE courier_rules SET is_enabled = 0");

@@ -93,10 +93,14 @@ test("review finding 1: a hybrid store is ready on either track; a physical prod
 
 test("ONBOARDING-BANK-WAREHOUSE-SPEC §3: the product form guides toward the warehouse and a non-COD rail; the public address is its own optional step", async () => {
   const { physicalProductGuide } = await import("./setup-checklist.ts");
-  assert.deepEqual(physicalProductGuide(fresh), { warehouse: true, mengantar: true, payment: true });
-  assert.deepEqual(physicalProductGuide({ ...fresh, primaryWarehouse: true, mengantar: true }), { warehouse: false, mengantar: false, payment: true }, "a bank account still owed");
-  assert.deepEqual(physicalProductGuide({ ...fresh, payment: true }), { warehouse: true, mengantar: true, payment: false });
-  assert.equal(physicalProductGuide({ ...fresh, primaryWarehouse: true, payment: true }), null, "nothing the banner names is owed");
+  assert.deepEqual(physicalProductGuide(fresh), { warehouse: true, mengantar: true, couriers: false, payment: true });
+  assert.deepEqual(physicalProductGuide({ ...fresh, primaryWarehouse: true, mengantar: true }), { warehouse: false, mengantar: false, couriers: false, payment: true }, "a bank account still owed");
+  assert.deepEqual(physicalProductGuide({ ...fresh, payment: true }), { warehouse: true, mengantar: true, couriers: false, payment: false });
+  const shipping = { ...fresh, primaryWarehouse: true, payment: true, mengantar: true };
+  assert.equal(physicalProductGuide(shipping), null, "nothing the banner names is owed");
+  // Review: any one missing physical prerequisite shows the guide, the Mengantar key or the couriers alone included.
+  assert.deepEqual(physicalProductGuide({ ...shipping, mengantar: false }), { warehouse: false, mengantar: true, couriers: false, payment: false });
+  assert.deepEqual(physicalProductGuide({ ...shipping, enabledCouriers: 0 }), { warehouse: false, mengantar: false, couriers: true, payment: false });
   assert.equal(physicalProductGuide(null), null);
   const address = (facts: SetupFacts) => buildSetupChecklist(facts).find((step) => step.id === "address");
   assert.deepEqual([address(fresh)?.required, address(fresh)?.done, address(fresh)?.href], [false, false, "/admin/settings/store#businessAddress"]);

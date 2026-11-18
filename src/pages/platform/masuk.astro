@@ -22,7 +22,7 @@ const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<st
 
     <div id="loginError" class="error-banner" hidden role="alert" tabindex="-1"></div>
 
-    <form id="loginForm" class="login-form" novalidate aria-busy="false">
+    <form id="loginForm" class="login-form" method="post" novalidate aria-busy="false">
       <div class="field">
         <label for="loginIdentifier">Email atau username</label>
         <input

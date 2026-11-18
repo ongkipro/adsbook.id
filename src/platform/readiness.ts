@@ -32,6 +32,7 @@
  */
 import { openCredential } from "../lib/credential-crypto.ts";
 import { autoLarisOrderRailGap } from "../lib/provider-config.ts";
+import { AUTOLARIS_CHANNEL_OPTIONS, resolveDisabledAutoLarisChannels } from "../lib/autolaris-client.ts";
 import { getCodDisabledProvinceCodes } from "../lib/form-mode.ts";
 
 export type CatalogMode = "physical" | "digital" | "hybrid";
@@ -76,6 +77,7 @@ type Row = {
   cod: number | null;
   cod_disabled_province_codes: string | null;
   autolaris_on: number | null;
+  disabled_autolaris_channels: string | null;
   autolaris_key: string | null;
   couriers: number;
   signals: number;
@@ -97,7 +99,7 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
          s.catalog_mode,
          EXISTS (SELECT 1 FROM warehouses WHERE is_primary = 1 AND is_active = 1
                  AND TRIM(COALESCE(origin_area_id, '')) <> '' AND TRIM(COALESCE(pickup_address_id, '')) <> '') AS primary_warehouse,
-         s.mengantar_api_key, s.is_cod_enabled AS cod, s.cod_disabled_province_codes, s.is_autolaris_enabled AS autolaris_on,
+         s.mengantar_api_key, s.is_cod_enabled AS cod, s.cod_disabled_province_codes, s.is_autolaris_enabled AS autolaris_on, s.disabled_autolaris_channels,
          s.autolaris_api_key AS autolaris_key,
          (SELECT COUNT(*) FROM courier_rules WHERE is_enabled = 1) AS couriers,
          (TRIM(COALESCE(s.meta_pixel_id, '')) <> '' OR TRIM(COALESCE(s.google_ads_conversion_id, '')) <> '') AS signals
@@ -114,9 +116,12 @@ export async function readReadiness(database: D1Database): Promise<ReadinessFact
   ]);
   // The same inputs /api/payment-methods offers AutoLaris on, so "enabled"
   // here means exactly what a buyer would be offered.
+  // ...and with at least one channel the store left on: every channel off offers the buyer nothing.
+  const disabledChannels: readonly string[] = resolveDisabledAutoLarisChannels(row.disabled_autolaris_channels);
   const autolaris =
     row.autolaris_on !== 0 &&
-    autoLarisOrderRailGap({ apiKey: text(autolarisKey) }) === null;
+    autoLarisOrderRailGap({ apiKey: text(autolarisKey) }) === null &&
+    AUTOLARIS_CHANNEL_OPTIONS.some((channel) => !disabledChannels.includes(channel.code));
   const prepaid = autolaris || Boolean(row.bank_account);
   const codOn = row.store_name !== null && row.cod !== 0;
   const codDisabledProvinces = getCodDisabledProvinceCodes(row.cod_disabled_province_codes).length;

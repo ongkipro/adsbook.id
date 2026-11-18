@@ -273,6 +273,15 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
     ? usableChannels.filter((channel) => !disabledChannels.includes(channel.code)).length
     : 0;
   const providerCount = Number(codEnabled) + Number(autolarisEnabled && apiReady);
+  // On a phone the bank editor opens far below the button: bring it into view and give it focus.
+  const openBankAccounts = () => {
+    setBanksOpen(true);
+    requestAnimationFrame(() => {
+      const section = document.getElementById("rekening-bank-section");
+      section?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      section?.focus({ preventScroll: true });
+    });
+  };
   const feeDirty = paymentFeeBearer !== savedFee.payment || codFeeBearer !== savedFee.cod;
   const mutationsDisabled = !hydrated || loading || Boolean(loadError) || Boolean(busy);
 
@@ -434,7 +443,7 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
               </p>
             </div>
             <StatusBadge ready={manualActiveCount > 0}>{loading ? "Memuat" : manualActiveCount > 0 ? "Aktif" : "Belum tersedia"}</StatusBadge>
-            <Button type="button" variant="outline" onClick={() => setBanksOpen(true)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={openBankAccounts} disabled={loading} data-open-bank-accounts>
               <Landmark /> Kelola rekening
             </Button>
           </div>
@@ -622,7 +631,7 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
       </Collapsible>
 
       <Collapsible open={banksOpen} onOpenChange={setBanksOpen}>
-        <Card id="rekening-bank-section" className="scroll-mt-20">
+        <Card id="rekening-bank-section" className="scroll-mt-20 outline-none" tabIndex={-1}>
           <CardHeader className="border-b">
             <CardTitle as="h3" className="font-semibold">Rekening transfer manual</CardTitle>
             <CardDescription>Rekening aktif langsung tersedia di checkout sesuai urutan, termasuk untuk provinsi non-COD dan produk digital.</CardDescription>

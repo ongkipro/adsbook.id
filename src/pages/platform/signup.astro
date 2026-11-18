@@ -36,6 +36,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           <div id="errorSummary" class="error-banner" hidden role="alert" tabindex="-1"></div>
 
           <form
+            method="post"
             id="signupForm"
             class="signup-form"
             novalidate
@@ -58,7 +59,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
                   <span class="catalog-sub">Tanpa gudang · link akses otomatis saat lunas</span>
                 </label>
               </div>
-              <p class="field-hint catalog-hint"><strong>Satu toko bisa keduanya.</strong> Pilihan ini hanya mengatur tampilan menu awal dashboard Anda. Kapan pun Anda ingin menjual produk fisik sekaligus digital, aktifkan mode Hybrid di Pengaturan › Toko.</p>
+              <p class="field-hint catalog-hint"><strong>Satu toko bisa keduanya.</strong> Pilihan ini mengatur jenis produk dan langkah persiapan awal dashboard Anda. Kapan pun ingin menjual produk fisik sekaligus digital, aktifkan mode Hybrid di Pengaturan › Toko.</p>
             </fieldset>
 
             <div class="field">

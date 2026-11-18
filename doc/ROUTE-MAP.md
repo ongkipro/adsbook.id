@@ -179,7 +179,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/orders` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/index.astro` | `admin-orders-initial` | — | — | `lib/admin-orders-initial.test.ts` |
 | `/admin/orders/[invoice]` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/[invoice].astro` | — | — | — | — |
 | `/admin/orders/abandoned` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/abandoned.astro` | — | — | — | — |
-| `/admin/payments` | GET | admin session | owner, admin | `src/pages/admin/payments.astro` | `autolaris-client` `payment-fee-policy` | — | — | `lib/autolaris-client.test.ts` `lib/autolaris-payment.test.ts` `lib/dev-providers.test.ts` `lib/payment-fee-policy.test.ts` |
+| `/admin/payments` | GET | admin session | owner, admin | `src/pages/admin/payments.astro` | `autolaris-client` `payment-fee-policy` | — | — | `lib/autolaris-client.test.ts` `lib/autolaris-payment.test.ts` `lib/dev-providers.test.ts` `lib/payment-fee-policy.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/products` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products.astro` | `tenant-database` | `product_variants` `products` | — | `platform/two-tenants.test.ts` |
 | `/admin/products/edit` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products/edit.astro` | — | — | — | — |
 | `/admin/products/new` | GET | admin session | owner, admin, advertiser | `src/pages/admin/products/new.astro` | `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/setup-checklist.test.ts` `platform/two-tenants.test.ts` |
@@ -320,7 +320,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `auth-secret` | 1 | `install_secrets` | — | 3 | `/[slug]` `/api/handoff` `/hello` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/logout` |
 | `auth` | 17 | — | — | 12 | `/api/handoff` `/hello` `/admin/dashboard` `/api/admin/access` `/api/admin/logout` `/api/admin/profile` |
 | `auto-load-more` | 2 | — | — | 1 | `/produk` |
-| `autolaris-client` | 20 | — | — | 3 | `/api/order-status` `/api/payment-methods` `/admin/payments` `/api/admin/settings` |
+| `autolaris-client` | 20 | — | — | 4 | `/api/order-status` `/api/payment-methods` `/admin/payments` `/api/admin/settings` |
 | `autolaris-payment` | 23 | `autolaris_callbacks` `order_items` `orders` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `stores` `warehouses` | — | 2 | `/api/meta-event` `/api/order-status` `/api/submit-order` `/api/v1/checkout` `/api/v1/tracking/events` `/api/admin/orders/[id]` |
 | `brand-assets` | 6 | — | — | **none** | `/thanks` `/api/handoff` `/hello` `/pemulihan` `/admin/settings/store` `/platform/login` |
 | `bundled-migrations` | 1 | — | — | **none** | — |

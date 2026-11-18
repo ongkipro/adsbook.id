@@ -34,6 +34,8 @@ test("physical store: a bank account is a required step, the product form guides
   await page.getByLabel("Email", { exact: true }).fill(OWNER.email);
   await page.getByLabel("Password", { exact: true }).fill(OWNER.password);
   await expect(page.locator('[data-next-steps="physical"]')).toContainText("rekening bank untuk pembeli di provinsi non-COD");
+  // Review: without JavaScript the form would post, never put the password in a URL.
+  await expect(page.locator("#signupForm")).toHaveAttribute("method", "post");
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
   await page.waitForURL(`${STORE}/admin/setup?welcome=1`, { timeout: 60_000 });
@@ -79,6 +81,15 @@ test("physical store: a bank account is a required step, the product form guides
   expect(bankY, "the bank comes before AutoLaris").toBeLessThan(autolarisY);
   await expect(page.getByText("Rekening aktif otomatis melayani pembeli dari provinsi yang dikecualikan dari COD")).toBeVisible();
   if (shots) await page.screenshot({ path: `${shots}/onb-payments-1366.png` });
+  // Review: on a phone, "Kelola rekening" brings the opened bank editor into view and focus.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await hydrated(page);
+  await page.locator("[data-open-bank-accounts]").click();
+  await expect(page.locator("#rekening-bank-section")).toBeFocused();
+  await expect(page.locator("#rekening-bank-section")).toBeInViewport();
+  if (shots) await page.screenshot({ path: `${shots}/onb-payments-bank-390.png` });
+  await page.setViewportSize({ width: 1366, height: 900 });
 
   // One bank account: the payment step is done and the guide stops naming it.
   const created = await adminFetch(page, "/api/admin/seller-bank-accounts", "POST", { bank_code: "BCA", account_holder: "Toko Rekening Uji", account_number: "1234567890", is_active: true });

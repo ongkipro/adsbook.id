@@ -174,8 +174,10 @@ export async function readSetupFacts(
  * still owes before a buyer can be quoted and pay — shown above the form, never
  * blocking the save. Null when nothing is owed (or the facts are unreadable).
  */
-export function physicalProductGuide(facts: SetupFacts | null): { warehouse: boolean; mengantar: boolean; payment: boolean } | null {
+export function physicalProductGuide(
+  facts: SetupFacts | null,
+): { warehouse: boolean; mengantar: boolean; couriers: boolean; payment: boolean } | null {
   if (!facts) return null;
-  const owed = { warehouse: !facts.primaryWarehouse, mengantar: !facts.mengantar, payment: !facts.payment };
-  return owed.warehouse || owed.payment ? owed : null;
+  const owed = { warehouse: !facts.primaryWarehouse, mengantar: !facts.mengantar, couriers: facts.enabledCouriers === 0, payment: !facts.payment };
+  return Object.values(owed).some(Boolean) ? owed : null;
 }

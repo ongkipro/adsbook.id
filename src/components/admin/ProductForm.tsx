@@ -124,7 +124,7 @@ export function ProductForm({
   storeName?: string;
   catalogMode?: CatalogMode;
   /** ONBOARDING-BANK-WAREHOUSE-SPEC §3.1: what a physical product still waits on (new products only). */
-  setupGuide?: { warehouse: boolean; mengantar: boolean; payment: boolean } | null;
+  setupGuide?: { warehouse: boolean; mengantar: boolean; couriers: boolean; payment: boolean } | null;
 }) {
   // DIGITAL-PRODUCTS-SPEC §4.2: the store's mode decides a new product's type; only hybrid offers the switch.
   const [productType, setProductType] = useState<ProductType>(catalogMode === "digital" ? "digital" : "physical");
@@ -413,6 +413,11 @@ export function ProductForm({
               {setupGuide.mengantar && (
                 <li data-guide-step="mengantar">
                   <a href="/admin/profile" className="font-semibold text-blue-700 underline underline-offset-2">API Key Mengantar</a> — untuk menghitung ongkir dan membuat resi.
+                </li>
+              )}
+              {setupGuide.couriers && (
+                <li data-guide-step="couriers">
+                  <a href="/admin/expeditions" className="font-semibold text-blue-700 underline underline-offset-2">Kurir aktif</a> — minimal satu kurir agar ongkir bisa dihitung.
                 </li>
               )}
               {setupGuide.payment && (
