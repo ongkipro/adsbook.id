@@ -1,7 +1,11 @@
 import {
+  bannerRefusalMessage,
+  isBannerOp,
   loadPublishedHomeContent,
+  projectPublishedBanner,
   type HomeContent,
 } from "./storefront-content.ts";
+import { canAccessAdminRoute, type AdminRole } from "./auth.ts";
 import { listPublicLandingPages } from "./landing-pages.ts";
 import { tenantDatabase } from "./tenant-database.ts";
 
@@ -55,8 +59,56 @@ function defaultHomeContent(
   };
 }
 
+/**
+ * The document a first banner publish starts from when nothing was published:
+ * the composed default without landing pages, which every read adds itself.
+ */
+export function seedHomeContent(tenant: App.Locals["tenant"]): TenantHomeContent {
+  return defaultHomeContent(tenant, []);
+}
+
+export type BannerPreview =
+  | { granted: false }
+  | { granted: true; published: TenantHomeContent | null; notice: string | null };
+
+/**
+ * `/?preview=banner&op=…&v=…` (R1b). Granted only to a session of this store
+ * whose role may open the content tools (owner, admin, advertiser) and that
+ * owes no password change; anyone else gets the public page and learns nothing
+ * about the draft. A granted preview renders `projectPublishedBanner` — the
+ * same function the publish runs — on the row read at version `v`; a stale `v`
+ * or a refused operation renders the published page with a notice instead.
+ */
+export function decideBannerPreview(input: {
+  session: { role: AdminRole; mustChangePassword: boolean } | null;
+  op: string | null;
+  version: string | null;
+  row: { version: number; draft_json: string | null; published_json: string | null } | null;
+  seed: TenantHomeContent;
+}): BannerPreview {
+  const { session } = input;
+  if (!session || session.mustChangePassword || !canAccessAdminRoute(session.role, "/admin/content")) {
+    return { granted: false };
+  }
+  if (!isBannerOp(input.op)) {
+    return { granted: true, published: null, notice: "Operasi pratinjau tidak dikenal." };
+  }
+  if (!input.row || String(input.row.version) !== input.version) {
+    return { granted: true, published: null, notice: "Konten berubah sejak dimuat. Muat ulang Tampilan toko, lalu buka pratinjau lagi." };
+  }
+  const projected = projectPublishedBanner(input.row, input.op, input.seed);
+  if (!projected.ok) return { granted: true, published: null, notice: bannerRefusalMessage(projected) };
+  return { granted: true, published: projected.content, notice: null };
+}
+
+/**
+ * `publishedOverride` is only for the signed-in banner preview: it stands in
+ * for the stored published document and goes through the same merge. Every
+ * other caller (the storefront, the headless API) passes nothing.
+ */
 export async function getTenantHomeContent(
   locals?: App.Locals,
+  publishedOverride?: TenantHomeContent,
 ): Promise<TenantHomeContentResolution> {
   const database = tenantDatabase(locals);
   if (!database || typeof database !== "object") {
@@ -64,7 +116,9 @@ export async function getTenantHomeContent(
     return { state: "unavailable" };
   }
 
-  const published = await loadPublishedHomeContent(database as D1Database);
+  const published = publishedOverride
+    ? ({ state: "published", content: publishedOverride } as const)
+    : await loadPublishedHomeContent(database as D1Database);
   if (published.state === "unavailable") {
     return { state: "unavailable" };
   }

@@ -1,10 +1,19 @@
 import type { APIRoute } from "astro";
 import { getRuntimeEnv } from "../../../lib/env.ts";
 import {
+  applyBannerOp,
+  bannerRefusalMessage,
   contentValidationMessage,
+  isBannerOp,
+  parseBannerSlide,
   parseContentKey,
+  projectPublishedBanner,
+  readStoredHome,
   validateContent,
+  type BannerRefusal,
+  type HomeContent,
 } from "../../../lib/storefront-content.ts";
+import { seedHomeContent } from "../../../lib/tenant-content.ts";
 import { buildContentSystemInstruction } from "../../../lib/ai-content-instructions.ts";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
 import { checkPlanCap } from "../../../platform/plans.ts";
@@ -269,6 +278,99 @@ async function generationContext(database: D1Database, keyValue: unknown) {
 const HOME_SHAPE = `hero {title, description, ratingLabel}; catalog, solutionsHeading, proofsHeading each {title,description}; heroHighlights [{label,icon}]; heroSlides [{image,alt,badge,text}]; solutions [{title,excerpt,image,optional href,optional crop}]; proofs [{name,location,story,image}]`;
 const PRODUCT_SHAPE = `contentName, headline, subheadline, seoTitle, seoDescription, image, heroImage, tag, relatedCategories[], optional relatedTags[], description, benefits[], keyPoints[], idealFor[], offerText, ctaText, optional ratingValue/reviewCount/soldCount, reviews [{name,location,avatar,verified,date,comment,rating}]`;
 
+const bannerRefused = (refusal: BannerRefusal) =>
+  json(
+    {
+      success: false,
+      ...refusal,
+      error: bannerRefusalMessage(refusal),
+    },
+    422,
+  );
+
+/**
+ * R1b: one slot-0 operation on the draft or on the published home document,
+ * under the same version contract as every other content write. Preconditions
+ * the version cannot express (an empty slot, a full list, a stored document
+ * that no longer parses) answer 422, so 409 keeps meaning "changed elsewhere".
+ */
+async function bannerAction(
+  database: D1Database,
+  locals: App.Locals,
+  body: Record<string, unknown>,
+  expectedVersion: number,
+) {
+  const target = body.target;
+  const op = body.op;
+  if (body.key !== "home") return json({ success: false, error: "Banner hanya untuk konten home." }, 400);
+  if ((target !== "draft" && target !== "published") || !isBannerOp(op)) {
+    return json({ success: false, error: "Target atau operasi banner tidak dikenal." }, 400);
+  }
+  const needsSlide = target === "draft" && op !== "remove-first";
+  if (!needsSlide && body.slide !== undefined) {
+    return json({ success: false, error: "Slide banner hanya dikirim untuk draft; terbit memakai slide draft." }, 400);
+  }
+  const slide = needsSlide ? parseBannerSlide(body.slide) : null;
+
+  const row = await database
+    .prepare("SELECT version, draft_json, published_json FROM storefront_content WHERE content_key = 'home' LIMIT 1")
+    .first<{ version: number; draft_json: string | null; published_json: string | null }>();
+  if (expectedVersion === 0) {
+    // Version 0 only ever creates the row, and only with a draft.
+    if (row) return versionConflict(Number(row.version));
+    if (target === "published") throw new Error("A valid draft is required before publication.");
+  } else if (!row || Number(row.version) !== expectedVersion) {
+    return versionConflict(row ? Number(row.version) : null);
+  }
+
+  const seed = seedHomeContent(locals.tenant);
+  const now = new Date().toISOString();
+  let result;
+  if (target === "draft") {
+    const draft = readStoredHome(row?.draft_json);
+    const published = readStoredHome(row?.published_json);
+    if (draft === "invalid") return bannerRefused({ code: "DRAFT_CONTENT_INVALID" });
+    // The draft starts from the published copy (or the seed) when there is none yet.
+    if (draft === null && published === "invalid") return bannerRefused({ code: "PUBLISHED_CONTENT_INVALID" });
+    const base: HomeContent = draft ?? (published === "invalid" ? null : published) ?? seed;
+    const applied = applyBannerOp(base, op, slide, "draft_empty");
+    if (!applied.ok) return bannerRefused(applied);
+    const document = JSON.stringify(applied.content);
+    result = expectedVersion === 0
+      ? await database
+          .prepare(
+            `INSERT INTO storefront_content (
+               store_id, content_key, content_type, draft_json, version, generated_by, updated_at
+             ) VALUES ((SELECT id FROM stores ORDER BY id ASC LIMIT 1), 'home', 'home', ?, 1, 'manual', ?)
+             ON CONFLICT(content_key) DO NOTHING`,
+          )
+          .bind(document, now)
+          .run()
+      : await database
+          .prepare(
+            `UPDATE storefront_content
+             SET draft_json = ?, version = version + 1, generated_by = 'manual', updated_at = ?
+             WHERE content_key = 'home' AND version = ?`,
+          )
+          .bind(document, now, expectedVersion)
+          .run();
+  } else {
+    const projected = projectPublishedBanner(row!, op, seed);
+    if (!projected.ok) return bannerRefused(projected);
+    result = await database
+      .prepare(
+        `UPDATE storefront_content
+         SET published_json = ?, published_at = ?, updated_at = ?, version = version + 1
+         WHERE content_key = 'home' AND version = ?`,
+      )
+      .bind(JSON.stringify(projected.content), now, now, expectedVersion)
+      .run();
+  }
+  if (!result.success) throw new Error("D1 rejected the banner change.");
+  if (!result.meta.changes) return versionConflict(await currentVersion(database, "home"));
+  return json({ success: true, data: { key: "home", target, op, version: expectedVersion + 1 } });
+}
+
 export const PUT: APIRoute = async ({ request, locals }) => {
   const database = databaseFrom(locals);
   if (!database)
@@ -311,7 +413,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
     const expectedVersion = readExpectedVersion(body);
     if (
-      (action === "save-draft" || action === "publish" || action === "generate") &&
+      (action === "save-draft" || action === "publish" || action === "generate" || action === "banner") &&
       expectedVersion === null
     ) {
       return json(
@@ -444,6 +546,10 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         success: true,
         data: { key: key.key, status: "draft", generatedBy: "workers-ai", version },
       });
+    }
+
+    if (action === "banner") {
+      return await bannerAction(database, locals, body, expectedVersion!);
     }
 
     return json({ success: false, error: "Unsupported content action." }, 400);
