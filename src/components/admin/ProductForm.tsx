@@ -387,6 +387,10 @@ export function ProductForm({
       </section>
     );
 
+  const variantLabelSpacing = digital ? "mb-2" : "mb-1";
+  const variantHelpSpacing = digital ? "mt-2" : "mt-1";
+  const variantPriceColumn = digital ? "sm:col-span-3" : "sm:col-span-2";
+
   return (
     <form
       onSubmit={submit}
@@ -465,9 +469,9 @@ export function ProductForm({
               <h2 id="digital-access-title" className="text-base font-semibold text-slate-950">Akses produk digital</h2>
               <p className="mt-1 text-xs text-slate-600">Dibuka otomatis setelah pembayaran lunas.</p>
             </div>
-            <div className="grid grid-cols-1 gap-4 p-5">
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-slate-600">Link akses utama</span>
+            <div className="grid grid-cols-1 gap-6 p-5">
+              <label className="grid grid-cols-1 gap-2">
+                <span className="text-xs font-semibold text-slate-600">Link akses utama</span>
                 <Input
                   id="digitalAccessUrl"
                   type="url"
@@ -480,12 +484,12 @@ export function ProductForm({
                   value={accessUrl}
                   onChange={(event) => setAccessUrl(event.target.value)}
                 />
-                <span id="digital-access-url-hint" className="mt-1 block text-xs text-slate-500">
+                <span id="digital-access-url-hint" className="text-xs text-slate-500">
                   Wajib https://. Tautan ini dirahasiakan di server dan hanya ditampilkan kepada pembeli yang pembayarannya sudah terverifikasi lunas.
                 </span>
               </label>
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-slate-600">Instruksi / catatan akses <span className="font-normal text-slate-400">(opsional)</span></span>
+              <label className="grid grid-cols-1 gap-2">
+                <span className="text-xs font-semibold text-slate-600">Instruksi / catatan akses <span className="font-normal text-slate-400">(opsional)</span></span>
                 <Textarea
                   id="digitalAccessNote"
                   rows={3}
@@ -494,7 +498,7 @@ export function ProductForm({
                   value={accessNote}
                   onChange={(event) => setAccessNote(event.target.value)}
                 />
-                <span className="mt-1 block text-xs text-slate-500">{accessNote.length}/500 karakter.</span>
+                <span className="text-xs text-slate-500">{accessNote.length}/500 karakter.</span>
               </label>
             </div>
           </section>
@@ -508,7 +512,7 @@ export function ProductForm({
               Identitas katalog dan status storefront.
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
+          <div className={`grid grid-cols-1 p-5 md:grid-cols-2 ${digital ? "gap-x-4 gap-y-6" : "gap-4"}`}>
             <label>
               <span className="mb-1.5 block text-xs font-semibold text-slate-700">
                 Nama produk
@@ -763,7 +767,7 @@ export function ProductForm({
               Tambah varian
             </button>
           </div>
-          <div className="space-y-4 p-5">
+          <div className={`p-5 ${digital ? "space-y-6" : "space-y-4"}`}>
             {variants.map((variant, index) => (
               <fieldset
                 key={variant.key}
@@ -804,9 +808,9 @@ export function ProductForm({
                     Hapus
                   </Button>
                 </div>
-                <div className="grid grid-cols-1 gap-x-3 gap-y-4 p-4 sm:grid-cols-6">
+                <div className={`grid grid-cols-1 p-4 sm:grid-cols-6 ${digital ? "gap-x-4 gap-y-6" : "gap-x-3 gap-y-4"}`}>
                   <label className="sm:col-span-3">
-                    <span className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-600">
+                    <span className={`flex items-center justify-between text-xs font-semibold text-slate-600 ${variantLabelSpacing}`}>
                       Nama varian
                       <span className={variant.title.length > 15 ? "font-semibold text-red-600" : "font-medium text-slate-400"}>
                         {variant.title.length}/15
@@ -821,12 +825,12 @@ export function ProductForm({
                         updateVariant(index, "title", event.target.value)
                       }
                     />
-                    <span className="mt-1 block text-xs text-slate-500">
+                    <span className={`block text-xs text-slate-500 ${variantHelpSpacing}`}>
                       Ukuran atau isi paket, mis. 500 ml, 1 Liter, Isi 3.
                     </span>
                   </label>
                   <label className="sm:col-span-3">
-                    <span className="mb-1 block text-xs font-semibold text-slate-600">
+                    <span className={`block text-xs font-semibold text-slate-600 ${variantLabelSpacing}`}>
                       SKU
                     </span>
                     <Input
@@ -842,12 +846,12 @@ export function ProductForm({
                       }
                       className="font-mono uppercase"
                     />
-                    <span className="mt-1 block text-xs text-slate-500">
+                    <span className={`block text-xs text-slate-500 ${variantHelpSpacing}`}>
                       Kode stok internal untuk gudang dan order.
                     </span>
                   </label>
-                  <label className="sm:col-span-2">
-                    <span className="mb-1 block text-xs font-semibold text-slate-600">
+                  <label className={variantPriceColumn}>
+                    <span className={`block text-xs font-semibold text-slate-600 ${variantLabelSpacing}`}>
                       Harga jual
                     </span>
                     <InputGroup>
@@ -867,8 +871,8 @@ export function ProductForm({
                       />
                     </InputGroup>
                   </label>
-                  <label className="sm:col-span-2">
-                    <span className="mb-1 block text-xs font-semibold text-slate-600">
+                  <label className={variantPriceColumn}>
+                    <span className={`block text-xs font-semibold text-slate-600 ${variantLabelSpacing}`}>
                       Harga coret
                     </span>
                     <InputGroup>
@@ -890,7 +894,7 @@ export function ProductForm({
                         }
                       />
                     </InputGroup>
-                    <span className="mt-1 block text-xs text-slate-500">
+                    <span className={`block text-xs text-slate-500 ${variantHelpSpacing}`}>
                       {Number(variant.compare_price) > Number(variant.price) && Number(variant.price) > 0
                         ? `Hemat ${Math.round((1 - Number(variant.price) / Number(variant.compare_price)) * 100)}%`
                         : "Opsional, harus lebih tinggi dari harga jual."}

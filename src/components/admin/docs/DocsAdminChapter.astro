@@ -37,7 +37,24 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
       <li>Enam angka utama: Revenue (nilai pesanan aktif; uang COD baru dihitung setelah paket diterima), Orders, AOV, Lead conversion, Online payment rate (tanpa COD), dan RTS rate (retur ÷ terkirim dan retur).</li>
       <li>Rentang tanggal maksimal 31 hari, dengan pembanding "vs same day last week", "vs same dates last month", atau "vs previous period".</li>
       <li>Panel <strong>Action needed</strong> memperbarui diri tiap menit dan hanya menampilkan pekerjaan yang ada: Menunggu konfirmasi, Siap push ke Mengantar, Push Mengantar bermasalah, Menunggu pembayaran online, Lead belum dihubungi, Perlu dibuatkan resi, Perlu jadwal pickup, Perlu drop-off. Lencana merah "&gt;24j" berarti sudah menunggu lebih dari sehari. Angkanya selalu sama dengan daftar yang dibukanya.</li>
-      <li>Owner dan admin melihat banner "Siapkan toko" selama masih ada langkah wajib yang belum selesai; tautannya ke <a href="/admin/status">Status operasional</a>.</li>
+      <li>Owner dan admin melihat kartu "Siapkan toko untuk jualan" selama masih ada langkah wajib yang belum selesai; "Lihat semua langkah" membuka <a href="/admin/setup">Siapkan toko</a>. Setelah toko siap, kartu menjadi satu baris "Toko siap jualan", dan hilang setelah langkah opsional juga selesai.</li>
+    </ul>
+
+    <h3>Kapan pembeli bisa memesan</h3>
+    <p>Dua syarat harus terpenuhi bersamaan: toko <strong>siap</strong>, yaitu semua langkah wajib di <a href="/admin/setup">Siapkan toko</a> selesai, dan <strong>langganan aktif atau masih dalam masa tenggang 48 jam</strong> (bab <a href="/admin/docs/pengaturan">Pengaturan</a>, bagian Langganan). Sebelum toko siap, pembeli melihat halaman "Toko belum siap". Status tiap langkah dihitung dari data toko, bukan dari klik. Langkah wajib tergantung mode katalog di Pengaturan › Toko &amp; CS:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class={th}>Mode katalog</th><th class={th}>Langkah wajib</th></tr></thead>
+        <tbody>
+          <tr><td class={td}>Produk Fisik</td><td class={td}>"Isi identitas toko", "Tambah produk fisik pertama" (aktif, dengan harga dan berat), "Lengkapi alamat pickup / gudang utama", "Simpan API key Mengantar", dan "Aktifkan minimal satu kurir". "Tambahkan rekening bank (atau AutoLaris QRIS/VA)" wajib bila COD nonaktif atau tidak mencakup ke-38 provinsi; toko baru mengecualikan 15 provinsi dari COD, jadi secara bawaan langkah ini wajib.</td></tr>
+          <tr><td class={td}>Produk Digital</td><td class={td}>"Isi identitas toko", "Tambah produk digital pertama + link akses" (aktif, dengan harga dan link akses <code>https://</code>), dan "Tambahkan rekening bank (atau AutoLaris QRIS/VA)". Tanpa gudang, Mengantar, atau kurir.</td></tr>
+          <tr><td class={td}>Hybrid (Fisik &amp; Digital)</td><td class={td}>Toko buka begitu salah satu jalur siap. Selama jalur digital belum siap dan toko sudah punya produk fisik aktif, Siapkan toko menampilkan langkah toko fisik. Produk fisik baru bisa dipesan setelah gudang utama, API key Mengantar, dan minimal satu kurir siap; produk digital tidak menunggu itu.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul>
+      <li>Rekening bank pada toko fisik: COD saja cukup hanya bila COD aktif untuk ke-38 provinsi. Toko baru mengecualikan 15 provinsi dari COD (kartu "Kebijakan Wilayah Khusus Non-COD" di <a href="/admin/expeditions">Ekspedisi</a>), jadi biasanya perlu minimal satu rekening aktif di <a href="/admin/payments">Pembayaran</a>, atau AutoLaris dengan API key tersimpan, sakelar menyala, dan minimal satu channel aktif. Di toko digital, COD tidak dihitung.</li>
+      <li>Langkah opsional tidak memengaruhi toko siap: "Isi alamat usaha (tampil publik)", "Pasang domain sendiri", dan "Pasang Meta Pixel atau Google Ads".</li>
     </ul>
 
     <h3>Perjalanan satu pesanan</h3>
@@ -229,11 +246,25 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
     <h3>Profil &amp; keamanan</h3>
     <p>Ganti username atau password (minimal 8 karakter, tidak sama dengan username). Menyimpan perubahan mengakhiri semua sesi login; masuk lagi dengan data baru. Sesi login berlaku 24 jam.</p>
 
+    <h3>Langganan</h3>
+    <p><a href="/admin/billing">Pengaturan › Langganan</a> bisa dibuka owner dan admin di status apa pun, termasuk Mode Preview dan Berakhir. Pilih paket, lalu bayar lewat QRIS atau Virtual Account; hari langganan bertambah setelah pembayaran terkonfirmasi ("Cek Status Pembayaran"). Tagihan ini memakai jalur pembayaran adsbook.id, bukan AutoLaris toko Anda.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class={th}>Status</th><th class={th}>Artinya</th></tr></thead>
+        <tbody>
+          <tr><td class={td}>Mode Preview</td><td class={td}>Status toko baru. Siapkan toko sepuasnya; pesanan pembeli, sinyal iklan, AI, dan domain sendiri aktif setelah langganan dibayar.</td></tr>
+          <tr><td class={td}>Aktif</td><td class={td}>"Aktif sampai &lt;tanggal&gt;". Pembeli bisa memesan selama toko juga sudah siap.</td></tr>
+          <tr><td class={td}>Masa tenggang 48 jam</td><td class={td}>Setelah jatuh tempo, toko masih menerima pesanan dan iklan tetap jalan selama 48 jam.</td></tr>
+          <tr><td class={td}>Berakhir</td><td class={td}>Pesanan, iklan, dan AI dijeda. Data toko tetap aman dan aktif lagi begitu langganan diperpanjang.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <h3>Status operasional</h3>
-    <p>Daftar langkah setup (wajib: produk, Mengantar, gudang, kurir; opsional: pembayaran non-COD dan domain sendiri) dan sinyal kesehatan: antrean CAPI, Mengantar, skor RTS, AutoLaris, antrean Google offline, dan cron. Tekan "Periksa ulang" setelah memperbaiki sesuatu.</p>
+    <p>Langkah setup yang sama dengan <a href="/admin/setup">Siapkan toko</a> (langkah wajib tiap mode katalog ada di bab <a href="/admin/docs/mulai">Mulai di sini</a>) dan sinyal kesehatan: antrean CAPI, Mengantar, skor RTS, AutoLaris, antrean Google offline, dan cron. Tekan "Periksa ulang" setelah memperbaiki sesuatu.</p>
 
     <h3>Pemakaian pertama</h3>
-    <p>Toko baru dipasang sekali di <code>/install</code> dengan token instalasi, lalu login di <code>/hello</code>. Akun yang masih wajib ganti password hanya bisa membuka halaman Profil sampai password diganti.</p>
+    <p>Toko dibuat sendiri di <code>adsbook.id/daftar</code> dan langsung terbuka di admin, di halaman <a href="/admin/setup">Siapkan toko</a> (atau Langganan bila paket dipilih saat daftar). Berikutnya, masuk di <code>adsbook.id/masuk</code> dengan email pemilik toko atau username tim; tokonya dikenali dari email atau username itu. Akun yang masih wajib ganti password hanya bisa membuka halaman Profil sampai password diganti.</p>
   </>
 )}
 
@@ -307,7 +338,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
 
     <h3>Landing page</h3>
     <ul>
-      <li>Landing page CMS disimpan di database, diedit dari admin, dan tayang begitu disimpan dengan "Status Terbit" aktif. Landing page native (file Astro di repository) butuh deploy; CMS bisa menautkan dan menjadikannya halaman produk, tetapi tidak bisa mengedit atau menghapusnya.</li>
+      <li>Landing page disimpan di database toko, diedit dari admin, dan tayang begitu disimpan dengan "Status Terbit" aktif.</li>
       <li>Setiap landing page tampil di <code>domain/&lt;slug&gt;</code>. Slug yang sudah dipakai halaman sistem ditolak.</li>
       <li>Wajib diisi: "Judul Landing Page", "URL Slug", dan "Produk Katalog". "Meta Title" dan "Meta Description" opsional untuk SEO dan share.</li>
       <li>Di kanvas, "Tambah section ke canvas" menambah Headline, Paragraf, Daftar angka, Bullet, Gambar, HTML, atau Form COD. Teks bisa memakai <code>{'{{product_name}}'}</code>, <code>{'{{product_price}}'}</code>, <code>{'{{compare_price}}'}</code>, <code>{'{{discount_percent}}'}</code>, dan <code>{'{{cs_whatsapp}}'}</code>. Section HTML hanya bisa diubah owner dan admin.</li>

@@ -1,11 +1,11 @@
 import type { APIRoute } from "astro";
-import { getRuntimeEnv } from "../../../lib/env";
+import { getRuntimeEnv } from "../../../lib/env.ts";
 import {
   contentValidationMessage,
   parseContentKey,
   validateContent,
-} from "../../../lib/storefront-content";
-import { buildContentSystemInstruction } from "../../../lib/ai-content-instructions";
+} from "../../../lib/storefront-content.ts";
+import { buildContentSystemInstruction } from "../../../lib/ai-content-instructions.ts";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
 import { checkPlanCap } from "../../../platform/plans.ts";
 import { isLive, subscriptionRefusalBody } from "../../../platform/billing.ts";
@@ -23,6 +23,49 @@ const json = (body: unknown, status = 200) =>
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Unknown content error.";
+
+/**
+ * Every write to a content row names the `version` the editor loaded
+ * (`expectedVersion`), and every successful save, generate or publish bumps it.
+ * 0 means "no row yet" and only ever creates one; a positive version only
+ * updates the row still at that version and never recreates a missing one.
+ * Without this, two editors (or a save landing while the model runs) replaced
+ * each other's draft in silence, and a publish could ship a draft its author
+ * never saw.
+ */
+class ContentVersionConflict extends Error {
+  readonly currentVersion: number | null;
+  constructor(currentVersion: number | null) {
+    super("Konten ini sudah diubah di tempat lain. Muat versi terbaru sebelum menyimpan lagi.");
+    this.currentVersion = currentVersion;
+  }
+}
+
+const versionConflict = (currentVersion: number | null) =>
+  json(
+    {
+      success: false,
+      code: "CONTENT_VERSION_CONFLICT",
+      currentVersion,
+      error: "Konten ini sudah diubah di tempat lain. Muat versi terbaru sebelum menyimpan lagi.",
+    },
+    409,
+  );
+
+function readExpectedVersion(body: Record<string, unknown>): number | null {
+  const value = body.expectedVersion;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
+}
+
+async function currentVersion(database: D1Database, contentKey: string) {
+  const row = await database
+    .prepare("SELECT version FROM storefront_content WHERE content_key = ? LIMIT 1")
+    .bind(contentKey)
+    .first<{ version: number }>();
+  return row ? Number(row.version) : null;
+}
 
 function databaseFrom(locals: App.Locals) {
   const database = tenantDatabase(locals);
@@ -131,30 +174,43 @@ async function saveDraft(
   keyValue: unknown,
   content: unknown,
   generatedBy: "manual" | "workers-ai",
+  expectedVersion: number,
 ) {
   const key = parseContentKey(keyValue);
   const validated = validateContent(key.key, content);
   const now = new Date().toISOString();
-  const result = await database
-    .prepare(
-      `
-      INSERT INTO storefront_content (
-        store_id, content_key, content_type, draft_json, version, generated_by, updated_at
-      ) VALUES (
-        (SELECT id FROM stores ORDER BY id ASC LIMIT 1), ?, ?, ?, 1, ?, ?
-      )
-      ON CONFLICT(content_key) DO UPDATE SET
-        content_type = excluded.content_type,
-        draft_json = excluded.draft_json,
-        version = storefront_content.version + 1,
-        generated_by = excluded.generated_by,
-        updated_at = excluded.updated_at
-    `,
-    )
-    .bind(key.key, key.type, JSON.stringify(validated), generatedBy, now)
-    .run();
+  const draft = JSON.stringify(validated);
+  const result =
+    expectedVersion === 0
+      ? await database
+          .prepare(
+            `
+            INSERT INTO storefront_content (
+              store_id, content_key, content_type, draft_json, version, generated_by, updated_at
+            ) VALUES (
+              (SELECT id FROM stores ORDER BY id ASC LIMIT 1), ?, ?, ?, 1, ?, ?
+            )
+            ON CONFLICT(content_key) DO NOTHING
+          `,
+          )
+          .bind(key.key, key.type, draft, generatedBy, now)
+          .run()
+      : await database
+          .prepare(
+            `
+            UPDATE storefront_content
+            SET content_type = ?, draft_json = ?, version = version + 1,
+              generated_by = ?, updated_at = ?
+            WHERE content_key = ? AND version = ?
+          `,
+          )
+          .bind(key.type, draft, generatedBy, now, key.key, expectedVersion)
+          .run();
   if (!result.success) throw new Error("D1 rejected the content draft.");
-  return { key, validated };
+  if (!result.meta.changes) {
+    throw new ContentVersionConflict(await currentVersion(database, key.key));
+  }
+  return { key, validated, version: expectedVersion + 1 };
 }
 
 async function generationContext(database: D1Database, keyValue: unknown) {
@@ -253,34 +309,68 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       return json({ success: true, data: { instructionsConfigured: true } });
     }
 
+    const expectedVersion = readExpectedVersion(body);
+    if (
+      (action === "save-draft" || action === "publish" || action === "generate") &&
+      expectedVersion === null
+    ) {
+      return json(
+        {
+          success: false,
+          code: "CONTENT_VERSION_REQUIRED",
+          error: "Editor konten sudah usang. Muat ulang halaman, lalu coba lagi.",
+        },
+        428,
+      );
+    }
+
     if (action === "save-draft") {
-      const { key } = await saveDraft(
+      const { key, version } = await saveDraft(
         database,
         body.key,
         body.content,
         "manual",
+        expectedVersion!,
       );
-      return json({ success: true, data: { key: key.key, status: "draft" } });
+      return json({ success: true, data: { key: key.key, status: "draft", version } });
     }
 
     if (action === "publish") {
       const key = parseContentKey(body.key);
+      // Version 0 only ever creates a draft; there is nothing to publish onto.
+      if (expectedVersion === 0) {
+        const current = await currentVersion(database, key.key);
+        if (current === null) throw new Error("A valid draft is required before publication.");
+        throw new ContentVersionConflict(current);
+      }
       const now = new Date().toISOString();
       const result = await database
         .prepare(
           `
           UPDATE storefront_content
-          SET published_json = draft_json, published_at = ?, updated_at = ?
-          WHERE content_key = ? AND draft_json IS NOT NULL
+          SET published_json = draft_json, published_at = ?, updated_at = ?,
+            version = version + 1
+          WHERE content_key = ? AND version = ? AND draft_json IS NOT NULL
         `,
         )
-        .bind(now, now, key.key)
+        .bind(now, now, key.key, expectedVersion)
         .run();
-      if (!result.success || !result.meta.changes)
-        throw new Error("A valid draft is required before publication.");
+      if (!result.success) throw new Error("D1 rejected the publication.");
+      if (!result.meta.changes) {
+        const row = await database
+          .prepare(
+            "SELECT version, draft_json IS NOT NULL AS has_draft FROM storefront_content WHERE content_key = ? LIMIT 1",
+          )
+          .bind(key.key)
+          .first<{ version: number; has_draft: number }>();
+        if (row && Number(row.version) === expectedVersion && !row.has_draft) {
+          throw new Error("A valid draft is required before publication.");
+        }
+        throw new ContentVersionConflict(row ? Number(row.version) : null);
+      }
       return json({
         success: true,
-        data: { key: key.key, status: "published" },
+        data: { key: key.key, status: "published", version: expectedVersion! + 1 },
       });
     }
 
@@ -288,6 +378,11 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       // ADR-041: AI drafting needs a live subscription (checked before the cap is spent).
       const billing = locals.billing;
       if (billing && !isLive(billing.state)) return json(subscriptionRefusalBody(billing.state), 402);
+      // A stale editor is refused before the cap is spent or the model runs;
+      // the write below checks again, for a save that lands while it runs.
+      const generateKey = parseContentKey(body.key);
+      const loaded = await currentVersion(database, generateKey.key);
+      if ((loaded ?? 0) !== expectedVersion) return versionConflict(loaded);
       // T-37: the plan's hourly AI cap, per tenant, spent before the model runs.
       const platformDb = (getRuntimeEnv(locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database | undefined;
       const aiCap = await checkPlanCap(platformDb, locals.tenantContext?.tenantId, "ai", true);
@@ -337,20 +432,23 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         typeof responseValue === "string"
           ? JSON.parse(responseValue)
           : responseValue;
-      const { key } = await saveDraft(
+      // A save that landed while the model ran wins: this result is discarded (409).
+      const { key, version } = await saveDraft(
         database,
         context.key.key,
         candidate,
         "workers-ai",
+        expectedVersion!,
       );
       return json({
         success: true,
-        data: { key: key.key, status: "draft", generatedBy: "workers-ai" },
+        data: { key: key.key, status: "draft", generatedBy: "workers-ai", version },
       });
     }
 
     return json({ success: false, error: "Unsupported content action." }, 400);
   } catch (error) {
+    if (error instanceof ContentVersionConflict) return versionConflict(error.currentVersion);
     const invalid = contentValidationMessage(error);
     const message = invalid ?? errorMessage(error);
     const status =
