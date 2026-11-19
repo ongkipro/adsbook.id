@@ -13,11 +13,11 @@ export const prerender = false;
 const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>);
 ---
 
-<SiteLayout page={LOGIN_PAGE} quietHeader>
+<SiteLayout page={LOGIN_PAGE} authStage>
   <AuthSplit active="masuk">
     <div class="card-head">
       <h1 class="dot-end">Masuk ke dashboard toko</h1>
-      <p>Gunakan email pemilik toko atau username unik akun tim Anda.</p>
+      <p>Email pemilik toko atau username tim Anda.</p>
     </div>
 
     <div id="loginError" class="error-banner" hidden role="alert" tabindex="-1"></div>
@@ -61,16 +61,16 @@ const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<st
       <button id="loginSubmit" type="submit" class="submit-btn">Masuk ke Dashboard →</button>
     </form>
 
-    <p class="card-foot">Belum punya toko? <a href="/daftar">Buat toko gratis di Mode Preview →</a></p>
+    <p class="card-foot">Belum punya toko? <a href="/daftar">Buat toko gratis →</a></p>
 
     <Fragment slot="pitch">
-      <h2 class="pitch-title dot-end">Satu pintu masuk ke ruang kendali toko Anda</h2>
-      <p class="pitch-lead">Kelola produk fisik, produk digital, maupun hybrid, periksa pesanan berisiko RTS, dan pantau konversi 1:1 Meta Ads, Google Ads, serta TikTok Ads dari satu tempat.</p>
-      <ol class="pitch-list">
-        <li><span aria-hidden="true">01</span><div><strong>Langsung ke toko Anda</strong><p>Sistem mengenali toko Anda secara otomatis dari email atau username unik Anda.</p></div></li>
-        <li><span aria-hidden="true">02</span><div><strong>Akses langsung di domain toko</strong><p>Anda juga tetap bisa masuk kapan saja lewat alamat <code>nama-toko.{suffix}/hello</code>.</p></div></li>
-        <li><span aria-hidden="true">03</span><div><strong>Database &amp; sesi terisolasi</strong><p>Setiap toko dilindungi enkripsi kredensial dan ruang data mandiri.</p></div></li>
-      </ol>
+      <h2 class="pitch-title dot-end">Satu pintu ke ruang kendali Anda</h2>
+      <p class="pitch-lead">Sistem mengenali toko Anda dari email pemilik atau username tim, lalu membuka admin di alamat toko Anda sendiri.</p>
+      <ul class="panel-checks">
+        <li>Sesi terisolasi per toko</li>
+        <li>Kredensial tersimpan terenkripsi</li>
+        <li><span>Tetap bisa masuk lewat <code>nama-toko.{suffix}/hello</code></span></li>
+      </ul>
     </Fragment>
   </AuthSplit>
 </SiteLayout>
@@ -100,6 +100,9 @@ const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<st
     if (message) banner.focus();
   };
 
+  // The first field takes focus on a desktop only: a phone's keyboard never jumps up unasked.
+  if (identifier && window.matchMedia('(min-width: 960px)').matches && !identifier.value) identifier.focus();
+
   if (form && identifier && password && submit) {
     bindInlineValidation(form);
     form.addEventListener('submit', async (event) => {
@@ -108,7 +111,7 @@ const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<st
       if (!validateInline(form)) return;
       submit.disabled = true;
       form.setAttribute('aria-busy', 'true');
-      submit.textContent = 'Memeriksa…';
+      submit.textContent = 'Memeriksa kredensial…';
       try {
         const response = await fetch('/api/platform/masuk', {
           method: 'POST',
@@ -117,7 +120,7 @@ const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<st
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.success) throw new Error(payload.error || 'Masuk belum berhasil. Coba lagi.');
-        submit.textContent = 'Membuka dashboard…';
+        submit.textContent = 'Membuka ruang kendali…';
         // The handoff travels in a POST body to the store's own subdomain, never a URL.
         const handoff = document.createElement('form');
         handoff.method = 'POST';
@@ -146,7 +149,7 @@ const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<st
 </script>
 
 <style>
-  .card-head { display: grid; gap: 0.35rem; margin-bottom: 1.5rem; }
+  .card-head { display: grid; gap: 0.35rem; margin-bottom: 1.35rem; }
   .card-head h1 { font-size: clamp(1.45rem, 1.2rem + 1vw, 1.85rem); }
   .card-head p { color: var(--slate); font-size: 0.95rem; }
   .login-form { display: grid; gap: 1.1rem; }
@@ -202,12 +205,7 @@ const suffix = tenantHostSuffix((getRuntimeEnv(Astro.locals) ?? {}) as Record<st
   .submit-btn:disabled { opacity: 0.7; cursor: progress; }
   .card-foot { margin-top: 1.25rem; padding-top: 1.1rem; border-top: var(--hairline); font-size: 0.9rem; color: var(--slate); }
   .card-foot a { color: var(--accent); font-weight: 700; text-decoration: none; }
-  .pitch-title { font: 800 clamp(1.25rem, 1.05rem + 0.9vw, 1.6rem)/1.25 var(--display); letter-spacing: -0.02em; word-spacing: 0.06em; color: var(--ink); }
-  .pitch-lead { color: var(--slate); font-size: 0.95rem; line-height: 1.6; }
-  .pitch-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
-  .pitch-list li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.75rem; }
-  .pitch-list span { font: 600 0.75rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
-  .pitch-list strong { display: block; font-size: 0.95rem; color: var(--ink); }
-  .pitch-list p { margin-top: 0.15rem; font-size: 0.88rem; line-height: 1.5; color: var(--slate); }
-  .pitch-list code { font-size: 0.85em; overflow-wrap: anywhere; }
+  .card-foot code, :global(.panel-checks code) { font-size: 0.85em; overflow-wrap: anywhere; }
+  /* The label may wrap under enlarged text; the minimum height keeps one-line labels steady. */
+  .submit-btn { padding: 0.7rem 1rem; line-height: 1.25; }
 </style>

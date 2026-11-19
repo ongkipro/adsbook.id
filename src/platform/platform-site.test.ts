@@ -318,7 +318,7 @@ test("borderless gallery (HOMEPAGE-DESIGN-SYSTEM v2): no phone bezel, no eyebrow
     assert.doesNotMatch(site(name), /pill-eyebrow|sec-kicker|signal-more|>Detail</, name);
   }
   assert.doesNotMatch(page("index"), /sec-kicker/, "the home has no kicker labels");
-  assert.match(page("index"), /<ClosingCta withShot=\{false\} visual \/>/, "the home ends on the band with its 2.5D visual, not a second screenshot");
+  assert.match(page("index"), /<ClosingCta withShot=\{false\} \/>/, "the home ends on the band, not a second screenshot");
   // One showcase: every plan stays real markup with its own signup link; 1 Tahun is chosen first.
   const pricing = site("Pricing.astro");
   assert.match(pricing, /type="radio" name="pricing-plan" value=\{plan\.code\} checked=\{plan\.code === best\}/);
@@ -403,23 +403,18 @@ test("PLATFORM-SEO §4: every page has its own 1200×630 share card under 120 KB
   assert.match(layout, /page\.noindex \? <meta name="robots" content="noindex, nofollow" \/> : <meta name="robots" content="max-image-preview:large" \/>/);
 });
 
-test("PLATFORM-SEO §4: each inner page and the home's closing band carry their own 2.5D illustration, sized, described and loaded on purpose", async () => {
-  const sharp = (await import("sharp")).default;
-  const pages = ["fitur", "cara-kerja", "harga", "faq", "kontak"];
-  const sources = [...pages.map((name) => readFileSync(`src/pages/platform/site/${name}.astro`, "utf8")), readFileSync("src/platform/site/ClosingCta.astro", "utf8")];
-  const images = sources.flatMap((source) => [...source.matchAll(/src: '(\/visual\/[a-z-]+\.webp)', width: (\d+), height: (\d+), alt: '([^']+)'/g), ...source.matchAll(/src="(\/visual\/[a-z-]+\.webp)" width="(\d+)" height="(\d+)" alt="([^"]+)"/g)]);
-  assert.deepEqual(images.map((match) => match[1]).sort(), ["cara-kerja", "faq", "fitur", "harga", "home-closing", "kontak"].map((name) => `/visual/${name}.webp`));
-  for (const [, src, width, height, alt] of images) {
-    assert.ok(alt.length >= 10 && alt.length <= 125, `${src} alt is ${alt.length} characters`);
-    const meta = await sharp(`public${src}`).metadata();
-    // Drawn at 2×: the file is exactly twice the box the markup reserves.
-    assert.deepEqual([meta.format, meta.width, meta.height], ["webp", Number(width) * 2, Number(height) * 2], src);
-  }
-  const banner = readFileSync("src/platform/site/VisualBanner.astro", "utf8");
-  assert.match(banner, /width=\{image\.width\} height=\{image\.height\} alt=\{image\.alt\} loading=\{eager \? 'eager' : 'lazy'\}/);
-  assert.match(readFileSync("src/platform/site/ClosingCta.astro", "utf8"), /home-closing\.webp" width="640" height="460" alt="[^"]+" loading="lazy"/);
-  const markup = banner.split("---").slice(2).join("---");
-  assert.doesNotMatch(markup, /eyebrow|border:/, "a borderless tile, no eyebrow pill");
+test("PLATFORM-SEO §4 (Paduka, 2026-11-19): the in-page 2.5D banners are retired; the pages keep their content and the share cards stay", async () => {
+  const { existsSync } = await import("node:fs");
+  const pages = ["index", "fitur", "cara-kerja", "harga", "faq", "kontak"].map((name) => readFileSync(`src/pages/platform/site/${name}.astro`, "utf8"));
+  // Marketing components only: the sign-in studio (AuthSplit.astro, /masuk, /daftar) keeps its own illustration.
+  const marketing = readdirSync("src/platform/site").filter((name) => name !== "AuthSplit.astro").map((name) => readFileSync(`src/platform/site/${name}`, "utf8"));
+  assert.equal(existsSync("src/platform/site/VisualBanner.astro"), false);
+  assert.doesNotMatch([...pages, ...marketing].join("\n"), /VisualBanner|\/visual\//, "no banner and no illustration on a marketing page");
+  assert.match(pages[0], /<ClosingCta withShot=\{false\} \/>/, "the home ends on the band alone");
+  for (const name of ["fitur", "cara-kerja", "harga", "faq", "kontak"]) assert.equal(existsSync(`public/visual/${name}.webp`), false, name);
+  // The one illustration left is the sign-in studio's (feat/auth-minimalist-step-studio).
+  assert.ok(existsSync("public/visual/home-closing.webp"));
+  for (const page of Object.values(SITE_PAGES)) assert.ok(existsSync(`public${page.ogImage}`), page.ogImage);
 });
 
 test("PLATFORM-SEO §3: /llms.txt summarises the site from its public pages and never names sign-in, admin or APIs", async () => {
@@ -440,4 +435,38 @@ test("the closing band counts the required setup steps a new physical store real
   assert.equal(SETUP_STEPS.length, owed.length);
   const words = ["", "satu", "dua", "tiga", "empat", "lima"];
   assert.match(readFileSync("src/platform/site/ClosingCta.astro", "utf8"), new RegExp(`selesaikan ${words[owed.length]} langkah`));
+});
+
+test("AUTH-MINIMALIST-STEP-UX-SPEC: /masuk and /daftar are one studio — no header, no footer, the wordmark and legal line in the studio", () => {
+  const layout = readFileSync("src/platform/site/SiteLayout.astro", "utf8");
+  assert.match(layout, /\{!heroHeader && !authStage && <SiteHeader /);
+  assert.match(layout, /\{!authStage && <footer class="site-footer">/);
+  assert.doesNotMatch(layout, /quietHeader/, "the old floating wordmark header is gone");
+  for (const page of ["src/pages/platform/masuk.astro", "src/pages/platform/signup.astro"]) {
+    assert.match(readFileSync(page, "utf8"), /<SiteLayout page=\{(LOGIN|SIGNUP)_PAGE\} authStage>/, page);
+  }
+  const studio = readFileSync("src/platform/site/AuthSplit.astro", "utf8");
+  assert.match(studio, /min-height: 100dvh/);
+  assert.match(studio, /class="panel-top"[\s\S]*adsbook-id-wordmark\.svg[\s\S]*← Beranda/, "the wordmark and home link top the studio panel");
+  assert.equal((studio.match(/href="\/syarat">Syarat Layanan<\/a> · <a href="\/privasi">Kebijakan Privasi<\/a>/g) ?? []).length, 2, "one legal line for the panel and one for a phone");
+  assert.match(studio, /prefers-reduced-motion: reduce/);
+});
+
+test("AUTH-MINIMALIST-STEP-UX-SPEC §4: the bot check is explicit, invisible unless needed, full width, light, and waits at most 4 seconds; no vendor in the copy", () => {
+  const signup = readFileSync("src/pages/platform/signup.astro", "utf8");
+  for (const option of ["size: 'flexible'", "theme: 'light'", "appearance: 'interaction-only'", "language: 'id'", "'error-callback'", "'expired-callback'"]) {
+    assert.ok(signup.includes(option), option);
+  }
+  assert.match(signup, /turnstile\/v0\/api\.js\?render=explicit&onload=__adsbookTurnstileReady/);
+  assert.match(signup, /setTimeout\(resolve, 4000\)/, "a token still in flight is waited for, at most 4 seconds");
+  // Every field of the three steps stays in the one form: a password manager sees email and new password together.
+  const form = signup.slice(signup.indexOf('<form'), signup.indexOf('</form>'));
+  for (const name of ["catalog_mode", "store_name", "slug", "email", "whatsapp", "password", "terms"]) assert.ok(form.includes(`name="${name}"`), name);
+  assert.match(form, /autocomplete="email"[\s\S]*autocomplete="new-password"/);
+  // Server errors return to their step.
+  assert.match(signup, /storeName: \{[^}]*step: 1 \}/);
+  assert.match(signup, /email: \{[^}]*step: 2 \}/);
+  // Product copy names no infrastructure vendor (Paduka, 2026-11-17).
+  const markup = signup.split("<script>")[0].replace(/<script[^>]*>[\s\S]*?<\/script>|<!--[\s\S]*?-->/g, "");
+  assert.doesNotMatch(markup.split("---").slice(2).join("---").replace(/\{[^}]*\}|<[^>]+>/g, " "), /Cloudflare|Turnstile/);
 });

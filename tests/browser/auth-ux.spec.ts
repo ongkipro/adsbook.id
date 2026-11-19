@@ -1,11 +1,8 @@
 // AUTH-LOGIN-REGISTER-UX-SPEC (2026-11-18) in a real browser, local only:
-// adsbook.id/masuk and /daftar as one split-screen pair (form first on a
-// phone), one email = one store, staff usernames unique across stores, and
+// adsbook.id/masuk and /daftar (their studio layout: auth-studio.spec.ts), one email = one store, staff usernames unique across stores, and
 // one sign-in door that lands owners and staff in their own store's admin.
 import { expect, test, type Page } from "@playwright/test";
-import { origin, owner, PLATFORM, TENANTS } from "./tenants.ts";
-
-const shots = process.env.AUTH_SHOT_DIR;
+import { origin, owner, PLATFORM, signUpThroughWizard, TENANTS } from "./tenants.ts";
 
 /** A same-origin JSON call from the page, as the admin's own screens make it (CSRF gate). */
 async function pageFetch(page: Page, path: string, method: string, body?: unknown) {
@@ -31,38 +28,6 @@ async function signInAtMasuk(page: Page, identifier: string, password: string) {
   await page.getByRole("button", { name: "Masuk ke Dashboard →" }).click();
 }
 
-test("the pair at 1440 and 390: switcher, the form in the first viewport on a phone, two catalog choices with the hybrid note", async ({ page }) => {
-  for (const [width, height] of [[1440, 900], [390, 844]] as const) {
-    await page.setViewportSize({ width, height });
-    await page.goto(`${PLATFORM}/masuk`);
-    await expect(page.locator("#loginForm"), "a form without JavaScript posts").toHaveAttribute("method", "post");
-    await expect(page.locator(".auth-switch a[aria-current=page]")).toHaveText("Masuk ke Toko");
-    const field = await page.locator("#loginPassword").boundingBox();
-    expect(field!.y + field!.height, `/masuk ${width}: both fields above the fold`).toBeLessThanOrEqual(height);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    if (shots) await page.screenshot({ path: `${shots}/auth-masuk-${width}.png`, fullPage: true });
-
-    await page.goto(`${PLATFORM}/daftar`);
-    await expect(page.locator(".auth-switch a[aria-current=page]")).toHaveText("Buat Toko Baru");
-    await expect(page.locator('input[name="catalog_mode"]')).toHaveCount(2);
-    await expect(page.locator('input[name="catalog_mode"][value="hybrid"]')).toHaveCount(0);
-    await expect(page.locator(".catalog-hint")).toContainText("Satu toko bisa keduanya");
-    // Said once, under the choices; the panel's first point names hybrid without repeating the paragraph.
-    await expect(page.getByText("Satu toko sebenarnya mendukung")).toHaveCount(0);
-    await expect(page.locator(".foundation-list")).toContainText("Bebas jual fisik, digital, maupun hybrid");
-    const name = await page.locator("#storeName").boundingBox();
-    expect(name!.y + name!.height, `/daftar ${width}: the form starts above the fold`).toBeLessThanOrEqual(height);
-    // The panel's "after signup" note follows the chosen focus.
-    await expect(page.locator('[data-next-steps="physical"]')).toBeVisible();
-    await page.getByRole("radio", { name: /Produk Digital/ }).check();
-    await expect(page.locator('[data-next-steps="digital"]')).toBeVisible();
-    await expect(page.locator('[data-next-steps="physical"]')).toBeHidden();
-    await page.getByRole("radio", { name: /Produk Fisik/ }).check();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    if (shots) await page.screenshot({ path: `${shots}/auth-daftar-${width}.png`, fullPage: true });
-  }
-});
-
 test("one email = one store; a new owner lands on setup, then signs back in at adsbook.id/masuk", async ({ page }) => {
   // The suite's other signups share an address's 5-per-hour allowance; these come from their own.
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": "198.51.100.91" });
@@ -71,19 +36,16 @@ test("one email = one store; a new owner lands on setup, then signs back in at a
   const password = "password-pintu-123";
   const fill = async (storeName: string, storeSlug: string, ownerEmail: string) => {
     await page.goto(`${PLATFORM}/daftar`);
-    await page.getByLabel("Nama toko").fill(storeName);
-    await page.getByLabel("Alamat toko", { exact: true }).fill(storeSlug);
-    await expect(page.locator("#slugHint")).toContainText("tersedia.", { timeout: 15_000 });
-    await page.getByLabel("Email", { exact: true }).fill(ownerEmail);
-    await page.getByLabel("Password", { exact: true }).fill(password);
-    await page.getByRole("checkbox").check();
-    await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
+    await signUpThroughWizard(page, { storeName, slug: storeSlug, email: ownerEmail, password });
   };
 
-  // An email that already owns a store is refused on the email field, in Indonesian.
+  // An email that already owns a store is refused on the email field, in Indonesian, and the
+  // wizard returns from step 3 to step 2 with that field focused (AUTH-MINIMALIST-STEP-UX-SPEC §4).
   await fill("Toko Ganda", "toko-ganda-email", owner(TENANTS[0].slug).username);
   await expect(page.locator("#emailError")).toBeVisible();
   await expect(page.locator("#emailError")).toContainText("Email ini sudah terdaftar untuk sebuah toko");
+  await expect(page.locator("#stepNow")).toHaveText("2");
+  await expect(page.getByLabel("Email", { exact: true })).toBeFocused();
 
   // A new store: the handoff lands on setup, with the physical first steps and the hybrid note.
   await fill("Toko Pintu Satu", slug, email);
