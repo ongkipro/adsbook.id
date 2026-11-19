@@ -13,7 +13,7 @@ const active = db ? Boolean(await pluginContext(db, getRuntimeEnv(Astro.locals),
 if (!active) return Astro.redirect('/admin/settings/plugins');
 ---
 
-<AdminLayout title="Kelola CRM" activeMenu="settings">
+<AdminLayout title="Kelola CRM" activeMenu="plugins">
   <div class="space-y-6">
     <AdminPageHeader
       title="Kelola CRM"

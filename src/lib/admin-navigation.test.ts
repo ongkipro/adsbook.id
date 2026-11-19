@@ -90,3 +90,27 @@ test("DIGITAL-PRODUCTS-SPEC §4.1: a digital store's menu drops shipping, courie
   for (const href of shipping) assert.ok(!search.includes(href), `search hides ${href}`);
   assert.deepEqual(getVisibleNavGroups("owner"), getVisibleNavGroups("owner", "hybrid"), "the default is today's menu");
 });
+
+test("Plugin is its own workspace right before Pengaturan for owner and admin, and nowhere for the scoped roles", () => {
+  const PLUGINS = "/admin/settings/plugins";
+  for (const role of ["owner", "admin"] as const) {
+    const system = getVisibleNavGroups(role).find((group) => group.items.some((item) => item.id === "settings"));
+    const ids = system?.items.map((item) => item.id) ?? [];
+    assert.equal(ids.indexOf("plugins"), ids.indexOf("settings") - 1, `${role}: Plugin sits immediately before Pengaturan`);
+    assert.equal(system?.items.find((item) => item.id === "plugins")?.href, PLUGINS, `${role}: same URL as before`);
+    const settings = system?.items.find((item) => item.id === "settings");
+    assert.equal(settings?.children?.some((child) => child.href === PLUGINS), false, `${role}: no second Plugin entry under Pengaturan`);
+    assert.equal(getSearchableNavItems(role).filter((item) => item.href === PLUGINS).length, 1, `${role}: one search result`);
+    // A digital store keeps it: plugins are not a shipping surface.
+    assert.ok(getVisibleNavGroups(role, "digital").some((group) => group.items.some((item) => item.id === "plugins")), `${role}: digital keeps Plugin`);
+  }
+  for (const role of ["advertiser", "customer_service"] as const) {
+    assert.equal(getSearchableNavItems(role).some((item) => item.href.startsWith(PLUGINS)), false, `${role}: no Plugin link anywhere`);
+    assert.equal(canAccessAdminRoute(role, PLUGINS), false, `${role}: and no access to the page`);
+  }
+  // Operator CS keeps exactly its workspace, Cek WA & Ongkir included.
+  assert.deepEqual(getVisibleNavGroups("customer_service").flatMap((group) => group.items.map((item) => item.id)), ["dashboard", "orders", "shipping", "scoring"]);
+  // Every plugin page, the list and each plugin's own page, lights the Plugin link.
+  assert.equal(isAdminNavHrefActive("/admin/settings/plugins", PLUGINS), true);
+  assert.equal(isAdminNavHrefActive("/admin/settings/plugins/kelola", PLUGINS), true);
+});

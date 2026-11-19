@@ -73,6 +73,13 @@ test("platform console: every menu at 390 and 1366 px, team add, support refused
       expect(overflow, `${menu.path} at ${width}px overflows`).toBeLessThanOrEqual(0);
       await page.screenshot({ path: `test-results/console-${width}-${menu.path.replace(/\//g, "_") || "root"}.png`, fullPage: true });
     }
+    // The seller-only scroll pad never reaches the platform sidebar: a sidebar click here leaves it unset.
+    if (width === 1366) {
+      await page.locator('[data-sidebar="content"] a[href="/platform/activity"]').click();
+      await page.waitForURL(`${PLATFORM}/platform/activity`);
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--sidebar-restore-pad").trim())).toBe("");
+      await expect(page.locator('[data-sidebar="content"]')).toHaveCSS("padding-bottom", "80px");
+    }
     // The current page is marked in the navigation (sidebar on desktop, bottom bar on a phone).
     await page.goto(`${PLATFORM}/platform/billing`);
     await expect(page.locator('a[aria-current="page"]:visible').first()).toContainText("Tagihan");
