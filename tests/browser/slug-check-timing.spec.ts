@@ -22,6 +22,19 @@ const NOT_CONFIRMED = "Belum sempat dicek; diperiksa lagi saat toko dibuat.";
 const NOTE_PENDING = "Alamat toko belum sempat dicek; diperiksa lagi saat toko dibuat.";
 const NOTE_TAKEN = "Alamat toko ternyata tidak tersedia; kembali ke langkah 1 untuk menggantinya.";
 const shots = process.env.AUTH2_SHOT_DIR;
+/**
+ * The form column slides in on load (`studio-in`: translateY(8px) over 240 ms,
+ * ease-out), so a position read before that ends still carries a residual —
+ * about 0.59 px at 100 ms — that later reads do not. Resolves once every
+ * animation on `selector` and its ancestors has finished; it waits for the
+ * entrance only, never for anything the status line does.
+ */
+const entranceSettled = (page: Page, selector: string) =>
+  page.locator(selector).evaluate(async (element) => {
+    const running: Animation[] = [];
+    for (let node: Element | null = element; node; node = node.parentElement) running.push(...node.getAnimations());
+    await Promise.all(running.map((animation) => animation.finished));
+  });
 /** The first request of a fresh local server is slow (cold start); measure warm. */
 const warm = (page: Page) => page.evaluate(() => fetch("/api/platform/slug?slug=pemanasan-cek").then((response) => response.status));
 
@@ -63,6 +76,7 @@ test("fast: Enter right after typing runs the pending check at once (one request
   await warm(page);
   const address = page.getByLabel("Alamat toko", { exact: true });
   const next = page.locator("#toStep2");
+  await entranceSettled(page, "#toStep2");
   const before = (await next.boundingBox())!.y;
   // Layout: "checking" and a result take the reserved line, the button stays put.
   await address.fill("cek-tata-letak");
