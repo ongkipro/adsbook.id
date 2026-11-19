@@ -41,6 +41,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     </div>
 
     <div id="errorSummary" class="error-banner" hidden role="alert" tabindex="-1"></div>
+    <!-- After step 1 only: the address is not confirmed yet (or turned out unavailable). -->
+    <p id="slugNote" class="slug-note" role="status" hidden></p>
 
     <form
       method="post"
@@ -80,7 +82,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
             <input id="slug" name="slug" type="text" required maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="url" placeholder="herbal-nusantara" aria-describedby="slugHint slugError" />
             <span class="slug-suffix">.{suffix}</span>
           </div>
-          <p id="slugHint" class="field-hint slug-hint" aria-live="polite" hidden></p>
+          <p id="slugHint" class="field-hint slug-hint" aria-live="polite"></p>
           <div id="slugSuggestions" class="slug-suggestions" hidden aria-label="Saran alamat toko yang tersedia"></div>
           <p id="slugError" class="field-error" hidden></p>
         </div>
@@ -205,6 +207,11 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   let pending = false;
   // The button's resting label, restored after every refused attempt.
   const SUBMIT_LABEL = 'Buat Toko Gratis →';
+  // How long Continue waits for an address check before moving on (the server checks again at signup).
+  const SLUG_DECISION_MS = 1200;
+  const SLUG_NOT_CONFIRMED = 'Belum sempat dicek; diperiksa lagi saat toko dibuat.';
+  const SLUG_NOTE_PENDING = 'Alamat toko belum sempat dicek; diperiksa lagi saat toko dibuat.';
+  const SLUG_NOTE_TAKEN = 'Alamat toko ternyata tidak tersedia; kembali ke langkah 1 untuk menggantinya.';
   const STEP_LEADS = ['Jenis dan alamat toko', 'Nama toko dan kontak pemilik', 'Keamanan dan peluncuran'];
 
   // ---- steps -----------------------------------------------------------------
@@ -218,6 +225,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     stepNow.textContent = String(next);
     stepLead.textContent = STEP_LEADS[next - 1];
     stepBack.hidden = next === 1;
+    syncSlugNote();
     if (!moveFocus) return;
     const target = focus ?? panels[next - 1].querySelector<HTMLElement>('input:not([type="radio"])');
     // A focused field outside the viewport (zoomed text, a short screen) is scrolled into view.
@@ -282,25 +290,49 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
 
   const setSlugState = (state: 'neutral' | 'checking' | 'ok' | 'err' | 'warn', text: string) => {
     slugHint.textContent = text;
-    // No filler: the line appears only with something to report (a check, a result, a reason).
-    slugHint.hidden = !text;
+    // No filler text, and no jump: the line keeps its height and is empty until there is something to say.
     slugHint.dataset.state = state;
     slugBox.dataset.state = state === 'ok' || state === 'err' ? state : 'neutral';
+    syncSlugNote();
   };
+  /**
+   * Past step 1 the address's own status line is out of sight: one short note says it is not
+   * confirmed yet (no answer in time, or a failed check), or that a late answer found it
+   * unavailable; a late "available" removes it. The server still decides at signup.
+   */
+  function syncSlugNote() {
+    const note = document.getElementById('slugNote');
+    if (!note) return;
+    const state = slugHint.dataset.state;
+    const text = step === 1 ? '' : state === 'err' ? SLUG_NOTE_TAKEN : state === 'neutral' && slugHint.textContent === SLUG_NOT_CONFIRMED ? SLUG_NOTE_PENDING : '';
+    note.textContent = text;
+    note.dataset.state = state === 'err' ? 'err' : 'pending';
+    note.hidden = !text;
+  }
 
   let availabilityTimer = 0;
   let availabilitySeq = 0;
   let availability: Promise<void> = Promise.resolve();
   let settleAvailability: (() => void) | null = null;
+  // The check still waiting for the typing pause (Continue runs it at once), and the request in flight.
+  let scheduledCheck: (() => void) | null = null;
+  let checkRequest: AbortController | null = null;
   // Addresses the server refused at signup stay unavailable until the seller picks another.
   const rejectedSlugs = new Map<string, string>();
-  const checkAvailability = () => {
+  /** Voids the current check: its timer, its request (aborted) and anyone waiting on it (settled). */
+  const voidCheck = () => {
     window.clearTimeout(availabilityTimer);
-    // A superseded check settles at once (a waiting Continue re-reads the current inputs),
-    // and its late answer is ignored.
+    scheduledCheck = null;
     availabilitySeq += 1;
+    checkRequest?.abort();
+    checkRequest = null;
     settleAvailability?.();
     settleAvailability = null;
+  };
+  const checkAvailability = () => {
+    // A superseded check is cancelled and settles at once (a waiting Continue re-reads the
+    // current inputs); an answer that still arrives is ignored.
+    voidCheck();
     const slug = slugInput.value.trim();
     syncStoreContext();
     // Alternatives offered for another address never outlive it, even if this check is slow or fails;
@@ -324,8 +356,11 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     const seq = availabilitySeq;
     availability = new Promise((resolve) => {
       settleAvailability = resolve;
-      availabilityTimer = window.setTimeout(async () => {
-        const response = await fetch(`/api/platform/slug?slug=${encodeURIComponent(slug)}`).catch(() => null);
+      const run = async () => {
+        scheduledCheck = null;
+        const request = new AbortController();
+        checkRequest = request;
+        const response = await fetch(`/api/platform/slug?slug=${encodeURIComponent(slug)}`, { signal: request.signal }).catch(() => null);
         const payload = await response?.json().catch(() => null);
         if (seq === availabilitySeq && payload?.success && slugInput.value.trim() === slug) {
           if (payload.data.available) {
@@ -338,12 +373,25 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           }
         } else if (seq === availabilitySeq && slugHint.dataset.state === 'checking') {
           // No answer: the server decides on submit.
-          setSlugState('neutral', 'Diperiksa saat membuat toko');
+          setSlugState('neutral', SLUG_NOT_CONFIRMED);
         }
-        if (seq === availabilitySeq) settleAvailability = null;
+        if (seq === availabilitySeq) {
+          settleAvailability = null;
+          checkRequest = null;
+        }
         resolve();
-      }, 240);
+      };
+      // Typing: the trailing pause. Continue or Enter runs it at once (flushCheck).
+      scheduledCheck = run;
+      availabilityTimer = window.setTimeout(run, 240);
     });
+  };
+  /** Runs a check still waiting for the typing pause now; one already in flight is reused, not repeated. */
+  const flushCheck = () => {
+    const run = scheduledCheck;
+    if (!run) return;
+    window.clearTimeout(availabilityTimer);
+    run();
   };
 
   const updatePasswordChecklist = () => {
@@ -460,10 +508,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     }
     if (errors.slug) {
       // The server's word is final for this address: any check still running is void.
-      window.clearTimeout(availabilityTimer);
-      availabilitySeq += 1;
-      settleAvailability?.();
-      settleAvailability = null;
+      voidCheck();
       rejectedSlugs.set(slugInput.value.trim(), errors.slug);
       setSlugState('err', errors.slug);
     }
@@ -490,16 +535,27 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         if (rejectedSlugs.has(slugInput.value.trim()) || slugHint.dataset.state === 'err') return ['slug', 'Pilih alamat toko yang tersedia.'];
         return null;
       };
-      // Wait for the check of the address as it is now; edits made while waiting start a new
-      // check, so the wait follows them, and the inputs are judged again once it settles.
-      for (let round = 0; round < 3 && !problem() && slugHint.dataset.state === 'checking'; round += 1) {
-        await Promise.race([availability, new Promise((resolve) => setTimeout(resolve, 3000))]);
+      // Known problems (too short, taken, reserved, refused by the server) block at once.
+      // Otherwise the check of the address as it is now runs immediately, and Continue waits for
+      // it within one deadline counted from this press: an edit while waiting starts (and runs)
+      // a new check but never extends the wait, and the inputs are judged again at the end.
+      const deadline = performance.now() + SLUG_DECISION_MS;
+      // An address left unconfirmed earlier (no answer in time, or a failed check) is checked
+      // afresh: a request that already missed one deadline is cancelled, not waited for again.
+      if (!problem() && slugHint.dataset.state === 'neutral' && slugInput.value.trim().length >= 3) checkAvailability();
+      while (!problem() && slugHint.dataset.state === 'checking') {
+        const left = deadline - performance.now();
+        if (left <= 0) break;
+        flushCheck();
+        await Promise.race([availability, new Promise((resolve) => setTimeout(resolve, left))]);
       }
       const found = problem();
       if (found) {
         stepError(found[0], found[1]);
         return false;
       }
+      // No answer in time: say so (never "available" without an answer); the server checks it at signup.
+      if (slugHint.dataset.state === 'checking') setSlugState('neutral', SLUG_NOT_CONFIRMED);
       return true;
     }
     if (current === 2) {
@@ -701,7 +757,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       // The launch sequence on the same card, then the handoff.
       form.hidden = true;
       progressNote.hidden = true;
-      for (const element of document.querySelectorAll<HTMLElement>('.wizard-head, .card-head, .picked-plan')) element.hidden = true;
+      for (const element of document.querySelectorAll<HTMLElement>('.wizard-head, .card-head, .picked-plan, #slugNote')) element.hidden = true;
       (document.getElementById('doneEmail') as HTMLElement).textContent = data.email;
       (document.getElementById('doneStoreUrl') as HTMLElement).textContent = data.store_url.replace(/^https?:\/\//, '');
       (document.getElementById('doneLogin') as HTMLAnchorElement).href = data.login_url;
@@ -803,7 +859,12 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18); }
   .field input[aria-invalid="true"] { border-color: #e11d48; background: #fffafa; }
 
-  .slug-hint { font-weight: 600; }
+  .slug-note { display: flex; gap: 0.5rem; align-items: baseline; margin: 0 0 0.85rem; font-size: 0.8rem; line-height: 1.4; color: var(--ink-muted); }
+  .slug-note::before { content: ""; width: 7px; height: 7px; flex-shrink: 0; border-radius: 999px; border: 1.5px solid var(--slate-soft); transform: translateY(-1px); }
+  .slug-note[data-state="err"] { color: #be123c; font-weight: 600; }
+  .slug-note[data-state="err"]::before { border-color: #e11d48; background: #e11d48; }
+  /* One line reserved: checking, a result or a reason replace each other without moving the form. */
+  .slug-hint { min-height: 1.4em; line-height: 1.4; font-weight: 600; }
   .slug-hint[data-state="ok"] { color: #15803d; }
   .slug-hint[data-state="err"] { color: #be123c; }
   .slug-hint[data-state="warn"] { color: #b45309; }
