@@ -268,4 +268,3 @@ test("a bot-check refusal at the server is recoverable: retry copy, cleared by a
   await expect(page.locator("#errorSummary")).toContainText("Password terlalu mudah ditebak.");
   await expect(page.locator("#errorSummary")).not.toContainText("Verifikasi keamanan");
 });
-
