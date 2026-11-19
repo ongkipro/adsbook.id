@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "./useConfirm";
 import {
   AlertTriangle,
@@ -192,6 +192,8 @@ function generateRandomPassword() {
 export function AccessManager() {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [users, setUsers] = useState<AccessUser[]>([]);
+  // The newest list read. An answer to an older read is dropped: it may predate a change made since.
+  const listRead = useRef(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -219,7 +221,14 @@ export function AccessManager() {
     role: "customer_service" as AssignableRole,
   });
 
+  /**
+   * Reads the list from the server. Only the newest read is applied, and every
+   * successful change reads again (`reload`), so a slow first answer can neither
+   * drop a member added meanwhile nor hide the members that already existed:
+   * the screen always ends equal to the server.
+   */
   const load = async () => {
+    const read = ++listRead.current;
     setLoading(true);
     try {
       const response = await fetch("/api/admin/access", {
@@ -229,15 +238,19 @@ export function AccessManager() {
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || "Daftar akses gagal dimuat.");
       }
-      setUsers((payload.data?.users || []) as AccessUser[]);
+      if (read === listRead.current) setUsers((payload.data?.users || []) as AccessUser[]);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Daftar akses gagal dimuat.",
-      );
+      if (read === listRead.current) {
+        toast.error(
+          error instanceof Error ? error.message : "Daftar akses gagal dimuat.",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (read === listRead.current) setLoading(false);
     }
   };
+  /** After a successful change: the local update shows at once, and the server's list follows it. */
+  const reload = () => void load();
 
   useEffect(() => {
     void load();
@@ -280,6 +293,7 @@ export function AccessManager() {
         throw new Error(payload.error || "Pengguna gagal dibuat.");
       }
       setUsers((current) => [...current, payload.data as AccessUser]);
+      reload();
       setForm({
         display_name: "",
         email: "",
@@ -328,6 +342,7 @@ export function AccessManager() {
       setUsers((current) =>
         current.map((u) => (u.id === editingUser.id ? (payload.data as AccessUser) : u)),
       );
+      reload();
       setEditingUser(null);
       toast.success(payload.message || "Profil & peran berhasil diperbarui.");
     } catch (error) {
@@ -364,6 +379,7 @@ export function AccessManager() {
       setUsers((current) =>
         current.map((u) => (u.id === resetUser.id ? (payload.data as AccessUser) : u)),
       );
+      reload();
       toast.success(payload.message || "Password berhasil di-reset!");
       setResetUser(null);
     } catch (error) {
@@ -391,6 +407,7 @@ export function AccessManager() {
         throw new Error(payload.error || "Akses gagal dicabut.");
       }
       setUsers((current) => current.filter((item) => item.id !== user.id));
+      reload();
       toast.success(payload.message || "Akses pengguna berhasil dicabut.");
     } catch (error) {
       toast.error(
@@ -642,8 +659,10 @@ export function AccessManager() {
                 <label className="text-xs font-semibold text-slate-900">
                   Role & Peran Akses <span className="text-rose-500">*</span>
                 </label>
+                {/* The trigger shows the short name; each option keeps its description
+                    and the role help below spells the selected role out in full. */}
                 <Select
-                  items={ASSIGNABLE_ROLE_OPTIONS}
+                  items={ASSIGNABLE_ROLE_SHORT_LABELS}
                   value={form.role}
                   onValueChange={(value) =>
                     value && setForm({ ...form, role: value as AssignableRole })

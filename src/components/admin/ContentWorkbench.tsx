@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { processImageUpload } from "../../lib/client-image";
 import { Button } from "@/components/ui/button";
@@ -24,18 +24,36 @@ type IndexData = {
   targets: Target[];
 };
 
+/**
+ * The target the editor holds: its key and the record (with the version) read
+ * for that key, set together only by a read that succeeded. Every write takes
+ * its key and `expectedVersion` from here, never from the picker, so a switch
+ * that is still loading or that failed cannot send one target's document or
+ * version to another.
+ */
+type LoadedTarget = { key: string; record: ContentRecord | null };
+
 export function ContentWorkbench() {
   const [index, setIndex] = useState<IndexData | null>(null);
-  const [selectedKey, setSelectedKey] = useState("home");
-  const [record, setRecord] = useState<ContentRecord | null>(null);
+  const [loaded, setLoaded] = useState<LoadedTarget | null>(null);
+  // The key being read for a switch; writes stay off until it lands or fails.
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const latestRead = useRef(0);
   const [editor, setEditor] = useState("{}");
   const [instructions, setInstructions] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mediaUrl, setMediaUrl] = useState("");
+  // Set when the server refuses a write because the row moved on (409): the
+  // editor keeps what the operator typed until they choose to load the newer one.
+  const [conflict, setConflict] = useState<{ currentVersion: number | null } | null>(null);
+  const record = loaded?.record ?? null;
+  const writesBlocked = saving || loaded === null || pendingKey !== null;
 
-  const loadRecord = async (key: string) => {
+  /** Reads `key` and, if it is still the latest read, makes it the loaded target. Throws on failure. */
+  const loadTarget = async (key: string) => {
+    const read = ++latestRead.current;
     const response = await fetch(`/api/admin/content?key=${encodeURIComponent(key)}`, {
       headers: { Accept: "application/json" },
     });
@@ -43,9 +61,24 @@ export function ContentWorkbench() {
     if (!response.ok || !payload.success) {
       throw new Error(payload.error || "Konten gagal dimuat.");
     }
+    if (read !== latestRead.current) return; // a newer read owns the editor now
     const next = (payload.data || null) as ContentRecord | null;
-    setRecord(next);
+    setLoaded({ key, record: next });
     setEditor(pretty(next?.draft ?? next?.published ?? {}));
+    setConflict(null);
+  };
+
+  const loadLatest = async () => {
+    if (!loaded) return;
+    const key = loaded.key;
+    setPendingKey(key);
+    try {
+      await loadTarget(key);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Konten gagal dimuat.");
+    } finally {
+      setPendingKey((current) => (current === key ? null : current));
+    }
   };
 
   useEffect(() => {
@@ -60,7 +93,7 @@ export function ContentWorkbench() {
           throw new Error(payload.error || "Workbench konten gagal dimuat.");
         }
         setIndex(payload.data as IndexData);
-        await loadRecord("home");
+        await loadTarget("home");
       })
       .catch((error) => {
         if (!(error instanceof Error && error.name === "AbortError")) {
@@ -71,19 +104,23 @@ export function ContentWorkbench() {
     return () => controller.abort();
   }, []);
 
+  // A failed switch keeps the loaded target and the operator's unsaved text;
+  // the picker falls back to the loaded key once nothing is pending.
   const selectTarget = async (key: string) => {
-    setSelectedKey(key);
-    setLoading(true);
+    if (key === loaded?.key && pendingKey === null) return;
+    setPendingKey(key);
     try {
-      await loadRecord(key);
+      await loadTarget(key);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Konten gagal dimuat.");
     } finally {
-      setLoading(false);
+      setPendingKey((current) => (current === key ? null : current));
     }
   };
 
   const mutate = async (action: "save-draft" | "generate" | "publish") => {
+    const target = loaded;
+    if (!target || pendingKey !== null) return;
     setSaving(true);
     try {
       let content: unknown;
@@ -97,13 +134,18 @@ export function ContentWorkbench() {
       const response = await fetch("/api/admin/content", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, key: selectedKey, content }),
+        // The version this editor loaded; 0 when the row does not exist yet.
+        body: JSON.stringify({ action, key: target.key, content, expectedVersion: target.record?.version ?? 0 }),
       });
       const payload = await response.json().catch(() => ({}));
+      if (response.status === 409 && payload.code === "CONTENT_VERSION_CONFLICT") {
+        setConflict({ currentVersion: typeof payload.currentVersion === "number" ? payload.currentVersion : null });
+        return;
+      }
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || "Aksi konten gagal.");
       }
-      await loadRecord(selectedKey);
+      await loadTarget(target.key);
       toast.success(
         action === "publish"
           ? "Konten diterbitkan."
@@ -191,7 +233,8 @@ export function ContentWorkbench() {
             Target konten
             <Select
               items={Object.fromEntries((index?.targets || []).map((target) => [target.key, target.label]))}
-              value={selectedKey}
+              // Shows the key being read while a switch is pending, else the loaded one.
+              value={pendingKey ?? loaded?.key ?? "home"}
               onValueChange={(value) => value && void selectTarget(String(value))}
               disabled={loading || saving}
             >
@@ -208,11 +251,30 @@ export function ContentWorkbench() {
             </Select>
           </label>
           <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
-            <span>Versi {record?.version || 0}</span>
-            <span>·</span>
-            <span>{record?.generated_by || "belum ada draft"}</span>
-            {record?.published_at && <span>· Published {record.published_at}</span>}
+            {pendingKey !== null ? (
+              <span role="status">Memuat target…</span>
+            ) : (
+              <>
+                <span>Versi {record?.version || 0}</span>
+                <span>·</span>
+                <span>{record?.generated_by || "belum ada draft"}</span>
+                {record?.published_at && <span>· Published {record.published_at}</span>}
+              </>
+            )}
           </div>
+          {conflict && (
+            <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                {conflict.currentVersion === null
+                  ? "Konten ini sudah dihapus atau belum pernah disimpan di tempat lain."
+                  : `Konten ini sudah diubah di tempat lain (sekarang versi ${conflict.currentVersion}).`}{" "}
+                Isi editor Anda belum tersimpan dan tetap ada di bawah. Salin dulu bila perlu, lalu muat versi terbaru.
+              </p>
+              <Button type="button" variant="outline" disabled={writesBlocked} onClick={() => void loadLatest()}>
+                Muat versi terbaru
+              </Button>
+            </div>
+          )}
           <label className="grid-cols-1 grid gap-2 text-xs font-semibold text-slate-700">
             Draft JSON
             <textarea
@@ -223,13 +285,13 @@ export function ContentWorkbench() {
             />
           </label>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <Button type="button" variant="outline" disabled={saving} onClick={() => void mutate("generate")}>
+            <Button type="button" variant="outline" disabled={writesBlocked} onClick={() => void mutate("generate")}>
               Generate Workers AI
             </Button>
-            <Button type="button" variant="outline" disabled={saving} onClick={() => void mutate("save-draft")}>
+            <Button type="button" variant="outline" disabled={writesBlocked} onClick={() => void mutate("save-draft")}>
               Simpan Draft
             </Button>
-            <Button type="button" disabled={saving || !record?.draft} onClick={() => void mutate("publish")}>
+            <Button type="button" disabled={writesBlocked || !record?.draft} onClick={() => void mutate("publish")}>
               Publish Draft
             </Button>
           </div>

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { isStoreReady, readinessTrack } from "../platform/readiness.ts";
 import { buildSetupChecklist, type SetupFacts } from "./setup-checklist.ts";
@@ -112,3 +113,14 @@ test("ONBOARDING-BANK-WAREHOUSE-SPEC §3: the product form guides toward the war
   assert.match(digitalPayment?.hint ?? "", /^Pilih salah satu: rekening bank transfer manual/);
 });
 
+// The admin guide (/admin/docs) quotes these labels; it went stale once and told
+// sellers the non-COD payment step was optional and to install at /install.
+test("the admin guide names every checklist step label and none of the single-tenant leftovers", () => {
+  const guide = readFileSync(new URL("../components/admin/docs/DocsAdminChapter.astro", import.meta.url), "utf8");
+  const hybrid: SetupFacts = { ...fresh, catalogMode: "hybrid", physicalCatalog: true, digitalProduct: true, prepaid: true };
+  const labels = new Set([fresh, { ...fresh, catalogMode: "digital" as const }, hybrid].flatMap((facts) => buildSetupChecklist(facts).map((step) => step.label)));
+  for (const label of labels) assert.ok(guide.includes(`"${label}"`), `guide quotes "${label}"`);
+  for (const stale of ["/install", "token instalasi", "file Astro di repository", "opsional: pembayaran non-COD"]) {
+    assert.ok(!guide.includes(stale), `guide still says ${stale}`);
+  }
+});
