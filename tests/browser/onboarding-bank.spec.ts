@@ -5,7 +5,7 @@
 // payments page puts the bank first and AutoLaris as optional; the store's
 // public address says where it shows and that it is not the pickup point.
 import { expect, test, type Page } from "@playwright/test";
-import { origin, PLATFORM } from "./tenants.ts";
+import { origin, PLATFORM, signUpThroughWizard } from "./tenants.ts";
 
 const SLUG = "toko-rekening-uji";
 const STORE = origin(SLUG);
@@ -28,16 +28,10 @@ test("physical store: a bank account is a required step, the product form guides
   await page.setViewportSize({ width: 1366, height: 900 });
 
   await page.goto(`${PLATFORM}/daftar`);
-  await page.getByLabel("Nama toko").fill("Toko Rekening Uji");
-  await page.getByLabel("Alamat toko", { exact: true }).fill(SLUG);
-  await expect(page.locator("#slugHint")).toContainText("tersedia.", { timeout: 15_000 });
-  await page.getByLabel("Email", { exact: true }).fill(OWNER.email);
-  await page.getByLabel("Password", { exact: true }).fill(OWNER.password);
-  await expect(page.locator('[data-next-steps="physical"]')).toContainText("rekening bank untuk pembeli di provinsi non-COD");
+  await expect(page.locator('[data-next-steps="physical"]')).toContainText("rekening bank");
   // Review: without JavaScript the form would post, never put the password in a URL.
   await expect(page.locator("#signupForm")).toHaveAttribute("method", "post");
-  await page.getByRole("checkbox").check();
-  await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
+  await signUpThroughWizard(page, { storeName: "Toko Rekening Uji", slug: SLUG, email: OWNER.email, password: OWNER.password });
   await page.waitForURL(`${STORE}/admin/setup?welcome=1`, { timeout: 60_000 });
 
   // Setup: the payment step is required and open (COD skips 15 provinces by default).

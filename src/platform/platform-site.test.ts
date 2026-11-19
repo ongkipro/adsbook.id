@@ -441,3 +441,37 @@ test("the closing band counts the required setup steps a new physical store real
   const words = ["", "satu", "dua", "tiga", "empat", "lima"];
   assert.match(readFileSync("src/platform/site/ClosingCta.astro", "utf8"), new RegExp(`selesaikan ${words[owed.length]} langkah`));
 });
+
+test("AUTH-MINIMALIST-STEP-UX-SPEC: /masuk and /daftar are one studio — no header, no footer, the wordmark and legal line in the studio", () => {
+  const layout = readFileSync("src/platform/site/SiteLayout.astro", "utf8");
+  assert.match(layout, /\{!heroHeader && !authStage && <SiteHeader /);
+  assert.match(layout, /\{!authStage && <footer class="site-footer">/);
+  assert.doesNotMatch(layout, /quietHeader/, "the old floating wordmark header is gone");
+  for (const page of ["src/pages/platform/masuk.astro", "src/pages/platform/signup.astro"]) {
+    assert.match(readFileSync(page, "utf8"), /<SiteLayout page=\{(LOGIN|SIGNUP)_PAGE\} authStage>/, page);
+  }
+  const studio = readFileSync("src/platform/site/AuthSplit.astro", "utf8");
+  assert.match(studio, /min-height: 100dvh/);
+  assert.match(studio, /class="panel-top"[\s\S]*adsbook-id-wordmark\.svg[\s\S]*← Beranda/, "the wordmark and home link top the studio panel");
+  assert.equal((studio.match(/href="\/syarat">Syarat Layanan<\/a> · <a href="\/privasi">Kebijakan Privasi<\/a>/g) ?? []).length, 2, "one legal line for the panel and one for a phone");
+  assert.match(studio, /prefers-reduced-motion: reduce/);
+});
+
+test("AUTH-MINIMALIST-STEP-UX-SPEC §4: the bot check is explicit, invisible unless needed, full width, light, and waits at most 4 seconds; no vendor in the copy", () => {
+  const signup = readFileSync("src/pages/platform/signup.astro", "utf8");
+  for (const option of ["size: 'flexible'", "theme: 'light'", "appearance: 'interaction-only'", "language: 'id'", "'error-callback'", "'expired-callback'"]) {
+    assert.ok(signup.includes(option), option);
+  }
+  assert.match(signup, /turnstile\/v0\/api\.js\?render=explicit&onload=__adsbookTurnstileReady/);
+  assert.match(signup, /setTimeout\(resolve, 4000\)/, "a token still in flight is waited for, at most 4 seconds");
+  // Every field of the three steps stays in the one form: a password manager sees email and new password together.
+  const form = signup.slice(signup.indexOf('<form'), signup.indexOf('</form>'));
+  for (const name of ["catalog_mode", "store_name", "slug", "email", "whatsapp", "password", "terms"]) assert.ok(form.includes(`name="${name}"`), name);
+  assert.match(form, /autocomplete="email"[\s\S]*autocomplete="new-password"/);
+  // Server errors return to their step.
+  assert.match(signup, /storeName: \{[^}]*step: 1 \}/);
+  assert.match(signup, /email: \{[^}]*step: 2 \}/);
+  // Product copy names no infrastructure vendor (Paduka, 2026-11-17).
+  const markup = signup.split("<script>")[0].replace(/<script[^>]*>[\s\S]*?<\/script>|<!--[\s\S]*?-->/g, "");
+  assert.doesNotMatch(markup.split("---").slice(2).join("---").replace(/\{[^}]*\}|<[^>]+>/g, " "), /Cloudflare|Turnstile/);
+});

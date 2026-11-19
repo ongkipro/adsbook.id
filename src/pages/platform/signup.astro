@@ -8,8 +8,9 @@ import AuthSplit from '../../platform/site/AuthSplit.astro';
 
 export const prerender = false;
 
-// UX-1: signup on the platform host, sharing the warm editorial SiteLayout
-// (#F8FAFC canvas, Plus Jakarta Sans headings, #2563EB accent).
+// AUTH-MINIMALIST-STEP-UX-SPEC §4: signup as a three-step wizard inside one
+// form (store, owner, security), so every step fits one screen and a password
+// manager still sees the email and the new password together.
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 const siteKey = typeof env.TURNSTILE_SITE_KEY === 'string' ? env.TURNSTILE_SITE_KEY : '';
 const localStandIn = siteKey === 'local-stand-in';
@@ -22,224 +23,162 @@ const chosenPlan = PLANS.find((plan) => plan.code === rawPaket) ?? null;
 if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk', 302);
 ---
 
-<SiteLayout page={SIGNUP_PAGE} quietHeader>
-  {siteKey && !localStandIn && (
-    <script slot="head" is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-  )}
-
+<SiteLayout page={SIGNUP_PAGE} authStage>
   <AuthSplit active="daftar">
-          <div class="card-head">
-            <h1 class="dot-end">Buat toko gratis</h1>
-            <p class="muted">1 email = 1 toko mandiri. Email ini juga dipakai untuk masuk di <strong>adsbook.id/masuk</strong>.</p>
+    <div class="wizard-head">
+      <button id="stepBack" type="button" class="step-back" hidden>← Kembali</button>
+      <div class="step-bar" aria-hidden="true"><span data-bar="1"></span><span data-bar="2"></span><span data-bar="3"></span></div>
+      <p class="step-count" aria-live="polite">Langkah <span id="stepNow">1</span> / 3</p>
+    </div>
+
+    {chosenPlan && (
+      <p class="picked-plan" role="note">Paket pilihan nanti: <strong>{chosenPlan.label} · {chosenPlan.price}</strong> <span>(belum ditagih)</span></p>
+    )}
+
+    <div class="card-head">
+      <h1 class="dot-end">Buat toko gratis</h1>
+      <p id="stepLead" class="step-lead">Jenis dan identitas toko</p>
+    </div>
+
+    <div id="errorSummary" class="error-banner" hidden role="alert" tabindex="-1"></div>
+
+    <form
+      method="post"
+      id="signupForm"
+      class="signup-form"
+      novalidate
+      aria-busy="false"
+      data-step="1"
+      data-suffix={suffix}
+      data-standin={localStandIn ? '1' : ''}
+      data-sitekey={localStandIn ? '' : siteKey}
+      data-paket={chosenPlan?.code ?? ''}
+    >
+      <!-- Step 1 — the store: what it sells, its name, its address. -->
+      <section class="step" data-step-panel="1" aria-label="Langkah 1 dari 3: jenis dan identitas toko">
+        <fieldset class="catalog-choice">
+          <legend>Fokus katalog awal</legend>
+          <div class="catalog-options">
+            <label class="catalog-option">
+              <input type="radio" name="catalog_mode" value="physical" checked />
+              <span class="catalog-title">Produk Fisik</span>
+              <span class="catalog-sub">COD · ongkir · kontrol RTS</span>
+            </label>
+            <label class="catalog-option">
+              <input type="radio" name="catalog_mode" value="digital" />
+              <span class="catalog-title">Produk Digital</span>
+              <span class="catalog-sub">Akses otomatis saat lunas</span>
+            </label>
           </div>
+          <p class="field-hint catalog-hint"><strong>Satu toko bisa keduanya.</strong> Mode Hybrid dapat diaktifkan kapan saja di Pengaturan › Toko.</p>
+        </fieldset>
 
-          <div id="errorSummary" class="error-banner" hidden role="alert" tabindex="-1"></div>
+        <div class="field">
+          <label for="storeName">Nama toko</label>
+          <input id="storeName" name="store_name" type="text" required maxlength="80" autocomplete="organization" placeholder="Contoh: Herbal Nusantara" aria-describedby="storeNameError" />
+          <p id="storeNameError" class="field-error" hidden></p>
+        </div>
 
-          <form
-            method="post"
-            id="signupForm"
-            class="signup-form"
-            novalidate
-            aria-busy="false"
-            data-suffix={suffix}
-            data-standin={localStandIn ? '1' : ''}
-            data-paket={chosenPlan?.code ?? ''}
-          >
-            <fieldset class="field catalog-choice">
-              <legend>Fokus katalog awal</legend>
-              <div class="catalog-options">
-                <label class="catalog-option">
-                  <input type="radio" name="catalog_mode" value="physical" checked />
-                  <span class="catalog-title">Produk Fisik</span>
-                  <span class="catalog-sub">COD, ongkir kecamatan &amp; kontrol RTS</span>
-                </label>
-                <label class="catalog-option">
-                  <input type="radio" name="catalog_mode" value="digital" />
-                  <span class="catalog-title">Produk Digital</span>
-                  <span class="catalog-sub">Tanpa gudang · link akses otomatis saat lunas</span>
-                </label>
-              </div>
-              <p class="field-hint catalog-hint"><strong>Satu toko bisa keduanya.</strong> Pilihan ini mengatur jenis produk dan langkah persiapan awal dashboard Anda. Kapan pun ingin menjual produk fisik sekaligus digital, aktifkan mode Hybrid di Pengaturan › Toko.</p>
-            </fieldset>
-
-            <div class="field">
-              <label for="storeName">Nama toko</label>
-              <input
-                id="storeName"
-                name="store_name"
-                type="text"
-                required
-                maxlength="80"
-                autocomplete="organization"
-                placeholder="Contoh: Herbal Nusantara"
-                aria-describedby="storeNameError"
-              />
-              <p id="storeNameError" class="field-error" hidden></p>
+        <div class="field domain-field">
+          <div class="domain-pill" id="slugPill" data-state="neutral">
+            <span class="dp-url"><span id="slugPillHost">nama-toko</span>.{suffix}</span>
+            <span id="slugHint" class="dp-status" aria-live="polite">Diisi dari nama toko</span>
+            <button id="slugEdit" type="button" class="dp-edit" aria-expanded="false" aria-controls="slugEditor">Ubah</button>
+          </div>
+          <div id="slugEditor" class="slug-editor" hidden>
+            <label for="slug">Alamat toko</label>
+            <div class="slug-box" id="slugBox">
+              <input id="slug" name="slug" type="text" required maxlength="32" autocomplete="off" spellcheck="false" inputmode="url" placeholder="herbal-nusantara" aria-describedby="slugHint slugError" />
+              <span class="slug-suffix">.{suffix}</span>
             </div>
+          </div>
+          <div id="slugSuggestions" class="slug-suggestions" hidden aria-label="Saran alamat toko yang tersedia"></div>
+          <p id="slugError" class="field-error" hidden></p>
+        </div>
 
-            <div class="field">
-              <label for="slug">Alamat toko</label>
-              <div class="slug-box" id="slugBox">
-                <input
-                  id="slug"
-                  name="slug"
-                  type="text"
-                  required
-                  maxlength="32"
-                  autocomplete="off"
-                  spellcheck="false"
-                  inputmode="url"
-                  placeholder="herbal-nusantara"
-                  aria-describedby="slugPreview slugHint slugError"
-                />
-                <span class="slug-suffix">.{suffix}</span>
-              </div>
-              <p id="slugPreview" class="slug-preview">
-                URL preview: <code id="slugPreviewUrl">https://nama-toko.{suffix}</code>
-              </p>
-              <p id="slugHint" class="field-hint" aria-live="polite">Huruf kecil, angka, dan tanda hubung (3–32 karakter).</p>
-              <div id="slugSuggestions" class="slug-suggestions" hidden aria-label="Saran alamat toko yang tersedia"></div>
-              <p id="slugError" class="field-error" hidden></p>
-            </div>
+        <button id="toStep2" type="submit" class="submit-btn">Lanjut ke Akun Pemilik →</button>
+      </section>
 
-            <div class="field">
-              <label for="email">Email</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                maxlength="254"
-                autocomplete="email"
-                inputmode="email"
-                placeholder="anda@email.com"
-                aria-describedby="emailHint emailError"
-              />
-              <p id="emailHint" class="field-hint">1 email untuk 1 toko — dipakai masuk di adsbook.id/masuk.</p>
-              <p id="emailError" class="field-error" hidden></p>
-            </div>
+      <!-- Step 2 — the owner: the sign-in email and an optional WhatsApp. -->
+      <section class="step" data-step-panel="2" aria-label="Langkah 2 dari 3: kontak pemilik" hidden>
+        <p class="ctx-chip"><span id="ctxHost">nama-toko.{suffix}</span> · <span id="ctxMode">Produk Fisik</span></p>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="anda@email.com" aria-describedby="emailHint emailError" />
+          <p id="emailHint" class="field-hint">1 email = 1 toko mandiri, dipakai masuk di adsbook.id/masuk.</p>
+          <p id="emailError" class="field-error" hidden></p>
+        </div>
+        <div class="field">
+          <div class="label-row">
+            <label for="whatsapp">Nomor WhatsApp aktif</label>
+            <span class="optional-tag">Opsional</span>
+          </div>
+          <input id="whatsapp" name="whatsapp" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0812-3456-7890" aria-describedby="whatsappHint whatsappError" />
+          <p id="whatsappHint" class="field-hint">Menjadi kontak CS awal dan pengingat masa aktif.</p>
+          <p id="whatsappError" class="field-error" hidden></p>
+        </div>
+        <button id="toStep3" type="submit" class="submit-btn">Lanjut ke Keamanan →</button>
+      </section>
 
+      <!-- Step 3 — security and launch. -->
+      <section class="step" data-step-panel="3" aria-label="Langkah 3 dari 3: keamanan dan peluncuran" hidden>
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="pw-box">
+            <input id="password" name="password" type="password" required minlength="10" maxlength="128" autocomplete="new-password" placeholder="Minimal 10 karakter" aria-describedby="passwordRules passwordError" />
+            <button id="togglePassword" type="button" class="pw-toggle" aria-controls="password" aria-pressed="false" aria-label="Tampilkan password">Lihat</button>
+          </div>
+          <ul id="passwordRules" class="pw-rules" aria-live="polite">
+            <li id="ruleLength" data-ok="false">10+ karakter <span id="pwCount">(0/10)</span></li>
+            <li id="ruleDiff" data-ok="true">Berbeda dari email</li>
+          </ul>
+          <p id="passwordError" class="field-error" hidden></p>
+        </div>
+        <div class="field">
+          <label class="terms-row">
+            <input id="terms" name="terms" type="checkbox" required aria-describedby="termsError" />
+            <span>Saya menyetujui <a href="/syarat" target="_blank" rel="noopener">Syarat Layanan Seller</a> dan <a href="/privasi" target="_blank" rel="noopener">Kebijakan Privasi</a> adsbook.id.</span>
+          </label>
+          <p id="termsError" class="field-error" hidden></p>
+        </div>
+        <p id="turnstileError" class="field-error" hidden role="alert"></p>
+        <button id="submitSignup" type="submit" class="submit-btn">Buat Toko Gratis →</button>
+        <p id="securityStatus" class="security-line" data-state={localStandIn || !siteKey ? 'ok' : 'pending'} aria-live="polite" hidden={!siteKey}>
+          {localStandIn ? 'Koneksi terverifikasi · proteksi keamanan aktif' : 'Memverifikasi koneksi aman…'}
+        </p>
+      </section>
+    </form>
 
-            <div class="field">
-              <div class="label-row">
-                <label for="whatsapp">Nomor WhatsApp aktif</label>
-                <span class="optional-tag">Opsional</span>
-              </div>
-              <input
-                id="whatsapp"
-                name="whatsapp"
-                type="tel"
-                maxlength="20"
-                autocomplete="tel"
-                inputmode="tel"
-                placeholder="0812-3456-7890"
-                aria-describedby="whatsappHint whatsappError"
-              />
-              <p id="whatsappHint" class="field-hint">Otomatis dipasang sebagai CS WhatsApp toko &amp; kontak tagihan.</p>
-              <p id="whatsappError" class="field-error" hidden></p>
-            </div>
+    <!-- Outside the form: while a signup waits, the steps are inert and the form is busy,
+         but the wait is still announced and the check stays usable. -->
+    <p id="progressNote" class="progress-note" role="status" aria-live="polite" hidden></p>
+    <!-- The bot check runs from the first second, invisibly for almost every visitor;
+         only a visitor it cannot clear sees a full-width check here, on any step. -->
+    {siteKey && !localStandIn && <div id="turnstileWidget" class="turnstile-slot"></div>}
 
-            <div class="field">
-              <label for="password">Password</label>
-              <div class="pw-box">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  minlength="10"
-                  maxlength="128"
-                  autocomplete="new-password"
-                  placeholder="Minimal 10 karakter"
-                  aria-describedby="passwordRules passwordError"
-                />
-                <button
-                  id="togglePassword"
-                  type="button"
-                  class="pw-toggle"
-                  aria-controls="password"
-                  aria-pressed="false"
-                  aria-label="Tampilkan password"
-                >Lihat</button>
-              </div>
-              <ul id="passwordRules" class="pw-rules" aria-live="polite">
-                <li id="ruleLength" data-ok="false">Minimal 10 karakter <span id="pwCount">(0/10)</span></li>
-                <li id="ruleDiff" data-ok="true">Tidak sama dengan email</li>
-              </ul>
-              <p id="passwordError" class="field-error" hidden></p>
-            </div>
-
-            <div class="field">
-              <label class="terms-row">
-                <input id="terms" name="terms" type="checkbox" required aria-describedby="termsError" />
-                <span>
-                  Saya setuju dengan <a href="/syarat" target="_blank" rel="noopener">Syarat Layanan Seller</a> dan telah membaca <a href="/privasi" target="_blank" rel="noopener">Kebijakan Privasi</a> adsbook.id.
-                </span>
-              </label>
-              <p id="termsError" class="field-error" hidden></p>
-            </div>
-
-            {siteKey && !localStandIn && (
-              <div class="turnstile-wrap">
-                <div class="cf-turnstile" data-sitekey={siteKey} data-language="id"></div>
-              </div>
-            )}
-            <p id="turnstileError" class="field-error" hidden role="alert"></p>
-
-            <button id="submitSignup" type="submit" class="btn submit-btn">
-              Buat Toko Gratis →
-            </button>
-            <p id="progressNote" class="progress-note" hidden aria-live="polite"></p>
-          </form>
-
-          <!-- Provisioning / Handoff Transition State -->
-          <section id="signupDone" class="done-panel" hidden aria-live="polite">
-            <div class="done-badge">✓ Toko berhasil dibuat</div>
-            <h3 id="doneStoreTitle">Toko Anda sudah aktif. Membuka admin…</h3>
-            <p class="done-url" id="doneStoreUrl"></p>
-            <div class="done-creds">
-              <p>Masuk dengan email <strong id="doneEmail"></strong> dan password yang baru Anda buat.</p>
-              <dl>
-                <dt>Alamat Admin</dt>
-                <dd><code id="doneAdminHref"></code></dd>
-              </dl>
-            </div>
-            <div class="done-actions">
-              <a id="doneLogin" href="#" class="btn">Masuk ke toko</a>
-              <p class="muted small">Jika halaman tidak berpindah otomatis dalam beberapa detik, klik tombol di atas.</p>
-            </div>
-          </section>
+    <!-- The launch, on the same card, before the handoff to the new store. -->
+    <section id="signupDone" class="launch" hidden aria-live="polite">
+      <h2 class="launch-title">Meluncurkan toko Anda</h2>
+      <ol class="launch-steps">
+        <li data-launch="1">Alamat toko dikunci · <code id="doneStoreUrl"></code></li>
+        <li data-launch="2">Database mandiri diaktifkan</li>
+        <li data-launch="3">Membuka dashboard toko Anda…</li>
+      </ol>
+      <p class="launch-note">Masuk dengan email <strong id="doneEmail"></strong>. Jika halaman tidak berpindah, <a id="doneLogin" href="#">masuk ke toko</a>.</p>
+    </section>
 
     <Fragment slot="pitch">
-      <p class="eyebrow">Mode Preview Gratis · Tanpa Biaya Awal</p>
-      <h2 class="pitch-title dot-end">Satu toko presisi untuk produk fisik, digital, atau keduanya</h2>
-      <p class="lead-copy">Siapkan katalog dan review tampilannya di HP tanpa biaya awal dan tanpa batas waktu persiapan. Aktifkan langganan hanya saat toko siap menerima trafik iklan.</p>
-
-      {chosenPlan && (
-        <div class="picked-plan" role="note">
-          <div>
-            <p class="picked-label">Paket pilihan setelah toko siap</p>
-            <p class="picked-title">{chosenPlan.label} · <strong>{chosenPlan.price}</strong> <span class="muted">({chosenPlan.note})</span></p>
-          </div>
-          <p class="picked-sub">Tidak ditagih sekarang. Anda baru membayar di menu Langganan setelah mencoba admin toko.</p>
-        </div>
-      )}
-
-      <ol class="foundation-list" aria-label="Pondasi adsbook.id">
-        <li><span aria-hidden="true">01</span><div><strong>Bebas jual fisik, digital, maupun hybrid</strong><p>Mulai dari e-book &amp; kelas instan tanpa perlu gudang, paket COD dengan filter provinsi anti-retur, hingga gabungan keduanya dalam 1 toko.</p></div></li>
-        <li><span aria-hidden="true">02</span><div><strong>Server tracking 1:1 di 3 platform iklan</strong><p>Meta Conversions API, Google Data Manager API, dan TikTok Events API sudah menyatu tanpa sewa server tambahan.</p></div></li>
-        <li><span aria-hidden="true">03</span><div><strong>1 email = 1 toko mandiri 10 GB, 0% komisi</strong><p>Uang penjualan cair langsung ke akun Mengantar &amp; AutoLaris milik Anda sendiri, tanpa kuota order bulanan.</p></div></li>
-      </ol>
-
+      <h2 class="pitch-title dot-end">Satu ruang kendali presisi untuk pengiklan</h2>
+      <p class="store-preview"><span class="sp-dot" aria-hidden="true"></span><span id="panelStoreUrl">nama-toko.{suffix}</span></p>
+      <ul class="panel-checks">
+        <li>Tracking 1:1 Meta, Google, dan TikTok dari server</li>
+        <li data-mode="physical">COD, ongkir per kecamatan, dan kontrol RTS</li>
+        <li data-mode="digital" hidden>Akses digital terbuka otomatis saat lunas</li>
+        <li>0% komisi · Mode Preview gratis tanpa batas waktu</li>
+      </ul>
       <!-- What the first minutes after signup ask, for the focus chosen in the form. -->
-      <div class="next-steps" data-next-steps="physical">
-        <strong>Setelah daftar (Produk Fisik)</strong>
-        <p>Halaman Setup menuntun 4 langkah: tambah produk fisik, isi alamat pickup / gudang awal, simpan API key Mengantar, lalu tambahkan rekening bank untuk pembeli di provinsi non-COD. Tidak perlu diisi sekarang.</p>
-      </div>
-      <div class="next-steps" data-next-steps="digital" hidden>
-        <strong>Setelah daftar (Produk Digital)</strong>
-        <p>Cukup 2 langkah tanpa gudang: tambah produk digital dengan link akses, lalu aktifkan QRIS/VA atau transfer bank.</p>
-      </div>
+      <p class="next-steps" data-next-steps="physical">Setelah daftar: 4 langkah setup dipandu (produk, gudang, API key Mengantar, rekening bank).</p>
+      <p class="next-steps" data-next-steps="digital" hidden>Setelah daftar: 2 langkah tanpa gudang (produk digital, pembayaran).</p>
     </Fragment>
   </AuthSplit>
 </SiteLayout>
@@ -253,8 +192,11 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   const progressNote = document.getElementById('progressNote') as HTMLElement;
   const slugInput = document.getElementById('slug') as HTMLInputElement;
   const slugBox = document.getElementById('slugBox') as HTMLElement;
-  const slugPreviewUrl = document.getElementById('slugPreviewUrl') as HTMLElement;
+  const slugPill = document.getElementById('slugPill') as HTMLElement;
+  const slugPillHost = document.getElementById('slugPillHost') as HTMLElement;
   const slugHint = document.getElementById('slugHint') as HTMLElement;
+  const slugEdit = document.getElementById('slugEdit') as HTMLButtonElement;
+  const slugEditor = document.getElementById('slugEditor') as HTMLElement;
   const slugSuggestions = document.getElementById('slugSuggestions') as HTMLElement;
   const nameInput = document.getElementById('storeName') as HTMLInputElement;
   const emailInput = document.getElementById('email') as HTMLInputElement;
@@ -264,28 +206,78 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   const ruleLength = document.getElementById('ruleLength') as HTMLElement;
   const ruleDiff = document.getElementById('ruleDiff') as HTMLElement;
   const pwCount = document.getElementById('pwCount') as HTMLElement;
+  const stepBack = document.getElementById('stepBack') as HTMLButtonElement;
+  const stepNow = document.getElementById('stepNow') as HTMLElement;
+  const stepLead = document.getElementById('stepLead') as HTMLElement;
+  const security = document.getElementById('securityStatus') as HTMLElement;
 
   const suffix = form.dataset.suffix || 'adsbook.my.id';
   const paket = form.dataset.paket || '';
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let slugTouched = false;
   let pending = false;
   // The button's resting label, restored after every refused attempt.
   const SUBMIT_LABEL = 'Buat Toko Gratis →';
+  const STEP_LEADS = ['Jenis dan identitas toko', 'Kontak pemilik toko', 'Keamanan dan peluncuran'];
+
+  // ---- steps -----------------------------------------------------------------
+  let step = 1;
+  const panels = [...form.querySelectorAll<HTMLElement>('[data-step-panel]')];
+  const showStep = (next: number, focus?: HTMLElement | null, moveFocus = true) => {
+    step = next;
+    form.dataset.step = String(next);
+    for (const panel of panels) panel.hidden = panel.dataset.stepPanel !== String(next);
+    for (const bar of document.querySelectorAll<HTMLElement>('[data-bar]')) bar.dataset.on = String(Number(bar.dataset.bar) <= next);
+    stepNow.textContent = String(next);
+    stepLead.textContent = STEP_LEADS[next - 1];
+    stepBack.hidden = next === 1;
+    if (!moveFocus) return;
+    const target = focus ?? panels[next - 1].querySelector<HTMLElement>('input:not([type="radio"])');
+    // A focused field outside the viewport (zoomed text, a short screen) is scrolled into view.
+    target?.focus();
+  };
+  stepBack.addEventListener('click', () => {
+    summary.hidden = true;
+    showStep(Math.max(1, step - 1));
+  });
 
   const cleanSlugTyping = (value: string) =>
     value
       .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[̀-ͯ]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9-]+/g, '-')
       .replace(/--+/g, '-')
       .replace(/^-+/, '')
       .slice(0, 32);
 
-  const updatePreviewUrl = () => {
-    const val = slugInput.value.trim() || 'nama-toko';
-    slugPreviewUrl.textContent = `https://${val}.${suffix}`;
+  const catalogMode = () => ((form.querySelector('input[name="catalog_mode"]:checked') as HTMLInputElement | null)?.value === 'digital' ? 'digital' : 'physical');
+  const host = () => `${slugInput.value.trim() || 'nama-toko'}.${suffix}`;
+  // The store's address, everywhere it is shown: the pill, step 2's chip, the panel's preview.
+  const syncStoreContext = () => {
+    slugPillHost.textContent = slugInput.value.trim() || 'nama-toko';
+    for (const id of ['ctxHost', 'panelStoreUrl']) {
+      const element = document.getElementById(id);
+      if (element) element.textContent = host();
+    }
+    const mode = catalogMode();
+    (document.getElementById('ctxMode') as HTMLElement).textContent = mode === 'digital' ? 'Produk Digital' : 'Produk Fisik';
+    for (const item of document.querySelectorAll<HTMLElement>('[data-mode]')) item.hidden = item.dataset.mode !== mode;
+    for (const note of document.querySelectorAll<HTMLElement>('[data-next-steps]')) note.hidden = note.dataset.nextSteps !== mode;
   };
+
+  const openEditor = (focus = false) => {
+    slugEditor.hidden = false;
+    slugEdit.setAttribute('aria-expanded', 'true');
+    if (focus) slugInput.focus();
+  };
+  slugEdit.addEventListener('click', () => {
+    if (slugEditor.hidden) openEditor(true);
+    else {
+      slugEditor.hidden = true;
+      slugEdit.setAttribute('aria-expanded', 'false');
+    }
+  });
 
   const renderSuggestions = (items: string[]) => {
     slugSuggestions.innerHTML = '';
@@ -301,60 +293,83 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'sug-chip';
-      btn.textContent = `${item}.${suffix}`;
+      btn.textContent = item;
       btn.addEventListener('click', () => {
         slugTouched = true;
         slugInput.value = item;
         clearFieldError('slug');
         slugSuggestions.hidden = true;
-        updatePreviewUrl();
         checkAvailability();
-        slugInput.focus();
+        // The chip just clicked is gone: keyboard focus lands on the address it filled, in the open editor.
+        openEditor(true);
       });
       slugSuggestions.append(btn);
     }
     slugSuggestions.hidden = false;
   };
 
+  const setSlugState = (state: 'neutral' | 'checking' | 'ok' | 'err' | 'warn', text: string) => {
+    slugHint.textContent = text;
+    slugHint.dataset.state = state;
+    slugPill.dataset.state = state;
+    slugBox.dataset.state = state === 'ok' || state === 'err' ? state : 'neutral';
+  };
+
   let availabilityTimer = 0;
   let availabilitySeq = 0;
+  let availability: Promise<void> = Promise.resolve();
+  let settleAvailability: (() => void) | null = null;
+  // Addresses the server refused at signup stay unavailable until the seller picks another.
+  const rejectedSlugs = new Map<string, string>();
   const checkAvailability = () => {
     window.clearTimeout(availabilityTimer);
+    // A superseded check settles at once (a waiting Continue re-reads the current inputs),
+    // and its late answer is ignored.
+    availabilitySeq += 1;
+    settleAvailability?.();
+    settleAvailability = null;
     const slug = slugInput.value.trim();
-    updatePreviewUrl();
+    syncStoreContext();
     if (!slug) {
-      slugHint.textContent = 'Huruf kecil, angka, dan tanda hubung (3–32 karakter).';
-      slugHint.dataset.state = 'neutral';
-      slugBox.dataset.state = 'neutral';
+      setSlugState('neutral', 'Diisi dari nama toko');
       renderSuggestions([]);
       return;
     }
     if (slug.length < 3) {
-      slugHint.textContent = 'Minimal 3 karakter.';
-      slugHint.dataset.state = 'warn';
-      slugBox.dataset.state = 'neutral';
+      setSlugState('warn', 'Minimal 3 karakter');
       renderSuggestions([]);
       return;
     }
-    slugHint.textContent = 'Memeriksa ketersediaan alamat…';
-    slugHint.dataset.state = 'checking';
-    const seq = ++availabilitySeq;
-    availabilityTimer = window.setTimeout(async () => {
-      const response = await fetch(`/api/platform/slug?slug=${encodeURIComponent(slug)}`).catch(() => null);
-      const payload = await response?.json().catch(() => null);
-      if (seq !== availabilitySeq || !payload?.success || slugInput.value.trim() !== slug) return;
-      if (payload.data.available) {
-        slugHint.textContent = `✓ ${slug}.${suffix} tersedia.`;
-        slugHint.dataset.state = 'ok';
-        slugBox.dataset.state = 'ok';
-        renderSuggestions([]);
-      } else {
-        slugHint.textContent = payload.data.reason || 'Alamat toko ini tidak tersedia.';
-        slugHint.dataset.state = 'err';
-        slugBox.dataset.state = 'err';
-        renderSuggestions(Array.isArray(payload.data.suggestions) ? payload.data.suggestions : []);
-      }
-    }, 240);
+    if (rejectedSlugs.has(slug)) {
+      setSlugState('err', rejectedSlugs.get(slug)!);
+      openEditor();
+      return;
+    }
+    setSlugState('checking', 'Memeriksa…');
+    const seq = availabilitySeq;
+    availability = new Promise((resolve) => {
+      settleAvailability = resolve;
+      availabilityTimer = window.setTimeout(async () => {
+        const response = await fetch(`/api/platform/slug?slug=${encodeURIComponent(slug)}`).catch(() => null);
+        const payload = await response?.json().catch(() => null);
+        if (seq === availabilitySeq && payload?.success && slugInput.value.trim() === slug) {
+          if (payload.data.available) {
+            setSlugState('ok', '✓ Tersedia');
+            renderSuggestions([]);
+          } else {
+            setSlugState('err', payload.data.reason || 'Alamat toko ini tidak tersedia.');
+            // A taken address opens the editor with free alternatives at once.
+            openEditor();
+            renderSuggestions(Array.isArray(payload.data.suggestions) ? payload.data.suggestions : []);
+          }
+        } else if (seq === availabilitySeq && slugHint.dataset.state === 'checking') {
+          // No answer: the server decides on submit.
+          setSlugState('neutral', 'Diperiksa saat membuat toko');
+        }
+        if (seq === availabilitySeq) settleAvailability = null;
+        resolve();
+      }, 240);
+    });
   };
 
   const updatePasswordChecklist = () => {
@@ -362,19 +377,19 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     const em = emailInput.value.trim().toLowerCase();
     const lenOk = pw.length >= 10 && pw.length <= 128;
     const diffOk = !pw || !em || pw.toLowerCase() !== em;
-    pwCount.textContent = `(${Math.min(pw.length, 10)}/10)`;
+    pwCount.textContent = lenOk ? '' : `(${Math.min(pw.length, 10)}/10)`;
     ruleLength.dataset.ok = String(lenOk);
     ruleDiff.dataset.ok = String(diffOk);
   };
 
-  const fields: Record<string, { input: HTMLElement; error: HTMLElement }> = {
-    storeName: { input: nameInput, error: document.getElementById('storeNameError') as HTMLElement },
-    slug: { input: slugInput, error: document.getElementById('slugError') as HTMLElement },
-    email: { input: emailInput, error: document.getElementById('emailError') as HTMLElement },
-    whatsapp: { input: whatsappInput, error: document.getElementById('whatsappError') as HTMLElement },
-    password: { input: password, error: document.getElementById('passwordError') as HTMLElement },
-    terms: { input: document.getElementById('terms') as HTMLElement, error: document.getElementById('termsError') as HTMLElement },
-    turnstile: { input: submit, error: document.getElementById('turnstileError') as HTMLElement },
+  const fields: Record<string, { input: HTMLElement; error: HTMLElement; step: number }> = {
+    storeName: { input: nameInput, error: document.getElementById('storeNameError') as HTMLElement, step: 1 },
+    slug: { input: slugInput, error: document.getElementById('slugError') as HTMLElement, step: 1 },
+    email: { input: emailInput, error: document.getElementById('emailError') as HTMLElement, step: 2 },
+    whatsapp: { input: whatsappInput, error: document.getElementById('whatsappError') as HTMLElement, step: 2 },
+    password: { input: password, error: document.getElementById('passwordError') as HTMLElement, step: 3 },
+    terms: { input: document.getElementById('terms') as HTMLElement, error: document.getElementById('termsError') as HTMLElement, step: 3 },
+    turnstile: { input: submit, error: document.getElementById('turnstileError') as HTMLElement, step: 3 },
   };
 
   const clearFieldError = (key: string) => {
@@ -392,7 +407,6 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       checkAvailability();
     }
   });
-
   slugInput.addEventListener('input', () => {
     slugTouched = slugInput.value.trim().length > 0;
     const cleaned = cleanSlugTyping(slugInput.value);
@@ -400,7 +414,6 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     clearFieldError('slug');
     checkAvailability();
   });
-
   slugInput.addEventListener('blur', () => {
     const trimmed = slugInput.value.replace(/-+$/g, '');
     if (trimmed !== slugInput.value) {
@@ -408,7 +421,9 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       checkAvailability();
     }
   });
-
+  form.addEventListener('change', (event) => {
+    if ((event.target as HTMLElement).matches('input[name="catalog_mode"]')) syncStoreContext();
+  });
   emailInput.addEventListener('input', () => {
     clearFieldError('email');
     updatePasswordChecklist();
@@ -437,43 +452,239 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     progressNote.hidden = true;
   });
 
-  const showErrors = (message: string, errors: Record<string, string>, suggestions: string[] = []) => {
-    let firstInvalid: HTMLElement | null = null;
+  // The bot check failing at the server is recoverable here: a fresh token replaces the spent one.
+  const TOKEN_RETRY = 'Verifikasi keamanan perlu diulang. Tunggu tanda koneksi terverifikasi, lalu tekan Buat Toko Gratis lagi.';
+  let shownErrors: { message: string; errors: Record<string, string> } | null = null;
+  const renderSummary = () => {
+    if (!shownErrors) return void (summary.hidden = true);
+    const listed = Object.values(shownErrors.errors).filter(Boolean);
+    if (!listed.length && !shownErrors.message) return void (summary.hidden = true);
+    summary.textContent = listed.length ? `${shownErrors.message} ${listed.join(' ')}`.trim() : shownErrors.message;
+    summary.hidden = false;
+  };
+  /** A fresh token answers the bot-check error alone; other errors stay as they are. */
+  const clearTokenError = () => {
+    clearFieldError('turnstile');
+    if (!shownErrors?.errors.turnstile) return;
+    const { turnstile: _spent, ...rest } = shownErrors.errors;
+    shownErrors = Object.values(rest).some(Boolean) ? { message: 'Pendaftaran belum selesai.', errors: rest } : null;
+    renderSummary();
+  };
+
+  /** Field errors on their steps: the wizard returns to the earliest step with one and focuses it. */
+  const showErrors = (message: string, rawErrors: Record<string, string>, suggestions: string[] = []) => {
+    const errors = { ...rawErrors };
+    if (errors.turnstile) {
+      errors.turnstile = TOKEN_RETRY;
+      // The server's own words ask for a reload; here a fresh token is all it takes.
+      if (Object.keys(errors).filter((key) => errors[key]).length === 1) message = '';
+    }
+    let first: { input: HTMLElement; step: number } | null = null;
     for (const [name, field] of Object.entries(fields)) {
       const text = errors[name] || '';
       field.error.textContent = text;
       field.error.hidden = !text;
       if (field.input !== submit) {
-        if (text) {
-          field.input.setAttribute('aria-invalid', 'true');
-          if (!firstInvalid) firstInvalid = field.input;
-        } else {
-          field.input.removeAttribute('aria-invalid');
-        }
+        if (text) field.input.setAttribute('aria-invalid', 'true');
+        else field.input.removeAttribute('aria-invalid');
       }
+      if (text && (!first || field.step < first.step)) first = { input: field.input, step: field.step };
     }
-    if (suggestions.length) renderSuggestions(suggestions);
-    const listed = Object.values(errors).filter(Boolean);
-    summary.textContent = listed.length ? `${message} ${listed.join(' ')}` : message;
-    summary.hidden = false;
-    (firstInvalid ?? summary).focus();
+    if (errors.slug) {
+      // The server's word is final for this address: any check still running is void.
+      window.clearTimeout(availabilityTimer);
+      availabilitySeq += 1;
+      settleAvailability?.();
+      settleAvailability = null;
+      rejectedSlugs.set(slugInput.value.trim(), errors.slug);
+      setSlugState('err', errors.slug);
+      openEditor();
+    }
+    if (suggestions.length) {
+      openEditor();
+      renderSuggestions(suggestions);
+    }
+    shownErrors = { message, errors };
+    renderSummary();
+    if (first) showStep(first.step, first.input === submit ? null : first.input);
+    else summary.focus();
+  };
+  const stepError = (key: string, text: string) => {
+    summary.hidden = true;
+    const field = fields[key];
+    field.error.textContent = text;
+    field.error.hidden = false;
+    field.input.setAttribute('aria-invalid', 'true');
+    field.input.focus();
   };
 
+  /** Step 1 and 2 checks before moving on; the server checks everything again. */
+  const stepReady = async (current: number): Promise<boolean> => {
+    if (current === 1) {
+      const problem = (): [key: string, text: string] | null => {
+        if (!nameInput.value.trim()) return ['storeName', 'Isi nama toko.'];
+        if (slugInput.value.trim().length < 3) return ['slug', 'Alamat toko minimal 3 karakter.'];
+        if (rejectedSlugs.has(slugInput.value.trim()) || slugHint.dataset.state === 'err') return ['slug', 'Pilih alamat toko yang tersedia.'];
+        return null;
+      };
+      // Wait for the check of the address as it is now; edits made while waiting start a new
+      // check, so the wait follows them, and the inputs are judged again once it settles.
+      for (let round = 0; round < 3 && !problem() && slugHint.dataset.state === 'checking'; round += 1) {
+        await Promise.race([availability, new Promise((resolve) => setTimeout(resolve, 3000))]);
+      }
+      const found = problem();
+      if (found) {
+        if (found[0] === 'slug') openEditor();
+        stepError(found[0], found[1]);
+        return false;
+      }
+      return true;
+    }
+    if (current === 2) {
+      if (!emailInput.value.trim() || !emailInput.checkValidity()) return stepError('email', 'Masukkan email yang valid, contoh: nama@email.com.'), false;
+      return true;
+    }
+    return true;
+  };
+
+  // ---- the bot check: invisible unless a visitor needs it ---------------------
+  let turnstileToken = form.dataset.standin ? 'local-stand-in' : '';
+  let turnstileFailed = false;
+  const tokenWaiters: Array<() => void> = [];
+  const LOAD_FAILED = 'Pemeriksaan keamanan gagal dimuat. Periksa koneksi, lalu muat ulang halaman.';
+  const setSecurity = (state: 'pending' | 'ok' | 'error', text: string) => {
+    security.dataset.state = state;
+    security.textContent = text;
+  };
+  type Turnstile = { render(element: HTMLElement, options: Record<string, unknown>): string; reset(id?: string): void };
+  let widgetId: string | undefined;
+  const widget = document.getElementById('turnstileWidget');
+  if (widget && form.dataset.sitekey) {
+    setSecurity('pending', 'Memverifikasi koneksi aman…');
+    const failed = () => {
+      turnstileFailed = true;
+      setSecurity('error', LOAD_FAILED);
+      tokenWaiters.splice(0).forEach((resolve) => resolve());
+    };
+    (window as unknown as Record<string, unknown>).__adsbookTurnstileReady = () => {
+      const turnstile = (window as unknown as { turnstile?: Turnstile }).turnstile;
+      if (!turnstile) return failed();
+      try {
+        widgetId = turnstile.render(widget, {
+          sitekey: form.dataset.sitekey,
+          language: 'id',
+          theme: 'light',
+          size: 'flexible',
+          appearance: 'interaction-only',
+          callback: (token: string) => {
+            turnstileToken = token;
+            clearTokenError();
+            setSecurity('ok', 'Koneksi terverifikasi · proteksi keamanan aktif');
+            tokenWaiters.splice(0).forEach((resolve) => resolve());
+          },
+          'error-callback': () => {
+            turnstileToken = '';
+            setSecurity('error', 'Verifikasi keamanan belum berhasil dan sedang diulang otomatis.');
+          },
+          'expired-callback': () => {
+            turnstileToken = '';
+            setSecurity('pending', 'Memperbarui verifikasi keamanan…');
+            (window as unknown as { turnstile?: Turnstile }).turnstile?.reset(widgetId);
+          },
+        });
+      } catch {
+        failed();
+      }
+    };
+    const script = document.createElement('script');
+    script.addEventListener('error', failed);
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__adsbookTurnstileReady';
+    script.async = true;
+    script.defer = true;
+    document.head.append(script);
+  }
+  /** A token still in flight when the seller is faster: wait up to 4 seconds. Without one, nothing is sent. */
+  const awaitToken = () =>
+    turnstileToken || turnstileFailed
+      ? Promise.resolve()
+      : Promise.race([new Promise<void>((resolve) => tokenWaiters.push(resolve)), new Promise<void>((resolve) => setTimeout(resolve, 4000))]);
+
   const PROVISION_STAGES = [
-    'Memeriksa ketersediaan & mengamankan alamat toko…',
+    'Mengamankan alamat toko…',
     'Menyiapkan database terisolasi khusus toko Anda…',
-    'Mengatur kredensial pemilik & membuka dashboard admin…',
+    'Mengatur kredensial pemilik…',
   ];
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : ms));
+  /** While a signup is in flight nothing it sends can change: Back, the address editor and every step are locked. */
+  const lockForm = (locked: boolean) => {
+    stepBack.disabled = locked;
+    slugEdit.disabled = locked;
+    for (const panel of panels) panel.inert = locked;
+  };
+  /**
+   * A token is single use: once a request carrying it may have reached the server,
+   * it is spent, whether the answer was a refusal or never arrived. The real widget
+   * is reset for a fresh one; the local stand-in token needs none.
+   */
+  const spendToken = () => {
+    if (form.dataset.standin) return;
+    turnstileToken = '';
+    setSecurity('pending', 'Memverifikasi koneksi aman…');
+    (window as unknown as { turnstile?: Turnstile }).turnstile?.reset(widgetId);
+  };
+  const restoreSubmit = () => {
+    lockForm(false);
+    pending = false;
+    submit.disabled = false;
+    submit.textContent = SUBMIT_LABEL;
+    form.setAttribute('aria-busy', 'false');
+    progressNote.hidden = true;
+  };
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (pending) return;
+    if (step < 3) {
+      const current = step;
+      pending = true;
+      const ready = await stepReady(current).finally(() => (pending = false));
+      if (ready) {
+        summary.hidden = true;
+        showStep(current + 1);
+      }
+      return;
+    }
     pending = true;
+    // What is sent is what the seller confirmed with this click, read before any wait.
+    const values = new FormData(form);
+    const mode = catalogMode();
+    lockForm(true);
     submit.disabled = true;
-    submit.textContent = 'Membuat toko…';
     form.setAttribute('aria-busy', 'true');
     summary.hidden = true;
+    clearFieldError('turnstile');
 
+    if (!turnstileToken) {
+      submit.textContent = 'Menyelesaikan verifikasi keamanan…';
+      progressNote.textContent = 'Menyelesaikan verifikasi keamanan…';
+      progressNote.hidden = false;
+      await awaitToken();
+      if (!turnstileToken) {
+        // No request without a token: it would only spend one of the hour's attempts. The
+        // check stays as it is (never reset here), so a visitor solving it keeps their progress.
+        restoreSubmit();
+        const error = fields.turnstile.error;
+        error.textContent = turnstileFailed
+          ? LOAD_FAILED
+          : 'Verifikasi keamanan belum selesai. Selesaikan pemeriksaan di bawah formulir bila muncul, lalu tekan Buat Toko Gratis lagi.';
+        error.hidden = false;
+        // Focus went with the inert step; it returns to the button, unless the seller is
+        // working in the check itself.
+        if (!widget?.contains(document.activeElement)) submit.focus();
+        return;
+      }
+    }
+    submit.textContent = 'Membuat toko…';
     let stageIdx = 0;
     progressNote.textContent = PROVISION_STAGES[0];
     progressNote.hidden = false;
@@ -482,14 +693,12 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       progressNote.textContent = PROVISION_STAGES[stageIdx];
     }, 1100);
 
-    const values = new FormData(form);
     const eventId = crypto.randomUUID();
-    const turnstileToken = form.dataset.standin
-      ? 'local-stand-in'
-      : String(values.get('cf-turnstile-response') || '');
 
     let succeeded = false;
+    let postAttempted = false;
     try {
+      postAttempted = true;
       const response = await fetch('/api/platform/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -500,30 +709,26 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           whatsapp: values.get('whatsapp'),
           password: values.get('password'),
           terms: values.get('terms') === 'on',
-          catalog_mode: values.get('catalog_mode') === 'digital' ? 'digital' : 'physical',
+          catalog_mode: mode,
           turnstile_token: turnstileToken,
           event_id: eventId,
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) {
+        // Unlocked first: the error moves focus into a step that must be usable.
+        restoreSubmit();
         showErrors(
           payload.error || 'Pendaftaran gagal.',
           payload.errors || {},
           Array.isArray(payload.suggestions) ? payload.suggestions : [],
         );
-        (window as unknown as { turnstile?: { reset(): void } }).turnstile?.reset();
+        spendToken();
         return;
       }
 
       succeeded = true;
-      const data = payload.data as {
-        store_url: string;
-        login_url: string;
-        handoff_url: string | null;
-        handoff_token: string | null;
-        email: string;
-      };
+      const data = payload.data as { store_url: string; login_url: string; handoff_url: string | null; handoff_token: string | null; email: string };
       const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
       try {
         fbq?.('track', 'CompleteRegistration', { content_name: 'signup', status: 'registered' }, { eventID: eventId });
@@ -531,326 +736,184 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         /* server CAPI still carries the event */
       }
 
+      // The launch sequence on the same card, then the handoff.
       form.hidden = true;
+      progressNote.hidden = true;
+      for (const element of document.querySelectorAll<HTMLElement>('.wizard-head, .card-head, .picked-plan')) element.hidden = true;
       (document.getElementById('doneEmail') as HTMLElement).textContent = data.email;
-      (document.getElementById('doneStoreUrl') as HTMLElement).textContent = data.store_url;
-      (document.getElementById('doneAdminHref') as HTMLElement).textContent = `${data.store_url}/admin`;
+      (document.getElementById('doneStoreUrl') as HTMLElement).textContent = data.store_url.replace(/^https?:\/\//, '');
       (document.getElementById('doneLogin') as HTMLAnchorElement).href = data.login_url;
-      (document.getElementById('signupDone') as HTMLElement).hidden = false;
+      const done = document.getElementById('signupDone') as HTMLElement;
+      done.hidden = false;
+      for (const line of done.querySelectorAll<HTMLElement>('[data-launch]')) {
+        line.dataset.on = 'true';
+        await wait(380);
+      }
 
       if (data.handoff_url && data.handoff_token) {
         const handoff = document.createElement('form');
         handoff.method = 'POST';
         handoff.action = data.handoff_url;
         handoff.hidden = true;
-
-        const tokenField = document.createElement('input');
-        tokenField.type = 'hidden';
-        tokenField.name = 'token';
-        tokenField.value = data.handoff_token;
-        handoff.append(tokenField);
-
-        const nextField = document.createElement('input');
-        nextField.type = 'hidden';
-        nextField.name = 'next';
-        nextField.value = paket ? `/admin/billing?cycle=${encodeURIComponent(paket)}` : '/admin/setup?welcome=1';
-        handoff.append(nextField);
-
+        for (const [name, value] of [['token', data.handoff_token], ['next', paket ? `/admin/billing?cycle=${encodeURIComponent(paket)}` : '/admin/setup?welcome=1']]) {
+          const field = document.createElement('input');
+          field.type = 'hidden';
+          field.name = name;
+          field.value = value;
+          handoff.append(field);
+        }
         document.body.append(handoff);
-        if (fbq) await new Promise((resolve) => setTimeout(resolve, 280));
         handoff.submit();
       }
     } catch {
-      showErrors('Koneksi terputus. Coba lagi.', {});
+      // A lost answer after a successful signup leaves the page as it is (the launch and its
+      // manual sign-in link stay); before that, the request may have spent the token.
+      if (!succeeded) {
+        restoreSubmit();
+        if (postAttempted) spendToken();
+        showErrors('Koneksi terputus. Coba lagi.', {});
+      }
     } finally {
       window.clearInterval(stageTimer);
-      if (!succeeded) {
-        pending = false;
-        submit.disabled = false;
-        submit.textContent = SUBMIT_LABEL;
-        form.setAttribute('aria-busy', 'false');
-        progressNote.hidden = true;
-      }
+      if (!succeeded) restoreSubmit();
     }
   });
 
-  // The panel's "after signup" note follows the focus chosen in the form.
-  const grid = document.querySelector('[data-auth-grid]');
-  const syncNextSteps = () => {
-    const mode = (document.querySelector('input[name="catalog_mode"]:checked') as HTMLInputElement | null)?.value ?? 'physical';
-    for (const note of document.querySelectorAll<HTMLElement>('[data-next-steps]')) note.hidden = note.dataset.nextSteps !== mode;
-  };
-  grid?.addEventListener('change', (event) => {
-    if ((event.target as HTMLElement).matches('input[name="catalog_mode"]')) syncNextSteps();
-  });
-  syncNextSteps();
+  showStep(1, null, false);
+  syncStoreContext();
+  form.dataset.ready = '1';
+  if (window.matchMedia('(min-width: 960px)').matches) nameInput.focus({ preventScroll: true });
 </script>
 
 <style>
-  .eyebrow {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--accent);
-    background: var(--accent-tint);
-    display: inline-block;
-    justify-self: start;
-    padding: 0.25rem 0.7rem;
-    border-radius: 999px;
-  }
-  .pitch-title { font-size: clamp(1.35rem, 1.1rem + 1.1vw, 1.9rem); line-height: 1.2; }
-  .foundation-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
-  .foundation-list li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.75rem; }
-  .foundation-list span { font: 600 0.75rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
-  .foundation-list strong { display: block; font-size: 0.95rem; color: var(--ink); }
-  .foundation-list p { margin-top: 0.15rem; font-size: 0.88rem; line-height: 1.5; color: var(--ink-muted); }
-  .next-steps { display: grid; gap: 0.3rem; padding: 1rem 1.1rem; border-radius: 14px; background: #fff; font-size: 0.88rem; line-height: 1.5; color: var(--ink-muted); }
-  .next-steps strong { color: var(--ink); font-size: 0.92rem; }
-  .next-steps { border-left: 3px solid var(--accent); }
-  .catalog-hint strong { color: var(--ink); }
-  .lead-copy { color: var(--ink-muted); font-size: 1.05rem; }
-  .lead-copy code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.92em;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    padding: 0.1rem 0.4rem;
-    border-radius: 6px;
-    color: var(--ink);
-  }
+  /* ---- wizard head: back, a three-segment bar, the count ---- */
+  .wizard-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.75rem; margin-bottom: 1rem; min-height: 28px; }
+  .step-back { grid-column: 1; border: 0; background: none; padding: 0.25rem 0; min-height: 28px; color: var(--slate); font-size: 0.85rem; font-weight: 700; cursor: pointer; }
+  .step-back:hover { color: var(--accent); }
+  .step-back[hidden] + .step-bar { grid-column: 1 / 3; }
+  .step-bar { grid-column: 2; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .step-bar span { height: 3px; border-radius: 3px; background: #e2e8f0; transition: background-color 240ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .step-bar span[data-on="true"] { background: var(--accent); }
+  .step-count { grid-column: 3; font: 600 0.75rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--slate); white-space: nowrap; }
 
-  .picked-plan {
-    background: var(--surface);
-    border: 1.5px solid var(--accent);
-    border-radius: 12px;
-    padding: 1rem 1.15rem;
-    display: grid;
-    gap: 0.35rem;
-  }
-  .picked-label { font-size: 0.82rem; font-weight: 700; color: var(--accent); }
-  .picked-title { font-size: 1rem; color: var(--ink); }
-  .picked-sub { font-size: 0.85rem; color: var(--ink-muted); }
+  .picked-plan { margin: 0 0 0.75rem; padding: 0.45rem 0.75rem; border-radius: 10px; background: var(--accent-tint); color: var(--ink); font-size: 0.82rem; }
+  .picked-plan span { color: var(--ink-muted); }
 
-  .card-head { display: grid; gap: 0.25rem; margin-bottom: 1.5rem; }
-  .card-head h1 { font-size: clamp(1.45rem, 1.2rem + 1vw, 1.85rem); }
-  .card-head p { font-size: 0.92rem; }
+  .card-head { display: grid; gap: 0.15rem; margin-bottom: 1rem; }
+  .card-head h1 { font-size: clamp(1.4rem, 1.15rem + 0.9vw, 1.75rem); }
+  .step-lead { font-size: 0.9rem; color: var(--ink-muted); }
 
-  .error-banner {
-    margin-bottom: 1.25rem;
-    border-radius: 10px;
-    border: 1px solid #fecdd3;
-    background: #fff1f2;
-    padding: 0.85rem 1rem;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #9f1239;
-  }
+  .error-banner { margin-bottom: 0.9rem; border-radius: 10px; background: #fff1f2; padding: 0.7rem 0.9rem; font-size: 0.86rem; font-weight: 600; color: #9f1239; }
 
-  .signup-form { display: grid; gap: 1.15rem; }
-  .field { display: grid; gap: 0.38rem; }
-  /* Jenis produk utama: two radio cards, the chosen one in the accent. */
-  .catalog-choice { margin: 0; padding: 0; border: 0; min-width: 0; }
-  .catalog-choice legend { padding: 0; margin-bottom: 0.38rem; font-size: 0.875rem; font-weight: 700; }
+  .signup-form { display: grid; }
+  .step { display: grid; gap: 0.95rem; animation: step-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes step-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+  .field { display: grid; gap: 0.35rem; }
+
+  /* Two compact choice cards, the chosen one in the accent. */
+  .catalog-choice { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 0.4rem; }
+  .catalog-choice legend { padding: 0; margin-bottom: 0.35rem; font-size: 0.875rem; font-weight: 700; }
   .catalog-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-  .catalog-option { position: relative; display: grid; gap: 0.15rem; padding: 0.75rem 0.875rem 0.75rem 2.4rem; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; }
-  .catalog-option input { position: absolute; left: 0.875rem; top: 0.95rem; margin: 0; accent-color: var(--accent); }
+  .catalog-option { position: relative; display: grid; gap: 0.1rem; padding: 0.65rem 0.75rem 0.65rem 2.2rem; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; transition: border-color 200ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .catalog-option input { position: absolute; left: 0.75rem; top: 0.85rem; margin: 0; accent-color: var(--accent); }
   .catalog-option:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
   .catalog-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .catalog-title { font-size: 0.9rem; font-weight: 700; }
-  .catalog-sub { font-size: 0.78rem; color: #64748b; }
-  /* A phone stacks the two choices: two narrow columns broke both titles and their lines. */
-  @media (max-width: 480px) { .catalog-options { grid-template-columns: 1fr; } }
-  .field label { font-size: 0.92rem; font-weight: 700; color: var(--ink); }
-  .label-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-  .optional-tag { font-size: 0.8rem; color: var(--ink-muted); font-weight: 500; }
+  .catalog-sub { font-size: 0.76rem; color: #64748b; }
+  .catalog-hint { font-size: 0.78rem; }
+  .catalog-hint strong { color: var(--ink); }
 
-  .field input[type="text"],
-  .field input[type="email"],
-  .field input[type="tel"],
-  .field input[type="password"] {
+  .field label { font-size: 0.875rem; font-weight: 700; color: var(--ink); }
+  .label-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .optional-tag { font-size: 0.78rem; color: var(--ink-muted); font-weight: 500; }
+  .field input[type="text"], .field input[type="email"], .field input[type="tel"], .field input[type="password"] {
     width: 100%;
     min-height: 46px;
-    padding: 0.65rem 0.85rem;
+    padding: 0.6rem 0.85rem;
     border: 1px solid #cbd5e1;
-    border-radius: 8px;
+    border-radius: 10px;
     background: #fff;
     color: var(--ink);
     font: 0.98rem/1.4 var(--body);
     transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
   }
-  .field input:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18);
-  }
-  .field input[aria-invalid="true"] {
-    border-color: #e11d48;
-    background: #fffafa;
-  }
+  .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18); }
+  .field input[aria-invalid="true"] { border-color: #e11d48; background: #fffafa; }
 
-  .slug-box {
-    display: flex;
-    align-items: stretch;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    overflow: hidden;
-    background: #fff;
-    transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
-  }
-  .slug-box:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18);
-  }
+  /* The live address: one pill, the editor only on request (or when taken). */
+  .domain-pill { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; min-height: 40px; padding: 0.35rem 0.4rem 0.35rem 0.8rem; border-radius: 999px; background: var(--tile); font-size: 0.84rem; }
+  .dp-url { min-width: 0; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: var(--ink); }
+  .dp-status { color: var(--ink-muted); font-weight: 600; }
+  .domain-pill[data-state="ok"] .dp-status { color: #15803d; }
+  .domain-pill[data-state="err"] .dp-status { color: #be123c; }
+  .domain-pill[data-state="warn"] .dp-status { color: #b45309; }
+  .dp-edit { margin-left: auto; min-height: 32px; padding: 0 0.8rem; border: 0; border-radius: 999px; background: #fff; color: var(--accent); font-size: 0.8rem; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgb(15 23 42 / 0.08); }
+  .slug-editor { display: grid; gap: 0.35rem; animation: step-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .slug-box { display: flex; align-items: stretch; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; background: #fff; }
+  .slug-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18); }
   .slug-box[data-state="ok"] { border-color: #15803d; }
   .slug-box[data-state="err"] { border-color: #e11d48; }
-  .slug-box input {
-    border: 0 !important;
-    box-shadow: none !important;
-    min-width: 0;
-    flex: 1;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.94rem !important;
-  }
-  .slug-suffix {
-    display: flex;
-    align-items: center;
-    padding: 0 0.8rem;
-    background: #f1f5f9;
-    border-left: 1px solid var(--line);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.88rem;
-    color: var(--ink-muted);
-    white-space: nowrap;
-  }
-  .slug-preview { font-size: 0.82rem; color: var(--ink-muted); }
-  .slug-preview code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); font-weight: 600; }
-
-  .field-hint { font-size: 0.82rem; color: var(--ink-muted); }
-  .field-hint[data-state="ok"] { color: #15803d; font-weight: 600; }
-  .field-hint[data-state="err"] { color: #be123c; font-weight: 600; }
-  .field-hint[data-state="warn"] { color: #b45309; }
-  .field-error { font-size: 0.82rem; font-weight: 600; color: #be123c; }
-
-  .slug-suggestions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    margin-top: 0.15rem;
-  }
-  .sug-label { font-size: 0.8rem; color: var(--ink-muted); font-weight: 600; }
-  :global(.sug-chip) {
-    appearance: none;
-    border: 1px solid #bfdbfe;
-    background: var(--accent-tint);
-    color: var(--accent-hover);
-    border-radius: 999px;
-    padding: 0.3rem 0.7rem;
-    min-height: 36px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
-  }
+  .slug-box input { border: 0 !important; box-shadow: none !important; min-width: 0; flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92rem !important; min-height: 42px !important; }
+  .slug-suffix { display: flex; align-items: center; padding: 0 0.7rem; background: #f1f5f9; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; color: var(--ink-muted); white-space: nowrap; }
+  .slug-suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+  .sug-label { font-size: 0.78rem; color: var(--ink-muted); font-weight: 600; }
+  :global(.sug-chip) { appearance: none; border: 0; background: var(--accent-tint); color: var(--accent-hover); border-radius: 999px; padding: 0.25rem 0.7rem; min-height: 32px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
   :global(.sug-chip:hover) { background: #bfdbfe; }
+
+  .field-hint { font-size: 0.8rem; color: var(--ink-muted); }
+  .field-error { font-size: 0.8rem; font-weight: 600; color: #be123c; }
+
+  .ctx-chip { justify-self: start; max-width: 100%; padding: 0.4rem 0.8rem; border-radius: 999px; background: var(--tile); font-size: 0.8rem; color: var(--ink-muted); overflow-wrap: anywhere; }
+  .ctx-chip span:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--ink); }
 
   .pw-box { position: relative; display: flex; align-items: center; }
   .pw-box input { padding-right: 6.2rem !important; }
-  .pw-toggle {
-    position: absolute;
-    right: 0.35rem;
-    min-height: 38px;
-    min-width: 4.5rem;
-    padding: 0 0.65rem;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--ink-muted);
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .pw-toggle:hover { background: #f1f5f9; color: var(--ink); }
-
-  .pw-rules {
-    list-style: none;
-    margin: 0.1rem 0 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem 1rem;
-    font-size: 0.8rem;
-    color: var(--ink-muted);
-  }
-  .pw-rules li::before { content: "• "; }
-  .pw-rules li[data-ok="true"] { color: #15803d; font-weight: 600; }
+  .pw-toggle { position: absolute; right: 0.35rem; min-height: 38px; min-width: 4.5rem; padding: 0 0.65rem; border: 0; border-radius: 8px; background: var(--tile); color: var(--ink); font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+  .pw-rules { list-style: none; margin: 0.1rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .pw-rules li { padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--tile); font-size: 0.76rem; font-weight: 600; color: var(--ink-muted); transition: background-color 200ms ease-out, color 200ms ease-out; }
+  .pw-rules li[data-ok="true"] { background: #dcfce7; color: #15803d; }
   .pw-rules li[data-ok="true"]::before { content: "✓ "; }
 
-  .terms-row {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.65rem;
-    align-items: start;
-    font-size: 0.88rem;
-    font-weight: 500 !important;
-    color: var(--ink-muted) !important;
-    cursor: pointer;
-  }
-  .terms-row input[type="checkbox"] {
-    width: 1.15rem;
-    height: 1.15rem;
-    margin-top: 0.18rem;
-    accent-color: var(--accent);
-    cursor: pointer;
-  }
+  .terms-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.6rem; align-items: start; font-size: 0.85rem; font-weight: 500 !important; color: var(--ink-muted) !important; cursor: pointer; }
+  .terms-row input[type="checkbox"] { width: 1.1rem; height: 1.1rem; margin-top: 0.15rem; accent-color: var(--accent); cursor: pointer; }
   .terms-row a { font-weight: 700; }
 
-  .turnstile-wrap { min-height: 65px; }
+  /* The label may wrap under enlarged text; the button only grows. */
+  .submit-btn { width: 100%; min-height: 48px; padding: 0.7rem 1rem; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 700 0.98rem/1.25 var(--display); word-spacing: 0.06em; cursor: pointer; box-shadow: 0 8px 20px -10px rgb(37 99 235 / 0.5); }
+  .submit-btn:hover { background: var(--accent-hover); }
+  .submit-btn:disabled { opacity: 0.75; cursor: progress; }
+  .security-line { display: flex; align-items: center; justify-content: center; gap: 0.45rem; font-size: 0.76rem; color: var(--ink-muted); }
+  .security-line::before { content: ""; width: 7px; height: 7px; border-radius: 999px; border: 1.5px solid var(--slate-soft); }
+  .security-line[data-state="ok"]::before { border-color: #16a34a; background: #16a34a; }
+  .security-line[data-state="error"] { color: #be123c; }
+  .progress-note { text-align: center; font-size: 0.8rem; color: var(--ink-muted); font-weight: 600; }
+  /* The check takes no room unless a visitor must interact with it. */
+  .turnstile-slot { width: 100%; }
+  .turnstile-slot:not(:empty) { margin-top: 0.75rem; }
 
-  .submit-btn {
-    width: 100%;
-    border: 0;
-    cursor: pointer;
-    font-size: 1rem;
-  }
-  .submit-btn:disabled { opacity: 0.72; cursor: wait; }
-  .progress-note { text-align: center; font-size: 0.85rem; color: var(--ink-muted); font-weight: 600; }
+  .launch { display: grid; gap: 1rem; padding: 0.5rem 0; }
+  .launch-title { font-size: 1.35rem; }
+  .launch-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+  .launch-steps li { display: flex; gap: 0.55rem; align-items: baseline; color: var(--slate-soft); font-weight: 600; font-size: 0.92rem; opacity: 0.5; transition: opacity 240ms ease-out, color 240ms ease-out; overflow-wrap: anywhere; }
+  .launch-steps li::before { content: "○"; }
+  .launch-steps li[data-on="true"] { color: var(--ink); opacity: 1; }
+  .launch-steps li[data-on="true"]::before { content: "✓"; color: #16a34a; }
+  .launch-steps code { font-size: 0.85em; color: var(--accent); }
+  .launch-note { font-size: 0.82rem; color: var(--ink-muted); }
 
-  .done-panel {
-    display: grid;
-    gap: 1rem;
-    padding: 0.5rem 0;
-  }
-  .done-badge {
-    justify-self: start;
-    background: #dcfce7;
-    color: #166534;
-    font-weight: 700;
-    font-size: 0.82rem;
-    padding: 0.25rem 0.7rem;
-    border-radius: 999px;
-  }
-  .done-url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92rem; color: var(--accent); font-weight: 700; }
-  .done-creds {
-    background: var(--canvas);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 1rem;
-    font-size: 0.9rem;
-  }
-  .done-creds dl {
-    margin: 0.6rem 0 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.35rem 1rem;
-  }
-  .done-creds dt { color: var(--ink-muted); font-size: 0.82rem; }
-  .done-creds dd { margin: 0; word-break: break-all; }
-  .done-actions { display: grid; gap: 0.6rem; }
-  .small { font-size: 0.82rem; }
+  .store-preview { display: inline-flex; align-items: center; gap: 0.5rem; justify-self: start; max-width: 100%; padding: 0.4rem 0.85rem; border-radius: 999px; background: #fff; box-shadow: var(--shadow-float); font: 600 0.82rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); overflow-wrap: anywhere; }
+  .sp-dot { width: 7px; height: 7px; flex-shrink: 0; background: var(--accent); }
+  .next-steps { font-size: 0.82rem; line-height: 1.5; color: var(--ink-muted); }
 
   [hidden] { display: none !important; }
 
-  @media (max-width: 520px) {
-    .slug-suffix { padding: 0 0.55rem; font-size: 0.8rem; }
+  @media (max-width: 400px) {
+    .catalog-option { padding-left: 2rem; }
+    .catalog-option input { left: 0.65rem; }
+    .step { gap: 0.8rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .step, .slug-editor { animation: none; }
+    .step-bar span, .launch-steps li, .catalog-option, .pw-rules li { transition: none; }
   }
 </style>

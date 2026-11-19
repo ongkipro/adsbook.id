@@ -1,20 +1,29 @@
 ---
 /**
- * The shared shell of adsbook.id/masuk and /daftar (AUTH-LOGIN-REGISTER-UX-SPEC
- * §2.2): a porcelain explanation panel and a floating white card. From 960px the
- * panel sits left (4.8fr) and the card right (7.2fr); below it the switcher and
- * the card come first, in the first viewport, and the panel follows as a short
- * reassurance strip — a phone visitor never scrolls past copy to reach a field.
+ * The 100dvh studio of adsbook.id/masuk and /daftar (AUTH-MINIMALIST-STEP-UX-SPEC
+ * §2–3): no site header and no footer (SiteLayout `authStage`). The left column
+ * is white: the Masuk / Buat Toko switcher over one floating card, centred. The
+ * right column is a porcelain studio tile: the wordmark and a quiet home link at
+ * its top, a light 2.5D illustration with the page's `pitch` in the middle, one
+ * legal line at its foot. Below 960px the tile folds away so a phone never
+ * scrolls; a compact wordmark row sits above the card and the legal line below.
  */
+import { SITE_NAME } from './site.ts';
+
 interface Props {
   active: 'masuk' | 'daftar';
 }
 const { active } = Astro.props;
+const year = new Date().getFullYear();
 ---
 
-<section class="auth-band">
-  <div class="wrap auth-grid" data-auth-grid>
-    <div class="auth-card-col">
+<section class="studio" data-auth-grid data-auth-studio>
+  <div class="studio-form">
+    <div class="mobile-bar">
+      <a href="/" class="mark-link"><img src="/platform/brand/adsbook-id-wordmark.svg" alt={SITE_NAME} width="126" height="20" loading="eager" decoding="async" /></a>
+      <a href="/" class="home-link">← Beranda</a>
+    </div>
+    <div class="form-col">
       <nav class="auth-switch" aria-label="Masuk atau buat toko">
         <a href="/masuk" aria-current={active === 'masuk' ? 'page' : undefined}>Masuk ke Toko</a>
         <a href="/daftar" aria-current={active === 'daftar' ? 'page' : undefined}>Buat Toko Baru</a>
@@ -23,31 +32,50 @@ const { active } = Astro.props;
         <slot />
       </div>
     </div>
-    <aside class="auth-pitch" aria-label="Tentang adsbook.id">
-      <slot name="pitch" />
-    </aside>
+    <p class="legal mobile-legal">&copy; {year} {SITE_NAME} · <a href="/syarat">Syarat Layanan</a> · <a href="/privasi">Kebijakan Privasi</a></p>
   </div>
+  <aside class="studio-panel" aria-label="Tentang adsbook.id">
+    <div class="panel-top">
+      <a href="/" class="mark-link"><img src="/platform/brand/adsbook-id-wordmark.svg" alt={SITE_NAME} width="151" height="24" loading="eager" decoding="async" /></a>
+      <a href="/" class="home-link">← Beranda</a>
+    </div>
+    <div class="panel-mid">
+      <img class="panel-visual" src="/visual/home-closing.webp" width="640" height="460" alt="Ilustrasi 2.5D: Meta Ads, Google Ads, dan TikTok Ads mengunci satu pesanan menjadi satu konversi" loading="lazy" decoding="async" />
+      <div class="panel-copy"><slot name="pitch" /></div>
+    </div>
+    <p class="legal">&copy; {year} {SITE_NAME} · <a href="/syarat">Syarat Layanan</a> · <a href="/privasi">Kebijakan Privasi</a></p>
+  </aside>
 </section>
 
 <style>
-  .auth-band { padding: 1rem 0 3.5rem; }
-  .auth-grid {
+  .studio {
+    --ease-studio: cubic-bezier(0.22, 1, 0.36, 1);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "card" "pitch";
-    gap: 1.25rem;
-    align-items: start;
+    min-height: 100dvh;
+    background: #fff;
   }
-  .auth-card-col { grid-area: card; display: grid; gap: 0.75rem; min-width: 0; }
-  .auth-pitch {
-    grid-area: pitch;
-    min-width: 0;
+  .studio-form { display: grid; grid-template-rows: auto 1fr auto; gap: 0.75rem; min-width: 0; padding: 0.75rem 1rem; }
+  .form-col {
+    align-self: center;
+    justify-self: center;
     display: grid;
-    gap: 1.1rem;
-    padding: 1.5rem 1.25rem;
-    border-radius: 22px;
-    background: var(--tile);
+    gap: 0.75rem;
+    width: min(460px, 100%);
+    min-width: 0;
+    animation: studio-in 240ms var(--ease-studio) both;
   }
+  @keyframes studio-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .mobile-bar, .panel-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .mark-link { display: inline-flex; align-items: center; min-height: 40px; }
+  .mark-link img { height: 20px; width: auto; display: block; }
+  .home-link { display: inline-flex; align-items: center; min-height: 40px; color: var(--slate); font-size: 0.88rem; font-weight: 600; text-decoration: none; }
+  .home-link:hover { color: var(--accent); }
+  .legal { margin: 0; color: var(--slate); font-size: 0.78rem; text-align: center; }
+  .legal a { color: var(--slate); text-decoration: none; }
+  .legal a:hover { color: var(--accent); text-decoration: underline; }
+
   /* The switcher: a porcelain track, the current page a white chip with cobalt text. */
   .auth-switch {
     display: grid;
@@ -68,7 +96,7 @@ const { active } = Astro.props;
     word-spacing: 0.06em;
     text-decoration: none;
     text-align: center;
-    transition: color 0.15s ease-out, background-color 0.15s ease-out;
+    transition: color 200ms var(--ease-studio), background-color 200ms var(--ease-studio), box-shadow 200ms var(--ease-studio);
   }
   .auth-switch a:hover { color: var(--ink); }
   .auth-switch a[aria-current="page"] {
@@ -78,27 +106,65 @@ const { active } = Astro.props;
   }
   .auth-card {
     min-width: 0;
-    padding: 1.35rem;
+    padding: 1.25rem;
     border-radius: 22px;
     background: #fff;
     border: 1px solid rgb(15 23 42 / 0.06);
     box-shadow: var(--shadow-float);
   }
-  @media (min-width: 640px) {
-    .auth-card { padding: 2rem; }
-    .auth-pitch { padding: 2rem; }
-  }
+
+  .studio-panel { display: none; }
+
   @media (min-width: 960px) {
-    .auth-band { padding: 2.5rem 0 4.5rem; }
-    .auth-grid {
-      grid-template-columns: minmax(0, 4.8fr) minmax(0, 7.2fr);
-      grid-template-areas: "pitch card";
-      gap: 2.5rem;
+    .studio { grid-template-columns: minmax(0, 5.4fr) minmax(0, 4.6fr); }
+    .studio-form { grid-template-rows: 1fr; padding: 1.5rem 2rem; }
+    .mobile-bar, .mobile-legal { display: none; }
+    .auth-card { padding: 2rem; }
+    .studio-panel {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 1rem;
+      margin: 0.75rem;
+      padding: 1.75rem 2.25rem;
+      border-radius: 28px;
+      background: var(--tile);
+      overflow: hidden;
     }
-    .auth-pitch { position: sticky; top: 1.5rem; padding: 2.5rem; }
-    .auth-card { padding: 2.5rem; }
+    /* A faint architectural dot grid, masked to nothing at the edges: texture, never a line. */
+    .studio-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image: radial-gradient(rgb(15 23 42 / 0.08) 1px, transparent 1.4px);
+      background-size: 22px 22px;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 0%, transparent 75%);
+      -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 0%, transparent 75%);
+    }
+    .panel-top, .panel-mid, .studio-panel .legal { position: relative; }
+    .studio-panel .legal { text-align: left; }
+    .panel-mid { align-self: center; display: grid; gap: 1.25rem; max-width: 460px; }
+    .panel-visual { width: 100%; max-height: 30dvh; object-fit: contain; object-position: left center; animation: studio-float 6s ease-in-out infinite; }
+  }
+  @keyframes studio-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+  /* The page's pitch: one short headline, a few checks. */
+  .panel-copy { display: grid; gap: 0.9rem; }
+  .panel-copy :global(.pitch-title) { font: 800 clamp(1.35rem, 1rem + 1vw, 1.75rem)/1.2 var(--display); letter-spacing: -0.02em; word-spacing: 0.06em; color: var(--ink); max-width: 22ch; }
+  .panel-copy :global(.pitch-lead) { color: var(--ink-muted); font-size: 0.95rem; line-height: 1.55; }
+  .panel-copy :global(.panel-checks) { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
+  .panel-copy :global(.panel-checks li) { display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); gap: 0.5rem; align-items: baseline; color: var(--ink); font-size: 0.93rem; font-weight: 600; }
+  .panel-copy :global(.panel-checks li::before) { content: "✓"; color: var(--accent); font-weight: 800; }
+  .panel-copy :global(.panel-checks li[hidden]) { display: none; }
+
+  /* Short screens (1366×768 and below): tighter air so the studio still never scrolls. */
+  @media (min-width: 960px) and (max-height: 820px) {
+    .auth-card { padding: 1.5rem 1.75rem; }
+    .panel-visual { max-height: 24dvh; }
   }
   @media (prefers-reduced-motion: reduce) {
+    .form-col, .panel-visual { animation: none; }
     .auth-switch a { transition: none; }
   }
 </style>

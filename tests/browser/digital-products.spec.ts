@@ -9,7 +9,7 @@
 import { spawnSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 import { PORT } from "../../playwright.config.ts";
-import { origin, PLATFORM } from "./tenants.ts";
+import { origin, PLATFORM, signUpThroughWizard } from "./tenants.ts";
 
 const PROVIDERS = `http://127.0.0.1:${PORT + 1}`;
 const SLUG = "toko-ebook-uji";
@@ -63,17 +63,8 @@ test("digital store: signup → menu without shipping → digital product → op
 
   // 1. Signup choosing Produk Digital.
   await page.goto(`${PLATFORM}/daftar`);
-  await page.getByLabel("Nama toko").fill("Toko Ebook Uji");
-  await page.getByLabel("Alamat toko", { exact: true }).fill(SLUG);
-  await expect(page.locator("#slugHint")).toContainText("tersedia.", { timeout: 15_000 });
-  await page.getByLabel("Email", { exact: true }).fill(OWNER.email);
-  await page.getByLabel("Nomor WhatsApp aktif").fill("0812-3456-7801");
-  await page.getByLabel("Password", { exact: true }).fill(OWNER.password);
   await expect(page.getByRole("radio", { name: /Produk Fisik/ })).toBeChecked();
-  await page.getByRole("radio", { name: /Produk Digital/ }).check();
-  await page.getByRole("checkbox").check();
-  if (shots) await page.screenshot({ path: `${shots}/dig-signup-1366.png`, fullPage: true });
-  await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
+  await signUpThroughWizard(page, { storeName: "Toko Ebook Uji", slug: SLUG, email: OWNER.email, password: OWNER.password, whatsapp: "0812-3456-7801", catalog: "digital" });
   await page.waitForURL(new RegExp(`^${STORE}/admin`), { timeout: 60_000 });
 
   // 2. A menu with nothing that ships, and a three-step digital checklist.
