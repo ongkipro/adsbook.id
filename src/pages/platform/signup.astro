@@ -37,7 +37,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
 
     <div class="card-head">
       <h1 class="dot-end">Buat toko gratis</h1>
-      <p id="stepLead" class="step-lead">Jenis dan identitas toko</p>
+      <p id="stepLead" class="step-lead">Jenis dan alamat toko</p>
     </div>
 
     <div id="errorSummary" class="error-banner" hidden role="alert" tabindex="-1"></div>
@@ -54,8 +54,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       data-sitekey={localStandIn ? '' : siteKey}
       data-paket={chosenPlan?.code ?? ''}
     >
-      <!-- Step 1 — the store: what it sells, its name, its address. -->
-      <section class="step" data-step-panel="1" aria-label="Langkah 1 dari 3: jenis dan identitas toko">
+      <!-- Step 1 — the store: what it sells and its address. -->
+      <section class="step" data-step-panel="1" aria-label="Langkah 1 dari 3: jenis dan alamat toko">
         <fieldset class="catalog-choice">
           <legend>Fokus katalog awal</legend>
           <div class="catalog-options">
@@ -73,35 +73,28 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           <p class="field-hint catalog-hint"><strong>Satu toko bisa keduanya.</strong> Mode Hybrid dapat diaktifkan kapan saja di Pengaturan › Toko.</p>
         </fieldset>
 
+        <!-- The store's address: the seller types only the prefix; the suffix is fixed. -->
+        <div class="field">
+          <label for="slug">Alamat toko</label>
+          <div class="slug-box" id="slugBox">
+            <input id="slug" name="slug" type="text" required maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="url" placeholder="herbal-nusantara" aria-describedby="slugHint slugError" />
+            <span class="slug-suffix">.{suffix}</span>
+          </div>
+          <p id="slugHint" class="field-hint slug-hint" aria-live="polite" hidden></p>
+          <div id="slugSuggestions" class="slug-suggestions" hidden aria-label="Saran alamat toko yang tersedia"></div>
+          <p id="slugError" class="field-error" hidden></p>
+        </div>
+
+        <button id="toStep2" type="submit" class="submit-btn">Lanjut ke Nama &amp; Kontak →</button>
+      </section>
+
+      <!-- Step 2 — the store's name and the owner: the sign-in email and an optional WhatsApp. -->
+      <section class="step" data-step-panel="2" aria-label="Langkah 2 dari 3: identitas dan kontak pemilik" hidden>
         <div class="field">
           <label for="storeName">Nama toko</label>
           <input id="storeName" name="store_name" type="text" required maxlength="80" autocomplete="organization" placeholder="Contoh: Herbal Nusantara" aria-describedby="storeNameError" />
           <p id="storeNameError" class="field-error" hidden></p>
         </div>
-
-        <div class="field domain-field">
-          <div class="domain-pill" id="slugPill" data-state="neutral">
-            <span class="dp-url"><span id="slugPillHost">nama-toko</span>.{suffix}</span>
-            <span id="slugHint" class="dp-status" aria-live="polite">Diisi dari nama toko</span>
-            <button id="slugEdit" type="button" class="dp-edit" aria-expanded="false" aria-controls="slugEditor">Ubah</button>
-          </div>
-          <div id="slugEditor" class="slug-editor" hidden>
-            <label for="slug">Alamat toko</label>
-            <div class="slug-box" id="slugBox">
-              <input id="slug" name="slug" type="text" required maxlength="32" autocomplete="off" spellcheck="false" inputmode="url" placeholder="herbal-nusantara" aria-describedby="slugHint slugError" />
-              <span class="slug-suffix">.{suffix}</span>
-            </div>
-          </div>
-          <div id="slugSuggestions" class="slug-suggestions" hidden aria-label="Saran alamat toko yang tersedia"></div>
-          <p id="slugError" class="field-error" hidden></p>
-        </div>
-
-        <button id="toStep2" type="submit" class="submit-btn">Lanjut ke Akun Pemilik →</button>
-      </section>
-
-      <!-- Step 2 — the owner: the sign-in email and an optional WhatsApp. -->
-      <section class="step" data-step-panel="2" aria-label="Langkah 2 dari 3: kontak pemilik" hidden>
-        <p class="ctx-chip"><span id="ctxHost">nama-toko.{suffix}</span> · <span id="ctxMode">Produk Fisik</span></p>
         <div class="field">
           <label for="email">Email</label>
           <input id="email" name="email" type="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="anda@email.com" aria-describedby="emailHint emailError" />
@@ -184,7 +177,6 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
 </SiteLayout>
 
 <script>
-  import { toSlug } from '../../platform/store-finder.ts';
 
   const form = document.getElementById('signupForm') as HTMLFormElement;
   const summary = document.getElementById('errorSummary') as HTMLElement;
@@ -192,11 +184,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   const progressNote = document.getElementById('progressNote') as HTMLElement;
   const slugInput = document.getElementById('slug') as HTMLInputElement;
   const slugBox = document.getElementById('slugBox') as HTMLElement;
-  const slugPill = document.getElementById('slugPill') as HTMLElement;
-  const slugPillHost = document.getElementById('slugPillHost') as HTMLElement;
   const slugHint = document.getElementById('slugHint') as HTMLElement;
-  const slugEdit = document.getElementById('slugEdit') as HTMLButtonElement;
-  const slugEditor = document.getElementById('slugEditor') as HTMLElement;
   const slugSuggestions = document.getElementById('slugSuggestions') as HTMLElement;
   const nameInput = document.getElementById('storeName') as HTMLInputElement;
   const emailInput = document.getElementById('email') as HTMLInputElement;
@@ -214,11 +202,10 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   const suffix = form.dataset.suffix || 'adsbook.my.id';
   const paket = form.dataset.paket || '';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let slugTouched = false;
   let pending = false;
   // The button's resting label, restored after every refused attempt.
   const SUBMIT_LABEL = 'Buat Toko Gratis →';
-  const STEP_LEADS = ['Jenis dan identitas toko', 'Kontak pemilik toko', 'Keamanan dan peluncuran'];
+  const STEP_LEADS = ['Jenis dan alamat toko', 'Nama toko dan kontak pemilik', 'Keamanan dan peluncuran'];
 
   // ---- steps -----------------------------------------------------------------
   let step = 1;
@@ -253,33 +240,19 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
 
   const catalogMode = () => ((form.querySelector('input[name="catalog_mode"]:checked') as HTMLInputElement | null)?.value === 'digital' ? 'digital' : 'physical');
   const host = () => `${slugInput.value.trim() || 'nama-toko'}.${suffix}`;
-  // The store's address, everywhere it is shown: the pill, step 2's chip, the panel's preview.
+  // The store's address in the studio panel's preview; the panel's points follow the catalog.
   const syncStoreContext = () => {
-    slugPillHost.textContent = slugInput.value.trim() || 'nama-toko';
-    for (const id of ['ctxHost', 'panelStoreUrl']) {
-      const element = document.getElementById(id);
-      if (element) element.textContent = host();
-    }
+    const preview = document.getElementById('panelStoreUrl');
+    if (preview) preview.textContent = host();
     const mode = catalogMode();
-    (document.getElementById('ctxMode') as HTMLElement).textContent = mode === 'digital' ? 'Produk Digital' : 'Produk Fisik';
     for (const item of document.querySelectorAll<HTMLElement>('[data-mode]')) item.hidden = item.dataset.mode !== mode;
     for (const note of document.querySelectorAll<HTMLElement>('[data-next-steps]')) note.hidden = note.dataset.nextSteps !== mode;
   };
 
-  const openEditor = (focus = false) => {
-    slugEditor.hidden = false;
-    slugEdit.setAttribute('aria-expanded', 'true');
-    if (focus) slugInput.focus();
-  };
-  slugEdit.addEventListener('click', () => {
-    if (slugEditor.hidden) openEditor(true);
-    else {
-      slugEditor.hidden = true;
-      slugEdit.setAttribute('aria-expanded', 'false');
-    }
-  });
-
-  const renderSuggestions = (items: string[]) => {
+  // Suggestions belong to the address they were offered for, and go the moment it changes.
+  let suggestionsFor = '';
+  const renderSuggestions = (items: string[], forSlug = slugInput.value.trim()) => {
+    suggestionsFor = items && items.length ? forSlug : '';
     slugSuggestions.innerHTML = '';
     if (!items || !items.length) {
       slugSuggestions.hidden = true;
@@ -295,13 +268,12 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       btn.className = 'sug-chip';
       btn.textContent = item;
       btn.addEventListener('click', () => {
-        slugTouched = true;
         slugInput.value = item;
         clearFieldError('slug');
         slugSuggestions.hidden = true;
         checkAvailability();
-        // The chip just clicked is gone: keyboard focus lands on the address it filled, in the open editor.
-        openEditor(true);
+        // The chip just clicked is gone: keyboard focus lands on the address it filled.
+        slugInput.focus();
       });
       slugSuggestions.append(btn);
     }
@@ -310,8 +282,9 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
 
   const setSlugState = (state: 'neutral' | 'checking' | 'ok' | 'err' | 'warn', text: string) => {
     slugHint.textContent = text;
+    // No filler: the line appears only with something to report (a check, a result, a reason).
+    slugHint.hidden = !text;
     slugHint.dataset.state = state;
-    slugPill.dataset.state = state;
     slugBox.dataset.state = state === 'ok' || state === 'err' ? state : 'neutral';
   };
 
@@ -330,8 +303,11 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     settleAvailability = null;
     const slug = slugInput.value.trim();
     syncStoreContext();
+    // Alternatives offered for another address never outlive it, even if this check is slow or fails;
+    // the server's alternatives for this same (refused) address stay.
+    if (suggestionsFor && suggestionsFor !== slug) renderSuggestions([]);
     if (!slug) {
-      setSlugState('neutral', 'Diisi dari nama toko');
+      setSlugState('neutral', '');
       renderSuggestions([]);
       return;
     }
@@ -342,7 +318,6 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     }
     if (rejectedSlugs.has(slug)) {
       setSlugState('err', rejectedSlugs.get(slug)!);
-      openEditor();
       return;
     }
     setSlugState('checking', 'Memeriksa…');
@@ -358,8 +333,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
             renderSuggestions([]);
           } else {
             setSlugState('err', payload.data.reason || 'Alamat toko ini tidak tersedia.');
-            // A taken address opens the editor with free alternatives at once.
-            openEditor();
+            // A taken address shows free alternatives at once.
             renderSuggestions(Array.isArray(payload.data.suggestions) ? payload.data.suggestions : []);
           }
         } else if (seq === availabilitySeq && slugHint.dataset.state === 'checking') {
@@ -383,7 +357,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   };
 
   const fields: Record<string, { input: HTMLElement; error: HTMLElement; step: number }> = {
-    storeName: { input: nameInput, error: document.getElementById('storeNameError') as HTMLElement, step: 1 },
+    storeName: { input: nameInput, error: document.getElementById('storeNameError') as HTMLElement, step: 2 },
     slug: { input: slugInput, error: document.getElementById('slugError') as HTMLElement, step: 1 },
     email: { input: emailInput, error: document.getElementById('emailError') as HTMLElement, step: 2 },
     whatsapp: { input: whatsappInput, error: document.getElementById('whatsappError') as HTMLElement, step: 2 },
@@ -400,15 +374,9 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     if (entry.input !== submit) entry.input.removeAttribute('aria-invalid');
   };
 
-  nameInput.addEventListener('input', () => {
-    clearFieldError('storeName');
-    if (!slugTouched) {
-      slugInput.value = toSlug(nameInput.value);
-      checkAvailability();
-    }
-  });
+  // The store's name never rewrites its address: the address is chosen on step 1.
+  nameInput.addEventListener('input', () => clearFieldError('storeName'));
   slugInput.addEventListener('input', () => {
-    slugTouched = slugInput.value.trim().length > 0;
     const cleaned = cleanSlugTyping(slugInput.value);
     if (slugInput.value !== cleaned) slugInput.value = cleaned;
     clearFieldError('slug');
@@ -498,12 +466,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       settleAvailability = null;
       rejectedSlugs.set(slugInput.value.trim(), errors.slug);
       setSlugState('err', errors.slug);
-      openEditor();
     }
-    if (suggestions.length) {
-      openEditor();
-      renderSuggestions(suggestions);
-    }
+    if (suggestions.length) renderSuggestions(suggestions);
     shownErrors = { message, errors };
     renderSummary();
     if (first) showStep(first.step, first.input === submit ? null : first.input);
@@ -522,7 +486,6 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   const stepReady = async (current: number): Promise<boolean> => {
     if (current === 1) {
       const problem = (): [key: string, text: string] | null => {
-        if (!nameInput.value.trim()) return ['storeName', 'Isi nama toko.'];
         if (slugInput.value.trim().length < 3) return ['slug', 'Alamat toko minimal 3 karakter.'];
         if (rejectedSlugs.has(slugInput.value.trim()) || slugHint.dataset.state === 'err') return ['slug', 'Pilih alamat toko yang tersedia.'];
         return null;
@@ -534,13 +497,13 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       }
       const found = problem();
       if (found) {
-        if (found[0] === 'slug') openEditor();
         stepError(found[0], found[1]);
         return false;
       }
       return true;
     }
     if (current === 2) {
+      if (!nameInput.value.trim()) return stepError('storeName', 'Isi nama toko.'), false;
       if (!emailInput.value.trim() || !emailInput.checkValidity()) return stepError('email', 'Masukkan email yang valid, contoh: nama@email.com.'), false;
       return true;
     }
@@ -618,7 +581,6 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   /** While a signup is in flight nothing it sends can change: Back, the address editor and every step are locked. */
   const lockForm = (locked: boolean) => {
     stepBack.disabled = locked;
-    slugEdit.disabled = locked;
     for (const panel of panels) panel.inert = locked;
   };
   /**
@@ -782,7 +744,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   showStep(1, null, false);
   syncStoreContext();
   form.dataset.ready = '1';
-  if (window.matchMedia('(min-width: 960px)').matches) nameInput.focus({ preventScroll: true });
+  if (window.matchMedia('(min-width: 960px)').matches) slugInput.focus({ preventScroll: true });
 </script>
 
 <style>
@@ -834,37 +796,33 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     border-radius: 10px;
     background: #fff;
     color: var(--ink);
-    font: 0.98rem/1.4 var(--body);
+    /* Keep editable fields at 16px or larger to avoid focus zoom on iOS. */
+    font: 1rem/1.4 var(--body);
     transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
   }
   .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18); }
   .field input[aria-invalid="true"] { border-color: #e11d48; background: #fffafa; }
 
-  /* The live address: one pill, the editor only on request (or when taken). */
-  .domain-pill { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; min-height: 40px; padding: 0.35rem 0.4rem 0.35rem 0.8rem; border-radius: 999px; background: var(--tile); font-size: 0.84rem; }
-  .dp-url { min-width: 0; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: var(--ink); }
-  .dp-status { color: var(--ink-muted); font-weight: 600; }
-  .domain-pill[data-state="ok"] .dp-status { color: #15803d; }
-  .domain-pill[data-state="err"] .dp-status { color: #be123c; }
-  .domain-pill[data-state="warn"] .dp-status { color: #b45309; }
-  .dp-edit { margin-left: auto; min-height: 32px; padding: 0 0.8rem; border: 0; border-radius: 999px; background: #fff; color: var(--accent); font-size: 0.8rem; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgb(15 23 42 / 0.08); }
-  .slug-editor { display: grid; gap: 0.35rem; animation: step-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .slug-hint { font-weight: 600; }
+  .slug-hint[data-state="ok"] { color: #15803d; }
+  .slug-hint[data-state="err"] { color: #be123c; }
+  .slug-hint[data-state="warn"] { color: #b45309; }
   .slug-box { display: flex; align-items: stretch; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; background: #fff; }
   .slug-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18); }
   .slug-box[data-state="ok"] { border-color: #15803d; }
   .slug-box[data-state="err"] { border-color: #e11d48; }
-  .slug-box input { border: 0 !important; box-shadow: none !important; min-width: 0; flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92rem !important; min-height: 42px !important; }
+  /* `.field .slug-box` outranks `.field input[type="text"]`, so the address keeps its mono face (still 16px). */
+  .field .slug-box input { border: 0 !important; box-shadow: none !important; min-width: 0; flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; min-height: 42px !important; }
   .slug-suffix { display: flex; align-items: center; padding: 0 0.7rem; background: #f1f5f9; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; color: var(--ink-muted); white-space: nowrap; }
   .slug-suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
-  .sug-label { font-size: 0.78rem; color: var(--ink-muted); font-weight: 600; }
+  /* Built by the script, so outside this component's scope like the chips. */
+  :global(.sug-label) { font-size: 0.78rem; color: var(--ink-muted); font-weight: 600; }
   :global(.sug-chip) { appearance: none; border: 0; background: var(--accent-tint); color: var(--accent-hover); border-radius: 999px; padding: 0.25rem 0.7rem; min-height: 32px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
   :global(.sug-chip:hover) { background: #bfdbfe; }
 
   .field-hint { font-size: 0.8rem; color: var(--ink-muted); }
   .field-error { font-size: 0.8rem; font-weight: 600; color: #be123c; }
 
-  .ctx-chip { justify-self: start; max-width: 100%; padding: 0.4rem 0.8rem; border-radius: 999px; background: var(--tile); font-size: 0.8rem; color: var(--ink-muted); overflow-wrap: anywhere; }
-  .ctx-chip span:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--ink); }
 
   .pw-box { position: relative; display: flex; align-items: center; }
   .pw-box input { padding-right: 6.2rem !important; }
@@ -913,7 +871,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     .step { gap: 0.8rem; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .step, .slug-editor { animation: none; }
+    .step { animation: none; }
     .step-bar span, .launch-steps li, .catalog-option, .pw-rules li { transition: none; }
   }
 </style>

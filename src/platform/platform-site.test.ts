@@ -446,7 +446,7 @@ test("AUTH-MINIMALIST-STEP-UX-SPEC: /masuk and /daftar are one studio — no hea
     assert.match(readFileSync(page, "utf8"), /<SiteLayout page=\{(LOGIN|SIGNUP)_PAGE\} authStage>/, page);
   }
   const studio = readFileSync("src/platform/site/AuthSplit.astro", "utf8");
-  assert.match(studio, /min-height: 100dvh/);
+  assert.match(studio, /min-height: 100svh/);
   assert.match(studio, /class="panel-top"[\s\S]*adsbook-id-wordmark\.svg[\s\S]*← Beranda/, "the wordmark and home link top the studio panel");
   assert.equal((studio.match(/href="\/syarat">Syarat Layanan<\/a> · <a href="\/privasi">Kebijakan Privasi<\/a>/g) ?? []).length, 2, "one legal line for the panel and one for a phone");
   assert.match(studio, /prefers-reduced-motion: reduce/);
@@ -464,9 +464,34 @@ test("AUTH-MINIMALIST-STEP-UX-SPEC §4: the bot check is explicit, invisible unl
   for (const name of ["catalog_mode", "store_name", "slug", "email", "whatsapp", "password", "terms"]) assert.ok(form.includes(`name="${name}"`), name);
   assert.match(form, /autocomplete="email"[\s\S]*autocomplete="new-password"/);
   // Server errors return to their step.
-  assert.match(signup, /storeName: \{[^}]*step: 1 \}/);
+  // Step 1 is the catalog and the address; the store's name is asked on step 2 with the owner's contact.
+  assert.match(signup, /slug: \{[^}]*step: 1 \}/);
+  assert.match(signup, /storeName: \{[^}]*step: 2 \}/);
+  const step1 = signup.slice(signup.indexOf('data-step-panel="1"'), signup.indexOf('data-step-panel="2"'));
+  assert.ok(step1.includes('name="slug"') && !step1.includes('name="store_name"'), "step 1 holds the address, not the name");
+  assert.doesNotMatch(signup, /slugPill|slugReadout|slugEditor|slugEdit\b|toSlug\(/, "no address badge, disclosure or name-derived address");
   assert.match(signup, /email: \{[^}]*step: 2 \}/);
   // Product copy names no infrastructure vendor (Paduka, 2026-11-17).
   const markup = signup.split("<script>")[0].replace(/<script[^>]*>[\s\S]*?<\/script>|<!--[\s\S]*?-->/g, "");
   assert.doesNotMatch(markup.split("---").slice(2).join("---").replace(/\{[^}]*\}|<[^>]+>/g, " "), /Cloudflare|Turnstile/);
+});
+
+test("iOS viewport: the auth studio and the home hero size from the small viewport, and the stage refits only for real geometry", () => {
+  const studio = readFileSync("src/platform/site/AuthSplit.astro", "utf8");
+  const hero = readFileSync("src/platform/site/KineticHero3D.astro", "utf8");
+  const stage = readFileSync("src/platform/site/kinetic-stage.ts", "utf8");
+  // A stable first screen while Safari's bars come and go; min-height so taller content still scrolls.
+  assert.match(studio, /min-height: 100vh;\s*min-height: 100svh;/);
+  assert.doesNotMatch(studio, /\d+dvh/, "no dynamic-viewport sizing in the studio");
+  assert.match(hero, /min-height: 520px;\s*min-height: max\(520px, 100vh\);\s*min-height: max\(520px, 100svh\);/);
+  assert.doesNotMatch(hero, /\d+dvh/, "no dynamic-viewport sizing in the hero");
+  assert.doesNotMatch(hero, /\n\s*height: 100s?vh/, "a minimum, never a fixed height that clips the copy");
+  // A pinch that starts on the stage still zooms the page.
+  assert.match(hero, /touch-action: pan-y; touch-action: pan-y pinch-zoom;/);
+  // The visual viewport (pinch, keyboard, bars) never refits the stage; an unchanged geometry never resizes the canvas.
+  assert.doesNotMatch(stage, /visualViewport\?*\.addEventListener/);
+  assert.match(stage, /if \(geometry === fitted\) return false;/);
+  assert.match(stage, /matchMedia\(`\(resolution: \$\{window\.devicePixelRatio \|\| 1\}dppx\)`\)/);
+  // No zoom lock anywhere on the site's pages.
+  assert.doesNotMatch(readFileSync("src/platform/site/SiteLayout.astro", "utf8"), /maximum-scale|user-scalable/);
 });

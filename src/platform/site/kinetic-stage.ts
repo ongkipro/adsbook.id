@@ -483,11 +483,19 @@ export function startKineticStage(root: HTMLElement): boolean {
   // The stage is centred and scaled inside #stage-slot; the canvas fills the hero.
   let fullW = root.clientWidth || window.innerWidth;
   let fullH = root.clientHeight || window.innerHeight;
-  function fit() {
+  // The geometry last fitted: a resize that changes none of it (Safari's bars, a pinch, the
+  // keyboard) leaves the canvas alone, because resizing it clears its buffer.
+  let fitted = "";
+  function fit(): boolean {
     fullW = root.clientWidth || window.innerWidth || 360;
     fullH = root.clientHeight || window.innerHeight || 640;
     const slotRect = slot!.getBoundingClientRect();
     const rootRect = root.getBoundingClientRect();
+    const geometry = [fullW, fullH, slotRect.width, slotRect.height, slotRect.left - rootRect.left, slotRect.top - rootRect.top, renderer.getPixelRatio()]
+      .map((value) => Math.round(value * 10) / 10)
+      .join(",");
+    if (geometry === fitted) return false;
+    fitted = geometry;
     const slotW = Math.max(slotRect.width, 220);
     const slotH = Math.max(slotRect.height, 180);
     const compact = slotW < 540;
@@ -504,6 +512,7 @@ export function startKineticStage(root: HTMLElement): boolean {
     camera.setViewOffset(fullW, fullH, fullW * 0.5 - centreX, fullH * 0.5 - centreY, fullW, fullH);
     camera.updateProjectionMatrix();
     renderer.setSize(fullW, fullH);
+    return true;
   }
 
   // State: the active channel, the order sequence, a tapped channel waiting for the next frame.
@@ -684,11 +693,24 @@ export function startKineticStage(root: HTMLElement): boolean {
   fit();
   activate(0);
   const refit = () => {
-    fit();
-    if (!running) still();
+    if (fit() && !running) still();
   };
+  // The element's own size (ResizeObserver) and the window (rotation) decide; the visual
+  // viewport (pinch-zoom, keyboard, Safari's bars) does not change the stage.
   window.addEventListener("resize", refit);
-  window.visualViewport?.addEventListener("resize", refit);
+  // A pixel-ratio change (another screen, browser zoom) redraws at the new density.
+  const watchPixelRatio = () => {
+    window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener?.(
+      "change",
+      () => {
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        refit();
+        watchPixelRatio();
+      },
+      { once: true },
+    );
+  };
+  watchPixelRatio();
   if ("ResizeObserver" in window) {
     const observer = new ResizeObserver(refit);
     observer.observe(root);
@@ -728,6 +750,8 @@ export function startKineticStage(root: HTMLElement): boolean {
     }
     down = null;
   });
+  // A pinch or a scroll the browser takes over is no tap.
+  root.addEventListener("pointercancel", () => { down = null; });
 
   schedule();
   root.classList.add("is-live");

@@ -1,12 +1,13 @@
 ---
 /**
- * The 100dvh studio of adsbook.id/masuk and /daftar (AUTH-MINIMALIST-STEP-UX-SPEC
+ * The full-height studio of adsbook.id/masuk and /daftar (AUTH-MINIMALIST-STEP-UX-SPEC
  * §2–3): no site header and no footer (SiteLayout `authStage`). The left column
  * is white: the Masuk / Buat Toko switcher over one floating card, centred. The
  * right column is a porcelain studio tile: the wordmark and a quiet home link at
  * its top, a light 2.5D illustration with the page's `pitch` in the middle, one
  * legal line at its foot. Below 960px the tile folds away so a phone never
- * scrolls; a compact wordmark row sits above the card and the legal line below.
+ * scrolls; the wordmark sits above the card, itself the link home (no second
+ * "Beranda" link), and the legal line below.
  */
 import { SITE_NAME } from './site.ts';
 
@@ -20,8 +21,7 @@ const year = new Date().getFullYear();
 <section class="studio" data-auth-grid data-auth-studio>
   <div class="studio-form">
     <div class="mobile-bar">
-      <a href="/" class="mark-link"><img src="/platform/brand/adsbook-id-wordmark.svg" alt={SITE_NAME} width="126" height="20" loading="eager" decoding="async" /></a>
-      <a href="/" class="home-link">← Beranda</a>
+      <a href="/" class="mark-link" aria-label={`${SITE_NAME}, ke beranda`}><img src="/platform/brand/adsbook-id-wordmark.svg" alt="" width="126" height="20" loading="eager" decoding="async" /></a>
     </div>
     <div class="form-col">
       <nav class="auth-switch" aria-label="Masuk atau buat toko">
@@ -52,7 +52,10 @@ const year = new Date().getFullYear();
     --ease-studio: cubic-bezier(0.22, 1, 0.36, 1);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    min-height: 100dvh;
+    /* The small viewport (bars shown) is a stable first screen: the centred card does not jump
+       while Safari's bars come and go; anything taller (keyboard, errors, zoom) scrolls naturally. */
+    min-height: 100vh;
+    min-height: 100svh;
     background: #fff;
   }
   .studio-form { display: grid; grid-template-rows: auto 1fr auto; gap: 0.75rem; min-width: 0; padding: 0.75rem 1rem; }
@@ -145,7 +148,7 @@ const year = new Date().getFullYear();
     .panel-top, .panel-mid, .studio-panel .legal { position: relative; }
     .studio-panel .legal { text-align: left; }
     .panel-mid { align-self: center; display: grid; gap: 1.25rem; max-width: 460px; }
-    .panel-visual { width: 100%; max-height: 30dvh; object-fit: contain; object-position: left center; animation: studio-float 6s ease-in-out infinite; }
+    .panel-visual { width: 100%; max-height: 30vh; max-height: 30svh; object-fit: contain; object-position: left center; animation: studio-float 6s ease-in-out infinite; }
   }
   @keyframes studio-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
@@ -161,7 +164,7 @@ const year = new Date().getFullYear();
   /* Short screens (1366×768 and below): tighter air so the studio still never scrolls. */
   @media (min-width: 960px) and (max-height: 820px) {
     .auth-card { padding: 1.5rem 1.75rem; }
-    .panel-visual { max-height: 24dvh; }
+    .panel-visual { max-height: 24vh; max-height: 24svh; }
   }
   @media (prefers-reduced-motion: reduce) {
     .form-col, .panel-visual { animation: none; }

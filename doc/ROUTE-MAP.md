@@ -260,7 +260,7 @@ under both headings wherever they are named; which database a statement meant is
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/platform/masuk` ⇐ `/masuk` | GET | public | — | `src/pages/platform/masuk.astro` | `env` `form-validation-id` `platform/hostnames` `platform/site/site` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `lib/form-validation-id.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/privasi` ⇐ `/privasi` | GET | public | — | `src/pages/platform/privasi.astro` | — | — | — | — |
-| `/platform/signup` ⇐ `/daftar` | GET | public | — | `src/pages/platform/signup.astro` | `env` `platform/hostnames` `platform/site/content` `platform/site/site` `platform/store-finder` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/store-finder.test.ts` `platform/two-tenants.test.ts` |
+| `/platform/signup` ⇐ `/daftar` | GET | public | — | `src/pages/platform/signup.astro` | `env` `platform/hostnames` `platform/site/content` `platform/site/site` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/site` ⇐ `/` | GET | public | — | `src/pages/platform/site/index.astro` | `env` `platform/hostnames` `platform/site/content` `platform/site/site` | — | `plans` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `platform/domain-poll.test.ts` `platform/hostnames.test.ts` `platform/plans.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/platform/site/cara-kerja` ⇐ `/cara-kerja` | GET | public | — | `src/pages/platform/site/cara-kerja.astro` | `platform/site/site` | — | — | `platform/platform-site.test.ts` |
 | `/platform/site/faq` ⇐ `/faq` | GET | public | — | `src/pages/platform/site/faq.astro` | `platform/site/content` `platform/site/site` | — | — | `platform/platform-site.test.ts` |
@@ -501,7 +501,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/slugs` | 6 | — | `tenants` | 1 | `/api/platform/slug` |
 | `platform/state-pages` | 2 | — | — | 1 | `/kebijakan-privasi` |
 | `platform/store-core` | 20 | — | — | 3 | — |
-| `platform/store-finder` | 1 | — | — | 1 | `/platform/signup` |
+| `platform/store-finder` | 1 | — | — | 1 | — |
 | `platform/tenant-alarm` | 7 | — | `tenant_health` `tenant_hosts` `tenants` | 1 | — |
 | `platform/tenant-db.conformance` | 1 | — | — | **none** | — |
 | `platform/tenant-db` | 14 | — | `migration_bookmarks` `tenant_events` `tenants` | 3 | — |

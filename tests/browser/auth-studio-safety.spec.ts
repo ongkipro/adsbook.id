@@ -107,7 +107,7 @@ test("a provider script that never loads says so, and still sends nothing", asyn
   expect(posts).toHaveLength(0);
 });
 
-test("step 1 never advances on a stale address check: a name cleared or an address shortened while it runs", async ({ page }) => {
+test("step 1 never advances on a stale address check: an address cleared or shortened while it runs", async ({ page }) => {
   // Every check of these addresses answers 1.5 s late.
   await page.route(/\/api\/platform\/slug\?slug=toko-lambat/, async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1_500));
@@ -115,19 +115,19 @@ test("step 1 never advances on a stale address check: a name cleared or an addre
   });
   await page.goto(`${PLATFORM}/daftar`);
   await ready(page);
-  const next = page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" });
+  const next = page.getByRole("button", { name: "Lanjut ke Nama & Kontak →" });
+  const address = page.getByLabel("Alamat toko", { exact: true });
 
-  await page.getByLabel("Nama toko").fill("Toko Lambat");
+  await address.fill("toko-lambat");
   await next.click();
-  await page.getByLabel("Nama toko").fill("");
+  await address.fill("");
   // At once: the superseded check settles, it is not left to the 3-second safety timeout.
-  await expect(page.locator("#storeNameError")).toHaveText("Isi nama toko.", { timeout: 2_000 });
+  await expect(page.locator("#slugError")).toHaveText("Alamat toko minimal 3 karakter.", { timeout: 2_000 });
   await expect(page.locator("#stepNow")).toHaveText("1");
 
-  await page.getByLabel("Nama toko").fill("Toko Lambat Dua");
-  await page.getByRole("button", { name: "Ubah" }).click();
+  await address.fill("toko-lambat-dua");
   await next.click();
-  await page.getByLabel("Alamat toko", { exact: true }).fill("ab");
+  await address.fill("ab");
   await expect(page.locator("#slugError")).toHaveText("Alamat toko minimal 3 karakter.", { timeout: 2_000 });
   await expect(page.locator("#stepNow")).toHaveText("1");
   await page.waitForTimeout(2_000);
@@ -147,24 +147,58 @@ test("an address the server refuses stays refused until it changes; a suggestion
   });
   await page.goto(`${PLATFORM}/daftar`);
   await signUpThroughWizard(page, { storeName: "Toko Tabrakan", email: "owner@tabrakan.local.test", password: "password-tabrakan-123" });
-  // Back on step 1, on the address, which the pill now marks unavailable.
+  // Back on step 1, on the address, which its status now marks unavailable.
   await expect(page.locator("#stepNow")).toHaveText("1");
   await expect(page.getByLabel("Alamat toko", { exact: true })).toBeFocused();
   await expect(page.locator("#slugHint")).toHaveText("Alamat toko ini baru saja dipakai.");
-  await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
+  await page.getByRole("button", { name: "Lanjut ke Nama & Kontak →" }).click();
   await expect(page.locator("#slugError")).toHaveText("Pilih alamat toko yang tersedia.");
   await expect(page.locator("#stepNow")).toHaveText("1");
-  // A suggestion fills the address and keeps the keyboard on it, reopening the editor if closed.
-  await page.getByRole("button", { name: "Ubah" }).click();
-  await expect(page.locator("#slugEditor")).toBeHidden();
+  // A suggestion applied by keyboard fills the address and returns focus to the visible field.
   await page.getByRole("button", { name: "toko-tabrakan-baru" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Alamat toko", { exact: true })).toHaveValue("toko-tabrakan-baru");
-  await expect(page.locator("#slugEditor")).toBeVisible();
+  await expect(page.getByLabel("Alamat toko", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Alamat toko", { exact: true })).toBeFocused();
   await expect(page.locator("#slugHint")).toHaveText("✓ Tersedia", { timeout: 15_000 });
-  await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
+  await page.getByRole("button", { name: "Lanjut ke Nama & Kontak →" }).click();
   await expect(page.locator("#stepNow")).toHaveText("2");
+  // What was typed on step 2 before the refusal is still there.
+  await expect(page.getByLabel("Nama toko")).toHaveValue("Toko Tabrakan");
+});
+
+test("alternatives belong to their address: gone the moment it changes, even when the next check is slow or fails; the server's stay for the same address", async ({ page }) => {
+  // The next address's check never answers in time (and then fails).
+  await page.route(/\/api\/platform\/slug\?slug=toko-cek-gagal/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    await route.abort("failed");
+  });
+  await page.goto(`${PLATFORM}/daftar`);
+  await ready(page);
+  const address = page.getByLabel("Alamat toko", { exact: true });
+  await address.fill("admin");
+  await expect(page.locator(".sug-chip").first()).toBeVisible();
+  await address.fill("toko-cek-gagal");
+  await expect(page.locator("#slugSuggestions"), "at once, not when the slow check answers").toBeHidden({ timeout: 300 });
+  await expect(page.locator("#slugHint")).toHaveText("Diperiksa saat membuat toko", { timeout: 5_000 });
+  await expect(page.locator("#slugSuggestions"), "and still gone after it fails").toBeHidden();
+});
+
+test("the server's alternatives for a refused address survive a re-check of that same address", async ({ page }) => {
+  let refused = false;
+  await page.route(`${PLATFORM}/api/platform/signup`, async (route) => {
+    if (refused) return route.continue();
+    refused = true;
+    await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ success: false, error: "Pendaftaran gagal.", errors: { slug: "Alamat toko ini baru saja dipakai." }, suggestions: ["toko-sama-baru"] }) });
+  });
+  await page.goto(`${PLATFORM}/daftar`);
+  await signUpThroughWizard(page, { storeName: "Toko Sama", email: "owner@toko-sama.local.test", password: "password-sama-123" });
+  await expect(page.locator("#stepNow")).toHaveText("1");
+  await expect(page.getByRole("button", { name: "toko-sama-baru" })).toBeVisible();
+  // The same address typed again re-runs the check: still refused, its alternatives kept.
+  await page.getByLabel("Alamat toko", { exact: true }).fill("toko-sama");
+  await expect(page.locator("#slugHint")).toHaveText("Alamat toko ini baru saja dipakai.");
+  await expect(page.getByRole("button", { name: "toko-sama-baru" })).toBeVisible();
 });
 
 test("a lost answer spends the token: the check is reset, and a retry waits for a fresh token before it sends", async ({ page }) => {
@@ -213,11 +247,12 @@ test("a refusal outranks a late availability answer: the address stays refused a
   );
   await page.goto(`${PLATFORM}/daftar`);
   await ready(page);
-  await page.getByLabel("Nama toko").fill("Toko Jawaban Telat");
+  await page.getByLabel("Alamat toko", { exact: true }).fill("toko-jawaban-telat");
   await expect(page.locator("#slugHint")).toHaveText("Memeriksa…");
   // Continue gives the slow check 3 s, then lets the server decide.
-  await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
+  await page.getByRole("button", { name: "Lanjut ke Nama & Kontak →" }).click();
   await expect(page.locator("#stepNow")).toHaveText("2", { timeout: 5_000 });
+  await page.getByLabel("Nama toko").fill("Toko Jawaban Telat");
   await page.getByLabel("Email", { exact: true }).fill("owner@jawaban-telat.local.test");
   await page.getByRole("button", { name: "Lanjut ke Keamanan →" }).click();
   await page.getByLabel("Password", { exact: true }).fill("password-telat-123");
@@ -228,8 +263,8 @@ test("a refusal outranks a late availability answer: the address stays refused a
   // The late "available" lands after the refusal and changes nothing.
   await page.waitForTimeout(2_500);
   await expect(page.locator("#slugHint")).toHaveText("Alamat toko ini baru saja dipakai.");
-  await expect(page.locator("#slugPill")).toHaveAttribute("data-state", "err");
-  await page.getByRole("button", { name: "Lanjut ke Akun Pemilik →" }).click();
+  await expect(page.locator("#slugHint")).toHaveAttribute("data-state", "err");
+  await page.getByRole("button", { name: "Lanjut ke Nama & Kontak →" }).click();
   await expect(page.locator("#slugError")).toHaveText("Pilih alamat toko yang tersedia.");
   await expect(page.locator("#stepNow")).toHaveText("1");
 });
