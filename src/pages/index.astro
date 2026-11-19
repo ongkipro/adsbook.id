@@ -3,15 +3,41 @@ import { tenantDatabase } from '../lib/tenant-database.ts';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import CompactMarketHome from '../components/storefront/templates/CompactMarketHome.astro';
 import { getStorefrontProducts } from '../lib/catalog';
-import { getTenantHomeContent } from '../lib/tenant-content';
+import { decideBannerPreview, getTenantHomeContent, seedHomeContent, type BannerPreview } from '../lib/tenant-content';
+import { resolveAdminSession } from '../lib/admin-session';
+import { resolveAuthSecret } from '../lib/auth-secret';
 import { resolveStorefrontTemplate } from '../lib/storefront-template';
 import { dailySeed, pickDaily } from '../lib/daily-rotation';
 import { homeDescription, homeTitle } from '../lib/home-seo';
 
 const database = tenantDatabase(Astro.locals);
+// R1b banner preview: only `?preview=banner` reads the session and the content
+// row; every other request renders exactly as before.
+let bannerPreview: BannerPreview = { granted: false };
+if (Astro.url.searchParams.get('preview') === 'banner' && database && typeof database === 'object') {
+  const db = database as D1Database;
+  const session = await resolveAdminSession(db, Astro.request, await resolveAuthSecret(db, Astro.locals.tenantContext?.tenantId));
+  const row = session
+    ? await db
+        .prepare("SELECT version, draft_json, published_json FROM storefront_content WHERE content_key = 'home' LIMIT 1")
+        .first<{ version: number; draft_json: string | null; published_json: string | null }>()
+    : null;
+  bannerPreview = decideBannerPreview({
+    session,
+    op: Astro.url.searchParams.get('op'),
+    version: Astro.url.searchParams.get('v'),
+    row,
+    seed: seedHomeContent(Astro.locals.tenant),
+  });
+}
+if (bannerPreview.granted) {
+  // For the signed-in operator alone: never stored by any cache, never indexed.
+  Astro.response.headers.set('Cache-Control', 'private, no-store');
+  Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+}
 const [catalog, homeResolution, templateResolution] = await Promise.all([
   getStorefrontProducts(Astro.locals),
-  getTenantHomeContent(Astro.locals),
+  getTenantHomeContent(Astro.locals, bannerPreview.granted ? bannerPreview.published ?? undefined : undefined),
   resolveStorefrontTemplate(
     database && typeof database === 'object' ? database as D1Database : undefined,
     Astro.locals.tenant.storefrontTemplate,
@@ -76,7 +102,15 @@ const itemList = {
   image={heroSlides[0]?.image || undefined}
   preloadImages={heroSlides[0]?.image}
   itemList={ready ? itemList : undefined}
+  noindex={bannerPreview.granted}
+  buyerTracking={!bannerPreview.granted}
 >
+  {bannerPreview.granted && (
+    <div role="status" data-banner-preview class="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950">
+      {bannerPreview.notice ?? 'Pratinjau banner: belum terlihat pembeli.'}{' '}
+      <a href="/admin/content/tampilan" class="font-semibold underline underline-offset-2">Kembali ke Tampilan toko</a>
+    </div>
+  )}
   {
       unavailable || !content || !template ? (
       <section class="mx-auto flex min-h-[70vh] max-w-2xl items-center px-6 py-20 text-center">

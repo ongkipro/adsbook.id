@@ -271,3 +271,105 @@ export function mergeRuntimeProductContent(
     ];
   });
 }
+
+/*
+ * Manual home banner (R1b). The banner is `heroSlides[0]` of one document. Each
+ * operation changes exactly one document — the draft or the published copy —
+ * and only index 0; every other field and slide is carried over as it is. A
+ * published operation takes its slide from the draft's slot 0, never from the
+ * request, so what is published is what was saved and previewed. The admin API
+ * (`/api/admin/content`, action `banner`) and the storefront preview
+ * (`/?preview=banner`) both call `projectPublishedBanner`, so a preview shows
+ * exactly the document the matching publish would store.
+ */
+export type HeroSlide = HomeContent["heroSlides"][number];
+export const BANNER_OPS = ["insert-first", "replace-first", "remove-first"] as const;
+export type BannerOp = (typeof BANNER_OPS)[number];
+export const MAX_HERO_SLIDES = 10;
+
+export function isBannerOp(value: unknown): value is BannerOp {
+  return typeof value === "string" && (BANNER_OPS as readonly string[]).includes(value);
+}
+
+/** A banner set from the admin: the slide schema, and an image from this store's own media. */
+const bannerSlideSchema = homeContentSchema.shape.heroSlides.element.refine(
+  (slide) => slide.image.startsWith("/media/"),
+  { path: ["image"], message: "Gambar banner harus diunggah ke media toko." },
+);
+export function parseBannerSlide(value: unknown): HeroSlide {
+  return bannerSlideSchema.parse(value);
+}
+
+export type BannerRefusal =
+  | { code: "BANNER_PRECONDITION_FAILED"; reason: "draft_empty" | "published_empty" | "slots_full" }
+  | { code: "DRAFT_CONTENT_INVALID" | "PUBLISHED_CONTENT_INVALID" | "BANNER_RESULT_INVALID" };
+export type BannerResult = { ok: true; content: HomeContent } | ({ ok: false } & BannerRefusal);
+
+const BANNER_REFUSAL_MESSAGES: Record<string, string> = {
+  draft_empty: "Draft belum punya banner. Simpan banner di draft dulu.",
+  published_empty: "Belum ada banner yang terbit.",
+  slots_full: "Sudah ada 10 slide; hapus satu di Konten & media dulu.",
+  DRAFT_CONTENT_INVALID: "Draft konten tidak valid. Perbaiki di Konten & media.",
+  PUBLISHED_CONTENT_INVALID: "Konten terbit tidak valid. Perbaiki di Konten & media.",
+  BANNER_RESULT_INVALID: "Hasil perubahan banner tidak valid.",
+};
+export function bannerRefusalMessage(refusal: BannerRefusal): string {
+  return BANNER_REFUSAL_MESSAGES["reason" in refusal ? refusal.reason : refusal.code];
+}
+
+/** null when there is no document; "invalid" when the stored one no longer parses. */
+export function readStoredHome(json: string | null | undefined): HomeContent | null | "invalid" {
+  if (!json) return null;
+  try {
+    return validateContent("home", JSON.parse(json)) as HomeContent;
+  } catch {
+    return "invalid";
+  }
+}
+
+/** Applies `op` to slot 0 of `document`; nothing else changes. */
+export function applyBannerOp(
+  document: HomeContent,
+  op: BannerOp,
+  slide: HeroSlide | null,
+  emptyReason: "draft_empty" | "published_empty",
+): BannerResult {
+  const slides = document.heroSlides;
+  let next: HeroSlide[];
+  if (op === "remove-first") {
+    if (slides.length === 0) return { ok: false, code: "BANNER_PRECONDITION_FAILED", reason: emptyReason };
+    next = slides.slice(1);
+  } else if (op === "replace-first") {
+    if (slides.length === 0) return { ok: false, code: "BANNER_PRECONDITION_FAILED", reason: emptyReason };
+    next = [slide!, ...slides.slice(1)];
+  } else {
+    if (slides.length >= MAX_HERO_SLIDES) return { ok: false, code: "BANNER_PRECONDITION_FAILED", reason: "slots_full" };
+    next = [slide!, ...slides];
+  }
+  try {
+    return { ok: true, content: homeContentSchema.parse({ ...document, heroSlides: next }) };
+  } catch {
+    return { ok: false, code: "BANNER_RESULT_INVALID" };
+  }
+}
+
+/**
+ * The published document after `op`, from one stored row: base = published
+ * (or `seed` when nothing was published yet), slide = the draft's slot 0.
+ */
+export function projectPublishedBanner(
+  row: { draft_json: string | null; published_json: string | null },
+  op: BannerOp,
+  seed: HomeContent,
+): BannerResult {
+  const published = readStoredHome(row.published_json);
+  if (published === "invalid") return { ok: false, code: "PUBLISHED_CONTENT_INVALID" };
+  let slide: HeroSlide | null = null;
+  if (op !== "remove-first") {
+    const draft = readStoredHome(row.draft_json);
+    if (draft === "invalid") return { ok: false, code: "DRAFT_CONTENT_INVALID" };
+    slide = draft?.heroSlides[0] ?? null;
+    if (!slide) return { ok: false, code: "BANNER_PRECONDITION_FAILED", reason: "draft_empty" };
+  }
+  return applyBannerOp(published ?? seed, op, slide, "published_empty");
+}

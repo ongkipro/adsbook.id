@@ -17,6 +17,7 @@ import {
   Package,
   Puzzle,
   Globe,
+  LayoutTemplate,
   Settings,
   ShoppingBag,
   Truck,
@@ -82,9 +83,12 @@ export const adminNavGroups: AdminNavGroup[] = [
         label: "Katalog",
         description: "Produk, varian, dan landing page",
         icon: Package,
-        keywords: "products produk katalog varian stock landing pages",
+        keywords: "products produk katalog varian stock landing pages tampilan toko banner beranda",
         children: [
           { href: "/admin/landing-pages", label: "Landing page", icon: FilePenLine },
+          // R1b: the manual home banner. Under Katalog because every role that sees
+          // Katalog (owner, admin, advertiser) may already open /admin/content*.
+          { href: "/admin/content/tampilan", label: "Tampilan toko", icon: LayoutTemplate },
         ],
       },
     ],
