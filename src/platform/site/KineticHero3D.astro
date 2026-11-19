@@ -1,7 +1,7 @@
 ---
 /**
  * The home's first viewport (Paduka, 2026-11-18; reference
- * adsbook_id_precision_100vh_3d_hero.html): a 100dvh gallery stage where
+ * adsbook_id_precision_100vh_3d_hero.html): a first-screen gallery stage where
  * TikTok Ads, Meta Ads and Google Ads feed one splitter, browser and server
  * signals converge on the logo's square dot, and the order locks 1:1. It
  * carries its own header (SiteLayout's `heroHeader`), so the stage starts at 0.
@@ -112,10 +112,15 @@ const { suffix } = Astro.props;
   .hero3d {
     position: relative;
     width: 100%;
-    height: 100vh;
-    height: 100svh;
-    height: 100dvh;
+    /* The small viewport is the stable first screen: the hero (and everything under it) keeps
+       its height while Safari's bars come and go; 100vh only where svh is unknown. A minimum,
+       not a height: when the copy needs more (narrow screen, larger text) the hero grows
+       instead of clipping it, and the page scrolls. */
     min-height: 520px;
+    min-height: max(520px, 100vh);
+    min-height: max(520px, 100svh);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     color: #0f172a;
     background:
@@ -126,11 +131,13 @@ const { suffix } = Astro.props;
   .topline { position: absolute; top: 0; left: 0; right: 0; height: 1.5px; z-index: 30; pointer-events: none; background: linear-gradient(90deg, transparent, rgb(37 99 235 / 0.6), transparent); }
   .layer { position: absolute; inset: 0; }
   .layer-canvas { z-index: 10; }
-  /* Vertical swipes still scroll the page on a phone; only horizontal drags tilt the stage. */
-  #stage-canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; }
+  /* Vertical swipes still scroll the page and a pinch still zooms it, also when it starts on the
+     stage; only horizontal drags reach the stage (to tilt it). `pan-y` alone where pinch-zoom is unknown. */
+  #stage-canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; touch-action: pan-y pinch-zoom; }
   .layer-projected { z-index: 20; pointer-events: none; overflow: hidden; opacity: 0; transition: opacity 0.4s ease-out; }
   .hero3d.is-live .layer-projected { opacity: 1; }
-  .layer-ui { z-index: 30; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+  /* In the flow (the other layers cover it): its content decides how tall the hero must be. */
+  .layer-ui { position: relative; inset: auto; flex: 1 0 auto; z-index: 30; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
 
   .orbital-anchor { position: absolute; top: 0; left: 0; will-change: transform, opacity; user-select: none; }
   .ad-token {
