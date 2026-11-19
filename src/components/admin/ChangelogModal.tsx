@@ -38,39 +38,39 @@ const CHANGELOG_RELEASES: ChangelogRelease[] = [
     date: "17 November 2026",
     releaseTag: "2026.11-launch",
     isLatest: true,
-    highlight: "Peluncuran adsbook.id: toko online siap iklan untuk seller COD, dari daftar sampai pesanan sampai di Meta dan Google.",
+    highlight: "Rilis pertama adsbook.id: jual produk fisik dan digital, kelola pesanan dari satu dashboard, dan kirim data konversi ke Meta, Google, dan TikTok.",
     changes: [
       {
-        title: "Toko langsung jadi dalam 30 detik",
-        description: "Daftar dengan nama toko, alamat, dan email; toko aktif di nama-toko.adsbook.my.id dan admin langsung terbuka. Setiap toko punya database sendiri yang terpisah dari toko lain.",
+        title: "Daftar toko dan masuk dari satu tempat",
+        description: "Pilih jenis produk dan alamat toko, lalu isi nama toko dan kontak pemilik. Masuk melalui adsbook.id/masuk dengan email pemilik atau username akun tim.",
       },
       {
         title: "Mode Preview gratis, bayar saat siap beriklan",
         description: "Siapkan produk, landing page, gudang, dan pixel tanpa biaya. Pesanan pembeli, sinyal iklan, AI, dan domain sendiri aktif setelah berlangganan, mulai Rp149.000/bulan lewat QRIS atau Virtual Account. Lewat jatuh tempo ada masa tenggang 48 jam.",
       },
       {
-        title: "Sinyal iklan 1:1 ke Meta dan Google Ads",
-        description: "Pixel di browser dan Conversions API dari server memakai satu event_id per pesanan, jadi Meta tidak menghitung dua kali. Purchase COD dikirim server saat order masuk; konversi offline Google Ads dari pesanan yang benar-benar terjadi.",
+        title: "Tracking konversi untuk Meta, Google, dan TikTok",
+        description: "Hubungkan akun iklan untuk mengirim data konversi dari toko. Sinyal browser dan server untuk Meta dan TikTok memakai ID yang sama agar platform dapat mengenali event ganda. Google Ads mendukung Data Manager API sesuai konfigurasi.",
       },
       {
-        title: "Form pesanan COD yang cepat di HP",
-        description: "Form singkat, form lengkap, atau hybrid dengan ongkir per kecamatan. Form yang tidak selesai tersimpan sebagai lead untuk di-follow up CS lewat WhatsApp, dengan rotator nomor CS.",
+        title: "Checkout untuk produk fisik dan digital",
+        description: "Produk fisik mendukung COD dan ongkir per kecamatan sesuai pengaturan. Akses produk digital dibuka setelah pembayaran lunas. Aktifkan Mode Hybrid di pengaturan toko untuk menjual keduanya.",
       },
       {
         title: "Pengiriman lewat Mengantar, rilis dari admin",
         description: "Pesanan masuk dengan status menunggu; Anda yang memutuskan kapan dirilis ke kurir. Resi tersimpan otomatis, banyak gudang didukung, dan pickup atau drop-off bisa dipilih.",
       },
       {
-        title: "Pembayaran QRIS dan VA cukup dengan API key AutoLaris",
-        description: "Masukkan API key AutoLaris dan QRIS serta Virtual Account langsung tampil di checkout. Uang pembeli masuk ke akun Anda sendiri, tanpa potongan per transaksi dari adsbook.id.",
+        title: "Transfer bank, QRIS, dan Virtual Account",
+        description: "Tambahkan rekening untuk transfer manual, atau hubungkan AutoLaris untuk QRIS dan Virtual Account yang aktif. Adsbook.id tidak mengambil komisi per transaksi; biaya penyedia pembayaran atau kurir tetap berlaku.",
       },
       {
-        title: "Domain sendiri untuk setiap toko",
-        description: "Hubungkan tokosaya.com atau www-nya dengan satu record CNAME ke cname.adsbook.my.id. SSL terpasang otomatis, alamat lama dialihkan ke domain Anda, dan domain bisa diganti kapan saja.",
+        title: "Gunakan domain sendiri",
+        description: "Setelah berlangganan, hubungkan domain toko dari Pengaturan dan ikuti petunjuk DNS yang ditampilkan. Jadikan domain itu alamat utama setelah statusnya aktif.",
       },
       {
         title: "Landing page, katalog, dan feed produk",
-        description: "Buat landing page dari admin, kelola katalog dengan varian dan foto, dan feed Google Merchant serta katalog Meta terisi otomatis dari produk Anda.",
+        description: "Buat landing page dan kelola varian serta foto produk dari admin. Gunakan feed toko untuk katalog Meta, Google Merchant Center, dan TikTok.",
       },
       {
         title: "Analitik dari pesanan, bukan tebakan",
@@ -80,10 +80,7 @@ const CHANGELOG_RELEASES: ChangelogRelease[] = [
         title: "Tim dengan peran masing-masing",
         description: "Owner, admin, CS, dan advertiser masing-masing hanya melihat menu yang menjadi tugasnya.",
       },
-      {
-        title: "Infrastruktur edge global, server di Asia-Pasifik",
-        description: "Toko dilayani dari jaringan edge di 348 kota dan 100+ negara, dengan 95% pengguna internet dunia berada dalam 50 ms dari titik layanan terdekat. Setiap toko punya database sendiri hingga 10 GB yang diutamakan berada di Asia-Pasifik, mampu menangani hingga 1.000 permintaan per detik per toko, dengan backup harian dan SSL otomatis.",
-      },
+
     ],
   },
 ];
