@@ -447,7 +447,7 @@ test("AUTH-MINIMALIST-STEP-UX-SPEC: /masuk and /daftar are one studio — no hea
   }
   const studio = readFileSync("src/platform/site/AuthSplit.astro", "utf8");
   assert.match(studio, /min-height: 100svh/);
-  assert.match(studio, /class="panel-top"[\s\S]*adsbook-id-wordmark\.svg[\s\S]*← Beranda/, "the wordmark and home link top the studio panel");
+  assert.match(studio, /class="panel-top"[\s\S]*adsbook-id-wordmark\.svg/, "the wordmark tops the studio panel");
   assert.equal((studio.match(/href="\/syarat">Syarat Layanan<\/a> · <a href="\/privasi">Kebijakan Privasi<\/a>/g) ?? []).length, 2, "one legal line for the panel and one for a phone");
   assert.match(studio, /prefers-reduced-motion: reduce/);
 });

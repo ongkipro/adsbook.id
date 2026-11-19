@@ -40,7 +40,10 @@ async function chrome(page: Page, width: number) {
     const top = await panel.locator(".panel-top").boundingBox();
     const mark = await panel.locator(".panel-top img").boundingBox();
     expect(mark!.y - top!.y).toBeLessThan(20);
-    await expect(panel.getByRole("link", { name: "← Beranda" })).toHaveAttribute("href", "/");
+    await expect(panel.getByRole("link", { name: "adsbook.id, ke beranda" })).toHaveAttribute("href", "/");
+    const homeLink = panel.getByRole("link", { name: "← Beranda" });
+    if (new URL(page.url()).pathname === "/daftar") await expect(homeLink).toHaveCount(0);
+    else await expect(homeLink).toHaveAttribute("href", "/");
     await expect(page.locator(".mobile-bar")).toBeHidden();
   } else {
     await expect(page.locator(".studio-panel")).toBeHidden();
@@ -153,7 +156,7 @@ test("step 1 is the catalog and the address: one plain field with a fixed suffix
       await expect(step1.getByLabel("Alamat toko", { exact: true })).toBeVisible();
       await expect(step1.locator(".slug-suffix")).toHaveText(".localhost");
       await expect(step1.getByRole("button", { name: /^(Ubah|Selesai)$/ })).toHaveCount(0);
-      await expect(page.locator("#slugHint"), "no filler before an address").toBeHidden();
+      await expect(page.locator("#slugHint"), "no filler before an address (the line is kept, empty)").toHaveText("");
       await expect(step1).not.toContainText("nama-toko");
       await step1.getByLabel("Alamat toko", { exact: true }).fill("herbal-nusantara");
       await expect(page.locator("#slugHint")).toHaveText("✓ Tersedia", { timeout: 15_000 });

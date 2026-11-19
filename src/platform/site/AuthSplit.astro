@@ -3,8 +3,8 @@
  * The full-height studio of adsbook.id/masuk and /daftar (AUTH-MINIMALIST-STEP-UX-SPEC
  * §2–3): no site header and no footer (SiteLayout `authStage`). The left column
  * is white: the Masuk / Buat Toko switcher over one floating card, centred. The
- * right column is a porcelain studio tile: the wordmark and a quiet home link at
- * its top, a light 2.5D illustration with the page's `pitch` in the middle, one
+ * right column is a porcelain studio tile: a linked wordmark at its top
+ * (with a separate home link on sign-in), an illustration and the page's `pitch`, one
  * legal line at its foot. Below 960px the tile folds away so a phone never
  * scrolls; the wordmark sits above the card, itself the link home (no second
  * "Beranda" link), and the legal line below.
@@ -36,8 +36,8 @@ const year = new Date().getFullYear();
   </div>
   <aside class="studio-panel" aria-label="Tentang adsbook.id">
     <div class="panel-top">
-      <a href="/" class="mark-link"><img src="/platform/brand/adsbook-id-wordmark.svg" alt={SITE_NAME} width="151" height="24" loading="eager" decoding="async" /></a>
-      <a href="/" class="home-link">← Beranda</a>
+      <a href="/" class="mark-link" aria-label={`${SITE_NAME}, ke beranda`}><img src="/platform/brand/adsbook-id-wordmark.svg" alt="" width="151" height="24" loading="eager" decoding="async" /></a>
+      {active === 'masuk' && <a href="/" class="home-link">← Beranda</a>}
     </div>
     <div class="panel-mid">
       <img class="panel-visual" src="/visual/home-closing.webp" width="640" height="460" alt="Ilustrasi 2.5D: Meta Ads, Google Ads, dan TikTok Ads mengunci satu pesanan menjadi satu konversi" loading="lazy" decoding="async" />

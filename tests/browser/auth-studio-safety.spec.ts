@@ -180,7 +180,7 @@ test("alternatives belong to their address: gone the moment it changes, even whe
   await expect(page.locator(".sug-chip").first()).toBeVisible();
   await address.fill("toko-cek-gagal");
   await expect(page.locator("#slugSuggestions"), "at once, not when the slow check answers").toBeHidden({ timeout: 300 });
-  await expect(page.locator("#slugHint")).toHaveText("Diperiksa saat membuat toko", { timeout: 5_000 });
+  await expect(page.locator("#slugHint")).toHaveText("Belum sempat dicek; diperiksa lagi saat toko dibuat.", { timeout: 5_000 });
   await expect(page.locator("#slugSuggestions"), "and still gone after it fails").toBeHidden();
 });
 
