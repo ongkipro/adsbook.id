@@ -118,6 +118,13 @@
     "binding": "AI"
   },
 
+  // Account email (outbound only; src/platform/seller-email.ts). Sends only from
+  // the onboarded sender address; no recipient restriction (any seller address).
+  // Without this binding the signup confirmation is skipped, never an error.
+  "send_email": [
+    { "name": "EMAIL", "allowed_sender_addresses": ["noreply@adsbook.id"] }
+  ],
+
   // Without this, Workers Logs are off and the ~76 labelled console.error
   // calls in src/ are unqueryable — a failing install cannot be diagnosed
   // after the fact. See OBSERVABILITY.md.
