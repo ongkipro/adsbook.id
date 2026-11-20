@@ -289,8 +289,8 @@ under both headings wherever they are named; which database a statement meant is
 | `/api/platform/login` | POST | public | — | `src/pages/api/platform/login.ts` | `env` `platform/admin/session` `rate-limit` | `rate_limits` | `platform_sessions` `platform_users` `rate_limits` | `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/logout` | POST | platform session | platform_owner, platform_support | `src/pages/api/platform/logout.ts` | `env` `platform/admin/session` | — | `platform_sessions` `platform_users` | `lib/env.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/masuk` | POST | public | — | `src/pages/api/platform/masuk.ts` | `env` `platform/login` `rate-limit` | `admin_credentials` `rate_limits` | `rate_limits` | `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/two-tenants.test.ts` |
-| `/api/platform/signup` | POST | public | — | `src/pages/api/platform/signup.ts` | `env` `platform/notify` `platform/signup` `platform/site/site` `rate-limit` | `rate_limits` `stores` | `operator_notices` `platform_identities` `rate_limits` `tenant_events` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/notify.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
-| `/api/platform/slug` | GET | public | — | `src/pages/api/platform/slug.ts` | `env` `platform/control-plane` `platform/slugs` | — | `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/backup.test.ts` `platform/billing.test.ts` `platform/console.test.ts` `platform/domain-poll.test.ts` `platform/gate.test.ts` `platform/hostnames.test.ts` `platform/isolation.test.ts` `platform/jobs.test.ts` `platform/middleware-gate.test.ts` `platform/notify.test.ts` `platform/plans.test.ts` `platform/tenant-store.test.ts` `platform/trust-watch.test.ts` `platform/two-tenants.test.ts` |
+| `/api/platform/signup` | POST | public | — | `src/pages/api/platform/signup.ts` | `env` `platform/notify` `platform/seller-email` `platform/signup` `platform/site/site` `rate-limit` | `rate_limits` `stores` | `operator_notices` `platform_identities` `rate_limits` `tenant_events` `tenant_hosts` `tenants` | `lib/dev-providers.test.ts` `lib/env.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/notify.test.ts` `platform/platform-site.test.ts` `platform/seller-email.test.ts` `platform/two-tenants.test.ts` |
+| `/api/platform/slug` | GET | public | — | `src/pages/api/platform/slug.ts` | `env` `platform/control-plane` `platform/slugs` | — | `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/backup.test.ts` `platform/billing.test.ts` `platform/console.test.ts` `platform/domain-poll.test.ts` `platform/gate.test.ts` `platform/hostnames.test.ts` `platform/isolation.test.ts` `platform/jobs.test.ts` `platform/middleware-gate.test.ts` `platform/notify.test.ts` `platform/plans.test.ts` `platform/seller-email.test.ts` `platform/tenant-store.test.ts` `platform/trust-watch.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/team` | GET, POST | platform session | platform_owner | `src/pages/api/platform/team/index.ts` | `env` `platform/admin/team` | — | `platform_sessions` `platform_users` `tenant_events` | `lib/env.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/team/[id]` | POST | platform session | platform_owner | `src/pages/api/platform/team/[id].ts` | `env` `platform/admin/team` | — | `platform_sessions` `platform_users` `tenant_events` | `lib/env.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
 | `/api/platform/tenants` | GET | platform session | platform_owner, platform_support | `src/pages/api/platform/tenants/index.ts` | `env` `platform/admin/tenants` | — | `plans` `tenant_events` `tenant_health` `tenant_hosts` `tenants` | `lib/env.test.ts` `platform/console.test.ts` `platform/two-tenants.test.ts` |
@@ -300,7 +300,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-203 modules under `src/lib` and `src/platform`; 10 that no test imports.
+204 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -475,7 +475,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/backup` | 9 | — | — | 1 | — |
 | `platform/billing` | 31 | — | `subscription_invoices` `tenant_events` `tenants` | 3 | `/api/admin/billing` `/api/admin/billing/[id]/check` `/api/admin/content` `/api/platform/invoices/[id]/check` `/api/platform/webhooks/autolaris/[token]` |
 | `platform/bundled-migrations` | 1 | — | — | **none** | — |
-| `platform/control-plane` | 11 | — | `tenant_hosts` `tenants` | 14 | `/api/platform/slug` |
+| `platform/control-plane` | 11 | — | `tenant_hosts` `tenants` | 15 | `/api/platform/slug` |
 | `platform/cron` | 3 | — | `tenants` | 1 | — |
 | `platform/demo` | 2 | — | — | **none** | — |
 | `platform/domain-poll` | 6 | — | `tenant_hosts` `tenants` | 1 | `/api/admin/domains/[host]/recheck` |
@@ -494,6 +494,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/purge` | 12 | — | `handoff_tokens` `migration_bookmarks` `operator_notices` `platform_identities` `purge_sweeps` `tenant_events` `tenant_health` `tenant_hosts` `tenant_usage_daily` `tenants` `webhook_secrets` | 1 | `/api/admin/store-removal` |
 | `platform/readiness` | 8 | `courier_rules` `product_variants` `products` `seller_bank_accounts` `stores` `warehouses` | — | 2 | — |
 | `platform/request-log` | 6 | — | — | 1 | — |
+| `platform/seller-email` | 10 | — | `operator_notices` | 1 | `/api/platform/signup` |
 | `platform/shared-areas` | 5 | — | `shared_mengantar_areas` | 1 | `/api/locations` |
 | `platform/signup` | 12 | `stores` | `platform_identities` `tenant_events` `tenant_hosts` `tenants` | 2 | `/api/platform/signup` |
 | `platform/site/content` | 16 | — | — | 1 | `/platform/signup` `/platform/site` `/platform/site/faq` `/platform/site/harga` |

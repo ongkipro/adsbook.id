@@ -2585,6 +2585,75 @@ test("T-44/PR-29: a signup through the real route sends one notice naming the st
   assert.match(notices[0], /^\[adsbook\.id\] Seller baru mendaftar: Toko Kabar Baru \(kabar-baru\) — https:\/\/app\.adsbook\.id\/platform\/tenants\/t_/);
 });
 
+test("account email: a signup through the real route sends one confirmation; a transport failure, a taken email or an invalid form change nothing else", async () => {
+  const { env, platformDb } = await signupHarness();
+  Object.assign(env, { PLATFORM_ALERT_WEBHOOK_URL: "https://hooks.example/notify", TURNSTILE_SECRET_KEY: "secret", TURNSTILE_VERIFY_URL: "https://turnstile.test/siteverify" });
+  const mails: Array<{ to: string; text: string }> = [];
+  let transportDown = false;
+  env.EMAIL = {
+    send: async (message: { to: string; text: string }) => {
+      if (transportDown) throw Object.assign(new Error("down"), { code: "E_INTERNAL_SERVER_ERROR" });
+      mails.push(message);
+      return { messageId: "fake" };
+    },
+  };
+  const notices: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === "https://hooks.example/notify") return (notices.push(JSON.parse(String(init?.body)).text), new Response("ok"));
+    if (url.startsWith("https://turnstile.test/")) return Response.json({ success: true });
+    return Response.json({});
+  }) as typeof fetch;
+  const quiet = { log: console.log, info: console.info, error: console.error };
+  console.log = console.info = console.error = () => undefined;
+  let counter = 0;
+  const post = async (payload: Record<string, unknown>) => {
+    const tasks: Promise<unknown>[] = [];
+    const href = "https://adsbook.id/api/platform/signup";
+    const response = (await platformSignupRoute.POST({
+      request: new Request(href, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "https://adsbook.id", "cf-connecting-ip": `198.51.100.${90 + (counter += 1)}` },
+        body: JSON.stringify({ terms: true, turnstile_token: "ok", password: "kata-sandi-panjang-1", ...payload }),
+      }),
+      url: new URL(href),
+      locals: { runtimeEnv: env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } },
+    } as never)) as Response;
+    await Promise.all(tasks);
+    return response;
+  };
+  try {
+    const ok = await post({ store_name: "Toko Surat Satu", slug: "surat-satu", email: "owner@surat-satu.example" });
+    assert.equal(ok.status, 201);
+    assert.equal(mails.length, 1);
+    assert.equal(mails[0].to, "owner@surat-satu.example");
+    assert.match(mails[0].text, /Toko Surat Satu/);
+    assert.doesNotMatch(mails[0].text, /kata-sandi-panjang-1|handoff|token/i);
+    assert.equal(notices.filter((text) => text.includes("Seller baru mendaftar")).length, 1, "the operator notice is unchanged");
+
+    // A taken email and an invalid form send nothing.
+    assert.equal((await post({ store_name: "Toko Lain", slug: "surat-lain", email: "owner@surat-satu.example" })).status, 409);
+    assert.equal((await post({ store_name: "X", slug: "surat-tiga", email: "bukan-email" })).status, 400);
+    assert.equal(mails.length, 1);
+
+    // The transport is down: the signup still succeeds, the tenant is active, the operator is still told.
+    transportDown = true;
+    const down = await post({ store_name: "Toko Surat Dua", slug: "surat-dua", email: "owner@surat-dua.example" });
+    assert.equal(down.status, 201, "a mail failure never changes the signup");
+    assert.equal((platformDb.sqlite.prepare("SELECT status FROM tenants WHERE slug = 'surat-dua'").get() as { status: string }).status, "active");
+    assert.equal(notices.filter((text) => text.includes("Seller baru mendaftar")).length, 2);
+    assert.equal(mails.length, 1);
+
+    // No binding at all: still 201.
+    delete env.EMAIL;
+    assert.equal((await post({ store_name: "Toko Surat Tiga", slug: "surat-empat", email: "owner@surat-empat.example" })).status, 201);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.assign(console, quiet);
+  }
+});
+
 // ---- T-48 / ADR-040: stored provider credentials are sealed per tenant ----
 
 test("T-48: a key saved through the admin route is stored sealed, opens only on its own store, and fails closed without the platform key", async () => {

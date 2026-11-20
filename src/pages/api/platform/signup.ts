@@ -4,6 +4,7 @@ import { getClientIp } from "../../../lib/rate-limit.ts";
 import { signup } from "../../../platform/signup.ts";
 import { cookieValue, registrationEventId, sendCompleteRegistration } from "../../../platform/site/site.ts";
 import { notifyOperator } from "../../../platform/notify.ts";
+import { sendSellerSignupEmail } from "../../../platform/seller-email.ts";
 
 export const prerender = false;
 
@@ -66,10 +67,18 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     kind: "signup",
     storeName: typeof body.store_name === "string" ? body.store_name : null,
   });
+  // Account email: one confirmation per tenant, after activation, off the
+  // response path. `sendSellerSignupEmail` never throws and has no tracking link.
+  const confirmation = sendSellerSignupEmail(env, env.PLATFORM_DB as D1Database, {
+    tenantId: result.tenantId,
+    email: result.email,
+    storeName: typeof body.store_name === "string" ? body.store_name : null,
+  });
   if (locals.cfContext) {
     locals.cfContext.waitUntil(signal);
     locals.cfContext.waitUntil(notice);
-  } else await Promise.all([signal, notice]);
+    locals.cfContext.waitUntil(confirmation);
+  } else await Promise.all([signal, notice, confirmation]);
   // The seller host answers on the same scheme and port as this platform host (local dev keeps its port).
   const base = `${url.protocol}//${result.host}${url.port ? `:${url.port}` : ""}`;
   return Response.json(
