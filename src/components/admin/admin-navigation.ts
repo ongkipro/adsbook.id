@@ -164,13 +164,25 @@ export const adminNavGroups: AdminNavGroup[] = [
           { href: "/admin/balance", label: "Rekonsiliasi", icon: BadgeDollarSign },
         ],
       },
+      // Its own workspace, right before Pengaturan: Pengaturan's sub-list opens
+      // below Pengaturan, so this link never moves when that list opens or closes.
+      // Its pages (/admin/settings/plugins and each plugin's page beneath it)
+      // pass activeMenu="plugins"; management stays owner-only on the page and API.
+      {
+        id: "plugins",
+        href: "/admin/settings/plugins",
+        label: "Plugin",
+        description: "Fitur opsional per toko",
+        icon: Puzzle,
+        keywords: "plugin ekstensi fitur opsional kelola crm",
+      },
       {
         id: "settings",
         href: "/admin/settings",
         label: "Pengaturan",
         description: "Toko, gudang, dan akses",
         icon: Settings,
-        keywords: "settings system store domain warehouse crm access headless developer api plugin kelola whatsapp wa cs rotator nomor langganan billing bayar paket perpanjang",
+        keywords: "settings system store domain warehouse crm access headless developer api whatsapp wa cs rotator nomor langganan billing bayar paket perpanjang",
         children: [
           { href: "/admin/settings/store", label: "Toko & CS", icon: ShoppingBag },
           { href: "/admin/settings/domains", label: "Domain", icon: Globe },
@@ -180,7 +192,6 @@ export const adminNavGroups: AdminNavGroup[] = [
           { href: "/admin/settings/warehouse", label: "Gudang", icon: Warehouse },
           { href: "/admin/settings/crm", label: "Template CRM", icon: FilePenLine },
           { href: "/admin/settings/access", label: "Akses Pengguna", icon: CircleUserRound },
-          { href: "/admin/settings/plugins", label: "Plugin", icon: Puzzle },
         ],
       },
     ],

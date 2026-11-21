@@ -12,6 +12,15 @@
  * address bar) the current page's item is scrolled above the floating product
  * card at the foot of the sidebar (`bottomInset`, the menu's bottom padding).
  * Nothing about the store or the account is stored.
+ *
+ * Seller desktop sidebar only (opts in with `data-restore-pad` on its content):
+ * when a sub-list *below* the clicked link closed (leaving a Pengaturan page for
+ * Plugin or Pembayaran), the shorter menu has no room to scroll the link back
+ * under the pointer. The restore then pads the menu's foot through
+ * `--sidebar-restore-pad` on <html> — outside every React root, so nothing
+ * hydration owns changes — and keeps the link inside the clear area above the
+ * footer card even when the window got shorter. Without the opt-in (the
+ * platform console) the restore behaves exactly as before.
  */
 export const SIDEBAR_SCROLL_KEY = "adsbook:sidebar-place";
 
@@ -81,8 +90,19 @@ export const SIDEBAR_SCROLL_RESTORE = `(() => {
   const links = Array.from(content.querySelectorAll('a[href]'));
   const link = place ? links.find((a) => a.getAttribute('href') === place.href) : null;
   const current = content.querySelector('[aria-current="page"]') || content.querySelector('[data-active="true"]');
-  const max = Math.max(0, content.scrollHeight - content.clientHeight);
+  let max = Math.max(0, content.scrollHeight - content.clientHeight);
   let target = place ? (link ? offset(link).top - place.y : place.scroll) : 0;
+  if (link && content.hasAttribute('data-restore-pad')) {
+    // The clicked link goes back to its place, bounded to the clear area above the footer card.
+    const at = offset(link);
+    const inset = parseFloat(getComputedStyle(content).paddingBottom) || 0;
+    const y = Math.max(8, Math.min(place.y, content.clientHeight - Math.max(8, inset) - (at.bottom - at.top)));
+    target = at.top - y;
+    if (target > max) {
+      document.documentElement.style.setProperty('--sidebar-restore-pad', Math.ceil(target - max) + 'px');
+      max = Math.max(0, content.scrollHeight - content.clientHeight);
+    }
+  }
   target = Math.min(Math.max(0, target), max);
   if (current && !link) {
     const item = offset(current);

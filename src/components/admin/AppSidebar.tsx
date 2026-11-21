@@ -83,7 +83,8 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 pb-28 group-data-[collapsible=icon]:pb-28">
+      {/* data-restore-pad: the scroll restore may pad the full desktop menu's foot (src/lib/sidebar-scroll.ts); the icon rail keeps pb-28. */}
+      <SidebarContent data-restore-pad="" className="px-2 pb-[calc(7rem+var(--sidebar-restore-pad,0px))] group-data-[collapsible=icon]:pb-28">
         {restricted && (
           <SidebarGroup className="py-1">
             <SidebarGroupLabel className="mb-0.5 h-6 px-2 text-xs font-medium uppercase tracking-wider text-slate-400">
