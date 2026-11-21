@@ -1084,6 +1084,50 @@ test("AUTH §1.3: adsbook.id/masuk signs an owner or a staff member into the rig
   assert.equal((await login("alfa@contoh.example", "kata-sandi-panjang-1", "2.2.2.2")).status, 200, "the owner from another network");
 });
 
+test("seller password floor: a profile change and owner-managed staff passwords refuse 9 characters and accept 10, at the API; an older shorter password still signs in", async () => {
+  const accessRoute = await import("../pages/api/admin/access.ts");
+  const profileRoute = await import("../pages/api/admin/profile.ts");
+  const { storeLogin } = await import("./login.ts");
+  const { hashAdminPassword } = await import("../lib/admin-credentials.ts");
+  const { stores, env, run } = await signupHarness();
+  const a = await run("toko-sandi", {}, "sandi@contoh.example");
+  if (a.status !== 201) return assert.fail("signup");
+  const call = async (route: { [method: string]: unknown }, method: string, admin: { username: string; role: string }, body: unknown) => {
+    const request = new Request("https://toko-sandi.adsbook.my.id/api/admin/x", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const locals = { admin, tenantDb: createTenantDb(stores.get(a.tenantId).stub), runtimeEnv: env, tenantContext: { tenantId: a.tenantId } };
+    const response = await (route[method] as (context: never) => Promise<Response>)({ request, locals, cookies: { delete: () => undefined } } as never);
+    return { status: response.status, body: (await response.json()) as Record<string, any> };
+  };
+  const owner = { username: "sandi@contoh.example", role: "owner" };
+  const refused = "Password baru harus berisi 10–128 karakter.";
+  const hashOf = (id: number) => (stores.get(a.tenantId).storage.db.prepare("SELECT password_hash FROM admin_credentials WHERE id = ?").get(id) as { password_hash: string }).password_hash;
+
+  // Staff create.
+  const staff = { username: "kasir_sandi", display_name: "Kasir", email: "", role: "customer_service" };
+  assert.deepEqual(await call(accessRoute, "POST", owner, { ...staff, password: "sembilan9" }), { status: 422, body: { success: false, error: refused } });
+  const created = await call(accessRoute, "POST", owner, { ...staff, password: "sepuluh-10" });
+  assert.equal(created.status, 201);
+  const staffId = Number(created.body.data.id);
+
+  // Owner resets the staff password.
+  const before = hashOf(staffId);
+  assert.deepEqual(await call(accessRoute, "PATCH", owner, { id: staffId, password: "pendek-99" }), { status: 422, body: { success: false, error: refused } });
+  assert.equal(hashOf(staffId), before, "a refused reset changes nothing");
+  assert.equal((await call(accessRoute, "PATCH", owner, { id: staffId, password: "sepuluh-11" })).status, 200);
+
+  // The owner's own profile change.
+  const ownerBefore = hashOf(1);
+  const profile = (next: string) => ({ current_password: "kata-sandi-panjang-1", username: owner.username, new_password: next, confirm_password: next });
+  assert.deepEqual(await call(profileRoute, "PUT", owner, profile("sembilan9")), { status: 400, body: { success: false, error: refused } });
+  assert.equal(hashOf(1), ownerBefore, "a refused change keeps the password");
+  assert.equal((await call(profileRoute, "PUT", owner, profile("sepuluh-12"))).status, 200);
+
+  // A password set before the floor moved still signs in through the real login path.
+  stores.get(a.tenantId).storage.db.prepare("UPDATE admin_credentials SET password_hash = ? WHERE id = 1").run(await hashAdminPassword("lama1234"));
+  const deps = { openStore: async (tenantId: string) => createTenantDb(stores.get(tenantId).stub) };
+  assert.equal((await storeLogin(env, { identifier: owner.username, password: "lama1234" }, "198.51.100.77", deps)).status, 200);
+});
+
 test("AUTH §1.2 (review finding 2): the registry follows the store's credentials — removals free names, renames keep the owner email", async () => {
   const { storeLogin } = await import("./login.ts");
   const accessRoute = await import("../pages/api/admin/access.ts");

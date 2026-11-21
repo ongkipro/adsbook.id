@@ -737,10 +737,10 @@ export function AccessManager() {
                     id="access-password"
                     required
                     type={showPassword ? "text" : "password"}
-                    minLength={8}
+                    minLength={10}
                     maxLength={128}
                     autoComplete="new-password"
-                    placeholder="Minimal 8 karakter"
+                    placeholder="Minimal 10 karakter"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className="pr-9 font-mono"
@@ -838,7 +838,7 @@ export function AccessManager() {
               <Input
                 id="access-reset-password"
                 required
-                minLength={8}
+                minLength={10}
                 value={newPasswordValue}
                 onChange={(e) => setNewPasswordValue(e.target.value)}
                 className="font-mono"
