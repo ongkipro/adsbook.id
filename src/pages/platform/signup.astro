@@ -8,9 +8,11 @@ import AuthSplit from '../../platform/site/AuthSplit.astro';
 
 export const prerender = false;
 
-// AUTH-MINIMALIST-STEP-UX-SPEC §4: signup as a three-step wizard inside one
-// form (store, owner, security), so every step fits one screen and a password
-// manager still sees the email and the new password together.
+// AUTH-MINIMALIST-STEP-UX-SPEC §4 and T-58 (PR-11): signup as a four-step wizard
+// inside one form (store, owner, security, mailbox code), so every step fits one
+// screen and a password manager still sees the email and the new password
+// together. Nothing is created until the owner types the code mailed to the exact
+// address: step 3 asks the server to send it, step 4 sends it back with the rest.
 const env = (getRuntimeEnv(Astro.locals) ?? {}) as Record<string, unknown>;
 const siteKey = typeof env.TURNSTILE_SITE_KEY === 'string' ? env.TURNSTILE_SITE_KEY : '';
 const localStandIn = siteKey === 'local-stand-in';
@@ -27,8 +29,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   <AuthSplit active="daftar">
     <div class="wizard-head">
       <button id="stepBack" type="button" class="step-back" hidden>← Kembali</button>
-      <div class="step-bar" aria-hidden="true"><span data-bar="1"></span><span data-bar="2"></span><span data-bar="3"></span></div>
-      <p class="step-count" aria-live="polite">Langkah <span id="stepNow">1</span> / 3</p>
+      <div class="step-bar" aria-hidden="true"><span data-bar="1"></span><span data-bar="2"></span><span data-bar="3"></span><span data-bar="4"></span></div>
+      <p class="step-count" aria-live="polite">Langkah <span id="stepNow">1</span> / 4</p>
     </div>
 
     {chosenPlan && (
@@ -57,7 +59,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       data-paket={chosenPlan?.code ?? ''}
     >
       <!-- Step 1 — the store: what it sells and its address. -->
-      <section class="step" data-step-panel="1" aria-label="Langkah 1 dari 3: jenis dan alamat toko">
+      <section class="step" data-step-panel="1" aria-label="Langkah 1 dari 4: jenis dan alamat toko">
         <fieldset class="catalog-choice">
           <legend>Fokus katalog awal</legend>
           <div class="catalog-options">
@@ -91,7 +93,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       </section>
 
       <!-- Step 2 — the store's name and the owner: the sign-in email and an optional WhatsApp. -->
-      <section class="step" data-step-panel="2" aria-label="Langkah 2 dari 3: identitas dan kontak pemilik" hidden>
+      <section class="step" data-step-panel="2" aria-label="Langkah 2 dari 4: identitas dan kontak pemilik" hidden>
         <div class="field">
           <label for="storeName">Nama toko</label>
           <input id="storeName" name="store_name" type="text" required maxlength="80" autocomplete="organization" placeholder="Contoh: Herbal Nusantara" aria-describedby="storeNameError" />
@@ -115,8 +117,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
         <button id="toStep3" type="submit" class="submit-btn">Lanjut ke Keamanan →</button>
       </section>
 
-      <!-- Step 3 — security and launch. -->
-      <section class="step" data-step-panel="3" aria-label="Langkah 3 dari 3: keamanan dan peluncuran" hidden>
+      <!-- Step 3 — security. The mailbox code is requested from here; nothing is created yet. -->
+      <section class="step" data-step-panel="3" aria-label="Langkah 3 dari 4: keamanan akun" hidden>
         <div class="field">
           <label for="password">Password</label>
           <div class="pw-box">
@@ -136,12 +138,35 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           </label>
           <p id="termsError" class="field-error" hidden></p>
         </div>
+        <p id="sendTurnstileError" class="field-error" hidden role="alert"></p>
+        <button id="sendCode" type="submit" class="submit-btn">Kirim kode ke email →</button>
+      </section>
+
+      <!-- Step 4 — the mailbox: the 8-digit code sent to the owner's email. It lives in memory only. -->
+      <section class="step" data-step-panel="4" aria-label="Langkah 4 dari 4: verifikasi email" hidden>
+        <div class="field">
+          <label for="emailCode">Kode verifikasi</label>
+          <input id="emailCode" class="code-input" name="email_code" type="text" required inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" placeholder="8 angka" aria-describedby="codeHint emailCodeError codeNote" />
+          <p id="codeHint" class="field-hint code-hint"></p>
+          <p id="emailCodeError" class="field-error" hidden></p>
+          <!-- A live region without a status role: the page's one role=status is the progress note. -->
+          <p id="codeNote" class="field-hint code-note" aria-live="polite"></p>
+        </div>
+        <div class="code-actions">
+          <button id="resendCode" type="button" class="link-btn" disabled>Kirim ulang kode</button>
+          <span id="resendWait" class="code-wait"></span>
+          <button id="changeEmail" type="button" class="link-btn">Ganti email</button>
+        </div>
         <p id="turnstileError" class="field-error" hidden role="alert"></p>
         <button id="submitSignup" type="submit" class="submit-btn">Buat Toko Gratis →</button>
+      </section>
+
+      <!-- Shared by steps 3 and 4: both calls carry a bot-check token. -->
+      <div id="stepFoot" class="step-foot" hidden>
         <p id="securityStatus" class="security-line" data-state={localStandIn || !siteKey ? 'ok' : 'pending'} aria-live="polite" hidden={!siteKey}>
           {localStandIn ? 'Koneksi terverifikasi · proteksi keamanan aktif' : 'Memverifikasi koneksi aman…'}
         </p>
-      </section>
+      </div>
     </form>
 
     <!-- Outside the form: while a signup waits, the steps are inert and the form is busy,
@@ -200,19 +225,37 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   const stepNow = document.getElementById('stepNow') as HTMLElement;
   const stepLead = document.getElementById('stepLead') as HTMLElement;
   const security = document.getElementById('securityStatus') as HTMLElement;
+  const sendCode = document.getElementById('sendCode') as HTMLButtonElement;
+  const emailCodeInput = document.getElementById('emailCode') as HTMLInputElement;
+  const codeHint = document.getElementById('codeHint') as HTMLElement;
+  const codeNote = document.getElementById('codeNote') as HTMLElement;
+  const resendCode = document.getElementById('resendCode') as HTMLButtonElement;
+  const resendWait = document.getElementById('resendWait') as HTMLElement;
+  const changeEmail = document.getElementById('changeEmail') as HTMLButtonElement;
+  const stepFoot = document.getElementById('stepFoot') as HTMLElement;
 
   const suffix = form.dataset.suffix || 'adsbook.my.id';
   const paket = form.dataset.paket || '';
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let pending = false;
-  // The button's resting label, restored after every refused attempt.
+  // The buttons' resting labels, restored after every refused attempt.
   const SUBMIT_LABEL = 'Buat Toko Gratis →';
+  const SEND_LABEL = 'Kirim kode ke email →';
+  const RESEND_LABEL = 'Kirim ulang kode';
+  // T-58, the mailbox code. The server owns the real limits; these only shape the screen.
+  const CODE_TTL_MINUTES = 10;
+  // A held code is reused for a step back and forth, never close to its expiry.
+  const CODE_REUSE_MS = (CODE_TTL_MINUTES - 1) * 60_000;
+  const RESEND_COOLDOWN_MS = 60_000;
+  const CODE_FORMAT_ERROR = 'Masukkan 8 angka kode dari email.';
+  const CODE_MISSING = 'Kode belum dikirim untuk email ini. Kirim kode dulu.';
+  const CODE_SEND_FAILED = 'Kode belum bisa dikirim. Coba lagi.';
   // How long Continue waits for an address check before moving on (the server checks again at signup).
   const SLUG_DECISION_MS = 1200;
   const SLUG_NOT_CONFIRMED = 'Belum sempat dicek; diperiksa lagi saat toko dibuat.';
   const SLUG_NOTE_PENDING = 'Alamat toko belum sempat dicek; diperiksa lagi saat toko dibuat.';
   const SLUG_NOTE_TAKEN = 'Alamat toko ternyata tidak tersedia; kembali ke langkah 1 untuk menggantinya.';
-  const STEP_LEADS = ['Jenis dan alamat toko', 'Nama toko dan kontak pemilik', 'Keamanan dan peluncuran'];
+  const STEP_LEADS = ['Jenis dan alamat toko', 'Nama toko dan kontak pemilik', 'Keamanan akun', 'Verifikasi email'];
 
   // ---- steps -----------------------------------------------------------------
   let step = 1;
@@ -225,6 +268,8 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     stepNow.textContent = String(next);
     stepLead.textContent = STEP_LEADS[next - 1];
     stepBack.hidden = next === 1;
+    // Both calls that carry a bot-check token (steps 3 and 4) show its status and its errors.
+    stepFoot.hidden = next < 3;
     syncSlugNote();
     if (!moveFocus) return;
     const target = focus ?? panels[next - 1].querySelector<HTMLElement>('input:not([type="radio"])');
@@ -404,6 +449,16 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     ruleDiff.dataset.ok = String(diffOk);
   };
 
+  const isButton = (element: HTMLElement) => element instanceof HTMLButtonElement;
+  const turnstileErrorStep3 = document.getElementById('sendTurnstileError') as HTMLElement;
+  const turnstileErrorStep4 = document.getElementById('turnstileError') as HTMLElement;
+  /** Both steps' bot-check errors: a fresh token, or a new call, answers whichever was showing. */
+  const clearTurnstileErrors = () => {
+    for (const error of [turnstileErrorStep3, turnstileErrorStep4]) {
+      error.textContent = '';
+      error.hidden = true;
+    }
+  };
   const fields: Record<string, { input: HTMLElement; error: HTMLElement; step: number }> = {
     storeName: { input: nameInput, error: document.getElementById('storeNameError') as HTMLElement, step: 2 },
     slug: { input: slugInput, error: document.getElementById('slugError') as HTMLElement, step: 1 },
@@ -411,7 +466,20 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     whatsapp: { input: whatsappInput, error: document.getElementById('whatsappError') as HTMLElement, step: 2 },
     password: { input: password, error: document.getElementById('passwordError') as HTMLElement, step: 3 },
     terms: { input: document.getElementById('terms') as HTMLElement, error: document.getElementById('termsError') as HTMLElement, step: 3 },
-    turnstile: { input: submit, error: document.getElementById('turnstileError') as HTMLElement, step: 3 },
+    emailCode: { input: emailCodeInput, error: document.getElementById('emailCodeError') as HTMLElement, step: 4 },
+    // The bot check answers for whichever call is open: the code request (step 3) or, on step 4,
+    // the resend and the signup itself. Each step keeps its error above its own button.
+    turnstile: {
+      get input(): HTMLElement {
+        return step >= 4 ? submit : sendCode;
+      },
+      get error(): HTMLElement {
+        return step >= 4 ? turnstileErrorStep4 : turnstileErrorStep3;
+      },
+      get step(): number {
+        return step >= 4 ? 4 : 3;
+      },
+    },
   };
 
   const clearFieldError = (key: string) => {
@@ -419,7 +487,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     if (!entry) return;
     entry.error.textContent = '';
     entry.error.hidden = true;
-    if (entry.input !== submit) entry.input.removeAttribute('aria-invalid');
+    if (!isButton(entry.input)) entry.input.removeAttribute('aria-invalid');
   };
 
   // The store's name never rewrites its address: the address is chosen on step 1.
@@ -443,8 +511,16 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   emailInput.addEventListener('input', () => {
     clearFieldError('email');
     updatePasswordChecklist();
+    dropStaleChallenge();
   });
   whatsappInput.addEventListener('input', () => clearFieldError('whatsapp'));
+  emailCodeInput.addEventListener('input', () => {
+    // Digits only (a pasted "1234 5678" or "123-456-78" still fits), at most eight.
+    const digits = emailCodeInput.value.replace(/\D+/g, '').slice(0, 8);
+    if (emailCodeInput.value !== digits) emailCodeInput.value = digits;
+    clearFieldError('emailCode');
+    codeNote.textContent = '';
+  });
   password.addEventListener('input', () => {
     clearFieldError('password');
     updatePasswordChecklist();
@@ -464,12 +540,17 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     pending = false;
     submit.disabled = false;
     submit.textContent = SUBMIT_LABEL;
+    sendCode.disabled = false;
+    sendCode.textContent = SEND_LABEL;
+    syncResend();
     form.setAttribute('aria-busy', 'false');
     progressNote.hidden = true;
   });
 
+  // The button the open call came from, named in the bot-check copy: the code request, its resend, or the signup.
+  let callLabel = 'Buat Toko Gratis';
   // The bot check failing at the server is recoverable here: a fresh token replaces the spent one.
-  const TOKEN_RETRY = 'Verifikasi keamanan perlu diulang. Tunggu tanda koneksi terverifikasi, lalu tekan Buat Toko Gratis lagi.';
+  const tokenRetry = () => `Verifikasi keamanan perlu diulang. Tunggu tanda koneksi terverifikasi, lalu tekan ${callLabel} lagi.`;
   let shownErrors: { message: string; errors: Record<string, string> } | null = null;
   const renderSummary = () => {
     if (!shownErrors) return void (summary.hidden = true);
@@ -480,7 +561,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   };
   /** A fresh token answers the bot-check error alone; other errors stay as they are. */
   const clearTokenError = () => {
-    clearFieldError('turnstile');
+    clearTurnstileErrors();
     if (!shownErrors?.errors.turnstile) return;
     const { turnstile: _spent, ...rest } = shownErrors.errors;
     shownErrors = Object.values(rest).some(Boolean) ? { message: 'Pendaftaran belum selesai.', errors: rest } : null;
@@ -491,7 +572,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   const showErrors = (message: string, rawErrors: Record<string, string>, suggestions: string[] = []) => {
     const errors = { ...rawErrors };
     if (errors.turnstile) {
-      errors.turnstile = TOKEN_RETRY;
+      errors.turnstile = tokenRetry();
       // The server's own words ask for a reload; here a fresh token is all it takes.
       if (Object.keys(errors).filter((key) => errors[key]).length === 1) message = '';
     }
@@ -500,7 +581,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       const text = errors[name] || '';
       field.error.textContent = text;
       field.error.hidden = !text;
-      if (field.input !== submit) {
+      if (!isButton(field.input)) {
         if (text) field.input.setAttribute('aria-invalid', 'true');
         else field.input.removeAttribute('aria-invalid');
       }
@@ -515,7 +596,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     if (suggestions.length) renderSuggestions(suggestions);
     shownErrors = { message, errors };
     renderSummary();
-    if (first) showStep(first.step, first.input === submit ? null : first.input);
+    if (first) showStep(first.step, isButton(first.input) ? null : first.input);
     else summary.focus();
   };
   const stepError = (key: string, text: string) => {
@@ -561,6 +642,15 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     if (current === 2) {
       if (!nameInput.value.trim()) return stepError('storeName', 'Isi nama toko.'), false;
       if (!emailInput.value.trim() || !emailInput.checkValidity()) return stepError('email', 'Masukkan email yang valid, contoh: nama@email.com.'), false;
+      return true;
+    }
+    if (current === 3) {
+      // Mirrors planSignup (src/platform/signup.ts; the server stays the authority). Asked here, before
+      // the code is mailed, so a password or terms refusal can never cost the owner a code.
+      const pw = password.value;
+      if (pw.length < 10 || pw.length > 128) return stepError('password', 'Password 10–128 karakter.'), false;
+      if (pw.toLowerCase() === normalizedEmail()) return stepError('password', 'Password tidak boleh sama dengan email.'), false;
+      if (!(document.getElementById('terms') as HTMLInputElement).checked) return stepError('terms', 'Setujui syarat & ketentuan untuk melanjutkan.'), false;
       return true;
     }
     return true;
@@ -655,8 +745,128 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     pending = false;
     submit.disabled = false;
     submit.textContent = SUBMIT_LABEL;
+    sendCode.disabled = false;
+    sendCode.textContent = SEND_LABEL;
+    resendCode.textContent = RESEND_LABEL;
+    syncResend();
     form.setAttribute('aria-busy', 'false');
     progressNote.hidden = true;
+  };
+
+  // ---- the mailbox code (T-58, PR-11) -------------------------------------------------------
+  // The challenge handle lives in this variable alone: never in storage, a cookie, the URL or the
+  // DOM, so a reload starts the wizard over and nothing of it can be resumed from the page.
+  // `email` is the normalised address the code is bound to (compared on every use); `shown` is it as typed.
+  let challenge: { id: string; email: string; shown: string; at: number } | null = null;
+  const normalizedEmail = () => emailInput.value.trim().toLowerCase();
+  /** Once the address is edited, a code held for the old one is dropped with its typed digits; nothing re-binds it. */
+  function dropStaleChallenge() {
+    if (challenge && challenge.email !== normalizedEmail()) dropChallenge();
+  }
+  /** The code is gone (spent, or bound to an address that is no longer the one typed): nothing of it is reused. */
+  function dropChallenge() {
+    challenge = null;
+    emailCodeInput.value = '';
+    clearFieldError('emailCode');
+    codeNote.textContent = '';
+  }
+  /** A code already sent to this address (same normalised address, not near its expiry) is used again, not re-sent. */
+  const heldChallenge = () =>
+    challenge && challenge.email === normalizedEmail() && Date.now() - challenge.at < CODE_REUSE_MS ? challenge : null;
+
+  // The resend button waits out a short cooldown. Read from the clock on every tick, so a throttled
+  // tab or a sleeping laptop still shows the true remainder. The server's own caps are the limit.
+  let resendAt = 0;
+  let resendTimer = 0;
+  function syncResend() {
+    const left = Math.ceil((resendAt - Date.now()) / 1000);
+    if (left > 0) {
+      resendWait.textContent = `Bisa kirim ulang dalam ${left} detik`;
+      if (!resendTimer) resendTimer = window.setInterval(syncResend, 1000);
+    } else {
+      window.clearInterval(resendTimer);
+      resendTimer = 0;
+      resendWait.textContent = '';
+    }
+    resendCode.disabled = pending || left > 0;
+  }
+
+  const showCodeStep = (note: string) => {
+    codeHint.textContent = `Kami mengirim kode 8 angka ke ${challenge?.shown ?? ''}. Berlaku ${CODE_TTL_MINUTES} menit; cek juga folder spam.`;
+    codeNote.textContent = note;
+    showStep(4, emailCodeInput);
+  };
+
+  /**
+   * Every call that reaches the server carries a bot-check token, and a token is single use.
+   * One still in flight is waited for (4 seconds at most); without one nothing is sent and
+   * the call's button is restored. `label` is that button's resting text, named in the retry copy.
+   */
+  const ensureToken = async (button: HTMLButtonElement, label: string): Promise<boolean> => {
+    callLabel = label.replace(/ →$/, '');
+    if (turnstileToken) return true;
+    button.textContent = 'Menyelesaikan verifikasi keamanan…';
+    progressNote.textContent = 'Menyelesaikan verifikasi keamanan…';
+    progressNote.hidden = false;
+    await awaitToken();
+    if (turnstileToken) return true;
+    // No request without a token: it would only spend one of the hour's attempts. The
+    // check stays as it is (never reset here), so a visitor solving it keeps their progress.
+    restoreSubmit();
+    const error = fields.turnstile.error;
+    error.textContent = turnstileFailed
+      ? LOAD_FAILED
+      : `Verifikasi keamanan belum selesai. Selesaikan pemeriksaan di bawah formulir bila muncul, lalu tekan ${callLabel} lagi.`;
+    error.hidden = false;
+    // Focus went with the inert step; it returns to the button, unless the seller is
+    // working in the check itself.
+    if (!widget?.contains(document.activeElement)) button.focus();
+    return false;
+  };
+
+  /** Step 3 and the resend: ask the server to mail a code to this address. Nothing is created by it. */
+  const requestCode = async (resend: boolean) => {
+    pending = true;
+    // What is mailed is what the seller confirmed with this click, read before any wait.
+    const email = emailInput.value.trim();
+    const button = resend ? resendCode : sendCode;
+    lockForm(true);
+    button.disabled = true;
+    syncResend();
+    form.setAttribute('aria-busy', 'true');
+    summary.hidden = true;
+    clearTurnstileErrors();
+    if (!(await ensureToken(button, resend ? RESEND_LABEL : SEND_LABEL))) return;
+    // The request is on its way: the cooldown starts now, whatever comes back (the server's caps count attempts, not successes).
+    resendAt = Date.now() + RESEND_COOLDOWN_MS;
+    button.textContent = resend ? 'Mengirim ulang…' : 'Mengirim kode…';
+    progressNote.textContent = `Mengirim kode ke ${email}…`;
+    progressNote.hidden = false;
+    try {
+      const response = await fetch('/api/platform/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request_email_code', email, turnstile_token: turnstileToken }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload.success && typeof payload.challenge_id === 'string' && payload.challenge_id) {
+        challenge = { id: payload.challenge_id, email: email.toLowerCase(), shown: email, at: Date.now() };
+        emailCodeInput.value = '';
+        clearFieldError('emailCode');
+        restoreSubmit();
+        showCodeStep(resend ? `Kode baru sudah dikirim ke ${email}. Pakai kode terbaru.` : '');
+        return;
+      }
+      // A refusal or a malformed answer: the code held before (if any) is untouched.
+      restoreSubmit();
+      showErrors(payload.error || CODE_SEND_FAILED, payload.errors || {});
+    } catch {
+      restoreSubmit();
+      showErrors('Koneksi terputus. Coba lagi.', {});
+    } finally {
+      // The request went out: its token is spent whatever came back, and the check is reset for the next call.
+      spendToken();
+    }
   };
 
   form.addEventListener('submit', async (event) => {
@@ -672,36 +882,37 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       }
       return;
     }
+    if (step === 3) {
+      pending = true;
+      const ready = await stepReady(3).finally(() => (pending = false));
+      if (!ready) return;
+      summary.hidden = true;
+      // Back from step 4 and forward again with the same address: the code already sent is still the one.
+      if (heldChallenge()) return void showCodeStep('');
+      await requestCode(false);
+      return;
+    }
+    // Step 4: the code is checked on the screen before a request is spent on it.
+    const code = emailCodeInput.value.trim();
+    const held = challenge && challenge.email === normalizedEmail() ? challenge : null;
+    if (!held) {
+      resendAt = 0;
+      syncResend();
+      return void stepError('emailCode', CODE_MISSING);
+    }
+    if (!/^\d{8}$/.test(code)) return void stepError('emailCode', CODE_FORMAT_ERROR);
     pending = true;
     // What is sent is what the seller confirmed with this click, read before any wait.
     const values = new FormData(form);
     const mode = catalogMode();
     lockForm(true);
     submit.disabled = true;
+    syncResend();
     form.setAttribute('aria-busy', 'true');
     summary.hidden = true;
-    clearFieldError('turnstile');
+    clearTurnstileErrors();
 
-    if (!turnstileToken) {
-      submit.textContent = 'Menyelesaikan verifikasi keamanan…';
-      progressNote.textContent = 'Menyelesaikan verifikasi keamanan…';
-      progressNote.hidden = false;
-      await awaitToken();
-      if (!turnstileToken) {
-        // No request without a token: it would only spend one of the hour's attempts. The
-        // check stays as it is (never reset here), so a visitor solving it keeps their progress.
-        restoreSubmit();
-        const error = fields.turnstile.error;
-        error.textContent = turnstileFailed
-          ? LOAD_FAILED
-          : 'Verifikasi keamanan belum selesai. Selesaikan pemeriksaan di bawah formulir bila muncul, lalu tekan Buat Toko Gratis lagi.';
-        error.hidden = false;
-        // Focus went with the inert step; it returns to the button, unless the seller is
-        // working in the check itself.
-        if (!widget?.contains(document.activeElement)) submit.focus();
-        return;
-      }
-    }
+    if (!(await ensureToken(submit, SUBMIT_LABEL))) return;
     submit.textContent = 'Membuat toko…';
     let stageIdx = 0;
     progressNote.textContent = PROVISION_STAGES[0];
@@ -730,12 +941,21 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
           catalog_mode: mode,
           turnstile_token: turnstileToken,
           event_id: eventId,
+          challenge_id: held.id,
+          email_code: code,
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) {
         // Unlocked first: the error moves focus into a step that must be usable.
         restoreSubmit();
+        // A refusal about the store, the owner or the password sends the seller back to an earlier
+        // step. The server may already have spent the code by then (it is claimed before the store
+        // is reserved), so the page does not offer it again: the next step 3 mails a new one. A
+        // wrong or expired code, a bot-check refusal or a general failure keeps the seller on this
+        // step with the same challenge.
+        const refused = (payload.errors || {}) as Record<string, string>;
+        if (Object.entries(refused).some(([key, text]) => text && key !== 'emailCode' && key !== 'turnstile')) dropChallenge();
         showErrors(
           payload.error || 'Pendaftaran gagal.',
           payload.errors || {},
@@ -746,6 +966,9 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
       }
 
       succeeded = true;
+      // The code is spent and the handle is not kept: nothing of the verification outlives the signup.
+      challenge = null;
+      emailCodeInput.value = '';
       const data = payload.data as { store_url: string; login_url: string; handoff_url: string | null; handoff_token: string | null; email: string };
       const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
       try {
@@ -797,6 +1020,15 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
     }
   });
 
+  resendCode.addEventListener('click', () => {
+    if (!pending) void requestCode(true);
+  });
+  // A wrong address is corrected on step 2; the code held for the old one is never used for the new one.
+  changeEmail.addEventListener('click', () => {
+    summary.hidden = true;
+    showStep(2, emailInput);
+  });
+
   showStep(1, null, false);
   syncStoreContext();
   form.dataset.ready = '1';
@@ -809,7 +1041,7 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   .step-back { grid-column: 1; border: 0; background: none; padding: 0.25rem 0; min-height: 28px; color: var(--slate); font-size: 0.85rem; font-weight: 700; cursor: pointer; }
   .step-back:hover { color: var(--accent); }
   .step-back[hidden] + .step-bar { grid-column: 1 / 3; }
-  .step-bar { grid-column: 2; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .step-bar { grid-column: 2; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .step-bar span { height: 3px; border-radius: 3px; background: #e2e8f0; transition: background-color 240ms cubic-bezier(0.22, 1, 0.36, 1); }
   .step-bar span[data-on="true"] { background: var(--accent); }
   .step-count { grid-column: 3; font: 600 0.75rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--slate); white-space: nowrap; }
@@ -906,6 +1138,23 @@ if (Astro.url.searchParams.get('masuk') === '1') return Astro.redirect('/masuk',
   .security-line[data-state="ok"]::before { border-color: #16a34a; background: #16a34a; }
   .security-line[data-state="error"] { color: #be123c; }
   .progress-note { text-align: center; font-size: 0.8rem; color: var(--ink-muted); font-weight: 600; }
+
+  /* T-58 mailbox code (step 4): one numeric field, a hint naming the address, resend and correction as quiet links. */
+  .step-foot { display: grid; gap: 0.5rem; margin-top: 0.6rem; }
+  .field input.code-input[type="text"] { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.32em; font-variant-numeric: tabular-nums; }
+  /* The spaced digits are for typed digits only; the hint text keeps normal spacing and weight. */
+  .field input.code-input::placeholder { letter-spacing: normal; font-family: var(--body); font-size: 1rem; font-weight: 500; }
+  .code-hint { overflow-wrap: anywhere; }
+  .code-note:empty { display: none; }
+  .code-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.1rem 1.25rem; }
+  /* The cooldown reads under the two actions, and takes no room when there is none. */
+  .code-wait { order: 3; flex-basis: 100%; }
+  .code-wait:empty { display: none; }
+  .link-btn { appearance: none; border: 0; background: none; padding: 0.35rem 0; min-height: 36px; color: var(--accent); font: 700 0.85rem/1.2 var(--body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .link-btn:hover:not(:disabled) { color: var(--accent-hover); }
+  .link-btn:disabled { color: var(--ink-muted); text-decoration: none; cursor: default; }
+  .link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .code-wait { font-size: 0.78rem; color: var(--ink-muted); }
   /* The check takes no room unless a visitor must interact with it. */
   .turnstile-slot { width: 100%; }
   .turnstile-slot:not(:empty) { margin-top: 0.75rem; }

@@ -9,12 +9,16 @@
  *   refuses anything younger);
  * - `tenant_usage_daily` older than 13 months;
  * - handoff tokens 7 days past their expiry;
+ * - signup email challenges once they no longer count toward their address's
+ *   hourly send cap (T-58; `deleteRetiredChallenges`);
  * - custom hostnames still `pending` 7 days after they were added, deleted at
  *   Cloudflare first (a pending hostname still counts toward usage), then
  *   revoked here;
  * - tenants whose `purge_after` has passed move to `purging`, which the purge
  *   pipeline (T-29) carries on from.
  */
+import { deleteRetiredChallenges } from "./signup-verification.ts";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Deletes one Cloudflare custom hostname by id; T-25 supplies the real client. */
@@ -24,6 +28,7 @@ export type PlatformJobResult = {
   tenantEvents: number;
   usageRows: number;
   handoffTokens: number;
+  signupChallenges: number;
   staleHostnames: number;
   purgesStarted: number;
   hostnameReapSkipped: boolean;
@@ -87,6 +92,10 @@ export async function runPlatformJobs(
     ),
   );
 
+  const signupChallenges = await step("platform-job-signup-challenges-failed", async () =>
+    changes(await deleteRetiredChallenges(platformDb, now.getTime(), JOB_BATCH).run()),
+  );
+
   const hostnameReapSkipped = !deleteCustomHostname;
   const staleHostnames = deleteCustomHostname
     ? await step("platform-job-hostnames-failed", () => reapStaleHostnames(platformDb, now, deleteCustomHostname))
@@ -127,7 +136,7 @@ export async function runPlatformJobs(
     return started;
   });
 
-  return { tenantEvents, usageRows, handoffTokens, staleHostnames, purgesStarted, hostnameReapSkipped };
+  return { tenantEvents, usageRows, handoffTokens, signupChallenges, staleHostnames, purgesStarted, hostnameReapSkipped };
 }
 
 /**

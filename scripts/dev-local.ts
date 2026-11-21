@@ -21,7 +21,9 @@
  *                id set, the browser loads Meta's script for real.
  *   --ip=<addr>  listen on this address instead of localhost — e.g. the
  *                machine's Tailscale IP, to open the store from another
- *                device on the tailnet. Providers stay on 127.0.0.1.
+ *                device on the tailnet. Providers stay on 127.0.0.1, and
+ *                the Local Explorer (including captured email) is disabled
+ *                on non-loopback listeners.
  *
  * Nothing here is read by a deploy: the env file lives under `.wrangler/`
  * (ignored) and is empty on purpose, so a developer's own `.env` or
@@ -147,7 +149,14 @@ const worker = spawn(
     "--test-scheduled",
     "--show-interactive-dev-session=false",
   ],
-  { cwd: root, stdio: "inherit" },
+  {
+    cwd: root,
+    stdio: "inherit",
+    // The Explorer trusts HTTP headers, not the remote peer. Only expose it on loopback.
+    env: !host || ["127.0.0.1", "::1", "localhost"].includes(host)
+      ? process.env
+      : { ...process.env, X_LOCAL_EXPLORER: "false" },
+  },
 );
 
 console.log(`

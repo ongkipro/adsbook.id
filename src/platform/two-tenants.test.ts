@@ -81,7 +81,7 @@ const { loadGoogleAdsOfflineConfig } = await import("../lib/google-ads-offline.t
 const autolarisWebhookRoute = await import("../pages/api/webhooks/autolaris/[token].ts");
 const { issueWebhookToken } = await import("./webhook-secrets.ts");
 const { probeAnswer } = await import("./hostnames.ts");
-const { signup, TERMS_VERSION } = await import("./signup.ts");
+const { signup: signupOnly, requestSignupEmailCode, TERMS_VERSION } = await import("./signup.ts");
 const { runPurges, requestStoreRemoval, cancelStoreRemoval, PURGE_DRAIN_MS, POST_PURGE_SWEEP_BATCH } = await import("./purge.ts");
 const { issueHandoff, prepareHandoffRequest, HANDOFF_ORIGIN_HEADER } = await import("./handoff.ts");
 const { RESERVED_SLUGS, SELLER_ZONE_RECORDS } = await import("./slugs.ts");
@@ -839,11 +839,41 @@ test("API-3 and ISO-4: each OpenAPI document names its own tenant's host, and a 
 
 // ---------------------------------------------------------------- T-26 ----
 
+// T-58: the draft challenge table, until the supervisor allocates its migration ID.
+const SIGNUP_KEY_SECRET = "platform-auth-secret-for-tests-0123456789";
+
+/**
+ * T-58: every signup in these tests passes the same mailbox gate as production.
+ * The code is requested through `requestSignupEmailCode` with an in-memory
+ * transport and read back from the mail it sent; there is no bypass. A code
+ * request that does not answer 200 (taken email, failed Turnstile, ...) is
+ * the signup's answer. Each address's request is spaced past the resend gap.
+ */
+const signupMailbox = new Map<string, string>();
+const signupSpacing = new Map<string, number>();
+const memoryTransport = async (message: { to: string; text: string }) => {
+  const code = message.text.match(/^(\d{8})$/m)?.[1];
+  if (code) signupMailbox.set(message.to, code);
+  return { messageId: "memory" };
+};
+async function signup(env: Record<string, unknown>, input: Parameters<typeof signupOnly>[1], ip: string, deps: Parameters<typeof signupOnly>[3] = {}): ReturnType<typeof signupOnly> {
+  const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+  const spacing = (signupSpacing.get(email) ?? 0) + 1;
+  signupSpacing.set(email, spacing);
+  const requested = await requestSignupEmailCode(env, { email: input.email, turnstileToken: input.turnstileToken }, ip, {
+    verifyTurnstile: deps.verifyTurnstile,
+    emailTransport: deps.emailTransport === undefined ? memoryTransport : deps.emailTransport,
+    now: () => new Date(Date.now() + spacing * 61_000),
+  });
+  if (requested.status !== 200) return requested;
+  return signupOnly(env, { ...input, challengeId: requested.challengeId, emailCode: signupMailbox.get(email) }, ip, deps);
+}
+
 /** A signup harness: one control plane, one store namespace, Turnstile passing. */
 async function signupHarness() {
   const platformDb = await platform([]);
   const stores = namespace();
-  const env = { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, ...TEST_CREDENTIAL_ENV } as Record<string, unknown>;
+  const env = { PLATFORM_DB: platformDb, TENANT_STORE: stores.binding, PLATFORM_AUTH_SECRET: SIGNUP_KEY_SECRET, ...TEST_CREDENTIAL_ENV } as Record<string, unknown>;
   const input = (slug: string, email = `owner@${slug}.example`) => ({
     storeName: `Toko ${slug}`,
     slug,
@@ -2592,9 +2622,43 @@ test("T-44/PR-29: one 'ready' and one 'first order' notice through the real midd
   }
 });
 
+/**
+ * T-58: one signup through the real route, both phases: `request_email_code`,
+ * then the final post with the code read from the fake mailbox `mails`.
+ * Returns the code request's response when it is not 200.
+ */
+async function routeSignup(
+  env: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  ip: string,
+  mails: Array<{ to: string; subject: string; text: string }>,
+  tasks: Promise<unknown>[] = [],
+) {
+  const href = "https://adsbook.id/api/platform/signup";
+  const post = (body: Record<string, unknown>) =>
+    platformSignupRoute.POST({
+      request: new Request(href, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "https://adsbook.id", "cf-connecting-ip": ip },
+        body: JSON.stringify(body),
+      }),
+      url: new URL(href),
+      locals: { runtimeEnv: env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } },
+    } as never) as Promise<Response>;
+  const requested = await post({ action: "request_email_code", email: payload.email, turnstile_token: "ok" });
+  if (requested.status !== 200) return requested;
+  const { challenge_id } = (await requested.json()) as { challenge_id: string };
+  const code = mails.filter((mail) => mail.to === payload.email && /Kode verifikasi/.test(mail.subject)).at(-1)?.text.match(/^(\d{8})$/m)?.[1];
+  const response = await post({ terms: true, turnstile_token: "ok", password: "kata-sandi-panjang-1", ...payload, challenge_id, email_code: code });
+  await Promise.all(tasks);
+  return response;
+}
+
 test("T-44/PR-29: a signup through the real route sends one notice naming the store and slug", async () => {
   const { env } = await signupHarness();
   Object.assign(env, { PLATFORM_ALERT_WEBHOOK_URL: "https://hooks.example/notify", TURNSTILE_SECRET_KEY: "secret", TURNSTILE_VERIFY_URL: "https://turnstile.test/siteverify" });
+  const mails: Array<{ to: string; subject: string; text: string }> = [];
+  env.EMAIL = { send: async (message: { to: string; subject: string; text: string }) => (mails.push(message), { messageId: "fake" }) };
   const notices: string[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -2603,24 +2667,13 @@ test("T-44/PR-29: a signup through the real route sends one notice naming the st
     if (url.startsWith("https://turnstile.test/")) return Response.json({ success: true });
     return Response.json({});
   }) as typeof fetch;
-  const tasks: Promise<unknown>[] = [];
   const quiet = { log: console.log, info: console.info };
   console.log = console.info = () => undefined;
   try {
-    const href = "https://adsbook.id/api/platform/signup";
-    const response = (await platformSignupRoute.POST({
-      request: new Request(href, {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: "https://adsbook.id", "cf-connecting-ip": "198.51.100.77" },
-        body: JSON.stringify({ store_name: "Toko Kabar Baru", slug: "kabar-baru", email: "owner@kabar-baru.example", password: "kata-sandi-panjang-1", terms: true, turnstile_token: "ok" }),
-      }),
-      url: new URL(href),
-      locals: { runtimeEnv: env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } },
-    } as never)) as Response;
+    const response = await routeSignup(env, { store_name: "Toko Kabar Baru", slug: "kabar-baru", email: "owner@kabar-baru.example" }, "198.51.100.77", mails);
     assert.equal(response.status, 201, await response.clone().text());
     // The body carries the one-time handoff token: no cache may keep it (T-28 review).
     assert.equal(response.headers.get("cache-control"), "no-store");
-    await Promise.all(tasks);
   } finally {
     globalThis.fetch = originalFetch;
     Object.assign(console, quiet);
@@ -2629,18 +2682,19 @@ test("T-44/PR-29: a signup through the real route sends one notice naming the st
   assert.match(notices[0], /^\[adsbook\.id\] Seller baru mendaftar: Toko Kabar Baru \(kabar-baru\) — https:\/\/app\.adsbook\.id\/platform\/tenants\/t_/);
 });
 
-test("account email: a signup through the real route sends one confirmation; a transport failure, a taken email or an invalid form change nothing else", async () => {
+test("account email: a signup through the real route sends one confirmation after the code; a confirmation failure, a taken email or an invalid form change nothing else; no transport, no signup (T-58)", async () => {
   const { env, platformDb } = await signupHarness();
   Object.assign(env, { PLATFORM_ALERT_WEBHOOK_URL: "https://hooks.example/notify", TURNSTILE_SECRET_KEY: "secret", TURNSTILE_VERIFY_URL: "https://turnstile.test/siteverify" });
-  const mails: Array<{ to: string; text: string }> = [];
-  let transportDown = false;
+  const mails: Array<{ to: string; subject: string; text: string }> = [];
+  let confirmationDown = false;
   env.EMAIL = {
-    send: async (message: { to: string; text: string }) => {
-      if (transportDown) throw Object.assign(new Error("down"), { code: "E_INTERNAL_SERVER_ERROR" });
+    send: async (message: { to: string; subject: string; text: string }) => {
+      if (confirmationDown && !/Kode verifikasi/.test(message.subject)) throw Object.assign(new Error("down"), { code: "E_INTERNAL_SERVER_ERROR" });
       mails.push(message);
       return { messageId: "fake" };
     },
   };
+  const confirmations = () => mails.filter((mail) => !/Kode verifikasi/.test(mail.subject));
   const notices: string[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -2652,46 +2706,34 @@ test("account email: a signup through the real route sends one confirmation; a t
   const quiet = { log: console.log, info: console.info, error: console.error };
   console.log = console.info = console.error = () => undefined;
   let counter = 0;
-  const post = async (payload: Record<string, unknown>) => {
-    const tasks: Promise<unknown>[] = [];
-    const href = "https://adsbook.id/api/platform/signup";
-    const response = (await platformSignupRoute.POST({
-      request: new Request(href, {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: "https://adsbook.id", "cf-connecting-ip": `198.51.100.${90 + (counter += 1)}` },
-        body: JSON.stringify({ terms: true, turnstile_token: "ok", password: "kata-sandi-panjang-1", ...payload }),
-      }),
-      url: new URL(href),
-      locals: { runtimeEnv: env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } },
-    } as never)) as Response;
-    await Promise.all(tasks);
-    return response;
-  };
+  const post = (payload: Record<string, unknown>) => routeSignup(env, payload, `198.51.100.${90 + (counter += 1)}`, mails);
   try {
     const ok = await post({ store_name: "Toko Surat Satu", slug: "surat-satu", email: "owner@surat-satu.example" });
     assert.equal(ok.status, 201);
-    assert.equal(mails.length, 1);
-    assert.equal(mails[0].to, "owner@surat-satu.example");
-    assert.match(mails[0].text, /Toko Surat Satu/);
-    assert.doesNotMatch(mails[0].text, /kata-sandi-panjang-1|handoff|token/i);
+    assert.equal(confirmations().length, 1);
+    assert.equal(confirmations()[0].to, "owner@surat-satu.example");
+    assert.match(confirmations()[0].text, /Toko Surat Satu/);
+    assert.doesNotMatch(confirmations()[0].text, /kata-sandi-panjang-1|handoff|token|\b\d{8}\b/i);
     assert.equal(notices.filter((text) => text.includes("Seller baru mendaftar")).length, 1, "the operator notice is unchanged");
 
-    // A taken email and an invalid form send nothing.
+    // A taken email gets no code and no confirmation; an invalid form gets no code.
+    const before = mails.length;
     assert.equal((await post({ store_name: "Toko Lain", slug: "surat-lain", email: "owner@surat-satu.example" })).status, 409);
     assert.equal((await post({ store_name: "X", slug: "surat-tiga", email: "bukan-email" })).status, 400);
-    assert.equal(mails.length, 1);
+    assert.equal(mails.length, before);
 
-    // The transport is down: the signup still succeeds, the tenant is active, the operator is still told.
-    transportDown = true;
+    // The confirmation fails: the signup still succeeds, the tenant is active, the operator is still told.
+    confirmationDown = true;
     const down = await post({ store_name: "Toko Surat Dua", slug: "surat-dua", email: "owner@surat-dua.example" });
-    assert.equal(down.status, 201, "a mail failure never changes the signup");
+    assert.equal(down.status, 201, "a confirmation failure never changes the signup");
     assert.equal((platformDb.sqlite.prepare("SELECT status FROM tenants WHERE slug = 'surat-dua'").get() as { status: string }).status, "active");
     assert.equal(notices.filter((text) => text.includes("Seller baru mendaftar")).length, 2);
-    assert.equal(mails.length, 1);
+    assert.equal(confirmations().length, 1);
 
-    // No binding at all: still 201.
+    // T-58: no binding at all means no code can be sent, so no signup and no tenant.
     delete env.EMAIL;
-    assert.equal((await post({ store_name: "Toko Surat Tiga", slug: "surat-empat", email: "owner@surat-empat.example" })).status, 201);
+    assert.equal((await post({ store_name: "Toko Surat Tiga", slug: "surat-empat", email: "owner@surat-empat.example" })).status, 503);
+    assert.equal(platformDb.sqlite.prepare("SELECT COUNT(*) AS n FROM tenants WHERE slug = 'surat-empat'").get()!.n, 0);
   } finally {
     globalThis.fetch = originalFetch;
     Object.assign(console, quiet);
