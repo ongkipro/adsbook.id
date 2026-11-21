@@ -4,6 +4,13 @@ import type { AdminRole } from './auth.ts';
 export const DEFAULT_ADMIN_USERNAME = 'admin';
 export const DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2-sha256$100000$-EwKzifD04qz0rRDZxAlpQ$Hq_4WkRnBcUgAASqRR0kukVbbGOZyN3IIxpvVfm6_l4';
 const PASSWORD_ITERATIONS = 100_000;
+/**
+ * The shortest new seller password, the same floor as signup (`src/platform/signup.ts`)
+ * and owner recovery (`src/platform/admin/recovery.ts`): a profile change or an
+ * owner-set staff password may never be weaker than the password the store began
+ * with. Existing passwords keep verifying whatever their length.
+ */
+const MIN_ADMIN_PASSWORD_LENGTH = 10;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,64}$/;
 
 type AdminCredentialRow = {
@@ -54,7 +61,7 @@ export function validateNewAdminPassword(password: string, username: string) {
   if (password.toLowerCase() === 'admin' || password.toLowerCase() === username.toLowerCase()) {
     return 'Password baru tidak boleh menggunakan username atau password default.';
   }
-  if (password.length < 8 || password.length > 128) return 'Password baru harus berisi 8–128 karakter.';
+  if (password.length < MIN_ADMIN_PASSWORD_LENGTH || password.length > 128) return `Password baru harus berisi ${MIN_ADMIN_PASSWORD_LENGTH}–128 karakter.`;
   return '';
 }
 

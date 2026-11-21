@@ -46,16 +46,16 @@ const pageTitle = mustChangePassword
           </label>
           <label class="block text-xs font-semibold text-slate-700" for="newPassword">
             Password baru
-            <input id="newPassword" name="new_password" type="password" required minlength="8" maxlength="128" autocomplete="new-password" class="admin-input-flat mt-2 sm:text-sm" />
+            <input id="newPassword" name="new_password" type="password" required minlength="10" maxlength="128" autocomplete="new-password" class="admin-input-flat mt-2 sm:text-sm" />
           </label>
           <label class="block text-xs font-semibold text-slate-700" for="confirmPassword">
             Konfirmasi password baru
-            <input id="confirmPassword" name="confirm_password" type="password" required minlength="8" maxlength="128" autocomplete="new-password" class="admin-input-flat mt-2 sm:text-sm" />
+            <input id="confirmPassword" name="confirm_password" type="password" required minlength="10" maxlength="128" autocomplete="new-password" class="admin-input-flat mt-2 sm:text-sm" />
           </label>
         </div>
       </fieldset>
       <div class="mt-5 flex flex-col-reverse items-stretch gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <p id="profileStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true">Password baru minimal 8 karakter dan tidak boleh sama dengan username.</p>
+        <p id="profileStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true">Password baru minimal 10 karakter dan tidak boleh sama dengan username.</p>
         <button id="saveProfile" type="submit" class="btn-primary">Simpan Profil</button>
       </div>
     </form>

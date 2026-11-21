@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   DEFAULT_ADMIN_PASSWORD_HASH,
@@ -85,8 +86,39 @@ test('admin usernames are normalized and restricted to URL-safe characters', () 
 });
 
 test('new admin passwords reject weak defaults', () => {
-  assert.equal(validateNewAdminPassword('abc', 'admin'), 'Password baru harus berisi 8–128 karakter.');
+  assert.equal(validateNewAdminPassword('abc', 'admin'), 'Password baru harus berisi 10–128 karakter.');
   assert.equal(validateNewAdminPassword('admin', 'admin'), 'Password baru tidak boleh menggunakan username atau password default.');
+});
+
+test('a new seller password is never weaker than signup and owner recovery: 10–128, checked at the boundary', async () => {
+  const signup = readFileSync(new URL('../platform/signup.ts', import.meta.url), 'utf8');
+  const recovery = readFileSync(new URL('../platform/admin/recovery.ts', import.meta.url), 'utf8');
+  assert.match(signup, /password\.length < 10 \|\| password\.length > 128/, 'signup floor is 10');
+  assert.match(recovery, /next\.length < 10 \|\| next\.length > 128/, 'IAM-9 floor is 10');
+  const message = 'Password baru harus berisi 10–128 karakter.';
+  assert.equal(validateNewAdminPassword('a'.repeat(9), 'kasir'), message, '9 refused');
+  assert.equal(validateNewAdminPassword('a'.repeat(10), 'kasir'), '', '10 accepted');
+  assert.equal(validateNewAdminPassword('a'.repeat(128), 'kasir'), '', '128 accepted');
+  assert.equal(validateNewAdminPassword('a'.repeat(129), 'kasir'), message, '129 refused');
+  assert.notEqual(validateNewAdminPassword('kasir-toko', 'kasir-toko'), '', 'the username is still refused at any length');
+  // The seller forms ask for the same floor before submitting.
+  const profile = readFileSync(new URL('../pages/admin/profile.astro', import.meta.url), 'utf8');
+  const access = readFileSync(new URL('../components/admin/AccessManager.tsx', import.meta.url), 'utf8');
+  assert.equal((profile.match(/minlength="10"/g) ?? []).length, 2, 'profile: new and confirm fields');
+  assert.match(profile, /minimal 10 karakter/);
+  assert.equal((access.match(/minLength=\{10\}/g) ?? []).length, 2, 'staff create and staff reset');
+  assert.match(access, /Minimal 10 karakter/);
+  const help = readFileSync(new URL('../components/admin/docs/DocsAdminChapter.astro', import.meta.url), 'utf8');
+  assert.match(help, /password \(minimal 10 karakter, tidak sama dengan username\)/, 'in-app help says the same');
+  assert.ok(!/minlength="8"|minLength=\{8\}|[Mm]inimal 8 karakter/.test(profile + access + help), 'no 8-character floor left');
+});
+
+test('existing shorter passwords keep signing in: the floor applies to new passwords only', async () => {
+  for (const legacy of ['kasir123', 'pemilik99']) {
+    const credential = { username: 'kasir', passwordHash: await hashAdminPassword(legacy) };
+    assert.equal(await verifyAdminLoginPassword(legacy, credential), true, `${legacy.length} characters still verify`);
+    assert.equal(await verifyAdminLoginPassword(`${legacy}x`, credential), false);
+  }
 });
 
 test("operator roles use one deny-by-default route policy", () => {
