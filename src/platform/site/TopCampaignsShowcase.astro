@@ -23,11 +23,11 @@ const ROWS = [
 <section class={`section campaigns ${tone === 'white' ? 'section-white' : ''}`} aria-labelledby={id} data-campaigns>
   <div class="wrap camp-grid">
     <div class="camp-copy">
-      <h2 id={id}>Lihat jelas campaign mana yang benar-benar menghasilkan pesanan</h2>
-      <p class="lead">Setiap pesanan tercatat kembali ke ad platform dan campaign asalnya, dari transaksi toko, bukan estimasi. Anda tahu ad set mana yang layak ditambah budget-nya, dan campaign mana yang belum menghasilkan satu pesanan pun.</p>
+      <h2 id={id}>Bandingkan pesanan yang tercatat per kampanye</h2>
+      <p class="lead">Analitik toko mengelompokkan transaksi berdasarkan sumber dan kampanye yang tercatat. Pesanan tanpa data sumber tidak bisa dihubungkan ke kampanye tertentu, dan angka di platform iklan bisa berbeda dari angka di toko.</p>
       <ul class="checks">
-        <li>Meta Ads, Google Ads, TikTok Ads, dan UTM platform lain</li>
-        <li>Deduplikasi 1:1 browser + server untuk Meta, Google, dan TikTok</li>
+        <li>Integrasi konversi untuk Meta Ads, Google Ads, dan TikTok Ads; UTM untuk kampanye lain</li>
+        <li>Meta dan TikTok memakai event_id untuk deduplikasi; Google Ads memakai tag dan konversi offline</li>
         <li>Setup dalam hitungan menit, tanpa coding</li>
       </ul>
     </div>
@@ -42,7 +42,7 @@ const ROWS = [
         <div class="tiles">
           <div class="tile"><span class="t-label">Orders</span><b>412</b></div>
           <div class="tile"><span class="t-label">Revenue</span><b>Rp68,3 jt</b><span class="t-pill">dari transaksi toko</span></div>
-          <div class="tile"><span class="t-label">Konversi ke Meta, Google &amp; TikTok</span><b>1:1</b><span class="t-sub">satu event per pesanan</span></div>
+          <div class="tile"><span class="t-label">Integrasi konversi</span><b>3</b><span class="t-sub">Meta, Google &amp; TikTok</span></div>
           <div class="tile"><span class="t-label">Match keys</span><b>8</b><span class="t-sub">SHA-256</span></div>
         </div>
         <div class="spark"><span style="--h:38%"></span><span style="--h:52%"></span><span style="--h:46%"></span><span style="--h:61%"></span><span style="--h:57%"></span><span style="--h:72%"></span><span style="--h:68%"></span><span style="--h:84%"></span><span style="--h:79%"></span><span style="--h:93%"></span></div>

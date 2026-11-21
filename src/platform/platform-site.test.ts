@@ -188,7 +188,9 @@ test("one site: every marketing page uses the shared frame, ends its title on th
   for (const channel of [AD_CHANNEL_LABELS.meta, AD_CHANNEL_LABELS.google, AD_CHANNEL_LABELS.tiktok]) {
     assert.ok(signal.points.join(" ").includes(channel), `the signal pillar names ${channel}`);
   }
-  assert.match(readFileSync("src/pages/platform/site/index.astro", "utf8"), /semua platform iklan|semua ad platform|semua kanal/i, "the home says every ad platform");
+  const home = readFileSync("src/pages/platform/site/index.astro", "utf8");
+  assert.match(home, /pemilik toko yang menjalankan iklan/i, "the home identifies its audience");
+  assert.doesNotMatch(home, /semua platform iklan|semua ad platform/i, "the home does not promise universal ad integrations");
   // Every FAQ answer appears exactly once in the grouped FAQ.
   const grouped = FAQ_GROUPS.flatMap((group) => group.items);
   assert.equal(grouped.length, FAQ_SHORT.length + FAQ_MORE.length);
