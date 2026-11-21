@@ -65,6 +65,9 @@ test("platform routes are their own families, and their auth is asked of the pla
   assert.equal(classify("/platform/login"), "Platform admin");
   assert.equal(classify("/api/platform/tenants/[id]/[action]"), "Platform API");
   const routes = new Map(buildRouteMap().map((route) => [route.path, route]));
+  const platformWebhook = routes.get("/api/platform/webhooks/autolaris/[token]");
+  assert.equal(platformWebhook?.auth, "webhook token");
+  assert.deepEqual(platformWebhook?.roles, []);
   // Guarded by a platform session, reachable by both platform roles (per-operation limits are ACTION_ROLES').
   for (const path of ["/platform/[...section]", "/api/platform/tenants", "/api/platform/tenants/[id]/[action]", "/api/platform/invoices/[id]/check", "/api/platform/logout"]) {
     assert.equal(routes.get(path)?.auth, "platform session", path);

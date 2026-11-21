@@ -32,7 +32,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { ADMIN_ROLES, canAccessAdminRoute } from "./auth.ts";
-import { isPlatformPublicPath } from "../platform/admin/guard.ts";
+import { isPlatformPublicPath, isPlatformWebhookPath } from "../platform/admin/guard.ts";
 import { ACTION_ROLES } from "../platform/admin/tenants.ts";
 import { isOwnerOnlyPlatformPath } from "../platform/admin/team.ts";
 import { PLATFORM_SITE_ROUTES } from "../platform/host.ts";
@@ -194,7 +194,7 @@ export function classify(path: string): RouteFamily {
 export function authFor(path: string, family: RouteFamily): RouteAuth {
   if (family === "Admin page" || family === "Admin API") return "admin session";
   if (family === "Headless API" || family === "Operations API") return "api key";
-  if (family === "Webhook") return "webhook token";
+  if (family === "Webhook" || (family === "Platform API" && isPlatformWebhookPath(path))) return "webhook token";
   if (family === "Platform site" || family === "Platform admin" || family === "Platform API") {
     return isPlatformPublicPath(path) ? "public" : "platform session";
   }
