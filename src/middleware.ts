@@ -455,8 +455,10 @@ export function createMiddleware(
       context.locals.ownerPreview = true;
     }
     // T-44: the operator hears once that this store is ready (claimed in
-    // PLATFORM_DB; this isolate stops asking after the first time).
-    if (!readyNoticed.has(tenantContext.tenantId)) {
+    // PLATFORM_DB; this isolate stops asking after the first time). Only a
+    // visit that passed the ready check counts: an owner previewing an unready
+    // store reaches here too, and must neither send nor claim the notice.
+    if (ready === true && !readyNoticed.has(tenantContext.tenantId)) {
       readyNoticed.add(tenantContext.tenantId);
       operatorNotice(context, { tenantId: tenantContext.tenantId, slug: tenantContext.slug, kind: 'ready', storeName: context.locals.tenant?.name });
     }

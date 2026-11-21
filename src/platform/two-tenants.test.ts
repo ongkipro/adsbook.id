@@ -1959,6 +1959,11 @@ async function readinessHarness(slug: string, options: { preview?: boolean } = {
   // Bound like the platform binds it (ADR-040): the same tenant id and env.
   const database = bindCredentials(createTenantDb(stores.get(created.tenantId).stub), created.tenantId, env);
   const host = `${slug}.adsbook.my.id`;
+  // Work a request hands to waitUntil (operator notices), so a test can await it instead of racing it.
+  const tasks: Promise<unknown>[] = [];
+  const settle = async () => {
+    while (tasks.length) await Promise.allSettled(tasks.splice(0));
+  };
   /** One request through the real middleware: the status, and whether the route ran. */
   const open = async (path: string, method = "GET", cookie?: string) => {
     const href = `https://${host}${path}`;
@@ -1971,7 +1976,7 @@ async function readinessHarness(slug: string, options: { preview?: boolean } = {
         {
           request: new Request(href, { method, headers: { ...(method === "GET" ? {} : { origin: `https://${host}`, "sec-fetch-site": "same-origin" }), ...(cookie ? { cookie } : {}) } }),
           url: new URL(href),
-          locals: { runtimeEnv: env },
+          locals: { runtimeEnv: env, cfContext: { waitUntil: (task: Promise<unknown>) => void tasks.push(task) } },
           routePattern: path,
           redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
         } as never,
@@ -1993,7 +1998,7 @@ async function readinessHarness(slug: string, options: { preview?: boolean } = {
   const bank = () =>
     sql.exec("INSERT INTO seller_bank_accounts (store_id, bank_code, account_holder, account_number, is_active, display_order, created_at, updated_at) VALUES (1, 'BCA', 'Toko', '1234567890', 1, 0, '2026-11-19', '2026-11-19')");
   const facts = async () => readReadiness(database);
-  return { open, product, warehouse, mengantar, bank, facts, sql, database, env, tenantId: created.tenantId, stub: stores.get(created.tenantId).stub };
+  return { open, settle, product, warehouse, mengantar, bank, facts, sql, database, env, tenantId: created.tenantId, stub: stores.get(created.tenantId).stub };
 }
 
 test("PR-23 owner preview: the signed-in owner sees the unready storefront, buyers and checkout stay closed", async () => {
@@ -2021,6 +2026,59 @@ test("PR-23 owner preview: the signed-in owner sees the unready storefront, buye
     assert.equal((await store.open(path, method, cookie)).status, 503, path);
   }
   assert.equal((await store.open("/", "GET", `${SESSION_COOKIE_NAME}=forged.token.value`)).status, 503);
+});
+
+test("T-44 (T-32 audit): an owner previewing an unready store neither sends nor consumes the 'ready' notice; the first ready visit sends it once", async () => {
+  const store = await readinessHarness("notice-siap");
+  // The webhook transport is stubbed: nothing leaves the process.
+  const HOOK = "https://alerts.test/operator-hook";
+  store.env.PLATFORM_ALERT_WEBHOOK_URL = HOOK;
+  const posts: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === HOOK) return (posts.push(String(init?.body ?? "")), new Response("ok"));
+    return realFetch(input, init);
+  }) as typeof fetch;
+  const readyPosts = () => posts.filter((body) => body.includes("Toko siap jualan")).length;
+  const readyClaims = async () =>
+    Number((await (store.env.PLATFORM_DB as D1Database).prepare("SELECT COUNT(*) AS n FROM operator_notices WHERE tenant_id = ? AND notice = 'ready'").bind(store.tenantId).first<{ n: number }>())?.n ?? 0);
+  try {
+    // The owner previews the unready storefront: preview itself is unchanged (renders, private, noindex)…
+    const secret = await resolveAuthSecret(store.database, store.tenantId);
+    const credential = (await getAdminCredential(store.database, "owner@notice-siap.example"))!;
+    const { token, session } = await signJwt({ username: credential.username, role: credential.role }, secret);
+    await storeAdminSession(store.database, session, credential);
+    const cookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`;
+    for (const path of ["/", "/produk/kopi"]) {
+      const page = await store.open(path, "GET", cookie);
+      assert.equal(page.reached, true, `${path}: the owner's preview still renders`);
+      assert.equal(page.robots, "noindex, nofollow");
+      assert.match(page.cacheControl ?? "", /private/);
+    }
+    // …and a buyer still gets the not-ready page.
+    assert.equal((await store.open("/")).status, 503);
+    await store.settle();
+    assert.equal(readyPosts(), 0, "no 'ready' notice while the store is not ready");
+    assert.equal(await readyClaims(), 0, "and none claimed, so the real one is not consumed");
+
+    // The store becomes ready; the first visit that passes the check sends the notice, once.
+    store.product();
+    store.mengantar();
+    store.warehouse(1, 1, "12345", "pickup-1");
+    store.bank();
+    assert.equal(isStoreReady(await store.facts()), true);
+    assert.equal((await store.open("/produk/kopi")).reached, true);
+    await store.settle();
+    assert.equal(readyPosts(), 1, "the first ready visit sends 'Toko siap jualan'");
+    assert.equal(await readyClaims(), 1);
+    for (const [path, owner] of [["/", false], ["/produk/kopi", true]] as const) {
+      assert.equal((await store.open(path, "GET", owner ? cookie : undefined)).reached, true);
+    }
+    await store.settle();
+    assert.equal(readyPosts(), 1, "never twice");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test("T-38: a new store says 'toko belum siap' (no checkout) until the ready predicate holds, and opens right after", async () => {
