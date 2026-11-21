@@ -303,3 +303,17 @@ test('a parallel wave of login guesses is capped, not all evaluated against a st
   await clearAdminLoginFailures(database, 'admin', '203.0.113.9');
   assert.equal((await spendAdminLoginAttempt(database, 'admin', '203.0.113.9')).allowed, true);
 });
+
+test('a caller that opts into fail-closed is refused on a store failure or a missing binding', async () => {
+  const failing = { prepare() { throw new Error('D1 down'); } } as unknown as D1Database;
+  const original = console.error;
+  console.error = () => undefined;
+  try {
+    assert.equal((await checkRateLimit(failing, 'signup-code:198.51.100.1', 10, 60_000, true, 'closed')).allowed, false);
+    assert.equal((await checkRateLimit(failing, 'signup-code:198.51.100.1', 10, 60_000)).allowed, true, 'the default stays open');
+  } finally {
+    console.error = original;
+  }
+  assert.equal((await checkRateLimit(undefined, 'signup-code:198.51.100.1', 10, 60_000, true, 'closed')).allowed, false);
+  assert.equal((await checkRateLimit(undefined, 'signup-code:198.51.100.1', 10, 60_000)).allowed, true);
+});

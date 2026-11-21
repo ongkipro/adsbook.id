@@ -14,6 +14,9 @@
  * merchant; see ARCHITECTURE.md). The products are invented for this script.
  *
  *   --platform=http://app.localhost:8787   platform host (default)
+ *   --explorer=http://127.0.0.1:8787       where Wrangler's local email capture answers
+ *                                 (default: loopback on the platform's port). The signup
+ *                                 mails a verification code (T-58); the seed reads it there.
  *   --slug=toko-uji                        the tenant to sign up (default)
  *   --catalogue-only              signup, sign-in and products only: no provider
  *                                 keys, no warehouse, no orders. The only mode
@@ -37,6 +40,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { prepareImage } from "./prepare-image.ts";
+import { loopbackOrigin, readVerificationCode, sentVerificationIds } from "./dev-mailbox.ts";
 
 const argValue = (name: string) =>
   process.argv.slice(2).find((arg) => arg.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -275,24 +279,56 @@ const BUYERS = [
   { name: "Hendra Wijaya", phone: "081234500006", area: "Medan Baru Medan", address: "Jl. Sei Batang Hari No. 21" },
 ];
 
-/** Sign the demo tenant up on the platform host, as the signup page does. */
-async function signupTenant() {
+/**
+ * Where Wrangler's local email capture (Miniflare's Local Explorer) answers: the same port as the platform, but on
+ * loopback, because the Explorer accepts only a loopback Host (`app.localhost` is refused). `--explorer=` overrides it.
+ * Only `scripts/dev-mailbox.ts` reads it; see that file for what the Explorer is and why it must stay on loopback.
+ */
+const explorerOrigin = argValue("explorer") || `http://127.0.0.1:${platform.port || 80}`;
+
+async function postSignup(body: Record<string, unknown>) {
   const response = await fetch(`${platform.origin}/api/platform/signup`, {
     method: "POST",
+    redirect: "manual",
     headers: { "Content-Type": "application/json", Origin: platform.origin, "Sec-Fetch-Site": "same-origin" },
-    body: JSON.stringify({
-      store_name: argValue("store-name") || "Toko Dummy Lokal",
-      slug,
-      email: DEV_ADMIN.username,
-      password: DEV_ADMIN.password,
-      terms: true,
-      turnstile_token: "local-stand-in",
-    }),
+    body: JSON.stringify({ ...body, turnstile_token: "local-stand-in" }),
   });
-  const payload = await response.json().catch(() => null);
+  return { status: response.status, payload: (await response.json().catch(() => null)) as any };
+}
+
+/**
+ * Sign the demo tenant up on the platform host, as the signup page does, in its two phases (T-58, PR-11): ask for
+ * the code, read it from the local mailbox, send the signup with it. There is no way around the proof: a server
+ * that does not verify the mailbox is not what this script is for, and it fails here instead of seeding.
+ */
+async function signupTenant() {
+  loopbackOrigin(explorerOrigin);
+  // The mail is read from a capture that other runs also write to: remember what is there before asking for a new one.
+  // An unreachable capture is only fatal once a code is actually needed: a re-run for a tenant that already exists
+  // still skips its signup without it ("Re-running is safe").
+  const seen = await sentVerificationIds(explorerOrigin, DEV_ADMIN.username).catch((error: unknown) => error as Error);
+  const requested = await postSignup({ action: "request_email_code", email: DEV_ADMIN.username });
+  // An email that already owns a store is refused on the code request too (no cheaper oracle): that is the same "exists".
+  if (requested.status === 409 && requested.payload?.errors?.email) return console.log(`[dev:seed] tenant ${slug} already exists — skipping signup`);
+  ok("request_email_code", requested);
+  if (seen instanceof Error) {
+    throw new Error(`${seen.message} — the local email capture must be reachable on ${explorerOrigin} (dev:local on loopback, Local Explorer on)`);
+  }
+  const challengeId = requested.payload?.challenge_id;
+  if (typeof challengeId !== "string" || !challengeId) fail("request_email_code (no challenge_id)", requested);
+  const code = await readVerificationCode(DEV_ADMIN.username, { explorer: explorerOrigin, ignore: seen });
+  const response = await postSignup({
+    store_name: argValue("store-name") || "Toko Dummy Lokal",
+    slug,
+    email: DEV_ADMIN.username,
+    password: DEV_ADMIN.password,
+    terms: true,
+    challenge_id: challengeId,
+    email_code: code,
+  });
   if (response.status === 409) return console.log(`[dev:seed] tenant ${slug} already exists — skipping signup`);
-  ok("signup", { status: response.status, payload });
-  console.log(`[dev:seed] signed up ${base}`);
+  ok("signup", response);
+  console.log(`[dev:seed] signed up ${base} (mailbox code verified)`);
 }
 
 /** Point the tenant's own provider settings at the local stand-ins (T-45: never env). */

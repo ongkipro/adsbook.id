@@ -31,8 +31,11 @@ const RATE_LIMIT_STORE_ERROR_LABEL = 'rate-limit-store-failed';
  * statement: `INSERT … ON CONFLICT DO UPDATE … RETURNING count` is atomic, so
  * N simultaneous requests see N distinct counts. That closes A-71 as well.
  *
- * A store failure fails open. This is spam damping, not a quota — a counter
- * that cannot be read must never take checkout or the admin down with it.
+ * A store failure fails open by default. This is spam damping, not a quota — a
+ * counter that cannot be read must never take checkout or the admin down with
+ * it. A caller whose every pass costs something outside (a mail, a provider
+ * call) passes `onStoreError: "closed"`: a missing binding or a store failure
+ * then refuses, because an uncounted pass is unbounded.
  */
 export async function checkRateLimit(
   database: D1Database | undefined,
@@ -40,11 +43,16 @@ export async function checkRateLimit(
   limit: number,
   windowMs: number,
   consume = true,
+  onStoreError: "open" | "closed" = "open",
 ): Promise<RateLimitResult> {
   const now = Date.now();
   // Without a database there is nothing shared to count in; fail open rather
   // than block every order because a binding is missing.
-  if (!database) return { allowed: true, remaining: limit - 1, resetAt: now + windowMs };
+  if (!database) {
+    return onStoreError === "closed"
+      ? { allowed: false, remaining: 0, resetAt: now + windowMs }
+      : { allowed: true, remaining: limit - 1, resetAt: now + windowMs };
+  }
 
   const windowStart = Math.floor(now / windowMs) * windowMs;
   const resetAt = windowStart + windowMs;
@@ -93,6 +101,7 @@ export async function checkRateLimit(
       bucket: key.split(':')[0],
       error: error instanceof Error ? error.message : String(error),
     });
+    if (onStoreError === "closed") return { allowed: false, remaining: 0, resetAt };
     // A peek that failed must report nothing spent: the login brake reads
     // `remaining < limit` as "this address has already failed here", and a
     // store error must not turn into a lockout of the real operator.
