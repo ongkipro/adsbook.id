@@ -44,21 +44,65 @@ export type SellerEmailOutcome = "submitted" | "failed" | "unknown" | "skipped" 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 
-/** Indonesian text and HTML. No password, no token, no magic link: one fixed sign-in URL. */
+/** adsbook.id brand values (docs/design/DESIGN-SYSTEM.md §1): white canvas, slate ink, brand blue. Inline in the mail because clients drop <style>. */
+const INK = "#0f172a";
+const MUTED = "#475569";
+const BLUE = "#2563eb";
+const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const BUTTON_LABEL = "Masuk ke Panel Toko";
+const SUBJECT = "Toko Anda sudah terdaftar di adsbook.id";
+
+const LEAD = "sudah dibuat di adsbook.id.";
+const NEXT =
+  "Langkah berikutnya: masuk ke panel toko dengan alamat email dan kata sandi yang Anda buat saat mendaftar, lalu lengkapi pengaturan toko Anda.";
+const SECURITY = "Kami tidak pernah meminta kata sandi Anda lewat email. Jika Anda tidak mendaftar di adsbook.id, abaikan pesan ini.";
+const AUTOMATIC = "Email ini dikirim otomatis dan tidak menerima balasan.";
+
+/**
+ * Branded signup confirmation, Indonesian. Plain text and HTML carry the same
+ * sentences. It says a store was created and what to do next; it does not say
+ * the address is verified, that the store can sell, or that a reply reaches
+ * anyone. One button to the fixed sign-in URL; no image, tracking, password,
+ * token or automatic sign-in. The wordmark is text (clients block remote
+ * images and most do not render SVG), so it is also the image-blocked fallback.
+ */
 export function sellerSignupMessage(to: string, storeName: string): SellerEmailMessage {
-  const name = storeName.replace(/[\r\n]+/g, " ").trim().slice(0, 80) || "toko Anda";
+  const name = storeName.replace(/[\r\n\u2028\u2029]+/g, " ").trim().slice(0, 80) || "toko Anda";
   const text = [
-    `Halo, toko "${name}" sudah terdaftar di adsbook.id.`,
+    "Toko Anda sudah terdaftar",
     "",
-    `Masuk ke panel toko dengan email ini dan kata sandi yang Anda buat saat mendaftar: ${SELLER_SIGNIN_URL}`,
+    `Halo, toko "${name}" ${LEAD}`,
     "",
-    "Kami tidak pernah meminta kata sandi Anda lewat email. Jika Anda tidak mendaftar, abaikan pesan ini.",
+    NEXT,
+    "",
+    `${BUTTON_LABEL}: ${SELLER_SIGNIN_URL}`,
+    "",
+    SECURITY,
+    AUTOMATIC,
   ].join("\n");
+  const safe = escapeHtml(name);
+  const cell = (style: string, inner: string) => `<tr><td style="${style}">${inner}</td></tr>`;
+  const body = `font-family:${FONT};font-size:16px;line-height:24px;color:${INK};padding:0 24px 16px 24px;overflow-wrap:anywhere;word-wrap:break-word;word-break:break-word;`;
   const html =
-    `<p>Halo, toko <strong>${escapeHtml(name)}</strong> sudah terdaftar di adsbook.id.</p>` +
-    `<p>Masuk ke panel toko dengan email ini dan kata sandi yang Anda buat saat mendaftar: <a href="${SELLER_SIGNIN_URL}">${SELLER_SIGNIN_URL}</a></p>` +
-    "<p>Kami tidak pernah meminta kata sandi Anda lewat email. Jika Anda tidak mendaftar, abaikan pesan ini.</p>";
-  return { to, from: SELLER_EMAIL_FROM, subject: "Toko Anda sudah terdaftar di adsbook.id", text, html };
+    `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${escapeHtml(SUBJECT)}</title></head>` +
+    `<body style="margin:0;padding:0;background:#ffffff;">` +
+    `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;">Toko ${safe} ${LEAD} Masuk ke panel toko untuk memulai.</div>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;"><tr><td align="center" style="padding:0;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;width:100%;">` +
+    `<tr><td height="4" style="height:4px;line-height:4px;font-size:4px;background:${BLUE};" bgcolor="${BLUE}">&nbsp;</td></tr>` +
+    cell(`font-family:${FONT};font-size:28px;line-height:32px;font-weight:700;letter-spacing:-0.02em;color:${INK};padding:28px 24px 20px 24px;`, `adsbook<span style="color:${BLUE};">.</span>id`) +
+    cell(`font-family:${FONT};font-size:22px;line-height:28px;font-weight:700;color:${INK};padding:0 24px 12px 24px;`, "Toko Anda sudah terdaftar") +
+    cell(body, `Halo, toko <strong>${safe}</strong> ${LEAD}`) +
+    cell(body, NEXT) +
+    `<tr><td style="padding:8px 24px 20px 24px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>` +
+    `<td align="center" bgcolor="${BLUE}" style="background:${BLUE};border-radius:8px;">` +
+    `<a href="${SELLER_SIGNIN_URL}" style="display:inline-block;font-family:${FONT};font-size:16px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;padding:14px 28px;min-height:20px;border-radius:8px;">${BUTTON_LABEL}</a>` +
+    `</td></tr></table></td></tr>` +
+    cell(`font-family:${FONT};font-size:14px;line-height:20px;color:${MUTED};padding:0 24px 20px 24px;`, `Tombol tidak berfungsi? Salin alamat ini ke browser: ${SELLER_SIGNIN_URL}`) +
+    cell(`font-family:${FONT};font-size:13px;line-height:20px;color:${MUTED};padding:16px 24px 32px 24px;border-top:1px solid #e2e8f0;`, `${SECURITY}<br>${AUTOMATIC}`) +
+    `</table></td></tr></table></body></html>`;
+  return { to, from: SELLER_EMAIL_FROM, subject: SUBJECT, text, html };
 }
 
 /**

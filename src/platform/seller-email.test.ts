@@ -37,17 +37,97 @@ async function quiet<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-test("the message is Indonesian, names the store, carries one fixed sign-in URL and no secret or token", () => {
+const BUTTON = "Masuk ke Panel Toko";
+const lum = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (fg: string, bg: string) => (Math.max(lum(fg), lum(bg)) + 0.05) / (Math.min(lum(fg), lum(bg)) + 0.05);
+const decode = (value: string) => value.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+/** Visible text of the mail HTML: tags dropped, the hidden preheader and the title removed, entities decoded. */
+const visibleText = (html: string) =>
+  decode(html.replace(/<title>[\s\S]*?<\/title>/, "").replace(/<div style="display:none[\s\S]*?<\/div>/, "").replace(/<\/?(?:span|strong)[^>]*>/g, "").replace(/<br>/g, "\n").replace(/<[^>]+>/g, "\n"))
+    .split("\n").map((line) => line.trim()).filter(Boolean);
+
+test("the message is Indonesian, names the store, has one button to the fixed sign-in URL and no secret, token or tracker", () => {
   const message = sellerSignupMessage("owner@toko-a.example", "Toko <A> & Co\r\nBcc: x@evil.example");
   assert.equal(message.from, SELLER_EMAIL_FROM);
   assert.equal(message.to, "owner@toko-a.example");
   assert.equal(message.subject, "Toko Anda sudah terdaftar di adsbook.id");
-  assert.match(message.text, /sudah terdaftar di adsbook\.id/);
-  assert.ok(message.text.includes(SELLER_SIGNIN_URL) && message.html.includes(SELLER_SIGNIN_URL));
+  assert.doesNotMatch(message.subject, /[\r\n]/);
+  assert.match(message.text, /Toko Anda sudah terdaftar/);
+  assert.match(message.text, /sudah dibuat di adsbook\.id/);
   assert.ok(message.html.includes("Toko &lt;A&gt; &amp; Co"), "the store name is escaped in HTML");
   assert.doesNotMatch(message.subject + message.text, /[\r\n]Bcc:/i, "no header injection through the store name");
-  assert.equal([...(message.text + message.html).matchAll(/https?:\/\/[^\s"<]+/g)].every(([url]) => url.startsWith("https://adsbook.id/masuk")), true, "only the fixed URL, no query or token");
-  assert.doesNotMatch(message.text + message.html, /password=|token|kata sandi:\s*\S{6,}|magic/i);
+  // The sign-in URL is the only URL anywhere, in both bodies.
+  for (const body of [message.text, message.html]) {
+    assert.deepEqual([...body.matchAll(/https?:\/\/[^\s"<]+/g)].map(([url]) => url).filter((url, i, all) => all.indexOf(url) === i), [SELLER_SIGNIN_URL]);
+  }
+  assert.doesNotMatch(message.text + message.html, /password|token|magic|kata sandi:\s*\S/i);
+});
+
+test("the HTML has exactly one link, the button, whose label and target match the plain text", () => {
+  const { html, text } = sellerSignupMessage("owner@toko-a.example", "Toko A");
+  const anchors = [...html.matchAll(/<a\s[^>]*>([\s\S]*?)<\/a>/g)];
+  assert.equal(anchors.length, 1, "one button, no second link");
+  assert.equal(anchors[0][1], BUTTON);
+  assert.match(anchors[0][0], new RegExp(`href="${SELLER_SIGNIN_URL.replace(/[.]/g, "\\.")}"`));
+  assert.equal([...html.matchAll(/href=/g)].length, 1);
+  assert.ok(text.includes(`${BUTTON}: ${SELLER_SIGNIN_URL}`), "plain-text URL parity");
+  assert.ok(html.includes(`Salin alamat ini ke browser: ${SELLER_SIGNIN_URL}`), "the URL is also visible as text when the button fails");
+});
+
+test("plain text and HTML say the same thing: every plain-text line appears in the visible HTML text", () => {
+  const { html, text } = sellerSignupMessage("owner@toko-a.example", "Toko Sambal Mak Ijah");
+  const seen = visibleText(html).join("\n");
+  for (const line of text.split("\n").filter(Boolean)) {
+    const needle = line.replace(`${BUTTON}: ${SELLER_SIGNIN_URL}`, BUTTON).replace(/^Halo, toko "(.*)" /, "Halo, toko $1 ");
+    assert.ok(seen.includes(needle), `missing from HTML: ${line}`);
+  }
+});
+
+test("hostile store names stay text: no markup, script, attribute break-out or extra link reaches the HTML or the subject", () => {
+  for (const name of ['<script>alert(1)</script>', '"><a href="https://evil.example">x</a>', "' onmouseover='x", "&lt;b&gt; &amp;", "Toko\u2028Baru\r\nSubject: x", "A".repeat(500), "   ", ""]) {
+    const { html, subject, text } = sellerSignupMessage("owner@toko-a.example", name);
+    assert.doesNotMatch(html, /<script|<b>|<a href="https:\/\/evil|<[^>]*\sonmouseover=/i, name);
+    assert.equal([...html.matchAll(/<a\s/g)].length, 1, "still exactly one link");
+    assert.doesNotMatch(subject, /[\r\n]/);
+    assert.doesNotMatch(text, /\r|\u2028|\u2029|^Subject:/m, "no header-looking line or Unicode line break from the name");
+  }
+  assert.match(sellerSignupMessage("a@b.example", "   ").text, /toko "toko Anda"|toko "toko Anda"/);
+  assert.ok(sellerSignupMessage("a@b.example", "A".repeat(500)).html.includes("A".repeat(80)) && !sellerSignupMessage("a@b.example", "A".repeat(500)).html.includes("A".repeat(81)), "the name is cut at 80");
+});
+
+test("no tracking surface: no image, remote resource, style import, script, form or query on any URL", () => {
+  const { html } = sellerSignupMessage("owner@toko-a.example", "Toko A");
+  assert.doesNotMatch(html, /<img|<link|<script|<form|<iframe|<video|<audio|<object|<embed|src=|srcset|url\(|@import|background-image|xmlns|<svg/i);
+  assert.doesNotMatch(html, /https?:\/\/[^\s"<]*[?#=]/, "no query, fragment or id on a URL");
+});
+
+test("brand and layout: white canvas, blue button with readable contrast, fluid width, text wordmark that survives blocked images", () => {
+  const { html } = sellerSignupMessage("owner@toko-a.example", "Toko A");
+  assert.match(html, /<html lang="id">/);
+  assert.match(html, /name="viewport" content="width=device-width,initial-scale=1"/);
+  assert.match(html, /<body style="margin:0;padding:0;background:#ffffff;">/);
+  assert.match(html, /max-width:520px;width:100%/, "fluid below 520 px, no fixed width that forces horizontal scroll");
+  assert.match(html, /overflow-wrap:anywhere;word-wrap:break-word;word-break:break-word/, "an 80-character store name with no spaces wraps instead of forcing horizontal scroll");
+  assert.doesNotMatch(html, /width="(?:[6-9]\d\d|\d{4,})"|min-width:\s*[5-9]\d\d/, "no wide fixed table");
+  assert.match(html, /bgcolor="#2563eb"[^>]*style="background:#2563eb;/, "the button keeps its colour where CSS background is dropped");
+  assert.ok(html.includes('adsbook<span style="color:#2563eb;">.</span>id'), "official wordmark as text: slate letters, blue dot");
+  assert.ok(contrast("#ffffff", "#2563eb") >= 4.5, "button text on brand blue");
+  assert.ok(contrast("#0f172a", "#ffffff") >= 7 && contrast("#475569", "#ffffff") >= 4.5, "ink and muted text on white");
+  assert.ok(visibleText(html)[0] === "adsbook.id", "the wordmark reads as text first, with no image");
+});
+
+test("the copy confirms creation and the next step, and does not claim verification, readiness to sell or a support reply", () => {
+  const { html, text } = sellerSignupMessage("owner@toko-a.example", "Toko A");
+  for (const body of [text, visibleText(html).join("\n")]) {
+    assert.match(body, /sudah dibuat di adsbook\.id/);
+    assert.match(body, /Langkah berikutnya: masuk ke panel toko/);
+    assert.doesNotMatch(body, /terverifikasi|diverifikasi|verifikasi|dikonfirmasi|siap (?:jual|berjualan|menerima)|mulai berjualan|hubungi|balas (?:email|pesan)|support|hello@|bantuan/i);
+    assert.match(body, /tidak menerima balasan/);
+    assert.doesNotMatch(body, /\b(?:beli|belanja|promo|diskon)\b/i, "no sales language in a service mail");
+  }
 });
 
 test("a successful signup yields exactly one logical mail: the second dispatch is a duplicate and sends nothing", async () => {
