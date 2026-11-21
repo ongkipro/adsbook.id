@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { getRuntimeEnv } from "../../../lib/env.ts";
 import { getClientIp } from "../../../lib/rate-limit.ts";
-import { signup } from "../../../platform/signup.ts";
+import { requestSignupEmailCode, signup } from "../../../platform/signup.ts";
 import { cookieValue, registrationEventId, sendCompleteRegistration } from "../../../platform/site/site.ts";
 import { notifyOperator } from "../../../platform/notify.ts";
 import { sendSellerSignupEmail } from "../../../platform/seller-email.ts";
@@ -23,6 +23,18 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   const env = (getRuntimeEnv(locals) ?? {}) as Record<string, unknown>;
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return Response.json({ success: false, error: "Payload tidak valid." }, { status: 400 });
+  // T-58 phase one: the same endpoint mails the code; nothing is reserved here.
+  if (body.action === "request_email_code") {
+    const requested = await requestSignupEmailCode(env, { email: body.email, turnstileToken: body.turnstile_token }, getClientIp(request.headers));
+    if (requested.status !== 200) {
+      return Response.json(
+        { success: false, error: requested.error, errors: "errors" in requested ? requested.errors ?? {} : {} },
+        { status: requested.status, headers: { "cache-control": "no-store" } },
+      );
+    }
+    return Response.json({ success: true, challenge_id: requested.challengeId }, { status: 200, headers: { "cache-control": "no-store" } });
+  }
+  if (body.action !== undefined) return Response.json({ success: false, error: "Payload tidak valid." }, { status: 400 });
   const result = await signup(
     env,
     {
@@ -34,6 +46,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       terms: body.terms,
       turnstileToken: body.turnstile_token,
       catalogMode: body.catalog_mode,
+      challengeId: body.challenge_id,
+      emailCode: body.email_code,
     },
     getClientIp(request.headers),
   );

@@ -34,6 +34,24 @@ import { checkSlug, suggestFreeSlugs } from "./slugs.ts";
 import { openTenantDb } from "./tenant-db.ts";
 import { issueWebhookToken } from "./webhook-secrets.ts";
 import { CURRENT_LEGAL_VERSION } from "./legal-texts.ts";
+import { emailTransportFromEnv, type EmailTransport } from "./seller-email.ts";
+import {
+  challengeClaim,
+  challengeHash,
+  codeDigest,
+  emailDigest,
+  insertChallenge,
+  isChallengeId,
+  isEmailCode,
+  markChallengeSent,
+  newChallengeId,
+  newEmailCode,
+  sendSignupCode,
+  signupCodeMessage,
+  SIGNUP_CODE_REQUESTS_PER_IP_PER_HOUR,
+  verificationKey,
+  voidChallenge,
+} from "./signup-verification.ts";
 
 /**
  * The seller terms and platform privacy notice a signup accepts (T-39,
@@ -54,9 +72,12 @@ export type SignupInput = {
   turnstileToken?: unknown;
   /** AUTH-LOGIN-REGISTER-UX-SPEC §2.4: 'physical' (the default), 'digital' or 'hybrid'. */
   catalogMode?: unknown;
+  /** T-58: the mailbox proof from `requestSignupEmailCode`. Mandatory. */
+  challengeId?: unknown;
+  emailCode?: unknown;
 };
 
-export type SignupFieldErrors = Partial<Record<"storeName" | "slug" | "email" | "whatsapp" | "password" | "terms" | "turnstile", string>>;
+export type SignupFieldErrors = Partial<Record<"storeName" | "slug" | "email" | "whatsapp" | "password" | "terms" | "turnstile" | "emailCode", string>>;
 
 export type SignupPlan = {
   storeName: string;
@@ -127,6 +148,8 @@ export type SignupDeps = {
   verifyTurnstile?: (token: unknown, ip: string) => Promise<boolean>;
   /** Tests inject a failure after a step to prove nothing half-made goes live. */
   checkpoint?: (step: ProvisionStep, tenantId: string) => void | Promise<void>;
+  /** T-58: the code mail's transport; defaults to the Worker's `EMAIL` binding. Not a bypass: the gate is the same. */
+  emailTransport?: EmailTransport | null;
 };
 
 export type SignupResult =
@@ -137,6 +160,79 @@ export { tenantHostSuffix };
 
 const EMAIL_TAKEN_MESSAGE = "Email ini sudah terdaftar untuk sebuah toko. Silakan masuk, atau gunakan email lain.";
 const EMAIL_TAKEN = { status: 409, error: EMAIL_TAKEN_MESSAGE, errors: { email: EMAIL_TAKEN_MESSAGE } } as const;
+const CODE_INVALID_MESSAGE = "Kode verifikasi salah atau sudah tidak berlaku. Minta kode baru lalu coba lagi.";
+const CODE_INVALID = { status: 400, error: CODE_INVALID_MESSAGE, errors: { emailCode: CODE_INVALID_MESSAGE } } as const;
+const TURNSTILE_FAILED = { status: 400, error: "Verifikasi keamanan gagal. Muat ulang halaman lalu coba lagi.", errors: { turnstile: "Verifikasi gagal." } } as const;
+const SIGNUP_UNAVAILABLE = { status: 503, error: "Pendaftaran belum tersedia." } as const;
+
+export type SignupCodeResult =
+  | { status: 200; challengeId: string }
+  | { status: 400 | 409 | 429 | 500 | 503; error: string; errors?: SignupFieldErrors };
+
+/**
+ * T-58 phase one: mail an 8-digit code to the exact address the signup will
+ * use. Same Turnstile and the same "email already has a store" answer as the
+ * signup (no cheaper oracle). The row is written before the send and becomes
+ * claimable only after `send()` returned; a failed send voids it and answers
+ * 503, and still counts toward the address's hourly cap.
+ */
+export async function requestSignupEmailCode(
+  env: Record<string, unknown>,
+  input: { email?: unknown; turnstileToken?: unknown },
+  ip: string,
+  deps: Pick<SignupDeps, "now" | "verifyTurnstile" | "emailTransport"> = {},
+): Promise<SignupCodeResult> {
+  const platformDb = env.PLATFORM_DB as D1Database | undefined;
+  const key = await verificationKey(env);
+  const transport = deps.emailTransport === undefined ? emailTransportFromEnv(env) : deps.emailTransport;
+  if (!platformDb || !env.TENANT_STORE || !key || !transport) return SIGNUP_UNAVAILABLE;
+  const now = (deps.now ?? (() => new Date()))().getTime();
+
+  await ensureControlPlane(platformDb);
+  const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+  if (email.length > 254 || !EMAIL_USERNAME_PATTERN.test(email)) {
+    return { status: 400, error: "Periksa kembali isian formulir.", errors: { email: "Email tidak valid." } };
+  }
+  // Each pass may send a mail: an uncounted pass (store failure) is refused, not waved through.
+  const limit = await checkRateLimit(platformDb, `signup-code:${ip}`, SIGNUP_CODE_REQUESTS_PER_IP_PER_HOUR, 60 * 60 * 1000, true, "closed");
+  if (!limit.allowed) return { status: 429, error: "Terlalu banyak permintaan kode dari jaringan ini. Coba lagi nanti." };
+  const human = await (deps.verifyTurnstile ?? ((token, address) => verifyTurnstile(env, token, address)))(input.turnstileToken, ip);
+  if (!human) return TURNSTILE_FAILED;
+  if (await emailTaken(platformDb, email)) return EMAIL_TAKEN;
+
+  const challengeId = newChallengeId();
+  const code = newEmailCode();
+  const idHash = await challengeHash(challengeId);
+  const addressDigest = await emailDigest(key, email);
+  try {
+    const inserted = await insertChallenge(platformDb, {
+      idHash,
+      emailDigest: addressDigest,
+      codeDigest: await codeDigest(key, challengeId, email, code),
+      now,
+    }).run();
+    if (Number(inserted.meta?.changes ?? 0) !== 1) {
+      return { status: 429, error: "Kode baru belum bisa dikirim ke email ini. Tunggu sebentar lalu coba lagi." };
+    }
+  } catch (error) {
+    console.error("signup-code-store-failed", { error: error instanceof Error ? error.name : "unknown" });
+    return { status: 500, error: "Kode verifikasi gagal dibuat. Coba lagi beberapa saat lagi." };
+  }
+  if (!(await sendSignupCode(transport, signupCodeMessage(email, code)))) {
+    // Never the recipient or the code in a log line.
+    console.error("signup-code-not-sent");
+    await voidChallenge(platformDb, idHash).run().catch(() => undefined);
+    return { status: 503, error: "Kode verifikasi gagal dikirim. Coba lagi beberapa saat lagi." };
+  }
+  try {
+    await platformDb.batch(markChallengeSent(platformDb, idHash, addressDigest));
+  } catch (error) {
+    // The mail left but the row is not claimable: the seller asks for a new code.
+    console.error("signup-code-mark-failed", { error: error instanceof Error ? error.name : "unknown" });
+    return { status: 500, error: "Kode verifikasi gagal dibuat. Coba lagi beberapa saat lagi." };
+  }
+  return { status: 200, challengeId };
+}
 
 /** Whether this email already signs into a store, as an owner or as a staff identifier. */
 async function emailTaken(platformDb: D1Database, email: string): Promise<boolean> {
@@ -163,7 +259,9 @@ export async function signup(
   deps: SignupDeps = {},
 ): Promise<SignupResult> {
   const platformDb = env.PLATFORM_DB as D1Database | undefined;
-  if (!platformDb || !env.TENANT_STORE) return { status: 503, error: "Pendaftaran belum tersedia." };
+  // T-58: no key, no proof can be checked; no signup (fail closed).
+  const key = await verificationKey(env);
+  if (!platformDb || !env.TENANT_STORE || !key) return SIGNUP_UNAVAILABLE;
   const now = deps.now ?? (() => new Date());
 
   await ensureControlPlane(platformDb);
@@ -179,8 +277,10 @@ export async function signup(
 
   const limit = await checkRateLimit(platformDb, `signup:${ip}`, SIGNUP_LIMIT_PER_HOUR, 60 * 60 * 1000);
   if (!limit.allowed) return { status: 429, error: "Terlalu banyak pendaftaran dari jaringan ini. Coba lagi nanti." };
+  // T-58: a proof of the right shape is required before anything costs a call.
+  if (!isChallengeId(input.challengeId) || !isEmailCode(input.emailCode)) return CODE_INVALID;
   const human = await (deps.verifyTurnstile ?? ((token, address) => verifyTurnstile(env, token, address)))(input.turnstileToken, ip);
-  if (!human) return { status: 400, error: "Verifikasi keamanan gagal. Muat ulang halaman lalu coba lagi.", errors: { turnstile: "Verifikasi gagal." } };
+  if (!human) return TURNSTILE_FAILED;
 
   // One email, one store (AUTH-LOGIN-REGISTER-UX-SPEC §1.2). Asked after the rate
   // limit and the human check, so the answer is no cheaper to harvest than a signup.
@@ -189,20 +289,32 @@ export async function signup(
   const tenantId = newTenantId();
   const host = `${plan.slug}.${tenantHostSuffix(env)}`;
   const at = now().toISOString();
+  // T-58: the challenge is consumed in the reservation batch, first; every
+  // insert carries the claim's guard, so a wrong, stale, replayed or other
+  // address's code reserves nothing, and a reservation that fails (a taken
+  // slug) rolls the consumption back with it.
+  const claim = await challengeClaim(platformDb, key, {
+    challengeId: input.challengeId,
+    email: plan.email,
+    code: input.emailCode,
+    now: now().getTime(),
+  });
   try {
-    await platformDb.batch([
+    const [, reserved] = await platformDb.batch([
+      claim.consume,
       platformDb
-        .prepare("INSERT INTO tenants (id, slug, owner_email, owner_whatsapp, status, plan_id, created_at) VALUES (?, ?, ?, ?, 'provisioning', 'pilot', ?)")
-        .bind(tenantId, plan.slug, plan.email, plan.whatsapp, at),
+        .prepare(`INSERT INTO tenants (id, slug, owner_email, owner_whatsapp, status, plan_id, created_at) SELECT ?, ?, ?, ?, 'provisioning', 'pilot', ? WHERE ${claim.guard}`)
+        .bind(tenantId, plan.slug, plan.email, plan.whatsapp, at, ...claim.guardBinds),
       platformDb
-        .prepare("INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) VALUES (?, ?, 'subdomain', 'pending', 0, ?)")
-        .bind(host, tenantId, at),
+        .prepare(`INSERT INTO tenant_hosts (host, tenant_id, kind, status, is_primary, created_at) SELECT ?, ?, 'subdomain', 'pending', 0, ? WHERE ${claim.guard}`)
+        .bind(host, tenantId, at, ...claim.guardBinds),
       // The owner's sign-in identifier, in the same transaction: a second store
       // racing for this email fails here even after the check above passed.
       platformDb
-        .prepare("INSERT INTO platform_identities (identifier, tenant_id, kind, created_at) VALUES (?, ?, 'owner_email', ?)")
-        .bind(plan.email, tenantId, at),
+        .prepare(`INSERT INTO platform_identities (identifier, tenant_id, kind, created_at) SELECT ?, ?, 'owner_email', ? WHERE ${claim.guard}`)
+        .bind(plan.email, tenantId, at, ...claim.guardBinds),
     ]);
+    if (Number(reserved.meta?.changes ?? 0) !== 1) return CODE_INVALID;
   } catch (error) {
     if (/platform_identities|owner_email/i.test(String(error))) return EMAIL_TAKEN;
     if (/UNIQUE|PRIMARY KEY|constraint/i.test(String(error))) {

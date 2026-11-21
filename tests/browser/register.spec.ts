@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { PLATFORM } from "./tenants.ts";
+import { PLATFORM, requestAndEnterCode } from "./tenants.ts";
 
 /**
- * UX-1 through the three-step wizard (AUTH-MINIMALIST-STEP-UX-SPEC §4): step 1
+ * UX-1 through the four-step wizard (AUTH-MINIMALIST-STEP-UX-SPEC §4, T-58 step 4 = the mailbox code): step 1
  * refuses an empty name, a taken address opens the editor with free
  * alternatives, the chosen plan survives the marketing rewrite, and the
  * handoff lands the new owner on that plan in /admin/billing.
@@ -48,6 +48,9 @@ test("signup with a chosen plan: the address first with free alternatives, the n
   await page.getByRole("button", { name: "Lanjut ke Keamanan →" }).click();
   await page.getByLabel("Password", { exact: true }).fill("password-aman-123");
   await page.getByRole("checkbox").check();
+  // T-58: step 3 asks for the mailbox code; the code is read from the local email capture and typed on step 4.
+  expect(await requestAndEnterCode(page, "owner@daftar-uji.local.test")).toBe(true);
+  await expect(page.locator("#stepNow")).toHaveText("4");
   await page.getByRole("button", { name: "Buat Toko Gratis →" }).click();
 
   await page.waitForURL(new RegExp(`^http://${slug}\\.localhost:\\d+/admin/billing\\?cycle=12m$`));
