@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join } from "node:path";
+import { linkProblems } from "./docs-links.ts";
 
 // Product documentation lives in a sibling repository (ADR-038). It is checked
 // when it is cloned beside this one and skipped when it is not, which is the
@@ -8,21 +9,13 @@ import { dirname, join, resolve } from "node:path";
 const DOCS_REPO = process.env.DOCS_REPO ?? "../adsbook.id-docs";
 
 const failures: string[] = [];
-const linkPattern = /\[[^\]]*\]\(([^)]+)\)/g;
 
 function check(file: string, heading: RegExp, rule: string): void {
   const source = readFileSync(file, "utf8");
   if (!heading.test(source) && !source.startsWith("---\n")) {
     failures.push(`${file}: must start with ${rule} or YAML frontmatter`);
   }
-  for (const match of source.matchAll(linkPattern)) {
-    const target = match[1].trim().replace(/^<|>$/g, "");
-    if (!target || /^(?:https?:|mailto:|#)/.test(target)) continue;
-    const path = decodeURIComponent(target.split("#", 1)[0]);
-    if (path && !existsSync(resolve(dirname(file), path))) {
-      failures.push(`${file}: missing local link ${target}`);
-    }
-  }
+  failures.push(...linkProblems(file, source));
 }
 
 // `git ls-files` still lists a file deleted in the working tree; it is not
@@ -54,6 +47,6 @@ if (failures.length) {
   console.log(
     `Documentation check passed: ${own.length} Markdown files here` +
       (docs.length ? `, ${docs.length} in ${DOCS_REPO}` : ` (${DOCS_REPO} absent, skipped)`) +
-      ", local links resolved.",
+      ", links and anchors resolved.",
   );
 }
