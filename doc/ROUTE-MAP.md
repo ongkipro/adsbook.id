@@ -467,12 +467,12 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `warehouses` | 12 | `orders` `pickup_schedules` `stores` `warehouses` | — | 1 | `/api/admin/warehouses` |
 | `weight` | 10 | — | — | 2 | — |
 | `whatsapp-numbers` | 12 | `stores` `whatsapp_numbers` | — | 1 | `/api/admin/whatsapp-numbers` |
-| `platform/admin/credentials` | 21 | — | `platform_credential_grants` `platform_sessions` `platform_users` `tenant_events` | 2 | `/api/platform/account/password` `/api/platform/akses` `/api/platform/team` `/api/platform/team/[id]` |
+| `platform/admin/credentials` | 24 | — | `platform_credential_grants` `platform_sessions` `platform_users` `tenant_events` | 2 | `/api/platform/account/password` `/api/platform/akses` `/api/platform/team` `/api/platform/team/[id]` |
 | `platform/admin/guard` | 5 | — | — | 2 | — |
 | `platform/admin/health` | 1 | — | `tenant_events` `tenant_health` `tenant_hosts` `tenants` | 1 | `/api/platform/health` |
 | `platform/admin/metrics` | 36 | — | `platform_users` `subscription_invoices` `tenant_events` `tenant_hosts` `tenant_usage_daily` `tenants` | 1 | — |
 | `platform/admin/recovery` | 2 | `admin_credentials` `admin_sessions` | `tenant_events` `tenants` | 1 | `/api/owner-recovery` |
-| `platform/admin/session` | 12 | — | `platform_sessions` `platform_users` | 3 | `/api/platform/account/password` `/api/platform/login` `/api/platform/logout` |
+| `platform/admin/session` | 14 | — | `platform_sessions` `platform_users` | 3 | `/api/platform/account/password` `/api/platform/login` `/api/platform/logout` |
 | `platform/admin/team` | 9 | — | `platform_credential_grants` `platform_sessions` `platform_users` `tenant_events` | 2 | `/api/platform/team` `/api/platform/team/[id]` |
 | `platform/admin/tenants` | 9 | — | `plans` `tenant_events` `tenant_health` `tenant_hosts` `tenants` | 2 | `/api/platform/tenants` `/api/platform/tenants/[id]` `/api/platform/tenants/[id]/[action]` |
 | `platform/admin/totp` | 6 | — | — | 3 | — |
@@ -497,7 +497,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/plans` | 7 | `rate_limits` | `plans` `rate_limits` `tenant_hosts` `tenant_usage_daily` `tenants` | 2 | `/api/admin/content` `/api/admin/media` `/api/admin/upload-r2` |
 | `platform/purge` | 12 | — | `handoff_tokens` `migration_bookmarks` `operator_notices` `platform_identities` `purge_sweeps` `tenant_events` `tenant_health` `tenant_hosts` `tenant_usage_daily` `tenants` `webhook_secrets` | 1 | `/api/admin/store-removal` |
 | `platform/readiness` | 8 | `courier_rules` `product_variants` `products` `seller_bank_accounts` `stores` `warehouses` | — | 2 | — |
-| `platform/request-log` | 6 | — | — | 1 | — |
+| `platform/request-log` | 6 | — | — | 2 | — |
 | `platform/seller-email` | 10 | — | `operator_notices` | 1 | `/api/platform/signup` |
 | `platform/shared-areas` | 5 | — | `shared_mengantar_areas` | 1 | `/api/locations` |
 | `platform/signup-verification` | 21 | — | `signup_email_challenges` | 1 | — |

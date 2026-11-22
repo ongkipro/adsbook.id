@@ -16,7 +16,12 @@ export const POST: APIRoute = async ({ request, locals, cookies }) => {
   const platformDb = (getRuntimeEnv(locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database | undefined;
   const user = locals.platformUser;
   if (!platformDb || !user) return Response.json({ success: false, error: "Unauthorized" }, { status: 401, headers: noStore });
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const parsed: unknown = await request.json().catch(() => null);
+  // Valid JSON can still be `null`, an array or a string: only an object is a request.
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return Response.json({ success: false, error: "Payload tidak valid." }, { status: 400, headers: noStore });
+  }
+  const body = parsed as Record<string, unknown>;
   const result = await changeOwnPassword(platformDb, user, { current: body.current, totp: body.totp, password: body.password });
   if (!result.ok) return Response.json({ success: false, error: result.error }, { status: result.status, headers: noStore });
   cookies.delete(PLATFORM_COOKIE_NAME, PLATFORM_COOKIE_OPTIONS);

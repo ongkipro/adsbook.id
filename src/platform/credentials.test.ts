@@ -154,7 +154,7 @@ test("IAM-11 reset link: owner-only behind a fresh step-up code; never self, nev
 });
 
 test("IAM-11 reset redemption: the link plus the enrolled authenticator; a typo does not spend it; single use under a race; expired and cross-user links do nothing", async () => {
-  const { db, owner, ownerSecret, supportSecret, user, events, everything } = await fixture();
+  const { db, owner, ownerSecret, supportSecret, user, events, everything, session } = await fixture();
   const issued = await issueCredentialGrant(db, owner, "pu_support", "password_reset", await code(ownerSecret, 0), ORIGIN, OPEN, at(0));
   assert.ok(issued.ok && issued.value);
   const token = tokenOf(issued.value.link);
@@ -180,8 +180,12 @@ test("IAM-11 reset redemption: the link plus the enrolled authenticator; a typo 
   assert.equal(after.totp_secret, totpBefore, "the authenticator is kept");
   assert.deepEqual(user("pu_owner"), ownerBefore, "nobody else changes");
   const winningStep = left.ok ? 1 : 2;
-  const reuse = await changeOwnPassword(db, { id: "pu_support", email: "cs@ops.test", role: "platform_support" }, { current: winner, totp: await code(supportSecret, winningStep), password: "reuse-password-123" }, at(winningStep));
-  assert.equal(reuse.ok || reuse.status, 401, "the code that proved the reset is spent, like a sign-in code");
+  // A live session of its own, so the refusal can only be the replayed code (Sol T-53 review).
+  session("pu_support", "after_reset");
+  const reuse = await changeOwnPassword(db, { id: "pu_support", email: "cs@ops.test", role: "platform_support", sessionId: "after_reset" }, { current: winner, totp: await code(supportSecret, winningStep), password: "reuse-password-123" }, at(winningStep));
+  assert.deepEqual(reuse, { ok: false, status: 401, error: "Kode ini sudah dipakai. Tunggu kode berikutnya." }, "the code that proved the reset is spent, like a sign-in code");
+  const fresh = await changeOwnPassword(db, { id: "pu_support", email: "cs@ops.test", role: "platform_support", sessionId: "after_reset" }, { current: winner, totp: await code(supportSecret, winningStep + 10), password: "reuse-password-123" }, at(winningStep + 10));
+  assert.ok(fresh.ok, `the same request with a fresh code succeeds: ${JSON.stringify(fresh)}`);
   const again = await consumeCredentialGrant(db, token, { password: "reset-password-again", totp: await code(supportSecret, 3) }, "198.51.100.1", OPEN, at(3));
   assert.equal(again.ok || again.status, 410, "used is used");
   assert.equal(events().filter((event) => event.kind === "platform_access_link_used").length, 1);
@@ -251,13 +255,30 @@ test("IAM-11 boundaries: the redeem API is public but same-origin only; account 
 test("IAM-11 no plaintext credential reaches a log", async () => {
   const lines: string[] = [];
   const original = { log: console.log, info: console.info, warn: console.warn, error: console.error };
-  for (const method of ["log", "info", "warn", "error"] as const) console[method] = (...args: unknown[]) => void lines.push(args.map(String).join(" "));
+  // Structured arguments are serialised, so a secret nested in a logged object is seen too (Sol T-53 review).
+  const render = (value: unknown) => {
+    if (typeof value === "string") return value;
+    try {
+      return JSON.stringify(value, (_key, inner) => (inner instanceof Error ? { name: inner.name, message: inner.message, stack: inner.stack } : inner));
+    } catch {
+      return String(value);
+    }
+  };
+  for (const method of ["log", "info", "warn", "error"] as const) console[method] = (...args: unknown[]) => void lines.push(args.map(render).join(" "));
   try {
-    const { db, owner, ownerSecret, support, supportSecret } = await fixture();
+    const { db, owner, ownerSecret, supportSecret, session } = await fixture();
     const issued = await issueCredentialGrant(db, owner, "pu_support", "password_reset", await code(ownerSecret, 0), ORIGIN, OPEN, at(0));
-    await consumeCredentialGrant(db, tokenOf(issued.ok ? issued.value!.link : ""), { password: "logged-password-1", totp: await code(supportSecret, 1) }, "198.51.100.1", OPEN, at(1));
-    await changeOwnPassword(db, support, { current: "logged-password-1", totp: await code(supportSecret, 2), password: "logged-password-2" }, at(2));
+    assert.ok(issued.ok, "issued");
+    const used = await consumeCredentialGrant(db, tokenOf(issued.value!.link), { password: "logged-password-1", totp: await code(supportSecret, 1) }, "198.51.100.1", OPEN, at(1));
+    assert.ok(used.ok, `redeemed: ${JSON.stringify(used)}`);
+    session("pu_support", "after_log_reset");
+    const changed = await changeOwnPassword(db, { id: "pu_support", email: "cs@ops.test", role: "platform_support", sessionId: "after_log_reset" }, { current: "logged-password-1", totp: await code(supportSecret, 2), password: "logged-password-2" }, at(2));
+    assert.ok(changed.ok, `changed: ${JSON.stringify(changed)}`);
+    // The request-log line of the redemption route, as the middleware writes it.
+    const { buildRequestLog, writeRequestLog } = await import("./request-log.ts");
+    writeRequestLog(buildRequestLog({ request_id: "r", host_kind: "platform", tenant_id: null, route: "/api/platform/akses", method: "POST", status: 200, duration_ms: 1 }));
     const all = lines.join("\n");
+    assert.ok(all.includes("/api/platform/akses"), "the scan reads the captured output, so it is not vacuous");
     for (const secret of ["logged-password-1", "logged-password-2", issued.ok ? tokenOf(issued.value!.link) : "-", supportSecret, ownerSecret]) assert.ok(!all.includes(secret));
   } finally {
     Object.assign(console, original);
@@ -684,4 +705,121 @@ test("IAM-11 add member is all or nothing even when authority lapses between the
   assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_users WHERE email = 'between@ops.test'").get()!.n, 0);
   assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_credential_grants").get()!.n, 0);
   assert.deepEqual(f.events(), []);
+});
+
+// ---- Sol review of PR #55 (2026-11-22): one test per finding ----
+
+test("Sol P1: a not-before cutoff later than the issuance time refuses the link before anything is written (reset link and add member)", async () => {
+  const later = (now: Date) => () => credentialLinkPolicy({ PLATFORM_CREDENTIAL_LINKS: new Date(now.getTime() + 60_000).toISOString() });
+  {
+    const f = await fixture();
+    f.session("pu_support", "kept");
+    const before = { grants: f.db.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_credential_grants").get()!.n, events: f.events().length };
+    const result = await issueCredentialGrant(f.db, f.owner, "pu_support", "password_reset", await code(f.ownerSecret, 0), ORIGIN, later(at(0)), at(0));
+    assert.equal(result.ok || result.status, 503, "a link born before the cutoff is refused");
+    assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_credential_grants").get()!.n, before.grants, "no grant");
+    assert.equal(f.events().length, before.events, "no audit row");
+    assert.equal(f.open("kept"), true, "the target's sessions are not revoked for a dead link");
+  }
+  {
+    const f = await fixture();
+    const added = await addTeamMember(f.db, f.owner, { email: "late@ops.test", role: "platform_support", totp: await code(f.ownerSecret, 0) }, ORIGIN, later(at(0)), at(0));
+    assert.equal(added.ok || added.status, 503, "no member with a link that could never be used");
+    assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_users WHERE email = 'late@ops.test'").get()!.n, 0);
+  }
+  {
+    // A cutoff already in the past does not block new links.
+    const f = await fixture();
+    const past = () => credentialLinkPolicy({ PLATFORM_CREDENTIAL_LINKS: new Date(at(0).getTime() - 60_000).toISOString() });
+    const ok = await issueCredentialGrant(f.db, f.owner, "pu_support", "password_reset", await code(f.ownerSecret, 0), ORIGIN, past, at(0));
+    assert.ok(ok.ok, JSON.stringify(ok));
+    assert.ok((await peekCredentialGrant(f.db, tokenOf(ok.value!.link), "198.51.100.1", past, at(0))).ok, "and that link is redeemable");
+  }
+});
+
+test("Sol P2: disabling or demoting an owner revokes the open links that owner issued; other owners' links stay", async () => {
+  const f = await fixture();
+  const secondSecret = newTotpSecret();
+  f.db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES ('pu_owner2', 'owner2@ops.test', ?, ?, 'platform_owner', ?)").run(await hashAdminPassword(OWNER_PASSWORD), secondSecret, at(-100).toISOString());
+  f.session("pu_owner2", "auth_owner2");
+  const owner2: PlatformUser = { id: "pu_owner2", email: "owner2@ops.test", role: "platform_owner", sessionId: "auth_owner2" };
+  // owner2 (later compromised) invites a pending second owner; owner invites a support member.
+  const byOwner2 = await addTeamMember(f.db, owner2, { email: "pending-owner@ops.test", role: "platform_owner", totp: await code(secondSecret, 0) }, ORIGIN, OPEN, at(0));
+  const byOwner = await addTeamMember(f.db, f.owner, { email: "pending-cs@ops.test", role: "platform_support", totp: await code(f.ownerSecret, 1) }, ORIGIN, OPEN, at(1));
+  assert.ok(byOwner2.ok && byOwner.ok);
+  const disabled = await setTeamMemberDisabled(f.db, f.owner, "pu_owner2", true, at(2));
+  assert.ok(disabled.ok, JSON.stringify(disabled));
+  assert.equal((await peekCredentialGrant(f.db, tokenOf(byOwner2.value!.link), "198.51.100.1", OPEN, at(2))).ok, false, "the disabled owner's outstanding link is dead");
+  assert.ok((await peekCredentialGrant(f.db, tokenOf(byOwner.value!.link), "198.51.100.1", OPEN, at(2))).ok, "another owner's link stays");
+
+  // Demotion: same rule.
+  const g = await fixture();
+  g.db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES ('pu_owner2', 'owner2@ops.test', ?, ?, 'platform_owner', ?)").run(await hashAdminPassword(OWNER_PASSWORD), secondSecret, at(-100).toISOString());
+  g.session("pu_owner2", "auth_owner2");
+  const issued = await addTeamMember(g.db, owner2, { email: "pending2@ops.test", role: "platform_support", totp: await code(secondSecret, 3) }, ORIGIN, OPEN, at(3));
+  assert.ok(issued.ok);
+  const demoted = await setTeamMemberRole(g.db, g.owner, "pu_owner2", "platform_support", at(4));
+  assert.ok(demoted.ok, JSON.stringify(demoted));
+  assert.equal((await peekCredentialGrant(g.db, tokenOf(issued.value!.link), "198.51.100.1", OPEN, at(4))).ok, false, "a demoted owner's outgoing link is dead");
+  // A promotion revokes nothing the member issued.
+  const h = await fixture();
+  const promote = await setTeamMemberRole(h.db, h.owner, "pu_support", "platform_owner", at(5));
+  assert.ok(promote.ok);
+});
+
+test("Sol P2: a pending operator and an unknown address cost the same full password derivation", async () => {
+  const { loginVerifierHash, DUMMY_PASSWORD_HASH } = await import("./admin/session.ts");
+  const { NOT_ENROLLED_HASH } = await import("./admin/credentials.ts");
+  assert.equal(loginVerifierHash(NOT_ENROLLED_HASH), DUMMY_PASSWORD_HASH, "the pending sentinel runs the dummy derivation");
+  assert.equal(loginVerifierHash(undefined), DUMMY_PASSWORD_HASH, "an unknown address too");
+  assert.equal(loginVerifierHash(null), DUMMY_PASSWORD_HASH);
+  const real = await hashAdminPassword("operator-password-1");
+  assert.equal(loginVerifierHash(real), real, "an enrolled account verifies against its own hash");
+  // The dummy is a well-formed hash at the real iteration count: the derivation runs, and never matches.
+  assert.match(DUMMY_PASSWORD_HASH, /^pbkdf2-sha256\$100000\$/);
+  assert.equal(await verifyPasswordHash("anything", DUMMY_PASSWORD_HASH), false);
+});
+
+test("Sol P2: a reset link's code attempts share one budget across addresses; exhausting it does not consume the link", async () => {
+  const { GRANT_TOTP_ATTEMPTS } = await import("./admin/credentials.ts");
+  const f = await fixture();
+  const issued = await issueCredentialGrant(f.db, f.owner, "pu_support", "password_reset", await code(f.ownerSecret, 0), ORIGIN, OPEN, at(0));
+  assert.ok(issued.ok);
+  const token = tokenOf(issued.value!.link);
+  for (let attempt = 0; attempt < GRANT_TOTP_ATTEMPTS; attempt += 1) {
+    const wrong = await consumeCredentialGrant(f.db, token, { password: "budget-password-12", totp: "000000" }, `198.51.100.${10 + attempt}`, OPEN, at(1));
+    assert.equal(wrong.ok || wrong.status, 401, `attempt ${attempt + 1} from its own address`);
+  }
+  const next = await consumeCredentialGrant(f.db, token, { password: "budget-password-12", totp: await code(f.supportSecret, 1) }, "203.0.113.99", OPEN, at(1));
+  assert.equal(next.ok || next.status, 429, "a fresh address with a correct code is still refused: the budget belongs to the link");
+  assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_credential_grants WHERE consumed_at IS NOT NULL").get()!.n, 0, "the link is not consumed");
+  // Fail closed: a store error on the budget refuses.
+  const g = await fixture();
+  const again = await issueCredentialGrant(g.db, g.owner, "pu_support", "password_reset", await code(g.ownerSecret, 0), ORIGIN, OPEN, at(0));
+  assert.ok(again.ok);
+  g.db.failWhen = /platform-grant-totp|rate_limits/;
+  const original = console.error;
+  console.error = () => undefined;
+  try {
+    const refused = await consumeCredentialGrant(g.db, tokenOf(again.value!.link), { password: "budget-password-12", totp: await code(g.supportSecret, 1) }, "198.51.100.50", OPEN, at(1));
+    assert.equal(refused.ok, false, "no budget, no attempt");
+  } finally {
+    console.error = original;
+    g.db.failWhen = null;
+  }
+});
+
+test("Sol P3: a JSON body that is not an object is a 400 on the redemption and the password-change endpoints", async () => {
+  const aksesRoute = await import("../pages/api/platform/akses.ts");
+  const passwordRoute = await import("../pages/api/platform/account/password.ts");
+  const f = await fixture();
+  const env = { PLATFORM_DB: f.db };
+  for (const raw of ["null", "[]", '"text"', "7"]) {
+    const request = new Request(`${ORIGIN}/api/platform/akses`, { method: "POST", headers: { "content-type": "application/json" }, body: raw });
+    const response = await aksesRoute.POST({ request, locals: { runtimeEnv: env } } as never);
+    assert.equal(response.status, 400, `akses ${raw}`);
+    const own = new Request(`${ORIGIN}/api/platform/account/password`, { method: "POST", headers: { "content-type": "application/json" }, body: raw });
+    const changed = await passwordRoute.POST({ request: own, locals: { runtimeEnv: env, platformUser: f.support }, cookies: { delete: () => undefined } } as never);
+    assert.equal(changed.status, 400, `password ${raw}`);
+  }
 });

@@ -63,6 +63,19 @@ export function readPlatformCookie(request: Request): string | null {
 
 export type LoginResult = { ok: true; cookie: string; user: PlatformUser } | { ok: false; status: 401 | 429 | 503 };
 
+/** A well-formed PBKDF2 hash no password matches: the work an unknown address costs. */
+export const DUMMY_PASSWORD_HASH = "pbkdf2-sha256$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+/**
+ * The hash a sign-in verifies against. A stored value that is not a PBKDF2 hash
+ * (a pending member's `!enrollment-pending` sentinel, an unknown address) runs
+ * the same full dummy derivation, so a pending operator email cannot be told
+ * apart from an unknown one by timing (Sol T-53 review). Never matches.
+ */
+export function loginVerifierHash(stored: string | null | undefined): string {
+  return typeof stored === "string" && stored.startsWith("pbkdf2-sha256$") ? stored : DUMMY_PASSWORD_HASH;
+}
+
 export async function platformLogin(
   env: Record<string, unknown>,
   input: { email?: unknown; password?: unknown; totp?: unknown },
@@ -86,7 +99,7 @@ export async function platformLogin(
     : null;
   // Both checks always run, so timing does not tell which failed.
   const [passwordOk, totpStep] = await Promise.all([
-    verifyPasswordHash(password, row?.password_hash ?? "pbkdf2-sha256$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+    verifyPasswordHash(password, loginVerifierHash(row?.password_hash)),
     verifyTotp(row?.totp_secret ?? "AAAAAAAAAAAAAAAA", input.totp),
   ]);
   // MFA is required: a user without an enrolled secret cannot sign in at all.

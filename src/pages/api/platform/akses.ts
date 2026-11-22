@@ -22,7 +22,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const links = () => credentialLinkPolicy(env);
   if (!platformDb) return Response.json({ success: false, error: "Belum tersedia." }, { status: 503, headers: noStore });
   await ensureControlPlane(platformDb);
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const parsed: unknown = await request.json().catch(() => null);
+  // Valid JSON can still be `null`, an array or a string: only an object is a request.
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return Response.json({ success: false, error: "Payload tidak valid." }, { status: 400, headers: noStore });
+  }
+  const body = parsed as Record<string, unknown>;
   const ip = getClientIp(request.headers);
   if (body.op === "peek") {
     const result = await peekCredentialGrant(platformDb, body.token, ip, links);

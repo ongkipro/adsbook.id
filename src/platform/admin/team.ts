@@ -6,7 +6,7 @@
  * active, enrolled platform_owner always remains. Every change is audited in `tenant_events` under the
  * platform key `_platform` with actor, before and after (IAM-6).
  */
-import { activeOwner, GRANT_PAGE, grantStatements, issueCredentialGrant, type LinkGate, liveSession, NOT_ENROLLED_HASH, PLATFORM_EVENTS_TENANT, revokeOpenGrants, stepUp } from "./credentials.ts";
+import { activeOwner, bornDead, GRANT_PAGE, grantStatements, issueCredentialGrant, type LinkGate, liveSession, NOT_ENROLLED_HASH, PLATFORM_EVENTS_TENANT, revokeIssuedGrants, revokeOpenGrants, stepUp } from "./credentials.ts";
 import type { PlatformRole, PlatformUser } from "./session.ts";
 
 export { PLATFORM_EVENTS_TENANT };
@@ -84,7 +84,7 @@ export async function addTeamMember(
   // One authorization decision: the member insert. The grant follows its result.
   const grant = await grantStatements(platformDb, actor, { id, email }, "enrollment", now, true);
   const [grantInsert, ...grantFollowUps] = grant.statements;
-  if (!links().open) return closed; // re-read at commit
+  if (bornDead(links(), now)) return closed; // re-read at commit: links off, or a cutoff would kill this link
   let results: D1Result[];
   try {
     results = await platformDb.batch([
@@ -197,6 +197,10 @@ export async function setTeamMemberDisabled(
       .bind(PLATFORM_EVENTS_TENANT, `platform:${actor.id}`, at, JSON.stringify({ user: userId, email: target.email, role: target.role, before: "active", after: "disabled" })),
     platformDb.prepare(`UPDATE platform_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL AND ${thisWrite}`).bind(at, userId, userId, at, after),
     revokeOpenGrants(platformDb, userId, at, thisWrite, userId, at, after),
+    // Links this operator issued die with their authority (Sol T-53 review): a
+    // disabled, possibly compromised owner's outstanding enrollment link for a
+    // second owner must not stay redeemable.
+    revokeIssuedGrants(platformDb, userId, at, thisWrite, userId, at, after),
   ]);
   if (Number(changed.meta?.changes ?? 0) !== 1) return NOT_SAVED;
   return { ok: true, message: `${target.email} dinonaktifkan; sesinya ditutup.` };
@@ -243,6 +247,16 @@ export async function setTeamMemberRole(
     // change is the one that happened: chained on the audit row, written only
     // if the role UPDATE changed a row. A losing concurrent change revokes nothing.
     revokeOpenGrants(platformDb, userId, now.toISOString(), "changes() = 1"),
+    // A demoted owner's outgoing links die too: whenever this member is not an
+    // owner after the role UPDATE (a promotion, or a losing demotion, revokes nothing
+    // because the member is still or again an owner).
+    revokeIssuedGrants(
+      platformDb,
+      userId,
+      now.toISOString(),
+      "EXISTS (SELECT 1 FROM platform_users WHERE id = ? AND role <> 'platform_owner')",
+      userId,
+    ),
   ]);
   if (Number(changed.meta?.changes ?? 0) !== 1) return NOT_SAVED;
   return { ok: true, message: `${target.email} sekarang ${next === "platform_owner" ? "Owner" : "Support"}.` };

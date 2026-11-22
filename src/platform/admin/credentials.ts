@@ -80,7 +80,18 @@ export function credentialLinkPolicy(env: Record<string, unknown> | null | undef
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/.test(raw) && !Number.isNaN(Date.parse(raw))) return { open: true, notBefore: new Date(raw).toISOString() };
   return { open: false, notBefore: null };
 }
+/** Code attempts per grant per 15 minutes, across every address. */
+export const GRANT_TOTP_ATTEMPTS = 5;
 const LINKS_CLOSED = { ok: false as const, status: 503, error: "Tautan akses sedang dinonaktifkan oleh owner platform. Coba lagi nanti." };
+
+/**
+ * Whether a grant created at `now` would be dead on arrival under `policy`:
+ * links off, or a not-before cutoff later than its creation time. Issuance
+ * checks this at commit and refuses before writing anything (Sol T-53 review).
+ */
+export function bornDead(policy: LinkPolicy, now: Date): boolean {
+  return !policy.open || (policy.notBefore !== null && now.toISOString() < policy.notBefore);
+}
 
 export type CredentialResult<T = undefined> = { ok: true; message: string; value?: T } | { ok: false; status: number; error: string };
 
@@ -176,6 +187,12 @@ export const revokeOpenGrants = (platformDb: D1Database, userId: string, at: str
     .prepare(`UPDATE platform_credential_grants SET revoked_at = ? WHERE user_id = ? AND consumed_at IS NULL AND revoked_at IS NULL AND ${fence}`)
     .bind(at, userId, ...fenceArgs);
 
+/** Revokes the open grants an operator ISSUED (as `actor_id`), inside another batch, behind that batch's fence. */
+export const revokeIssuedGrants = (platformDb: D1Database, actorId: string, at: string, fence: string, ...fenceArgs: unknown[]) =>
+  platformDb
+    .prepare(`UPDATE platform_credential_grants SET revoked_at = ? WHERE actor_id = ? AND consumed_at IS NULL AND revoked_at IS NULL AND ${fence}`)
+    .bind(at, actorId, ...fenceArgs);
+
 /** The acting owner, as of the write itself: active, enrolled, still an owner. Every credential write is fenced on it. */
 export const activeOwner = (userRef = "?") =>
   `EXISTS (SELECT 1 FROM platform_users WHERE id = ${userRef} AND role = 'platform_owner' AND disabled_at IS NULL AND totp_secret IS NOT NULL)`;
@@ -261,7 +278,9 @@ export async function issueCredentialGrant(
   const stepped = await stepUp(platformDb, actor, stepUpCode, now);
   if (!stepped.ok) return stepped;
   const grant = await grantStatements(platformDb, actor, { id: targetId, email: target.email }, purpose, now);
-  if (!links().open) return LINKS_CLOSED; // re-read at commit
+  // Re-read at commit. A grant created before a not-before cutoff could never be
+  // redeemed, yet issuing it would still revoke the target's sessions and links.
+  if (bornDead(links(), now)) return LINKS_CLOSED;
   const [inserted] = await platformDb.batch(grant.statements);
   if (Number(inserted.meta?.changes ?? 0) !== 1) return { ok: false, status: 409, error: "Sesi, peran Anda, atau status pengguna ini berubah. Muat ulang halaman." };
   return {
@@ -335,6 +354,11 @@ export async function consumeCredentialGrant(
   if (problem) return { ok: false, status: 422, error: problem };
   const enrolling = grant.purpose === "enrollment";
   const secret = enrolling ? (typeof input.totpSecret === "string" && /^[A-Z2-7]{32}$/.test(input.totpSecret) ? input.totpSecret : "") : grant.totp_secret;
+  // A reset's second factor is a 6-digit code: a leaked link must not get a
+  // fresh allowance from every address. One budget per grant, shared across IPs
+  // and fail-closed; exhausting it refuses without consuming the grant (Sol T-53 review).
+  const budget = await checkRateLimit(platformDb, `platform-grant-totp:${grant.id}`, GRANT_TOTP_ATTEMPTS, 15 * 60 * 1000, true, "closed");
+  if (!budget.allowed) return { ok: false, status: 429, error: "Terlalu banyak percobaan kode untuk tautan ini. Coba lagi dalam 15 menit." };
   const step = await verifyTotp(secret, input.totp, now.getTime());
   if (!secret || step === null) return { ok: false, status: 401, error: "Kode autentikator salah." };
   // A reset proves the enrolled authenticator, and that code is spent like a sign-in code.
