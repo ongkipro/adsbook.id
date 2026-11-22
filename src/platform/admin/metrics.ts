@@ -413,6 +413,9 @@ export const EVENT_LABELS: Record<string, string> = {
   platform_user_enabled: "Pengguna platform diaktifkan",
   platform_user_role_changed: "Peran pengguna platform diubah",
   platform_user_reset: "Akses pengguna platform direset",
+  platform_password_changed: "Password platform diganti sendiri",
+  platform_access_link_issued: "Tautan akses platform dibuat",
+  platform_access_link_used: "Tautan akses platform dipakai",
 };
 
 /** One readable line from an event's detail; keys it does not know are left out (never a secret). */
@@ -428,7 +431,8 @@ export function describeEvent(detailJson: string | null): string {
   const text = (value: unknown) => (typeof value === "string" || typeof value === "number" ? String(value) : "");
   const WORDS: Record<string, string> = {
     platform_owner: "Owner", platform_support: "Support", active: "aktif", disabled: "nonaktif", suspended: "ditangguhkan",
-    access: "akses lama", reset: "akses baru",
+    access: "akses lama", reset: "akses baru", pending: "menunggu aktivasi", password: "password lama", changed: "password baru",
+    password_reset: "reset password", enrollment: "aktivasi",
   };
   const word = (value: unknown) => WORDS[text(value)] ?? text(value);
   if (detail.invoice) parts.push(text(detail.invoice));
@@ -438,6 +442,7 @@ export function describeEvent(detailJson: string | null): string {
   if (detail.channel) parts.push(text(detail.channel));
   if (detail.email) parts.push(text(detail.email));
   if (detail.role) parts.push(word(detail.role));
+  if (detail.purpose) parts.push(word(detail.purpose));
   if (detail.host) parts.push(text(detail.host));
   if (detail.step) parts.push(`langkah ${text(detail.step)}`);
   if (typeof detail.before === "string" && typeof detail.after === "string") parts.push(`${word(detail.before)} → ${word(detail.after)}`);

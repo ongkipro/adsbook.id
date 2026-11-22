@@ -24,7 +24,11 @@
  * AUTOINCREMENT ids) and D1's own `_cf_*` tables. `EPHEMERAL_TABLES` keep their
  * schema but not their rows: live session and handoff token hashes and rate
  * windows help no recovery, and leaving them out keeps live sessions out of
- * every copy (SEC-6). Everything else — tenants, hosts, plans, invoices,
+ * every copy (SEC-6). Operator credential grants (IAM-11) are left out for the
+ * same reason and one more: a copy taken before a link was used or revoked
+ * would bring it back redeemable. Their issue/use audit rows stay in
+ * `tenant_events`; after a restore, links reopen only behind a
+ * `PLATFORM_CREDENTIAL_LINKS` instant (PLATFORM-RUNBOOK). Everything else — tenants, hosts, plans, invoices,
  * platform users (password hash and TOTP secret, needed to sign in after a
  * restore), webhook secrets, events, health, usage, notices, bookmarks, purge
  * sweeps, the shared Mengantar areas and the `d1_migrations` ledger — is kept
@@ -32,7 +36,7 @@
  */
 
 /** Tables whose rows are never written to a backup (their `CREATE TABLE` is). */
-export const EPHEMERAL_TABLES: ReadonlySet<string> = new Set(["platform_sessions", "handoff_tokens", "rate_limits"]);
+export const EPHEMERAL_TABLES: ReadonlySet<string> = new Set(["platform_sessions", "handoff_tokens", "rate_limits", "platform_credential_grants"]);
 
 /** The UTC hour from which the cron writes the day's file (01:07 UTC, 08:07 WIB). */
 export const BACKUP_FROM_UTC_HOUR = 1;

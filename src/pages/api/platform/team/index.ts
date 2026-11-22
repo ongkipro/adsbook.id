@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getRuntimeEnv } from "../../../../lib/env.ts";
+import { credentialLinkPolicy } from "../../../../platform/admin/credentials.ts";
 import { addTeamMember, listTeam } from "../../../../platform/admin/team.ts";
 
 export const prerender = false;
@@ -15,16 +16,15 @@ export const GET: APIRoute = async ({ locals }) => {
   return Response.json({ success: true, data: { team: await listTeam(platformDb) } }, { headers: noStore });
 };
 
-/** Adds a member; the TOTP secret is in this one response and nowhere else. */
+/** Adds a member (owner step-up code in `totp`); the enrollment link is in this one response and nowhere else. */
 export const POST: APIRoute = async ({ request, locals }) => {
-  const platformDb = (getRuntimeEnv(locals) as Record<string, unknown> | undefined)?.PLATFORM_DB as D1Database | undefined;
+  const env = getRuntimeEnv(locals) as Record<string, unknown> | undefined;
+  const platformDb = env?.PLATFORM_DB as D1Database | undefined;
   const user = locals.platformUser;
   if (!platformDb || !user) return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const result = await addTeamMember(platformDb, user, body);
+  const result = await addTeamMember(platformDb, user, body, new URL(request.url).origin, () => credentialLinkPolicy(env));
   if (!result.ok) return Response.json({ success: false, error: result.error }, { status: result.status, headers: noStore });
-  return Response.json(
-    { success: true, message: result.message, data: { id: result.value!.id, email: result.value!.email, totp_secret: result.value!.totpSecret, otpauth_uri: result.value!.otpauthUri } },
-    { status: 201, headers: noStore },
-  );
+  const { id, email, link, expiresAt } = result.value!;
+  return Response.json({ success: true, message: result.message, data: { id, email, link, expires_at: expiresAt, purpose: "enrollment" } }, { status: 201, headers: noStore });
 };

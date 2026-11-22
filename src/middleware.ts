@@ -64,7 +64,8 @@ function applySecurityHeaders(
   // keep. No preload either - that one is close to irreversible. A store that
   // wants both can turn on zone-level HSTS in Cloudflare.
   response.headers.set('Strict-Transport-Security', 'max-age=31536000');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // A route that asked for no referrer at all (the operator-link page, IAM-11) keeps it.
+  if (response.headers.get('Referrer-Policy') !== 'no-referrer') response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   if (isPrivate) {
     // O2O: a seller's own Cloudflare cache rules run first; `private` keeps them off it (T-25).

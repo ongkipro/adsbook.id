@@ -1,0 +1,15 @@
+---
+import PlatformLayout from '../PlatformLayout.astro';
+import AdminPageHeader from '../../admin/AdminPageHeader.astro';
+import { AccountPassword } from '../AccountPassword';
+
+// IAM-11 (T-53): every operator changes their own password here; nobody else can.
+const user = Astro.locals.platformUser!;
+---
+<PlatformLayout title="Akun" description="Password akun console Anda">
+  <div class="space-y-4 md:space-y-5">
+    <AdminPageHeader title="Akun saya" description={`${user.email} · ganti password dengan password sekarang dan kode autentikator.`} />
+    <AccountPassword client:load email={user.email} />
+    <p class="max-w-md text-xs leading-5 text-slate-500">Lupa password? Minta owner platform membuat tautan reset. Kehilangan autentikator, atau Anda owner: ikuti prosedur pemulihan break-glass bersama owner lain — console tidak punya tombol untuk mereset keduanya.</p>
+  </div>
+</PlatformLayout>

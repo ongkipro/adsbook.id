@@ -1,0 +1,146 @@
+---
+import { BRAND_WORDMARK, BRAND_WORDMARK_ON_DARK } from '../../lib/brand-assets';
+import PlatformLayout from '../../components/platform/PlatformLayout.astro';
+export const prerender = false;
+
+// IAM-11 (T-53): redeem a single-use operator link — set a password after an
+// owner-assisted reset (the enrolled authenticator is still required), or
+// enroll a new account (password + a code from the new authenticator). The
+// token is in the URL fragment: no request carries it, so it reaches no log;
+// the page moves it into a POST body and removes it from the address bar.
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+---
+<PlatformLayout title="Atur akses">
+  <main class="admin-login-stage" aria-labelledby="accessTitle">
+    <div class="admin-login-brand relative isolate hidden flex-col justify-center overflow-hidden bg-slate-950 p-10 text-white lg:flex xl:p-14">
+      <div class="login-brand-grid" aria-hidden="true"></div>
+      <section class="relative max-w-md" aria-labelledby="accessBrandTitle">
+        <div class="flex items-center gap-2.5">
+          <img src={BRAND_WORDMARK_ON_DARK} alt="adsbook.id" width="126" height="20" loading="eager" class="h-5 w-auto opacity-90" />
+          <span class="rounded-md bg-white/10 px-2 py-0.5 text-xs font-medium tracking-wide text-slate-300">platform</span>
+        </div>
+        <h2 id="accessBrandTitle" class="mt-4 text-3xl font-semibold leading-tight">Tautan sekali pakai dari owner platform.</h2>
+        <p class="mt-3 text-sm leading-6 text-slate-300">Hanya berlaku singkat. Password dan kode autentikator tidak pernah dikirim ke siapa pun selain console ini.</p>
+      </section>
+    </div>
+    <div class="admin-login-form-wrapper">
+      <div class="admin-login-card">
+        <div class="admin-login-header text-center lg:text-left">
+          <p class="login-wordmark">
+            <img src={BRAND_WORDMARK} alt="adsbook.id" width="138" height="22" loading="eager" class="h-[22px] w-auto shrink-0" />
+          </p>
+          <h1 id="accessTitle" class="mt-4 text-xl font-semibold text-slate-900">Memeriksa tautan…</h1>
+          <p id="accessLead" class="mt-2 text-sm text-slate-500" aria-live="polite"></p>
+        </div>
+        <div class="admin-login-form-content">
+          <div id="accessErrorBox" class="mb-6 hidden rounded-xl border border-rose-200 bg-rose-50 p-4" role="alert" aria-live="assertive">
+            <p id="accessError" class="text-sm leading-relaxed text-rose-800"></p>
+          </div>
+          <form id="accessForm" method="post" action="/platform/akses" novalidate hidden aria-busy="false">
+            <fieldset id="accessFields" class="m-0 min-w-0 space-y-4 border-0 p-0" disabled>
+            <div id="enrolBox" class="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" hidden>
+              <p class="text-xs font-medium text-amber-900">1. Tambahkan ke aplikasi autentikator (Google Authenticator, 1Password, Authy)</p>
+              <p class="text-xs text-amber-900">Kunci rahasia</p>
+              <code id="enrolSecret" class="break-all font-mono text-sm"></code>
+              <a id="enrolUri" class="text-xs font-medium text-amber-900 underline underline-offset-2" href="#">Buka di aplikasi autentikator</a>
+            </div>
+            <div class="space-y-2">
+              <label for="password" class="text-sm font-semibold text-slate-900">Password baru</label>
+              <input id="password" name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" class="admin-input-flat" aria-describedby="password-hint password-error" data-msg-missing="Masukkan password baru." data-msg-short="Password minimal 12 karakter." />
+              <p id="password-hint" class="text-xs text-slate-500">12–128 karakter, bukan email Anda.</p>
+              <p id="password-error" class="admin-field-error" hidden></p>
+            </div>
+            <div class="space-y-2">
+              <label for="confirm" class="text-sm font-semibold text-slate-900">Ulangi password baru</label>
+              <input id="confirm" name="confirm" type="password" required maxlength="128" autocomplete="new-password" class="admin-input-flat" aria-describedby="confirm-error" data-msg-missing="Ulangi password baru." />
+              <p id="confirm-error" class="admin-field-error" hidden></p>
+            </div>
+            <div class="space-y-2">
+              <label for="totp" id="totpLabel" class="text-sm font-semibold text-slate-900">Kode autentikator</label>
+              <input id="totp" name="totp" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6 digit" class="admin-input-flat font-mono tracking-widest" aria-describedby="totp-error" data-msg-missing="Masukkan kode 6 digit dari aplikasi autentikator." data-msg-invalid="Kode autentikator terdiri dari 6 angka." />
+              <p id="totp-error" class="admin-field-error" hidden></p>
+            </div>
+            <button id="accessSubmit" type="submit" class="mt-1 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[#1D4ED8] disabled:text-white/80">Simpan</button>
+            </fieldset>
+          </form>
+          <a id="accessDone" href="/platform/login" class="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white" hidden>Masuk ke console</a>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script>
+    import { bindInlineValidation, validateInline } from '../../lib/form-validation-id.ts';
+
+    const token = window.location.hash.slice(1);
+    // Out of the address bar and history at once; the page keeps it in memory only.
+    if (token) history.replaceState(null, '', window.location.pathname);
+    // A second link opened in this tab changes only the fragment: start over with it.
+    window.addEventListener('hashchange', () => window.location.reload());
+    const title = document.getElementById('accessTitle') as HTMLElement;
+    const lead = document.getElementById('accessLead') as HTMLElement;
+    const form = document.getElementById('accessForm') as HTMLFormElement;
+    const errorBox = document.getElementById('accessErrorBox') as HTMLElement;
+    const error = document.getElementById('accessError') as HTMLElement;
+    const button = document.getElementById('accessSubmit') as HTMLButtonElement;
+    const done = document.getElementById('accessDone') as HTMLAnchorElement;
+    const confirmField = document.getElementById('confirm') as HTMLInputElement;
+    const password = document.getElementById('password') as HTMLInputElement;
+    let totpSecret: string | undefined;
+    const showError = (text: string) => { error.textContent = text; errorBox.classList.toggle('hidden', !text); };
+    const call = async (body: Record<string, unknown>) => {
+      const response = await fetch('/api/platform/akses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, ...body }) }).catch(() => null);
+      return ((await response?.json().catch(() => null)) ?? { success: false, error: 'Koneksi terputus. Coba lagi.' }) as { success?: boolean; error?: string; message?: string; data?: { purpose: string; email: string; totp_secret?: string; otpauth_uri?: string } };
+    };
+    const dead = (text: string) => { title.textContent = 'Tautan tidak berlaku'; lead.textContent = ''; showError(text); };
+
+    bindInlineValidation(form);
+    confirmField.addEventListener('input', () => confirmField.setCustomValidity(''));
+    (async () => {
+      if (!/^[0-9a-f]{64}$/.test(token)) return dead('Tautan ini tidak lengkap. Buka lagi dari pesan yang Anda terima, atau minta tautan baru ke owner platform.');
+      const payload = await call({ op: 'peek' });
+      if (!payload.success || !payload.data) return dead(payload.error ?? 'Tautan ini tidak berlaku lagi.');
+      const enrolling = payload.data.purpose === 'enrollment';
+      title.textContent = enrolling ? 'Aktifkan akun console' : 'Atur password baru';
+      lead.textContent = enrolling
+        ? `Untuk ${payload.data.email}. Pasang autentikator, lalu buat password.`
+        : `Untuk ${payload.data.email}. Kode dari autentikator Anda yang sekarang tetap diperlukan.`;
+      if (enrolling && payload.data.totp_secret) {
+        totpSecret = payload.data.totp_secret;
+        (document.getElementById('enrolBox') as HTMLElement).hidden = false;
+        (document.getElementById('enrolSecret') as HTMLElement).textContent = totpSecret;
+        (document.getElementById('enrolUri') as HTMLAnchorElement).href = payload.data.otpauth_uri ?? '#';
+        (document.getElementById('totpLabel') as HTMLElement).textContent = '2. Kode dari autentikator baru';
+      }
+      button.textContent = enrolling ? 'Aktifkan akun' : 'Simpan password';
+      (document.getElementById('accessFields') as HTMLFieldSetElement).disabled = false;
+      form.hidden = false;
+      password.focus();
+    })();
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (button.disabled) return;
+      confirmField.setCustomValidity(confirmField.value && confirmField.value !== password.value ? 'Password tidak sama.' : '');
+      if (!validateInline(form)) return;
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Menyimpan…';
+      form.setAttribute('aria-busy', 'true');
+      showError('');
+      const values = new FormData(form);
+      const payload = await call({ op: 'use', password: values.get('password'), totp: values.get('totp'), totp_secret: totpSecret });
+      form.setAttribute('aria-busy', 'false');
+      if (!payload.success) {
+        button.disabled = false;
+        button.textContent = label;
+        return showError(payload.error ?? 'Gagal menyimpan.');
+      }
+      form.hidden = true;
+      title.textContent = 'Selesai';
+      lead.textContent = payload.message ?? 'Masuk dengan password baru.';
+      done.hidden = false;
+      done.focus();
+    });
+  </script>
+</PlatformLayout>

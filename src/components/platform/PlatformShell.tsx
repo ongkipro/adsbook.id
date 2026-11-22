@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, ChevronRight, LogOut, Menu, Search, Store, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, KeyRound, LogOut, Menu, Search, Store, UserRound } from "lucide-react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -220,6 +220,12 @@ export function PlatformShell({
                     </span>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <a href="/platform/account">
+                      <KeyRound aria-hidden="true" />
+                      Ganti password
+                    </a>
+                  </DropdownMenuItem>
                   <DropdownMenuItem variant="destructive" disabled={signingOut} onSelect={(event) => { event.preventDefault(); void signOut(); }}>
                     <LogOut aria-hidden="true" />
                     {signingOut ? "Keluar…" : "Keluar"}

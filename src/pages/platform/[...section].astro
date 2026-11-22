@@ -1,5 +1,6 @@
 ---
 import { getRuntimeEnv } from '../../lib/env';
+import Account from '../../components/platform/sections/Account.astro';
 import Activity from '../../components/platform/sections/Activity.astro';
 import Billing from '../../components/platform/sections/Billing.astro';
 import Domains from '../../components/platform/sections/Domains.astro';
@@ -28,7 +29,7 @@ if (tenantMatch) {
   if (!found) return Astro.redirect('/platform/tenants');
   tenantId = found.id;
 }
-const known = new Set(['', 'tenants', 'billing', 'domains', 'activity', 'team', 'health']);
+const known = new Set(['', 'tenants', 'billing', 'domains', 'activity', 'team', 'health', 'account']);
 if (!tenantId && !known.has(section)) return new Response('Not found', { status: 404, headers: { 'cache-control': 'private, no-store' } });
 // UX-10: the team screen is platform_owner only; support sees a 403 page.
 if (section === 'team' && Astro.locals.platformUser?.role !== 'platform_owner') Astro.response.status = 403;
@@ -42,3 +43,4 @@ Astro.response.headers.set('Cache-Control', 'private, no-store');
 {section === 'activity' && <Activity />}
 {section === 'team' && <Team />}
 {section === 'health' && <Health />}
+{section === 'account' && <Account />}

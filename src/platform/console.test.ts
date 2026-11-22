@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-import { verifyPasswordHash } from "../lib/auth.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { createSqliteD1 } from "./testing/sqlite-d1.ts";
 import {
@@ -21,10 +20,12 @@ import {
   wibDay,
   wibMonthStart,
 } from "./admin/metrics.ts";
-import { addTeamMember, listTeam, resetTeamMemberAccess, setTeamMemberDisabled, setTeamMemberRole } from "./admin/team.ts";
+import * as teamModule from "./admin/team.ts";
+import { addTeamMember, issueTeamMemberLink, listTeam, setTeamMemberDisabled, setTeamMemberRole } from "./admin/team.ts";
+import { credentialLinkPolicy, NOT_ENROLLED_HASH } from "./admin/credentials.ts";
 import { listTenants } from "./admin/tenants.ts";
 import type { PlatformUser } from "./admin/session.ts";
-import { verifyTotp, totpCode } from "./admin/totp.ts";
+import { totpCode } from "./admin/totp.ts";
 
 const dir = new URL("./migrations/", import.meta.url);
 const CHAIN = readdirSync(dir).filter((name) => name.endsWith(".sql")).sort().map((name) => ({ name, sql: readFileSync(new URL(name, dir), "utf8") }));
@@ -181,69 +182,82 @@ test("UX-9 domains and activity: stuck hosts, filters, cursor, readable detail",
   assert.equal(describeEvent("not json"), "");
 });
 
-test("UX-10 team: owner only, MFA enrolled once, no self-disable, last owner kept, sessions revoked, every change audited", async () => {
+// Real TOTP secrets: every credential action on the team is stepped up with the owner's own fresh code (IAM-11).
+const OWNER_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+const stepAt = (offset: number) => new Date(NOW.getTime() + offset * 30_000);
+const codeAt = (secret: string, offset: number) => totpCode(secret, Math.floor(stepAt(offset).getTime() / 30_000));
+const ORIGIN = "https://app.adsbook.id";
+const OPEN = () => credentialLinkPolicy({});
+const liveSession = (db: Awaited<ReturnType<typeof controlPlane>>["db"], userId: string) => {
+  db.sqlite.prepare("INSERT INTO platform_sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)").run(`auth_${userId}`, userId, iso(400 * DAY), iso(-DAY));
+  return `auth_${userId}`;
+};
+
+test("UX-10 team: owner only, step-up, a new member is created unenrolled with a link, no self-disable, last enrolled owner kept, sessions and links revoked, every change audited", async () => {
   const { db } = await controlPlane();
-  db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES ('pu_owner', 'owner@ops.test', 'x', 'AAAA', 'platform_owner', ?)").run(iso(-DAY));
-  const owner: PlatformUser = { id: "pu_owner", email: "owner@ops.test", role: "platform_owner" };
+  db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES ('pu_owner', 'owner@ops.test', 'x', ?, 'platform_owner', ?)").run(OWNER_SECRET, iso(-DAY));
+  const owner: PlatformUser = { id: "pu_owner", email: "owner@ops.test", role: "platform_owner", sessionId: liveSession(db, "pu_owner") };
   const support: PlatformUser = { id: "pu_s", email: "s@ops.test", role: "platform_support" };
 
-  const refused = await addTeamMember(db, support, { email: "x@ops.test", role: "platform_support", password: "long-enough-password" });
+  const refused = await addTeamMember(db, support, { email: "x@ops.test", role: "platform_support", totp: await codeAt(OWNER_SECRET, 0) }, ORIGIN, OPEN, stepAt(0));
   assert.equal(refused.ok || refused.status, 403);
-  assert.equal((await addTeamMember(db, owner, { email: "bad", role: "platform_support", password: "long-enough-password" })).ok, false);
-  assert.equal((await addTeamMember(db, owner, { email: "x@ops.test", role: "root", password: "long-enough-password" })).ok, false);
-  assert.equal((await addTeamMember(db, owner, { email: "x@ops.test", role: "platform_support", password: "short" })).ok, false);
+  assert.equal((await addTeamMember(db, owner, { email: "bad", role: "platform_support", totp: await codeAt(OWNER_SECRET, 0) }, ORIGIN, OPEN, stepAt(0))).ok, false);
+  assert.equal((await addTeamMember(db, owner, { email: "x@ops.test", role: "root", totp: await codeAt(OWNER_SECRET, 0) }, ORIGIN, OPEN, stepAt(0))).ok, false);
+  const noStepUp = await addTeamMember(db, owner, { email: "x@ops.test", role: "platform_support", totp: "000000" }, ORIGIN, OPEN, stepAt(0));
+  assert.equal(noStepUp.ok || noStepUp.status, 401, "no member without the owner's own code");
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM platform_users").get()!.n, 1);
 
-  const added = await addTeamMember(db, owner, { email: " CS@Ops.Test ", role: "platform_support", password: "long-enough-password" });
+  const added = await addTeamMember(db, owner, { email: " CS@Ops.Test ", role: "platform_support", totp: await codeAt(OWNER_SECRET, 0) }, ORIGIN, OPEN, stepAt(0));
   assert.ok(added.ok && added.value);
   if (!added.ok || !added.value) return;
   assert.equal(added.value.email, "cs@ops.test");
-  const stored = db.sqlite.prepare("SELECT password_hash, totp_secret, role FROM platform_users WHERE id = ?").get(added.value.id) as { password_hash: string; totp_secret: string; role: string };
-  assert.ok(await verifyPasswordHash("long-enough-password", stored.password_hash), "password stored as a hash");
-  assert.notEqual(stored.password_hash, "long-enough-password");
-  assert.equal(stored.totp_secret, added.value.totpSecret);
-  const step = Math.floor(Date.now() / 30_000);
-  assert.equal(await verifyTotp(added.value.totpSecret, await totpCode(added.value.totpSecret, step)), step, "the returned secret signs in");
-  assert.match(added.value.otpauthUri, /^otpauth:\/\/totp\//);
-  assert.equal((await addTeamMember(db, owner, { email: "cs@ops.test", role: "platform_owner", password: "long-enough-password" })).ok, false, "email unique");
+  assert.match(added.value.link, /^https:\/\/app\.adsbook\.id\/platform\/akses#[0-9a-f]{64}$/, "the token is in the fragment, never in a path or query");
+  const replay = await addTeamMember(db, owner, { email: "y@ops.test", role: "platform_support", totp: await codeAt(OWNER_SECRET, 0) }, ORIGIN, OPEN, stepAt(0));
+  assert.equal(replay.ok || replay.status, 401, "a step-up code works once");
+  const stored = db.sqlite.prepare("SELECT password_hash, totp_secret FROM platform_users WHERE id = ?").get(added.value.id) as { password_hash: string; totp_secret: string | null };
+  assert.equal(stored.password_hash, NOT_ENROLLED_HASH, "no password until the member sets one");
+  assert.equal(stored.totp_secret, null, "no authenticator until the member proves one");
+  assert.equal((await addTeamMember(db, owner, { email: "cs@ops.test", role: "platform_owner", totp: await codeAt(OWNER_SECRET, 1) }, ORIGIN, OPEN, stepAt(1))).ok, false, "email unique");
   const team = await listTeam(db);
-  assert.ok(!JSON.stringify(team).includes(added.value.totpSecret), "the list never carries a secret");
-  assert.ok(!JSON.stringify(team).includes("pbkdf2"), "nor a hash");
+  const token = added.value.link.split("#")[1];
+  assert.ok(!JSON.stringify(team).includes(token), "the list never carries a link");
+  assert.equal(team.find((row) => row.id === added.value!.id)?.mfa, 0, "shown as not yet enrolled");
 
   db.sqlite.prepare("INSERT INTO platform_sessions (id, user_id, expires_at, created_at) VALUES ('s1', ?, ?, ?)").run(added.value.id, iso(DAY), iso(-60_000));
   assert.equal((await setTeamMemberDisabled(db, support, added.value.id, true)).ok, false, "support cannot");
   assert.equal((await setTeamMemberDisabled(db, owner, "pu_owner", true)).ok, false, "never yourself");
-  const disabled = await setTeamMemberDisabled(db, owner, added.value.id, true, NOW);
-  assert.ok(disabled.ok);
+  assert.ok((await setTeamMemberDisabled(db, owner, added.value.id, true, NOW)).ok);
   const session = db.sqlite.prepare("SELECT revoked_at FROM platform_sessions WHERE id = 's1'").get() as { revoked_at: string | null };
   assert.equal(session.revoked_at, NOW.toISOString(), "sessions closed with the disable");
+  const grant = db.sqlite.prepare("SELECT revoked_at FROM platform_credential_grants WHERE user_id = ?").get(added.value.id) as { revoked_at: string | null };
+  assert.equal(grant.revoked_at, NOW.toISOString(), "the open enrollment link dies with the disable");
   assert.ok((await setTeamMemberDisabled(db, owner, added.value.id, false, NOW)).ok);
 
-  // A second owner may disable the first only while another active owner remains.
-  const second = await addTeamMember(db, owner, { email: "o2@ops.test", role: "platform_owner", password: "long-enough-password" });
+  // A second, not yet enrolled owner does not count: it cannot sign in, so it cannot keep the console reachable.
+  const second = await addTeamMember(db, owner, { email: "o2@ops.test", role: "platform_owner", totp: await codeAt(OWNER_SECRET, 2) }, ORIGIN, OPEN, stepAt(2));
   assert.ok(second.ok && second.value);
   if (!second.ok || !second.value) return;
-  const secondOwner: PlatformUser = { id: second.value.id, email: "o2@ops.test", role: "platform_owner" };
-  assert.ok((await setTeamMemberDisabled(db, secondOwner, "pu_owner", true, NOW)).ok);
-  db.sqlite.prepare("UPDATE platform_users SET disabled_at = NULL WHERE id = 'pu_owner'").run();
-  db.sqlite.prepare("UPDATE platform_users SET disabled_at = ? WHERE id = ?").run(iso(0), second.value.id);
-  db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, role, created_at) VALUES ('pu_other', 'other@ops.test', 'x', 'platform_owner', ?)").run(iso(0));
-  const other: PlatformUser = { id: "pu_other", email: "other@ops.test", role: "platform_owner" };
+  db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES ('pu_other', 'other@ops.test', 'x', 'CCCC', 'platform_owner', ?)").run(iso(0));
+  const other: PlatformUser = { id: "pu_other", email: "other@ops.test", role: "platform_owner", sessionId: liveSession(db, "pu_other") };
   db.sqlite.prepare("UPDATE platform_users SET disabled_at = ? WHERE id = 'pu_other'").run(iso(0));
-  // Only pu_owner is an active owner now; another owner session (stale) cannot disable it.
+  // Only pu_owner is an active enrolled owner; a stale owner (disabled, session row still present) cannot disable or demote
+  // it, though o2 (pending) is "active": the actor fence and the enrolled-owner count both refuse.
   const last = await setTeamMemberDisabled(db, other, "pu_owner", true, NOW);
-  assert.equal(last.ok || last.status, 409, "the last active owner stays");
+  assert.equal(last.ok || last.status, 409, "the last active enrolled owner stays");
+  const lastRole = await setTeamMemberRole(db, other, "pu_owner", "platform_support", NOW);
+  assert.equal(lastRole.ok || lastRole.status, 409, "nor demoted while only a pending owner remains");
 
   const audit = db.sqlite.prepare("SELECT kind, actor, detail_json FROM tenant_events WHERE tenant_id = '_platform' ORDER BY id").all() as { kind: string; actor: string; detail_json: string }[];
-  assert.deepEqual(audit.map((row) => row.kind), ["platform_user_added", "platform_user_disabled", "platform_user_enabled", "platform_user_added", "platform_user_disabled"]);
+  assert.deepEqual(audit.map((row) => row.kind), ["platform_user_added", "platform_access_link_issued", "platform_user_disabled", "platform_user_enabled", "platform_user_added", "platform_access_link_issued"]);
   assert.ok(audit.every((row) => row.actor.startsWith("platform:pu_")));
-  assert.ok(audit.every((row) => !row.detail_json.includes(added.value!.totpSecret) && !row.detail_json.includes("long-enough-password")));
-  assert.deepEqual(JSON.parse(audit[1].detail_json), { user: added.value.id, email: "cs@ops.test", role: "platform_support", before: "active", after: "disabled" });
+  assert.ok(audit.every((row) => !row.detail_json.includes(token) && !row.detail_json.includes(OWNER_SECRET)));
+  assert.deepEqual(JSON.parse(audit[2].detail_json), { user: added.value.id, email: "cs@ops.test", role: "platform_support", before: "active", after: "disabled" });
 });
 
-test("UX-10 team: change role keeps an active owner, never your own; reset replaces password + TOTP and closes sessions", async () => {
+test("UX-10 team: change role keeps an active owner, never your own, and revokes open links; the legacy both-factor reset is gone", async () => {
   const { db } = await controlPlane();
-  db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES ('pu_a', 'a@ops.test', 'x', 'AAAA', 'platform_owner', ?), ('pu_b', 'b@ops.test', 'x', 'BBBB', 'platform_support', ?)").run(iso(-DAY), iso(-DAY));
-  const a: PlatformUser = { id: "pu_a", email: "a@ops.test", role: "platform_owner" };
+  db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, totp_secret, role, created_at) VALUES ('pu_a', 'a@ops.test', 'x', ?, 'platform_owner', ?), ('pu_b', 'b@ops.test', 'x', 'BBBB', 'platform_support', ?)").run(OWNER_SECRET, iso(-DAY), iso(-DAY));
+  const a: PlatformUser = { id: "pu_a", email: "a@ops.test", role: "platform_owner", sessionId: liveSession(db, "pu_a") };
   const b: PlatformUser = { id: "pu_b", email: "b@ops.test", role: "platform_support" };
   const roleOf = (id: string) => (db.sqlite.prepare("SELECT role FROM platform_users WHERE id = ?").get(id) as { role: string }).role;
 
@@ -251,35 +265,24 @@ test("UX-10 team: change role keeps an active owner, never your own; reset repla
   assert.equal((await setTeamMemberRole(db, a, "pu_a", "platform_support")).ok, false, "never your own role");
   assert.equal((await setTeamMemberRole(db, a, "pu_b", "root")).ok, false, "unknown role");
   assert.equal((await setTeamMemberRole(db, a, "pu_b", "platform_support")).ok, false, "unchanged role");
+
+  const link = await issueTeamMemberLink(db, a, "pu_b", await codeAt(OWNER_SECRET, 0), ORIGIN, OPEN, stepAt(0));
+  assert.ok(link.ok && link.value?.purpose === "password_reset");
   assert.ok((await setTeamMemberRole(db, a, "pu_b", "platform_owner", NOW)).ok);
   assert.equal(roleOf("pu_b"), "platform_owner");
+  const grant = db.sqlite.prepare("SELECT revoked_at FROM platform_credential_grants WHERE user_id = 'pu_b'").get() as { revoked_at: string | null };
+  assert.equal(grant.revoked_at, NOW.toISOString(), "a link issued under the old role does not outlive it");
+
   // Now b demotes a: allowed while b stays an active owner.
-  const bOwner: PlatformUser = { ...b, role: "platform_owner" };
+  const bOwner: PlatformUser = { ...b, role: "platform_owner", sessionId: liveSession(db, "pu_b") };
   assert.ok((await setTeamMemberRole(db, bOwner, "pu_a", "platform_support", NOW)).ok);
-  // a (now support) cannot demote b; and with b the only active owner, a demotion of b by a stale owner session is refused.
   db.sqlite.prepare("INSERT INTO platform_users (id, email, password_hash, role, disabled_at, created_at) VALUES ('pu_c', 'c@ops.test', 'x', 'platform_owner', ?, ?)").run(iso(0), iso(0));
-  const c: PlatformUser = { id: "pu_c", email: "c@ops.test", role: "platform_owner" };
+  const c: PlatformUser = { id: "pu_c", email: "c@ops.test", role: "platform_owner", sessionId: liveSession(db, "pu_c") };
   const last = await setTeamMemberRole(db, c, "pu_b", "platform_support", NOW);
   assert.equal(last.ok || last.status, 409, "the last active owner keeps the role");
   assert.equal(roleOf("pu_b"), "platform_owner");
 
-  db.sqlite.prepare("INSERT INTO platform_sessions (id, user_id, expires_at, created_at) VALUES ('sa', 'pu_a', ?, ?)").run(iso(DAY), iso(0));
-  assert.equal((await resetTeamMemberAccess(db, bOwner, "pu_a", "short")).ok, false, "password length");
-  assert.equal((await resetTeamMemberAccess(db, bOwner, "pu_b", "long-enough-password")).ok, false, "never yourself");
-  // a was demoted above; resolvePlatformUser reads the role from the database on every request.
-  const aNow: PlatformUser = { ...a, role: "platform_support" };
-  assert.equal((await resetTeamMemberAccess(db, aNow, "pu_b", "long-enough-password")).ok, false, "support cannot");
-  const reset = await resetTeamMemberAccess(db, bOwner, "pu_a", "brand-new-password-1", NOW);
-  assert.ok(reset.ok && reset.value);
-  if (!reset.ok || !reset.value) return;
-  const row = db.sqlite.prepare("SELECT password_hash, totp_secret, totp_last_step FROM platform_users WHERE id = 'pu_a'").get() as { password_hash: string; totp_secret: string; totp_last_step: number | null };
-  assert.ok(await verifyPasswordHash("brand-new-password-1", row.password_hash));
-  assert.equal(row.totp_secret, reset.value.totpSecret);
-  assert.notEqual(row.totp_secret, "AAAA");
-  assert.equal(row.totp_last_step, null);
-  assert.equal((db.sqlite.prepare("SELECT revoked_at FROM platform_sessions WHERE id = 'sa'").get() as { revoked_at: string }).revoked_at, NOW.toISOString());
-  const audit = db.sqlite.prepare("SELECT kind, detail_json FROM tenant_events WHERE tenant_id = '_platform' ORDER BY id").all() as { kind: string; detail_json: string }[];
-  assert.deepEqual(audit.map((event) => event.kind), ["platform_user_role_changed", "platform_user_role_changed", "platform_user_reset"]);
-  assert.ok(audit.every((event) => !event.detail_json.includes(reset.value!.totpSecret) && !event.detail_json.includes("brand-new-password-1")));
+  assert.equal("resetTeamMemberAccess" in teamModule, false, "no action resets both factors (IAM-11 cutover)");
+  const audit = db.sqlite.prepare("SELECT kind FROM tenant_events WHERE tenant_id = '_platform' ORDER BY id").all() as { kind: string }[];
+  assert.deepEqual(audit.map((event) => event.kind), ["platform_access_link_issued", "platform_user_role_changed", "platform_user_role_changed"]);
 });
-

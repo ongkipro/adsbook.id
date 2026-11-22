@@ -32,22 +32,34 @@ const ROLE_OPTIONS = [
 const when = (iso: string | null) =>
   iso ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(iso)) : "—";
 
-type Secret = { email: string; secret: string; uri: string; title: string };
-type Panel = { kind: "add" } | { kind: "role"; member: TeamMember } | { kind: "reset"; member: TeamMember } | { kind: "secret"; secret: Secret };
+type Link = { email: string; link: string; expiresAt: string; purpose: "password_reset" | "enrollment" };
+type Panel = { kind: "add" } | { kind: "role"; member: TeamMember } | { kind: "link"; member: TeamMember } | { kind: "issued"; link: Link };
 
 async function post(url: string, body: unknown) {
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
   const payload = (await response?.json().catch(() => ({}))) as
-    | { success?: boolean; message?: string; error?: string; data?: { email: string; totp_secret: string; otpauth_uri: string } }
+    | { success?: boolean; message?: string; error?: string; data?: { email: string; link: string; expires_at: string; purpose: Link["purpose"] } }
     | undefined;
   return payload ?? { success: false, error: "Koneksi terputus. Coba lagi." };
+}
+
+/** The owner's own fresh code: every credential action is stepped up (IAM-11). */
+function StepUpField({ id }: { id: string }) {
+  return (
+    <div className="grid gap-1.5">
+      <label htmlFor={id} className="text-xs font-medium text-slate-600">Kode autentikator Anda (owner)</label>
+      <Input id={id} name="totp" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" className="font-mono tracking-widest" />
+    </div>
+  );
 }
 
 /**
  * UX-10 (T-52): the platform team, platform_owner only, in the seller admin's
  * access-manager idiom — table, a row menu, dialogs, useConfirm, toasts.
- * Add, change role, reset password + authenticator, disable / enable. A TOTP
- * secret is shown once in a dialog and never again.
+ * Add (with an enrollment link), change role, a password-reset link for a
+ * support member, disable / enable. IAM-11 (T-53): no factor of another
+ * operator is ever shown or set here; a single-use link is shown once, behind
+ * the owner's own fresh TOTP code, to pass on through a verified channel.
  */
 export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId: string }) {
   const [panel, setPanel] = React.useState<Panel | null>(null);
@@ -69,12 +81,12 @@ export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId
     if (!form.reportValidity()) return;
     setPending(true);
     const values = Object.fromEntries(new FormData(form));
-    const payload = await post("/api/platform/team", { email: values.email, password: values.password, role });
+    const payload = await post("/api/platform/team", { email: values.email, totp: values.totp, role });
     setPending(false);
     if (!payload.success || !payload.data) return void toast.error(payload.error ?? "Gagal menambah anggota.");
     toast.success(payload.message ?? "Anggota ditambahkan.");
     setChanged(true);
-    setPanel({ kind: "secret", secret: { email: payload.data.email, secret: payload.data.totp_secret, uri: payload.data.otpauth_uri, title: "Anggota ditambahkan" } });
+    setPanel({ kind: "issued", link: { email: payload.data.email, link: payload.data.link, expiresAt: payload.data.expires_at, purpose: payload.data.purpose } });
   };
 
   const saveRole = async () => {
@@ -89,20 +101,18 @@ export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId
     reloadSoon();
   };
 
-  const reset = async (event: React.SubmitEvent<HTMLFormElement>) => {
+  const issueLink = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (panel?.kind !== "reset") return;
+    if (panel?.kind !== "link") return;
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
-    const member = panel.member;
-    if (!(await confirm({ title: `Reset akses ${member.email}?`, description: "Password dan authenticator lamanya berhenti berlaku dan semua sesinya ditutup. Ia masuk lagi dengan password dan kode authenticator baru.", confirmLabel: "Reset akses" }))) return;
     setPending(true);
-    const payload = await post(`/api/platform/team/${encodeURIComponent(member.id)}`, { op: "reset", password: new FormData(form).get("password") });
+    const payload = await post(`/api/platform/team/${encodeURIComponent(panel.member.id)}`, { op: "link", totp: new FormData(form).get("totp") });
     setPending(false);
-    if (!payload.success || !payload.data) return void toast.error(payload.error ?? "Gagal mereset akses.");
-    toast.success(payload.message ?? "Akses direset.");
+    if (!payload.success || !payload.data) return void toast.error(payload.error ?? "Gagal membuat tautan.");
+    toast.success(payload.message ?? "Tautan dibuat.");
     setChanged(true);
-    setPanel({ kind: "secret", secret: { email: payload.data.email, secret: payload.data.totp_secret, uri: payload.data.otpauth_uri, title: "Akses direset" } });
+    setPanel({ kind: "issued", link: { email: payload.data.email, link: payload.data.link, expiresAt: payload.data.expires_at, purpose: payload.data.purpose } });
   };
 
   const toggle = async (member: TeamMember) => {
@@ -151,7 +161,9 @@ export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId
                   </TableCell>
                   <TableCell className="px-4">{ROLE_LABEL[member.role]}</TableCell>
                   <TableCell className="px-4">{member.mfa ? "Aktif" : "Belum"}</TableCell>
-                  <TableCell className="px-4">{member.disabled_at ? <Badge variant="outline">Nonaktif</Badge> : <Badge variant="secondary">Aktif</Badge>}</TableCell>
+                  <TableCell className="px-4">
+                    {member.disabled_at ? <Badge variant="outline">Nonaktif</Badge> : member.mfa ? <Badge variant="secondary">Aktif</Badge> : <Badge variant="outline">Menunggu aktivasi</Badge>}
+                  </TableCell>
                   <TableCell className="px-4 text-slate-600">{when(member.last_sign_in)}</TableCell>
                   <TableCell className="px-4 text-right">
                     {self ? (
@@ -167,9 +179,11 @@ export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId
                           <DropdownMenuItem onSelect={() => { setRole(member.role); setPanel({ kind: "role", member }); }}>
                             <UserCog aria-hidden="true" /> Ubah peran
                           </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setPanel({ kind: "reset", member })}>
-                            <KeyRound aria-hidden="true" /> Reset password & authenticator
-                          </DropdownMenuItem>
+                          {!member.disabled_at && (!member.mfa || member.role === "platform_support") && (
+                            <DropdownMenuItem onSelect={() => setPanel({ kind: "link", member })}>
+                              <KeyRound aria-hidden="true" /> {member.mfa ? "Tautan reset password" : "Tautan aktivasi baru"}
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem variant={member.disabled_at ? "default" : "destructive"} onSelect={() => void toggle(member)}>
                             <Power aria-hidden="true" /> {member.disabled_at ? "Aktifkan" : "Nonaktifkan"}
@@ -184,7 +198,7 @@ export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId
           </TableBody>
         </Table>
       </div>
-      <p className="text-xs leading-5 text-slate-500">Support bisa melihat semua toko, tagihan, dan kesehatan, menangguhkan toko, dan mengecek pembayaran. Owner juga bisa memberi hari langganan, memulihkan owner toko, menghapus toko, dan mengelola tim. Selalu tersisa minimal satu owner aktif.</p>
+      <p className="text-xs leading-5 text-slate-500">Support bisa melihat semua toko, tagihan, dan kesehatan, menangguhkan toko, dan mengecek pembayaran. Owner juga bisa memberi hari langganan, memulihkan owner toko, menghapus toko, dan mengelola tim. Selalu tersisa minimal satu owner aktif. Password diganti sendiri di menu Akun; owner hanya bisa membuat tautan reset sekali pakai untuk support (autentikatornya tetap). Owner yang lupa password atau siapa pun yang kehilangan autentikator: prosedur break-glass.</p>
 
       <Dialog open={panel !== null} onOpenChange={(next) => { if (!next) close(); }}>
         <DialogContent className="sm:max-w-md">
@@ -192,17 +206,14 @@ export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId
             <form onSubmit={add} className="grid gap-4">
               <DialogHeader>
                 <DialogTitle>Tambah anggota tim</DialogTitle>
-                <DialogDescription>Akun baru wajib memakai kode authenticator untuk masuk.</DialogDescription>
+                <DialogDescription>Ia mengatur password dan autentikatornya sendiri lewat tautan aktivasi sekali pakai (berlaku 24 jam).</DialogDescription>
               </DialogHeader>
               <div className="grid gap-1.5">
                 <label htmlFor="memberEmail" className="text-xs font-medium text-slate-600">Email</label>
                 <Input id="memberEmail" name="email" type="email" required autoComplete="off" />
               </div>
               {roleField("memberRole")}
-              <div className="grid gap-1.5">
-                <label htmlFor="memberPassword" className="text-xs font-medium text-slate-600">Password awal (min. 12)</label>
-                <Input id="memberPassword" name="password" type="password" required minLength={12} maxLength={128} autoComplete="new-password" />
-              </div>
+              <StepUpField id="memberStepUp" />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={close} disabled={pending}>Batal</Button>
                 <Button type="submit" disabled={pending}>{pending ? "Menambah…" : "Tambah"}</Button>
@@ -222,36 +233,35 @@ export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId
               </DialogFooter>
             </div>
           )}
-          {panel?.kind === "reset" && (
-            <form onSubmit={reset} className="grid gap-4">
+          {panel?.kind === "link" && (
+            <form onSubmit={issueLink} className="grid gap-4">
               <DialogHeader>
-                <DialogTitle>Reset password & authenticator</DialogTitle>
-                <DialogDescription>Untuk {panel.member.email}. Berikan password baru dan kode authenticator baru lewat jalur aman.</DialogDescription>
+                <DialogTitle>{panel.member.mfa ? "Tautan reset password" : "Tautan aktivasi baru"}</DialogTitle>
+                <DialogDescription>
+                  {panel.member.mfa
+                    ? `Untuk ${panel.member.email}. Semua sesinya langsung ditutup dan tautan lamanya batal. Ia tetap memakai autentikator yang sama; tautan berlaku 30 menit.`
+                    : `Untuk ${panel.member.email}. Tautan aktivasi lamanya batal; yang baru berlaku 24 jam.`}
+                </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-1.5">
-                <label htmlFor="resetPassword" className="text-xs font-medium text-slate-600">Password awal baru (min. 12)</label>
-                <Input id="resetPassword" name="password" type="password" required minLength={12} maxLength={128} autoComplete="new-password" />
-              </div>
+              <StepUpField id="linkStepUp" />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={close} disabled={pending}>Batal</Button>
-                <Button type="submit" variant="destructive" disabled={pending}>{pending ? "Mereset…" : "Reset akses"}</Button>
+                <Button type="submit" disabled={pending}>{pending ? "Membuat…" : "Buat tautan"}</Button>
               </DialogFooter>
             </form>
           )}
-          {panel?.kind === "secret" && (
+          {panel?.kind === "issued" && (
             <div className="grid gap-4">
               <DialogHeader>
-                <DialogTitle>{panel.secret.title} — simpan kode authenticator</DialogTitle>
-                <DialogDescription>Hanya tampil sekali. Berikan ke {panel.secret.email} lewat jalur aman; ia memasukkannya ke Google Authenticator, 1Password, atau Authy.</DialogDescription>
+                <DialogTitle>{panel.link.purpose === "enrollment" ? "Tautan aktivasi" : "Tautan reset password"} — tampil sekali</DialogTitle>
+                <DialogDescription>Kirim hanya ke {panel.link.email} lewat jalur yang sudah terverifikasi (bukan grup atau email bersama). Sekali pakai, berlaku sampai {when(panel.link.expiresAt)} WIB.</DialogDescription>
               </DialogHeader>
-              <div id="enrolment" className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" role="status">
-                <p className="text-xs text-amber-900">TOTP secret</p>
-                <code id="enrolSecret" className="break-all font-mono text-sm">{panel.secret.secret}</code>
-                <p className="mt-1 text-xs text-amber-900">otpauth URI</p>
-                <code className="break-all font-mono text-xs">{panel.secret.uri}</code>
+              <div id="accessLink" className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" role="status">
+                <p className="text-xs text-amber-900">Tautan</p>
+                <code id="accessLinkValue" className="break-all font-mono text-xs">{panel.link.link}</code>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => void navigator.clipboard?.writeText(panel.secret.secret).then(() => toast.success("Secret disalin."))}>Salin secret</Button>
+                <Button type="button" variant="outline" onClick={() => void navigator.clipboard?.writeText(panel.link.link).then(() => toast.success("Tautan disalin."))}>Salin tautan</Button>
                 <Button type="button" onClick={close}>Selesai</Button>
               </DialogFooter>
             </div>

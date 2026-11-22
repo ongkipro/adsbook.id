@@ -35,7 +35,9 @@ if (Astro.locals.platformUser) return Astro.redirect('/platform');
           <div id="loginErrorBox" class="mb-6 hidden rounded-xl border border-rose-200 bg-rose-50 p-4" role="alert" aria-live="assertive">
             <p id="loginError" class="text-sm leading-relaxed text-rose-800"></p>
           </div>
-          <form id="loginForm" class="space-y-4" novalidate aria-busy="false">
+          <form id="loginForm" method="post" action="/platform/login" novalidate aria-busy="false">
+            <!-- Disabled until the script below runs: credentials never leave by a native (or GET) submit. -->
+            <fieldset id="loginFields" class="m-0 min-w-0 space-y-4 border-0 p-0" disabled>
             <div class="space-y-2">
               <label for="email" class="text-sm font-semibold text-slate-900">Email</label>
               <input id="email" name="email" type="email" required autocomplete="username" autofocus placeholder="nama@email.com" class="admin-input-flat" spellcheck="false" aria-describedby="email-error" data-msg-missing="Masukkan email akun platform Anda." data-msg-invalid="Format email belum benar (contoh: nama@adsbook.id)." />
@@ -55,6 +57,7 @@ if (Astro.locals.platformUser) return Astro.redirect('/platform');
               <p id="totp-error" class="admin-field-error" hidden></p>
             </div>
             <button id="loginSubmit" type="submit" class="mt-1 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[#1D4ED8] disabled:text-white/80">Masuk</button>
+            </fieldset>
           </form>
         </div>
       </div>
@@ -67,6 +70,7 @@ if (Astro.locals.platformUser) return Astro.redirect('/platform');
     import { bindInlineValidation, validateInline } from '../../lib/form-validation-id.ts';
 
     const form = document.getElementById('loginForm') as HTMLFormElement;
+    (document.getElementById('loginFields') as HTMLFieldSetElement).disabled = false;
     bindInlineValidation(form);
     const errorBox = document.getElementById('loginErrorBox') as HTMLElement;
     const error = document.getElementById('loginError') as HTMLElement;
