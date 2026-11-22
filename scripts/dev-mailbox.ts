@@ -29,6 +29,8 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 /** Reserved or local-only names (RFC 2606, RFC 6761): a mail to them can never reach a person. */
 const SYNTHETIC_TLDS = ["test", "example", "invalid", "localhost"];
 const SUBJECT = "Kode verifikasi pendaftaran adsbook.id";
+/** The owner password reset mail (src/platform/owner-reset.ts); read only when a caller asks for it by name. */
+export const RESET_SUBJECT = "Kode reset password adsbook.id";
 const LIST_PATH = "/cdn-cgi/local/explorer/api/local/email/sending";
 const CODE_LINE = /^\d{8}$/gm;
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -40,6 +42,8 @@ export type MailboxOptions = {
   ignore: ReadonlySet<string>;
   timeoutMs?: number;
   pollMs?: number;
+  /** Which code mail to read; the signup verification mail unless named. */
+  subject?: string;
 };
 
 type SentItem = { messageId: string; to: string[]; subject: string; sentAt: string };
@@ -88,16 +92,16 @@ async function listSent(origin: string): Promise<SentItem[]> {
 }
 
 /** The verification mails to exactly `recipient`, newest first. Anything else in the capture is ignored. */
-async function verificationMails(origin: string, recipient: string): Promise<SentItem[]> {
+async function verificationMails(origin: string, recipient: string, subject = SUBJECT): Promise<SentItem[]> {
   return (await listSent(origin)).filter(
-    (item) => item.subject === SUBJECT && item.to.length === 1 && item.to[0].toLowerCase() === recipient,
+    (item) => item.subject === subject && item.to.length === 1 && item.to[0].toLowerCase() === recipient,
   );
 }
 
 /** The ids of the verification mails to `recipient` captured right now. Take it before the action that sends a new one. */
-export async function sentVerificationIds(explorer: string, recipient: string): Promise<Set<string>> {
+export async function sentVerificationIds(explorer: string, recipient: string, subject = SUBJECT): Promise<Set<string>> {
   const wanted = assertSyntheticRecipient(recipient);
-  return new Set((await verificationMails(loopbackOrigin(explorer), wanted)).map((item) => item.messageId));
+  return new Set((await verificationMails(loopbackOrigin(explorer), wanted, subject)).map((item) => item.messageId));
 }
 
 /** The eight digits on their own line of a mail's plain text. Exactly one such line, or it is not a code mail. */
@@ -125,7 +129,7 @@ export async function readVerificationCode(recipient: string, options: MailboxOp
   while (Date.now() < deadline) {
     let body: string | null = null;
     try {
-      const fresh = (await verificationMails(origin, wanted)).find((item) => !options.ignore.has(item.messageId));
+      const fresh = (await verificationMails(origin, wanted, options.subject)).find((item) => !options.ignore.has(item.messageId));
       if (fresh) {
         const response = await bounded(`${origin}${LIST_PATH}?${new URLSearchParams({ email_id: fresh.messageId })}`);
         if (response.status !== 200) throw new Error(`[mailbox] the local email detail answered HTTP ${response.status}`);

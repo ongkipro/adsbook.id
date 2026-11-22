@@ -47,6 +47,15 @@ export const LOGIN_PAGE: SitePage = {
   noindex: true,
 };
 
+/** adsbook.id/lupa-password: the store owner's password reset by email code (`src/platform/owner-reset.ts`). */
+export const RESET_PATH = "/lupa-password";
+export const RESET_PAGE: SitePage = {
+  path: RESET_PATH,
+  title: "Lupa Password Pemilik Toko - adsbook.id",
+  description: "Buat password baru pemilik toko adsbook.id dengan kode 8 digit yang dikirim ke email pemilik toko.",
+  noindex: true,
+};
+
 /** One entry per indexable page; titles ≤ 70 and descriptions 120–155 characters (copy QA gate). */
 export const SITE_PAGES: Record<"home" | "fitur" | "caraKerja" | "harga" | "faq" | "kontak" | "syarat" | "privasi", SitePage> = {
   home: {

@@ -71,6 +71,7 @@ export const PLATFORM_SITE_ROUTES: Readonly<Record<string, string>> = {
   "/kontak": "/platform/site/kontak",
   "/daftar": "/platform/signup",
   "/masuk": "/platform/masuk",
+  "/lupa-password": "/platform/lupa-password",
   "/syarat": "/platform/syarat",
   "/privasi": "/platform/privasi",
   "/robots.txt": "/platform/site/robots.txt",
@@ -113,14 +114,14 @@ export function consoleHostRefuses(pathname: string): boolean {
 /**
  * Platform responses that must never be indexed (Paduka, 2026-11-19: "halaman
  * register, login, admin, dan backend operator jangan sampai ke index"):
- * everything on the console host, /daftar, /masuk, /platform* and /api/*.
+ * everything on the console host, /daftar, /masuk, /lupa-password, /platform* and /api/*.
  * They stay crawlable (robots.txt never disallows /daftar or /masuk) so the
  * header is read.
  */
 export function platformNoindex(host: string, pathname: string): boolean {
   if (host === PLATFORM_CONSOLE_HOST) return true;
   const path = withoutTrailingSlash(pathname);
-  return path === "/daftar" || path === "/masuk" || isPlatformRoute(pathname) || under(pathname, "/api");
+  return path === "/daftar" || path === "/masuk" || path === "/lupa-password" || isPlatformRoute(pathname) || under(pathname, "/api");
 }
 
 /** Tenant paths that must never be indexed: the owner's way in, the admin, APIs and embeds. */
