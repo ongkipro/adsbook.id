@@ -194,7 +194,7 @@ test("a restore is recorded in PLATFORM_DB first; the restarted store is not mig
       throw new Error("aborted"); // what ctx.abort() looks like to the caller
     },
   };
-  const { undo, state } = await restoreTenant(db, stub, "t-a", "bm-before", "owner@example.test", new Date("2026-11-16T06:00:00.000Z"));
+  const { undo, state } = await restoreTenant(db, () => stub, "t-a", "bm-before", "owner@example.test", new Date("2026-11-16T06:00:00.000Z"));
   assert.equal(undo, "bm-undo");
   assert.equal(state.applied, N, "a fresh read after the restart");
   assert.deepEqual(calls, ["prepareRestore bm-before", "restart"]);
@@ -206,6 +206,26 @@ test("a restore is recorded in PLATFORM_DB first; the restarted store is not mig
     [
       { kind: "restore_requested", actor: "owner@example.test", detail: { bookmark: "bm-before" } },
       { kind: "restore_armed", actor: "owner@example.test", detail: { bookmark: "bm-before", undo: "bm-undo" } },
+      {
+        kind: "restore_readback",
+        actor: "owner@example.test",
+        detail: {
+          bookmark: "bm-before",
+          undo: "bm-undo",
+          applied: N,
+          bundled: CHAIN.length,
+          history_unknown: false,
+          recovery: false,
+          reader_floor: state.readerFloor,
+          protocol: TENANT_STORE_PROTOCOL,
+        },
+      },
+      {
+        kind: "restore_sessions_revoked",
+        actor: "owner@example.test",
+        // Counts for the sign-in tables this store (migrated to N) has; the challenge table arrives with T-57.
+        detail: { handoffs: 0, admin_sessions: 0, ...(CHAIN.slice(0, N).some((file) => /admin_login_challenges/.test(file.sql)) ? { admin_login_challenges: 0 } : {}) },
+      },
     ],
   );
   // While PLATFORM_DB says recovery the gate answers 503 before any store call;
@@ -225,14 +245,180 @@ test("a restore arms nothing when the control-plane fence cannot be written, and
     restart: async () => undefined,
   };
   db.failWhen = /UPDATE tenants SET status = 'recovery'/;
-  await assert.rejects(restoreTenant(db, stub, "t-a", "bm-before", "owner@example.test"));
+  await assert.rejects(restoreTenant(db, () => stub, "t-a", "bm-before", "owner@example.test"));
   assert.deepEqual(armed, [], "armed before the tenant was fenced");
   db.failWhen = null;
   const silent = { ...stub, schemaState: async () => { throw new Error("object gone"); } };
   await assert.rejects(
-    restoreTenant(db, silent, "t-a", "bm-before", "owner@example.test"),
+    restoreTenant(db, () => silent, "t-a", "bm-before", "owner@example.test"),
     (error: unknown) => error instanceof TenantUnavailableError && error.reason === "protocol",
   );
+});
+
+test("after the restart the state is read on a fresh stub; a fresh stub that cannot answer keeps the tenant fenced", async () => {
+  const store = objectFor(storeAt(N));
+  const ABORT = "Application called abort() to reset Durable Object.";
+  // The stub that carried the restart is broken afterwards, as workerd leaves it
+  // (reproduced by the scratch rehearsal harness): every later call fails.
+  const restarted = () => {
+    let aborted = false;
+    const calls: string[] = [];
+    const stub: TenantStoreStub = {
+      ...store.stub,
+      schemaState: async (protocol) => (calls.push("schemaState"), aborted ? Promise.reject(new Error(ABORT)) : store.stub.schemaState(protocol)),
+      prepareRestore: async () => (calls.push("prepareRestore"), { undo: "bm-undo" }),
+      restart: async () => {
+        calls.push("restart");
+        aborted = true;
+        throw new Error(ABORT);
+      },
+    };
+    return { stub, calls };
+  };
+  const fenced = (db: SqliteD1) => ({
+    tenant: { ...(db.sqlite.prepare("SELECT status, cache_version FROM tenants WHERE id = 't-a'").get() as object) },
+    events: (db.sqlite.prepare("SELECT kind FROM tenant_events WHERE tenant_id = 't-a' ORDER BY id").all() as Array<{ kind: string }>).map((e) => e.kind),
+  });
+  const expectedFence = { tenant: { status: "recovery", cache_version: 2 }, events: ["restore_requested", "restore_armed"] };
+
+  // The object came back: a fresh stub answers, so the restore is reported done.
+  const db = await platform("t-a");
+  const first = restarted();
+  const opened: TenantStoreStub[] = [];
+  const open = () => {
+    const stub = opened.length === 0 ? first.stub : store.stub;
+    opened.push(stub);
+    return stub;
+  };
+  const { undo, state } = await restoreTenant(db, open, "t-a", "bm-before", "owner@example.test");
+  assert.equal(undo, "bm-undo");
+  assert.equal(state.applied, N, "the state came from the fresh stub");
+  assert.equal(opened.length, 3, "one stub for the restore, new ones for the read and the revocation after it");
+  assert.equal(opened[1], store.stub);
+  assert.equal(opened[2], store.stub);
+  assert.deepEqual(first.calls, ["prepareRestore", "restart"], "the restarted stub is never read again");
+  assert.deepEqual(
+    fenced(db),
+    { ...expectedFence, events: [...expectedFence.events, "restore_readback", "restore_sessions_revoked"] },
+    "ordering and fence unchanged; the readback is audited; nothing reopens the tenant",
+  );
+
+  // The object did not come back: the fresh read fails, the protocol error stands, the fence stays.
+  const db2 = await platform("t-a");
+  const second = restarted();
+  const gone: TenantStoreStub = { ...store.stub, schemaState: async () => { throw new Error("object gone"); } };
+  let opens = 0;
+  await assert.rejects(
+    restoreTenant(db2, () => (opens++ === 0 ? second.stub : gone), "t-a", "bm-before", "owner@example.test"),
+    (error: unknown) => error instanceof TenantUnavailableError && error.reason === "protocol" && /store did not answer after restart: object gone/.test(error.message),
+  );
+  assert.equal(opens, 2);
+  assert.deepEqual(second.calls, ["prepareRestore", "restart"]);
+  assert.deepEqual(fenced(db2), expectedFence, "an unreachable store leaves no readback row");
+});
+
+test("a readback that cannot be audited fails the restore call: the tenant stays fenced, nothing is armed or restarted again", async (t) => {
+  const db = await platform("t-a");
+  const store = objectFor(storeAt(N));
+  const calls: string[] = [];
+  const stub: TenantStoreStub = {
+    ...store.stub,
+    prepareRestore: async () => (calls.push("prepareRestore"), { undo: "bm-undo" }),
+    restart: async () => {
+      calls.push("restart");
+      throw new Error("Application called abort() to reset Durable Object.");
+    },
+  };
+  let opens = 0;
+  const open = () => {
+    // The fresh stub is opened after restore_armed is written and before the
+    // readback: from here every tenant_events insert fails.
+    if (opens++ === 1) db.failWhen = /INSERT INTO tenant_events/;
+    return stub;
+  };
+  const logged = t.mock.method(console, "error", () => undefined);
+  await assert.rejects(restoreTenant(db, open, "t-a", "bm-before", "owner@example.test"), /injected failure/);
+  db.failWhen = null;
+  assert.equal(opens, 2);
+  assert.deepEqual(calls, ["prepareRestore", "restart"], "no second arm and no second restart");
+  const tenant = { ...(db.sqlite.prepare("SELECT status, cache_version FROM tenants WHERE id = 't-a'").get() as object) };
+  assert.deepEqual(tenant, { status: "recovery", cache_version: 2 }, "still fenced; never reopened");
+  const kinds = (db.sqlite.prepare("SELECT kind FROM tenant_events WHERE tenant_id = 't-a' ORDER BY id").all() as Array<{ kind: string }>).map((e) => e.kind);
+  assert.deepEqual(kinds, ["restore_requested", "restore_armed"]);
+  const lines = logged.mock.calls.map((call) => call.arguments);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0][0], "tenant-restore-readback-unrecorded");
+  assert.deepEqual(
+    { ...(lines[0][1] as Record<string, unknown>), message: "…" },
+    {
+      tenant_id: "t-a",
+      bookmark: "bm-before",
+      undo: "bm-undo",
+      applied: N,
+      bundled: CHAIN.length,
+      history_unknown: false,
+      recovery: false,
+      reader_floor: 0,
+      protocol: TENANT_STORE_PROTOCOL,
+      message: "…",
+    },
+    "the observation survives in the error log line",
+  );
+});
+
+test("T-57: a restore revokes every sign-in it could bring back — this tenant's sessions, challenges and handoffs only", async (t) => {
+  const db = await platform("t-a", "t-b");
+  const store = objectFor(storeAt(CHAIN.length));
+  const at = "2026-11-23T00:00:00.000Z";
+  // What the restore point brings back: two sessions and a pending two-step challenge.
+  // The challenge table comes with T-57's migration; on a chain without it the test creates it as 0085 does.
+  await store.stub.batch(TENANT_STORE_PROTOCOL, [
+    { sql: "CREATE TABLE IF NOT EXISTS admin_login_challenges (token_hash TEXT PRIMARY KEY NOT NULL, credential_id INTEGER NOT NULL, credential_updated_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, expires_at TEXT NOT NULL, created_at TEXT NOT NULL)", args: [] },
+    { sql: "INSERT INTO admin_sessions (jti, username, role, credential_updated_at, expires_at, created_at) VALUES ('s1', 'owner@t-a.test', 'owner', ?, '2099-01-01', ?), ('s2', 'cs', 'customer_service', ?, '2099-01-01', ?)", args: [at, at, at, at] },
+    { sql: "INSERT INTO admin_login_challenges (token_hash, credential_id, credential_updated_at, attempts, expires_at, created_at) VALUES ('c1', 1, ?, 0, '2099-01-01', ?)", args: [at, at] },
+  ]);
+  const handoff = (hash: string, tenant: string, used: string | null) =>
+    db.sqlite.prepare("INSERT INTO handoff_tokens (token_hash, tenant_id, purpose, host, expires_at, used_at) VALUES (?, ?, 'login', 'x', '2099-01-01', ?)").run(hash, tenant, used);
+  handoff("h-open", "t-a", null);
+  handoff("h-spent", "t-a", "2026-11-01T00:00:00.000Z");
+  handoff("h-other", "t-b", null);
+  const stub: TenantStoreStub = { ...store.stub, prepareRestore: async () => ({ undo: "bm-undo" }), restart: async () => { throw new Error("aborted"); } };
+
+  const now = new Date("2026-11-23T01:00:00.000Z");
+  await restoreTenant(db, () => stub, "t-a", "bm-before", "owner@example.test", now);
+
+  const count = async (table: string) => Number((await store.stub.query(TENANT_STORE_PROTOCOL, { sql: `SELECT COUNT(*) AS n FROM ${table}`, args: [] }, false)).results[0].n);
+  assert.equal(await count("admin_sessions"), 0);
+  assert.equal(await count("admin_login_challenges"), 0);
+  const handoffs = db.sqlite.prepare("SELECT token_hash, used_at FROM handoff_tokens ORDER BY token_hash").all().map((row) => ({ ...(row as object) }));
+  assert.deepEqual(handoffs, [
+    { token_hash: "h-open", used_at: now.toISOString() },
+    { token_hash: "h-other", used_at: null },
+    { token_hash: "h-spent", used_at: "2026-11-01T00:00:00.000Z" },
+  ], "this tenant's unspent handoff is spent; a spent one keeps its time; another tenant's is untouched");
+  const last = db.sqlite.prepare("SELECT kind, detail_json FROM tenant_events WHERE tenant_id = 't-a' ORDER BY id DESC LIMIT 1").get() as { kind: string; detail_json: string };
+  assert.equal(last.kind, "restore_sessions_revoked");
+  assert.deepEqual(JSON.parse(last.detail_json), { handoffs: 1, admin_sessions: 2, admin_login_challenges: 1 }, "counts only");
+  assert.deepEqual({ ...(db.sqlite.prepare("SELECT status FROM tenants WHERE id = 't-a'").get() as object) }, { status: "recovery" }, "still fenced");
+
+  // A restore point that predates the challenge table: it is skipped, not an error.
+  const older = objectFor(storeAt(N));
+  await older.stub.query(TENANT_STORE_PROTOCOL, { sql: "DROP TABLE IF EXISTS admin_login_challenges", args: [] }, false);
+  const db2 = await platform("t-a");
+  const olderStub: TenantStoreStub = { ...older.stub, prepareRestore: async () => ({ undo: "u" }), restart: async () => { throw new Error("aborted"); } };
+  await restoreTenant(db2, () => olderStub, "t-a", "bm", "owner@example.test", now);
+  const revoked = db2.sqlite.prepare("SELECT detail_json FROM tenant_events WHERE kind = 'restore_sessions_revoked'").get() as { detail_json: string };
+  assert.deepEqual(JSON.parse(revoked.detail_json), { handoffs: 0, admin_sessions: 0 });
+
+  // A revocation that cannot finish fails the call and the tenant stays fenced.
+  const db3 = await platform("t-a");
+  const failing: TenantStoreStub = { ...stub, batch: async () => { throw new Error("store write failed"); } };
+  const logged = t.mock.method(console, "error", () => undefined);
+  await assert.rejects(restoreTenant(db3, () => failing, "t-a", "bm-before", "owner@example.test", now), /store write failed/);
+  assert.equal(logged.mock.calls[0].arguments[0], "tenant-restore-revoke-failed");
+  assert.deepEqual({ ...(db3.sqlite.prepare("SELECT status FROM tenants WHERE id = 't-a'").get() as object) }, { status: "recovery" });
+  const kinds = (db3.sqlite.prepare("SELECT kind FROM tenant_events WHERE tenant_id = 't-a' ORDER BY id").all() as Array<{ kind: string }>).map((e) => e.kind);
+  assert.deepEqual(kinds, ["restore_requested", "restore_armed", "restore_readback"], "no revocation is recorded that did not happen");
 });
 
 test("a state another release changed between calls is checked again before it is accepted", async () => {
