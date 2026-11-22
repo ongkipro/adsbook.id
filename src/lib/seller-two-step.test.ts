@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { createSqliteD1, type SqliteD1 } from "../platform/testing/sqlite-d1.ts";
 import { withTestCredentials } from "../platform/testing/credentials.ts";
-import { bindCredentials } from "./credential-crypto.ts";
+import { bindCredentials, openCredential } from "./credential-crypto.ts";
 import { totpCode } from "../platform/admin/totp.ts";
 import { hashAdminPassword } from "./admin-credentials.ts";
 import { splitMigrationStatements } from "./schema-version.ts";
@@ -18,6 +18,7 @@ import {
   disableOwnTwoStep,
   forgotPasswordUrl,
   proveSecondFactor,
+  sealTwoStepSecrets,
   twoStepEnrollmentOpen,
   recoveryCodesLeft,
   redeemLoginChallenge,
@@ -180,4 +181,43 @@ test("T-57 enrollment stays closed unless the Worker sets SELLER_TWO_STEP=on", (
   for (const value of ["", "off", "true", "1", "ON", true]) assert.equal(twoStepEnrollmentOpen({ SELLER_TWO_STEP: value }), false, String(value));
   assert.equal(twoStepEnrollmentOpen({ SELLER_TWO_STEP: "on" }), true);
   assert.equal(twoStepEnrollmentOpen({ SELLER_TWO_STEP: " on " }), true);
+});
+
+test("T-57 review: a parallel wave of guesses is cut at the limits, not evaluated whole", async () => {
+  const db = await store();
+  const { secret } = await enroll(db);
+  const revision = col(db, "SELECT updated_at FROM admin_credentials WHERE id = 1")!.updated_at as string;
+  const at = new Date(T0 + 60_000);
+  const right = await totpCode(secret, Math.floor(at.getTime() / 30_000));
+
+  // One challenge, 50 wrong codes at once, then the right one: the challenge allows five evaluations in total.
+  const token = await createLoginChallenge(db, { id: 1, updatedAt: revision }, at);
+  const wave = await Promise.all(Array.from({ length: 50 }, () => redeemLoginChallenge(db, token, "000000", at)));
+  assert.equal(wave.filter((outcome) => !outcome.ok && outcome.reason === "wrong_code").length, CHALLENGE_MAX_ATTEMPTS - 1);
+  assert.equal(col(db, "SELECT attempts FROM admin_login_challenges")!.attempts, CHALLENGE_MAX_ATTEMPTS);
+  assert.deepEqual(await redeemLoginChallenge(db, token, right, at), { ok: false, reason: "exhausted" });
+
+  // Across many fresh challenges (a known password mints them freely), the per-credential budget caps the
+  // total: 45 wrong guesses and, behind them in the same wave, the right code. Only FACTOR_FAILURE_LIMIT
+  // codes are evaluated, so the right one is never reached. (A peek-then-record budget let it through.)
+  db.sqlite.exec("DELETE FROM rate_limits");
+  const tokens = await Promise.all(Array.from({ length: 10 }, () => createLoginChallenge(db, { id: 1, updatedAt: revision }, at)));
+  const guesses = tokens.slice(0, 9).flatMap((each) => Array.from({ length: 5 }, () => redeemLoginChallenge(db, each, "000000", at)));
+  const outcomes = await Promise.all([...guesses, redeemLoginChallenge(db, tokens[9], right, at)]);
+  assert.equal(outcomes.at(-1)!.ok, false, "the right code behind a wave is not evaluated");
+  // The budget window runs on the wall clock (rate-limit.ts), so the reopening after 15 minutes is not simulated here.
+});
+
+test("T-57 review: a key rotation re-seals the two-step secret, so retiring the previous key strands no one", async () => {
+  const db = await store();
+  await enroll(db);
+  const oldKey = Buffer.alloc(32, 1).toString("base64");
+  const newKey = Buffer.alloc(32, 2).toString("base64");
+  bindCredentials(db, "t_alfa", { PLATFORM_CREDENTIAL_KEY: newKey, PLATFORM_CREDENTIAL_KEY_PREVIOUS: oldKey });
+  assert.equal(await sealTwoStepSecrets(db), 1);
+  assert.equal(await sealTwoStepSecrets(db), 0, "idempotent");
+  bindCredentials(db, "t_alfa", { PLATFORM_CREDENTIAL_KEY: newKey });
+  const stored = col(db, "SELECT totp_secret FROM admin_credentials WHERE id = 1")!.totp_secret;
+  assert.match(String(await openCredential(db, "admin_credentials.totp_secret:1", stored)), /^[A-Z2-7]{32}$/, "the new key alone opens it");
+  assert.equal(await openCredential(db, "admin_credentials.totp_secret:2", stored), null, "still bound to its own credential");
 });

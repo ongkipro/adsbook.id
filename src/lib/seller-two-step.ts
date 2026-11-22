@@ -1,5 +1,6 @@
 /**
  * T-57 / PR-35: optional seller two-step verification (TOTP), per credential.
+ * Recommended in Profile, never required: no role or store setting forces it.
  *
  * - Enrollment (signed in, `/admin/profile`): the current password is required;
  *   a fresh secret is shown, and two-step turns on only after a code from it is
@@ -22,7 +23,7 @@
  * challenges and platform handoffs pin) and deletes this user's sessions, so
  * nothing issued on the password alone survives it. Turning it off does not.
  */
-import { openCredential, sealCredential } from "./credential-crypto.ts";
+import { credentialsAvailable, openCredential, resealedCredential, sealCredential } from "./credential-crypto.ts";
 import { verifyPasswordHash } from "./auth.ts";
 import { checkRateLimit } from "./rate-limit.ts";
 import { newTotpSecret, otpauthUri, verifyTotp } from "../platform/admin/totp.ts";
@@ -124,12 +125,14 @@ export async function confirmEnrollment(
  * concurrent uses of the same code cannot both pass.
  */
 export async function proveSecondFactor(database: D1Database, credentialId: number, code: string, now = Date.now()): Promise<boolean> {
-  // Fail closed on a store error: a limiter that cannot count lets nothing through.
-  const budget = await checkRateLimit(database, factorBucket(credentialId), FACTOR_FAILURE_LIMIT, FACTOR_FAILURE_WINDOW_MS, false, "closed");
+  // Every attempt spends from the budget up front, in one atomic statement, so a
+  // wave of parallel guesses gets at most FACTOR_FAILURE_LIMIT evaluated per
+  // window (a peek-then-record split let all of them through). A correct code
+  // costs an attempt too; the window is generous enough that a user never meets
+  // it. Fail closed on a store error: a limiter that cannot count lets nothing through.
+  const budget = await checkRateLimit(database, factorBucket(credentialId), FACTOR_FAILURE_LIMIT, FACTOR_FAILURE_WINDOW_MS, true, "closed");
   if (!budget.allowed) return false;
-  const proven = await checkFactor(database, credentialId, code, now);
-  if (!proven) await checkRateLimit(database, factorBucket(credentialId), FACTOR_FAILURE_LIMIT, FACTOR_FAILURE_WINDOW_MS, true, "closed");
-  return proven;
+  return checkFactor(database, credentialId, code, now);
 }
 
 async function checkFactor(database: D1Database, credentialId: number, code: string, now: number): Promise<boolean> {
@@ -184,6 +187,30 @@ export async function clearTwoStep(database: D1Database, credentialId: number) {
   ]);
 }
 
+/**
+ * ADR-040 sweep for the two-step secrets: re-seal each one still under an older
+ * key version (or, defensively, in plaintext), so retiring
+ * `PLATFORM_CREDENTIAL_KEY_PREVIOUS` never strands an enrolled user. Written only
+ * if the row still holds what was read. A secret that cannot be opened is left.
+ */
+export async function sealTwoStepSecrets(database: D1Database): Promise<number> {
+  if (!credentialsAvailable(database)) return 0;
+  const { results } = await database
+    .prepare("SELECT id, totp_secret FROM admin_credentials WHERE totp_secret IS NOT NULL")
+    .all<{ id: number; totp_secret: string }>();
+  let sealed = 0;
+  for (const row of results ?? []) {
+    const next = await resealedCredential(database, twoStepColumn(row.id), row.totp_secret);
+    if (next === null) continue;
+    const result = await database
+      .prepare("UPDATE admin_credentials SET totp_secret = ? WHERE id = ? AND totp_secret = ?")
+      .bind(next, row.id, row.totp_secret)
+      .run();
+    sealed += Number(result.meta?.changes ?? 0);
+  }
+  return sealed;
+}
+
 // ---- the sign-in challenge -------------------------------------------------
 
 export type ChallengeCredential = { id: number; updatedAt: string };
@@ -226,10 +253,15 @@ export async function redeemLoginChallenge(
     .first<{ credential_id: number; credential_updated_at: string; attempts: number }>();
   if (!challenge) return { ok: false, reason: "invalid" };
   if (expectedCredentialId !== undefined && Number(challenge.credential_id) !== expectedCredentialId) return { ok: false, reason: "invalid" };
-  if (challenge.attempts >= CHALLENGE_MAX_ATTEMPTS) return { ok: false, reason: "exhausted" };
+  // Spend the attempt before the code is checked, atomically: N parallel
+  // submissions claim N distinct slots and only the first five are evaluated.
+  const slot = await database
+    .prepare("UPDATE admin_login_challenges SET attempts = attempts + 1 WHERE token_hash = ? AND attempts < ? AND expires_at > ? RETURNING attempts")
+    .bind(hash, CHALLENGE_MAX_ATTEMPTS, now.toISOString())
+    .first<{ attempts: number }>();
+  if (!slot) return { ok: false, reason: "exhausted" };
   if (!(await proveSecondFactor(database, challenge.credential_id, code, now.getTime()))) {
-    await database.prepare("UPDATE admin_login_challenges SET attempts = attempts + 1 WHERE token_hash = ?").bind(hash).run();
-    return { ok: false, reason: challenge.attempts + 1 >= CHALLENGE_MAX_ATTEMPTS ? "exhausted" : "wrong_code" };
+    return { ok: false, reason: Number(slot.attempts) >= CHALLENGE_MAX_ATTEMPTS ? "exhausted" : "wrong_code" };
   }
   const consumed = await database.prepare("DELETE FROM admin_login_challenges WHERE token_hash = ? RETURNING credential_id").bind(hash).first();
   if (!consumed) return { ok: false, reason: "invalid" };

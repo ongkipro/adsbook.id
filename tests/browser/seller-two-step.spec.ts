@@ -31,6 +31,10 @@ test("two-step: enrolled in Profile, then /hello and /masuk ask for the code on 
   await page.goto(`${origin(SLUG)}/admin/profile`);
   const section = page.locator("#twoStep");
   await expect(section.locator("#twoStepBadge")).toHaveText("Belum aktif");
+  // Recommended, never required: the seller already reached the admin without it.
+  await expect(section.getByText("Disarankan", { exact: true })).toBeVisible();
+  await expect(section.locator("#twoStepAdvice")).toBeVisible();
+  await section.screenshot({ path: "test-results/two-step-recommend-390.png" });
   await section.locator("#twoStepBeginPassword").fill("password-salah-sekali");
   await section.getByRole("button", { name: "Aktifkan" }).click();
   await expect(section.locator("#twoStepMessage")).toHaveText("Password saat ini salah.");
@@ -53,6 +57,7 @@ test("two-step: enrolled in Profile, then /hello and /masuk ask for the code on 
   const backups = await section.locator("#twoStepCodeList li").allTextContents();
   expect(backups).toHaveLength(10);
   await expect(section.locator("#twoStepBadge")).toHaveText("Aktif");
+  await expect(section.locator("#twoStepAdvice")).toBeHidden();
 
   // The enrollment ended this session too.
   await page.goto(`${origin(SLUG)}/admin/dashboard`);

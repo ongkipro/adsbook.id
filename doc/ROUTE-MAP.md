@@ -432,7 +432,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `rts-scoring` | 10 | `orders` | — | 1 | `/api/submit-middle-order` `/api/submit-order` `/api/admin/check` `/api/admin/orders` `/api/admin/orders/[id]` |
 | `schema-version` | 12 | — | — | 29 | — |
 | `seller-bank-account` | 3 | — | — | 1 | `/api/admin/seller-bank-accounts` |
-| `seller-two-step` | 23 | `admin_credentials` `admin_login_challenges` `admin_sessions` | — | 2 | `/hello` `/admin/profile` `/api/admin/access` `/api/admin/profile/two-step` |
+| `seller-two-step` | 24 | `admin_credentials` `admin_login_challenges` `admin_sessions` | — | 2 | `/hello` `/admin/profile` `/api/admin/access` `/api/admin/profile/two-step` |
 | `setup-checklist` | 5 | `stores` | `tenant_hosts` | 3 | `/admin/dashboard` `/admin/products/new` `/admin/setup` `/admin/status` |
 | `shipping-fallback` | 2 | — | — | 1 | — |
 | `shipping-queue` | 3 | — | — | 1 | `/api/admin/shipping` |
