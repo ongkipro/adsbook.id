@@ -342,7 +342,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `crm-template` | 11 | `seller_bank_accounts` `stores` | — | 2 | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/settings` |
 | `daily-rotation` | 2 | — | — | 1 | `/` |
 | `dashboard-compare` | 6 | — | — | 1 | `/api/admin/analytics` |
-| `deploy-preflight` | 11 | — | — | 1 | — |
+| `deploy-preflight` | 13 | — | — | 1 | — |
 | `developer-api-keys` | 22 | — | — | 8 | `/api/admin/settings/developer` |
 | `digital-access` | 4 | `order_items` `orders` `product_variants` `products` | — | 1 | `/api/order-status` |
 | `digital-checkout` | 5 | — | — | 1 | — |
