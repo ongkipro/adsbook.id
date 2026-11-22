@@ -18,6 +18,7 @@ import {
   disableOwnTwoStep,
   forgotPasswordUrl,
   proveSecondFactor,
+  twoStepEnrollmentOpen,
   recoveryCodesLeft,
   redeemLoginChallenge,
   twoStepEnabled,
@@ -171,4 +172,12 @@ test("T-57 the /hello 'Lupa password' link points at the platform page, keeping 
   assert.equal(forgotPasswordUrl(new URL("https://toko.adsbook.my.id/hello")), "https://adsbook.id/lupa-password");
   assert.equal(forgotPasswordUrl(new URL("https://www.tokosaya.com/hello")), "https://adsbook.id/lupa-password");
   assert.equal(forgotPasswordUrl(new URL("http://toko-alfa.localhost:4399/hello")), "http://app.localhost:4399/lupa-password");
+});
+
+test("T-57 enrollment stays closed unless the Worker sets SELLER_TWO_STEP=on", () => {
+  assert.equal(twoStepEnrollmentOpen(undefined), false);
+  assert.equal(twoStepEnrollmentOpen({}), false);
+  for (const value of ["", "off", "true", "1", "ON", true]) assert.equal(twoStepEnrollmentOpen({ SELLER_TWO_STEP: value }), false, String(value));
+  assert.equal(twoStepEnrollmentOpen({ SELLER_TWO_STEP: "on" }), true);
+  assert.equal(twoStepEnrollmentOpen({ SELLER_TWO_STEP: " on " }), true);
 });

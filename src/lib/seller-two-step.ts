@@ -237,6 +237,16 @@ export async function redeemLoginChallenge(
 }
 
 /** The /hello challenge cookie: HttpOnly, host-only, five minutes. */
+/**
+ * T-57 release gate: enrollment opens only when the Worker sets
+ * `SELLER_TWO_STEP=on`. Off (the default) hides the profile card and refuses
+ * `begin`/`confirm`. Sign-in still challenges an already-enrolled credential and
+ * turning off stays available: switching the gate off never weakens an account.
+ */
+export function twoStepEnrollmentOpen(env: { SELLER_TWO_STEP?: unknown } | null | undefined): boolean {
+  return typeof env?.SELLER_TWO_STEP === "string" && env.SELLER_TWO_STEP.trim() === "on";
+}
+
 export const TWO_STEP_COOKIE_NAME = "__Host-adsbook_two_step";
 export const TWO_STEP_COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "strict", path: "/" } as const;
 

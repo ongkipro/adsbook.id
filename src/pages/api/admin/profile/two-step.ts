@@ -8,7 +8,9 @@ import {
   disableOwnTwoStep,
   recoveryCodesLeft,
   twoStepEnabled,
+  twoStepEnrollmentOpen,
 } from "../../../../lib/seller-two-step.ts";
+import { getRuntimeEnv } from "../../../../lib/env.ts";
 import { tenantDatabase } from "../../../../lib/tenant-database.ts";
 
 export const prerender = false;
@@ -30,7 +32,8 @@ export const GET: APIRoute = async ({ locals }) => {
   const me = await self(locals);
   if (!me) return jsonError("Akun tidak ditemukan.", 404);
   const enabled = await twoStepEnabled(me.database, me.credential.id);
-  return jsonOk({ data: { enabled, recovery_codes_left: enabled ? await recoveryCodesLeft(me.database, me.credential.id) : 0 } });
+  const available = twoStepEnrollmentOpen(getRuntimeEnv(locals) as Record<string, unknown>);
+  return jsonOk({ data: { enabled, available, recovery_codes_left: enabled ? await recoveryCodesLeft(me.database, me.credential.id) : 0 } });
 };
 
 export const POST: APIRoute = async ({ request, locals, cookies }) => {
@@ -41,6 +44,10 @@ export const POST: APIRoute = async ({ request, locals, cookies }) => {
   const text = (key: string, max: number) => (typeof body[key] === "string" ? (body[key] as string).slice(0, max) : "");
   const password = text("current_password", 1024);
   if (!password) return jsonError("Masukkan password saat ini.", 400);
+
+  if ((body.action === "begin" || body.action === "confirm") && !twoStepEnrollmentOpen(getRuntimeEnv(locals) as Record<string, unknown>)) {
+    return jsonError("Verifikasi dua langkah belum tersedia.", 403);
+  }
 
   try {
     if (body.action === "begin") {
