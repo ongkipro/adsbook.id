@@ -318,19 +318,37 @@ export function transientStoreFailure(error: unknown): boolean {
  * 3. Record the undo bookmark (`restore_armed`). If this write fails the
  *    restore stays armed and the tenant stays fenced; the bookmark is in the
  *    error log line, and `getBookmarkForTime` can recover it.
- * 4. Restart the store, then confirm with a fresh state read that a new
- *    object answers. A store that does not answer is reported, not hidden.
+ * 4. Restart the store, then confirm with a state read on a **fresh** stub
+ *    (`open()` again) that a new object answers. A store that does not answer
+ *    is reported, not hidden.
+ * 5. Record what that read observed (`restore_readback`: the store's schema
+ *    metadata only). It says a restarted object answered with this ledger; it
+ *    is not proof that the intended rows came back, and not a reason to
+ *    reopen. If this write fails the call fails and the tenant stays fenced.
+ *
+ * 6. Revoke sign-in state the restore may have brought back (T-57 decision,
+ *    2026-11-23): every `admin_sessions` and `admin_login_challenges` row in
+ *    the restored store, and every unspent handoff for the tenant in
+ *    `PLATFORM_DB`, then `restore_sessions_revoked` with counts only. A
+ *    restored store holds rows revoked after the restore point; nobody keeps
+ *    a sign-in across a restore. Tables the restored schema lacks are skipped.
+ *    A failure here fails the call and the tenant stays fenced.
+ *
+ * `open` returns a new stub for the tenant's store on every call, as in
+ * `openTenantDb`: the stub that made the restart call is left broken by
+ * `ctx.abort()`, so a read through it fails even when the object came back.
  *
  * Automatic migration stays off while the tenant is in `recovery`.
  */
 export async function restoreTenant(
   platformDb: D1Database,
-  stub: TenantStoreStub,
+  open: () => TenantStoreStub,
   tenantId: string,
   bookmark: string,
   actor: string,
   now = new Date(),
 ): Promise<{ undo: string; state: SchemaState }> {
+  const stub = open();
   if (!stub.prepareRestore || !stub.restart) throw new TenantUnavailableError("protocol", "store cannot restore");
   const event = (kind: string, detail: Record<string, unknown>) =>
     platformDb
@@ -348,14 +366,57 @@ export async function restoreTenant(
     throw error;
   }
   // `ctx.abort()` ends the call with an error; whether the object came back is
-  // what a fresh call says.
+  // what a call on a fresh stub says.
   await stub.restart(TENANT_STORE_PROTOCOL).catch(() => undefined);
+  let state: SchemaState;
   try {
-    return { undo, state: await stub.schemaState(TENANT_STORE_PROTOCOL) };
+    state = await open().schemaState(TENANT_STORE_PROTOCOL);
   } catch (error) {
     throw new TenantUnavailableError("protocol", `store did not answer after restart: ${(error as Error).message}`);
   }
+  const observed = {
+    bookmark,
+    undo,
+    applied: state.applied,
+    bundled: state.bundled,
+    history_unknown: state.historyUnknown,
+    recovery: state.recovery,
+    reader_floor: state.readerFloor,
+    protocol: state.protocol,
+  };
+  try {
+    await event("restore_readback", observed).run();
+  } catch (error) {
+    console.error("tenant-restore-readback-unrecorded", { tenant_id: tenantId, ...observed, message: (error as Error).message });
+    throw error;
+  }
+  try {
+    // The raw store RPC (no sealed column is touched), on the stub that just answered.
+    const store = open();
+    const { results } = await store.query(
+      TENANT_STORE_PROTOCOL,
+      { sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('admin_sessions', 'admin_login_challenges')", args: [] },
+      false,
+    );
+    const present = new Set((results ?? []).map((row) => String(row.name)));
+    const tables = RESTORE_REVOKED_TABLES.filter((table) => present.has(table));
+    const deleted = tables.length ? await store.batch(TENANT_STORE_PROTOCOL, tables.map((table) => ({ sql: `DELETE FROM ${table}`, args: [] }))) : [];
+    const handoffs = await platformDb
+      .prepare("UPDATE handoff_tokens SET used_at = ? WHERE tenant_id = ? AND used_at IS NULL")
+      .bind(now.toISOString(), tenantId)
+      .run();
+    const counts: Record<string, number> = { handoffs: Number(handoffs.meta?.changes ?? 0) };
+    tables.forEach((table, index) => (counts[table] = Number(deleted[index]?.meta?.changes ?? 0)));
+    await event("restore_sessions_revoked", counts).run();
+  } catch (error) {
+    console.error("tenant-restore-revoke-failed", { tenant_id: tenantId, bookmark, message: (error as Error).message });
+    throw error;
+  }
+  return { undo, state };
 }
+
+/** Sign-in state a restore can bring back; deleted from the restored store before it can reopen. */
+const RESTORE_REVOKED_TABLES = ["admin_sessions", "admin_login_challenges"] as const;
 
 /** What `openTenantDb` reads from the runtime environment. Only `src/platform/` reads it. */
 export type TenantDbEnv = {
