@@ -223,8 +223,8 @@ test("a restore is recorded in PLATFORM_DB first; the restarted store is not mig
       {
         kind: "restore_sessions_revoked",
         actor: "owner@example.test",
-        // Counts for the sign-in tables this store has (the challenge table arrives with T-57).
-        detail: { handoffs: 0, admin_sessions: 0, ...(CHAIN.some((file) => /admin_login_challenges/.test(file.sql)) ? { admin_login_challenges: 0 } : {}) },
+        // Counts for the sign-in tables this store (migrated to N) has; the challenge table arrives with T-57.
+        detail: { handoffs: 0, admin_sessions: 0, ...(CHAIN.slice(0, N).some((file) => /admin_login_challenges/.test(file.sql)) ? { admin_login_challenges: 0 } : {}) },
       },
     ],
   );
