@@ -5,7 +5,7 @@
 import { ensureSchemaUpgraded, type MigrationSource } from "../lib/schema-version.ts";
 
 /** Files in `src/platform/migrations/`. Bump with every new control-plane file. */
-export const PLATFORM_SCHEMA_VERSION = 12;
+export const PLATFORM_SCHEMA_VERSION = 13;
 
 async function bundledPlatformMigrations(): Promise<readonly MigrationSource[]> {
   const { PLATFORM_MIGRATIONS } = await import("./bundled-migrations.ts");

@@ -8,7 +8,7 @@ import { BROWSER_UNSUPPORTED_MESSAGE, unsafeRequestVerdict } from "../../lib/aut
 import { resolvePlatformUser, type PlatformUser } from "./session.ts";
 
 /** Platform paths reachable without a platform session (also read by the route map). */
-export const PLATFORM_PUBLIC_PATHS: ReadonlySet<string> = new Set(["/platform/signup", "/platform/masuk", "/platform/login", "/platform/syarat", "/platform/privasi", "/api/platform/signup", "/api/platform/slug", "/api/platform/login", "/api/platform/masuk"]);
+export const PLATFORM_PUBLIC_PATHS: ReadonlySet<string> = new Set(["/platform/signup", "/platform/masuk", "/platform/login", "/platform/syarat", "/platform/privasi", "/api/platform/signup", "/api/platform/slug", "/api/platform/login", "/api/platform/masuk", "/platform/akses", "/api/platform/akses"]);
 
 /** Whether a platform path is public: the signup and sign-in surfaces and the marketing site (T-40). */
 /**

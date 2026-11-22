@@ -13,6 +13,7 @@
 import { verifyPasswordHash } from "../../lib/auth.ts";
 import { checkRateLimit } from "../../lib/rate-limit.ts";
 import { ensureControlPlane } from "../control-plane.ts";
+import { claimTotpStep } from "./credentials.ts";
 import { verifyTotp } from "./totp.ts";
 
 export const PLATFORM_COOKIE_NAME = "__Host-adsbook_platform";
@@ -21,7 +22,13 @@ export const PLATFORM_SESSION_MS = 12 * 60 * 60 * 1000;
 export const PLATFORM_LOGIN_LIMIT = 10;
 
 export type PlatformRole = "platform_owner" | "platform_support";
-export type PlatformUser = { id: string; email: string; role: PlatformRole };
+/**
+ * `sessionId` is the session row that authorized this request (the stored
+ * digest, never the cookie). Credential writes are fenced on it still being
+ * live in their own transaction (IAM-11); a user built without one cannot make
+ * a credential write at all.
+ */
+export type PlatformUser = { id: string; email: string; role: PlatformRole; sessionId?: string };
 
 const hex = (bytes: ArrayBuffer | Uint8Array) =>
   Array.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -73,9 +80,9 @@ export async function platformLogin(
   const password = typeof input.password === "string" ? input.password : "";
   const row = email
     ? await platformDb
-        .prepare("SELECT id, email, password_hash, totp_secret, role FROM platform_users WHERE email = ? AND disabled_at IS NULL")
+        .prepare("SELECT id, email, password_hash, totp_secret, role, credential_generation FROM platform_users WHERE email = ? AND disabled_at IS NULL")
         .bind(email)
-        .first<{ id: string; email: string; password_hash: string; totp_secret: string | null; role: PlatformRole }>()
+        .first<{ id: string; email: string; password_hash: string; totp_secret: string | null; role: PlatformRole; credential_generation: number }>()
     : null;
   // Both checks always run, so timing does not tell which failed.
   const [passwordOk, totpStep] = await Promise.all([
@@ -86,17 +93,21 @@ export async function platformLogin(
   if (!row || !row.totp_secret || !passwordOk || totpStep === null) return { ok: false, status: 401 };
   // Each code signs in once: the step is claimed atomically, so a replay (or a
   // concurrent second use) of an accepted code within its window is refused.
-  const claimed = await platformDb
-    .prepare("UPDATE platform_users SET totp_last_step = ? WHERE id = ? AND (totp_last_step IS NULL OR totp_last_step < ?)")
-    .bind(totpStep, row.id, totpStep)
-    .run();
-  if (Number(claimed.meta?.changes ?? 0) !== 1) return { ok: false, status: 401 };
+  if (!(await claimTotpStep(platformDb, row.id, totpStep))) return { ok: false, status: 401 };
 
   const id = hex(crypto.getRandomValues(new Uint8Array(32)));
-  await platformDb
-    .prepare("INSERT INTO platform_sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)")
-    .bind(await sha256(id), row.id, new Date(now.getTime() + PLATFORM_SESSION_MS).toISOString(), now.toISOString())
+  // IAM-11: the session exists only if the credentials it was proven against
+  // still hold. A password change, reset link, enrollment or disable that
+  // committed after the read above moved the generation (and revoked the
+  // sessions that existed then); this sign-in then gets no session at all.
+  const issued = await platformDb
+    .prepare(
+      `INSERT INTO platform_sessions (id, user_id, expires_at, created_at)
+       SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM platform_users WHERE id = ?2 AND credential_generation = ?5 AND disabled_at IS NULL AND totp_secret IS NOT NULL)`,
+    )
+    .bind(await sha256(id), row.id, new Date(now.getTime() + PLATFORM_SESSION_MS).toISOString(), now.toISOString(), row.credential_generation)
     .run();
+  if (Number(issued.meta?.changes ?? 0) !== 1) return { ok: false, status: 401 };
   return { ok: true, cookie: `${id}.${await hmac(secret, id)}`, user: { id: row.id, email: row.email, role: row.role } };
 }
 
@@ -108,14 +119,15 @@ export async function resolvePlatformUser(env: Record<string, unknown>, request:
   if (!platformDb || !secret || !cookie) return null;
   const [id, mac] = cookie.split(".");
   if (!id || !mac || !/^[0-9a-f]{64}$/.test(id) || !equal(mac, await hmac(secret, id))) return null;
+  const sessionId = await sha256(id);
   const row = await platformDb
     .prepare(
       `SELECT u.id, u.email, u.role FROM platform_sessions s JOIN platform_users u ON u.id = s.user_id
        WHERE s.id = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND u.disabled_at IS NULL`,
     )
-    .bind(await sha256(id), now.toISOString())
+    .bind(sessionId, now.toISOString())
     .first<PlatformUser>();
-  return row ?? null;
+  return row ? { ...row, sessionId } : null;
 }
 
 export async function platformLogout(env: Record<string, unknown>, request: Request, now = new Date()): Promise<void> {

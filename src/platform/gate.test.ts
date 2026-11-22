@@ -86,6 +86,7 @@ test("the control-plane chain creates every table of the data model, with the pi
     "migration_bookmarks",
     "operator_notices",
     "plans",
+    "platform_credential_grants",
     "platform_identities",
     "platform_sessions",
     "platform_users",

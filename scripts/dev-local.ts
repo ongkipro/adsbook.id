@@ -139,6 +139,8 @@ const worker = spawn(
     "--var", "CF_SAAS_ZONE_ID:dev-zone",
     "--var", "CF_SAAS_TOKEN:dev-token",
     "--var", `CF_API_BASE:${providerBase}/client/v4`,
+    // IAM-11 rehearsal: `PLATFORM_CREDENTIAL_LINKS=off` (or an ISO instant) in the shell reaches the local Worker.
+    ...(process.env.PLATFORM_CREDENTIAL_LINKS ? ["--var", `PLATFORM_CREDENTIAL_LINKS:${process.env.PLATFORM_CREDENTIAL_LINKS}`] : []),
     ...(args.has("--platform-pixel")
       ? [
           "--var", "PLATFORM_META_PIXEL_ID:100000000000001",
