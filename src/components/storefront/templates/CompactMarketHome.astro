@@ -1,6 +1,7 @@
 ---
 import HeroSection from '../home/HeroSection.astro';
 import ProductsSection from '../home/ProductsSection.astro';
+import TrustStrip from '../shared/TrustStrip.astro';
 import type { TenantHomeContent } from '../../../lib/tenant-content';
 
 interface ProductCard {
@@ -33,14 +34,17 @@ interface Props {
     proofs?: boolean;
     landingPages?: boolean;
   };
+  /** True claims from the store's checkout settings (`storefrontTrustSignals`). */
+  trustSignals?: Array<{ icon: string; label: string }>;
 }
 
-const { content, products, heroSlides, sections } = Astro.props;
+const { content, products, heroSlides, sections, trustSignals = [] } = Astro.props;
 ---
 
 <main id="konten-utama" class="overflow-x-hidden bg-white font-sans text-[#111111] antialiased">
   <div id="home" class="flex w-full flex-col">
     {sections.hero && <HeroSection slides={heroSlides} highlights={content.heroHighlights} content={content.hero} />}
+    {trustSignals.length > 0 && <div class="sf-wrap pt-4"><TrustStrip signals={trustSignals} /></div>}
     {sections.catalog && <ProductsSection products={products} heading={content.catalog} />}
     {/* Landing pages are not listed on the home page (Paduka, 2026-11-01):
         they live on /landing-page, reached from the header and footer

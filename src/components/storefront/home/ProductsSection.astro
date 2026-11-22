@@ -31,41 +31,36 @@ interface Heading {
 interface Props {
   products: Product[];
   heading: Heading;
+  /** /produk: the heading is the page's h1, there is no "Lihat semua", and the header's `?q=` filters the grid. */
+  asPage?: boolean;
+  /** The first row is the LCP element on /produk. */
+  eager?: boolean;
 }
 
-const { products, heading } = Astro.props;
+const { products, heading, asPage = false, eager = false } = Astro.props;
 // Chips only when they narrow something: one category is the whole list.
 const categories = [...new Set(products.map((product) => product.category).filter(Boolean))];
 const showChips = categories.length > 1;
 const chipClass =
-  'catalog-chip inline-flex min-h-10 shrink-0 items-center rounded-full border border-[#E5E5E5] bg-white px-3.5 text-sm text-[#111111] transition-colors hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] aria-pressed:border-[#111111] aria-pressed:bg-[#111111] aria-pressed:text-white';
+  'catalog-chip inline-flex min-h-9 shrink-0 items-center rounded-md border border-[#E2E2E5] bg-white px-3 text-sm text-[#333333] transition-colors hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] aria-pressed:border-[var(--sf-accent,#2563EB)] aria-pressed:bg-[var(--sf-accent-soft,#EFF6FF)] aria-pressed:font-semibold aria-pressed:text-[var(--sf-accent-strong,#1D4ED8)]';
 
 const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
 ---
 
-<section id="produk" class="px-4 pb-6 pt-8">
-  <div class="mb-4">
-    <h2 class="text-xl font-bold tracking-[-0.02em] text-[#111111]">{heading.title}</h2>
-    {heading.description && <p class="mt-1 text-sm leading-6 text-[#555555]">{heading.description}</p>}
+<section id="produk" class:list={["sf-wrap pb-10", asPage ? "pt-1" : "pt-6 md:pt-8"]}>
+  <div class="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+    <div class="min-w-0">
+      {asPage
+        ? <h1 class="text-xl font-bold tracking-[-0.01em] text-[#111111] md:text-2xl">{heading.title}</h1>
+        : <h2 class="text-lg font-bold tracking-[-0.01em] text-[#111111] md:text-xl">{heading.title}</h2>}
+      {heading.description && <p class="mt-0.5 text-sm leading-6 text-[#555555]">{heading.description}</p>}
+    </div>
+    {!asPage && <a href="/produk" class="text-sm font-semibold text-[var(--sf-accent,#2563EB)] underline-offset-4 hover:underline">Lihat semua</a>}
   </div>
 
   <div class="mb-4 flex flex-col gap-3" hidden={products.length === 0}>
-    <div class="relative w-full">
-      <input
-        type="search"
-        id="catalog-search"
-        placeholder="Cari produk"
-        aria-label="Cari produk"
-        class="min-h-11 w-full rounded-full border border-[#E5E5E5] bg-[#F3F3F3] py-2.5 pl-11 pr-4 text-base text-[#111111] transition-colors placeholder:text-[#555555] focus:border-[#111111] focus:bg-white focus:outline-none"
-      />
-      <Icon
-        name="lucide:search"
-        class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#555555]"
-        aria-hidden="true"
-      />
-    </div>
     {showChips && (
-      <div role="group" aria-label="Kategori" class="catalog-chips -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+      <div role="group" aria-label="Kategori" class="catalog-chips -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
         <button type="button" class={chipClass} data-category="" aria-pressed="true">Semua</button>
         {categories.map((category) => (
           <button type="button" class={chipClass} data-category={category} aria-pressed="false">{category}</button>
@@ -76,7 +71,7 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
 
   {
     products.length === 0 && (
-      <div class="rounded-2xl bg-[#F3F3F3] px-5 py-10 text-center">
+      <div class="rounded-md bg-[#F6F6F7] px-5 py-10 text-center">
         <p class="text-sm font-semibold text-[#111111]">Katalog sedang disiapkan</p>
         <p class="mx-auto mt-1 max-w-[26rem] text-sm leading-6 text-[#555555]">
           Produk akan tampil di sini setelah diterbitkan.
@@ -85,11 +80,11 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
     )
   }
 
-  <p id="catalog-empty" class="hidden rounded-2xl bg-[#F3F3F3] px-5 py-8 text-center text-sm text-[#555555]">
+  <p id="catalog-empty" class="hidden rounded-md bg-[#F6F6F7] px-5 py-8 text-center text-sm text-[#555555]">
     Produk tidak ditemukan. Coba kata lain atau pilih kategori Semua.
   </p>
 
-  <div id="product-grid" class="grid grid-cols-2 gap-x-3 gap-y-5" hidden={products.length === 0}>
+  <div id="product-grid" class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5" hidden={products.length === 0}>
     {
       products.map((product, idx) => (
         <div
@@ -107,8 +102,12 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
               price: product.price,
               comparePrice: product.comparePrice,
               variants: product.variants ?? [],
+              ratingValue: product.ratingValue,
+              reviewCount: product.reviewCount,
+              soldCount: product.soldCount,
             }}
             formatPrice={formatPrice}
+            eager={eager && idx < 4}
           />
         </div>
       ))
@@ -128,7 +127,7 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
         <button
           type="button"
           id="load-more-btn"
-          class="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#E5E5E5] bg-white px-6 text-sm font-semibold text-[#111111] transition-colors hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]"
+          class="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[#E2E2E5] bg-white px-6 text-sm font-semibold text-[#111111] transition-colors hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] sm:w-auto sm:min-w-64"
         >
           <span>Lihat produk lainnya</span>
           <Icon name="lucide:chevron-down" class="h-4 w-4" aria-hidden="true" />
@@ -143,7 +142,9 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
   import { CATALOG_PAGE_SIZE } from '../../../lib/catalog-page-size';
 
   function initProductCatalog() {
-    const searchInput = document.getElementById('catalog-search') as HTMLInputElement | null;
+    // The header's search box (SiteHeader) is the one search: typing filters
+    // this grid live, and a submitted `?q=` arrives here already filtered.
+    const searchInput = document.getElementById('site-search') as HTMLInputElement | null;
     const cards = document.querySelectorAll('.product-card') as NodeListOf<HTMLElement>;
     const loadMoreBtn = document.getElementById('load-more-btn');
     const visibleCountEl = document.getElementById('product-visible-count');
@@ -152,7 +153,8 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
     const emptyEl = document.getElementById('catalog-empty');
     const statusEl = document.getElementById('catalog-status');
     const chips = document.querySelectorAll<HTMLButtonElement>('.catalog-chip');
-    let currentSearch = '';
+    let currentSearch = (new URLSearchParams(window.location.search).get('q') ?? '').trim().toLowerCase().slice(0, 80);
+    if (searchInput && currentSearch && !searchInput.value) searchInput.value = currentSearch;
     let currentCategory = '';
     let visibleLimit = CATALOG_PAGE_SIZE;
 

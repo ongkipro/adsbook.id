@@ -1,0 +1,23 @@
+---
+import Icon from './Icon.astro';
+
+// "Pasar Rapi" trust strip: up to three short claims, each read from the
+// store's live checkout settings (`storefrontTrustSignals`). A store with
+// nothing configured shows nothing. No per-visitor value: edge-cacheable.
+interface Props {
+  signals: Array<{ icon: string; label: string }>;
+  class?: string;
+}
+const { signals, class: className = '' } = Astro.props;
+---
+
+{signals.length > 0 && (
+  <ul class={`sf-trust grid gap-px overflow-hidden rounded-md border border-[#E7E7E9] bg-[#E7E7E9] text-[13px] leading-5 text-[#333333] sm:grid-cols-3 ${className}`} aria-label="Belanja di toko ini">
+    {signals.map((signal) => (
+      <li class="flex min-h-11 items-center gap-2.5 bg-white px-3 py-2">
+        <Icon name={`lucide:${signal.icon}`} class="h-4 w-4 shrink-0 text-[var(--sf-accent,#2563EB)]" aria-hidden="true" />
+        <span class="min-w-0">{signal.label}</span>
+      </li>
+    ))}
+  </ul>
+)}

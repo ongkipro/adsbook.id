@@ -153,3 +153,62 @@ export async function getStorePublicFacts(locals: App.Locals): Promise<{
   }
   return facts;
 }
+
+/**
+ * The storefront trust strip (default storefront "Pasar Rapi", 2026-11-23):
+ * at most three short claims, each true of this store's live settings, in the
+ * order a buyer weighs them. Nothing is said that the checkout would not honour:
+ * no COD claim without an active COD method, no courier without an enabled rule.
+ */
+export function storefrontTrustSignals(facts: { couriers: readonly string[]; payments: readonly string[] }): Array<{
+  icon: "wallet" | "credit-card" | "truck";
+  label: string;
+}> {
+  const signals: Array<{ icon: "wallet" | "credit-card" | "truck"; label: string }> = [];
+  const payments = facts.payments;
+  if (payments.some((payment) => payment.startsWith("COD"))) signals.push({ icon: "wallet", label: "Bisa bayar di tempat (COD)" });
+  const online = [
+    payments.some((payment) => payment === "QRIS") && "QRIS",
+    payments.some((payment) => payment.startsWith("Virtual Account")) && "Virtual Account",
+    payments.some((payment) => payment.startsWith("transfer bank")) && "transfer bank",
+  ].filter((item): item is string => Boolean(item));
+  if (online.length) signals.push({ icon: "credit-card", label: `Bayar via ${joinIndonesian(online)}` });
+  const couriers = facts.couriers.filter(Boolean);
+  if (couriers.length) {
+    const shown = couriers.slice(0, 3);
+    signals.push({ icon: "truck", label: `Dikirim ${shown.join(", ")}${couriers.length > shown.length ? ` +${couriers.length - shown.length}` : ""}` });
+  }
+  return signals;
+}
+
+/** A buyer's question to the store over WhatsApp, about one product. Empty when the store has no CS number. */
+export function productWhatsappHref(phone: string, productName: string): string {
+  if (!/^62\d{7,13}$/.test(phone)) return "";
+  return `https://wa.me/${phone}?text=${encodeURIComponent(`Halo, saya mau tanya tentang ${productName}.`)}`;
+}
+
+/**
+ * A seller's plain-text description, as paragraphs and bullet lists: lines
+ * (or " - " runs inside one line, as the catalogue import writes them)
+ * starting with "-", "•" or "*" become list items. Text only; nothing is
+ * interpreted as markup, so a description can never inject HTML.
+ */
+export function descriptionBlocks(text: string): Array<{ kind: "p"; text: string } | { kind: "ul"; items: string[] }> {
+  const normalized = text.replace(/\r\n?/g, "\n").replace(/\s+[-•*]\s+(?=\S)/g, "\n- ");
+  const blocks: Array<{ kind: "p"; text: string } | { kind: "ul"; items: string[] }> = [];
+  for (const raw of normalized.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const bullet = /^[-•*]\s*(.+)$/.exec(line);
+    const last = blocks[blocks.length - 1];
+    if (bullet) {
+      if (last?.kind === "ul") last.items.push(bullet[1]);
+      else blocks.push({ kind: "ul", items: [bullet[1]] });
+    } else if (last?.kind === "p") {
+      last.text = `${last.text} ${line}`;
+    } else {
+      blocks.push({ kind: "p", text: line });
+    }
+  }
+  return blocks;
+}
