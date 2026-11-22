@@ -3,10 +3,11 @@
  * certificate-validation paths pass through (DOM-1); the Host is normalised
  * and either matches the platform allowlist exactly or is resolved against
  * `PLATFORM_DB` (TEN-1, DOM-2); anything else is refused before any cache read
- * or tenant query. Nothing here reads or writes KV.
+ * or tenant query. Nothing here reads or writes KV. A plain-HTTP GET or HEAD
+ * on a production platform host is sent to HTTPS first (`platformHttpsRedirect`).
  */
 import { ensureControlPlane, resolveTenantHost, type HostCache, type TenantContext } from "./control-plane.ts";
-import { consoleHostRefuses, isPlatformRoute, isValidationPath, NOINDEX_HEADER, PLATFORM_CONSOLE_HOST, normalizeHost, platformHosts, platformNoindex, platformRedirect, platformSitePath } from "./host.ts";
+import { consoleHostRefuses, isPlatformRoute, isValidationPath, NOINDEX_HEADER, PLATFORM_CONSOLE_HOST, PRODUCTION_PLATFORM_HOSTS, normalizeHost, platformHosts, platformNoindex, platformRedirect, platformSitePath } from "./host.ts";
 import { PLATFORM_DOMAIN, SELLER_ZONE } from "./hostnames.ts";
 import { statePage } from "./state-pages.ts";
 
@@ -51,6 +52,42 @@ async function defaultPassThrough(request: Request): Promise<Response> {
   return fetch(request);
 }
 
+/** The fixed reason code the request log line carries when the fallback below answered. */
+const HTTPS_FALLBACK_REASON = "http_to_https";
+
+/** Paths the fallback never answers: certificate and hostname validation, Cloudflare's own paths, provider callbacks. */
+const HTTPS_FALLBACK_SKIP = ["/.well-known/", "/cdn-cgi/", "/api/platform/webhooks/"];
+
+/**
+ * Defensive fallback for the platform hosts: plain HTTP is not served. It is
+ * not the primary control (a zone redirect rule is) and is not known to be
+ * active in production until a plain-HTTP request has been seen to reach it.
+ *
+ * Narrow on purpose. GET and HEAD only: a redirect can turn a POST into a GET,
+ * the body has already crossed in the clear, and most callback senders never
+ * follow one. The two production platform hosts only: never a `PLATFORM_HOSTS`
+ * development host, never a tenant or custom host (the middleware has its own
+ * http to https step for those). Never certificate validation, `/cdn-cgi/` or a
+ * provider callback, checked on the raw path and on Astro's normalised one.
+ *
+ * The scheme is the one the runtime put in the request's own URL. Nothing
+ * here reads a header, so a client cannot pick the scheme or the target host:
+ * the target is always `https://` plus an allowlisted host. Temporary (302,
+ * no-store): if a runtime ever reported the wrong scheme for a host, a
+ * permanent redirect would stay cached in browsers.
+ */
+function platformHttpsRedirect(request: Request, url: URL, host: string): Response | null {
+  const own = new URL(request.url);
+  if (own.protocol !== "http:") return null;
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  if (!PRODUCTION_PLATFORM_HOSTS.includes(host)) return null;
+  if (HTTPS_FALLBACK_SKIP.some((prefix) => own.pathname.startsWith(prefix) || url.pathname.startsWith(prefix))) return null;
+  return new Response(null, {
+    status: 302,
+    headers: { Location: `https://${host}${own.pathname}${own.search}`, "Cache-Control": "no-store" },
+  });
+}
+
 export async function gateRequest(
   request: Request,
   url: URL,
@@ -67,6 +104,8 @@ export async function gateRequest(
 
   const extra = typeof env?.PLATFORM_HOSTS === "string" ? env.PLATFORM_HOSTS : null;
   if (platformHosts(extra).has(host)) {
+    const secure = platformHttpsRedirect(request, url, host);
+    if (secure) return { kind: "refused", hostKind: "platform", response: secure, reason: HTTPS_FALLBACK_REASON };
     const moved = platformRedirect(url, request.method, host);
     if (moved) {
       const headers: Record<string, string> = { Location: moved.location, "Cache-Control": moved.status === 301 ? "public, max-age=3600" : "no-store" };

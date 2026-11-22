@@ -483,3 +483,53 @@ test("AUTH migration 0010 on a live control plane: owners backfilled, live token
   await assert.rejects(ensureControlPlane(dup, CHAIN), /SCHEMA_UPGRADE_APPLY_FAILED/);
   assert.equal(dup.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE name = 'platform_identities'").get(), undefined, "rolled back whole");
 });
+
+test("HTTPS fallback: plain-HTTP GET/HEAD on a production platform host gets a 302 to the same path on https; nothing else is touched", async () => {
+  const moved = async (href: string, method = "GET", extraPlatform?: string) => {
+    const request = new Request(href, { method });
+    return gateRequest(request, new URL(href), { PLATFORM_HOSTS: extraPlatform }, { ensureSchema: noSchema, passThrough: async () => new Response("validation") });
+  };
+  for (const [href, location] of [
+    ["http://adsbook.id/masuk", "https://adsbook.id/masuk"],
+    ["http://adsbook.id/daftar?paket=12m&utm_source=fb", "https://adsbook.id/daftar?paket=12m&utm_source=fb"],
+    ["http://app.adsbook.id/", "https://app.adsbook.id/"],
+    ["http://ADSBOOK.ID./lupa-password", "https://adsbook.id/lupa-password"],
+  ]) {
+    for (const method of ["GET", "HEAD"]) {
+      const result = await moved(href, method);
+      assert.equal(result.kind, "refused", `${method} ${href}`);
+      if (result.kind !== "refused") continue;
+      assert.equal(result.response.status, 302, `${method} ${href}`);
+      assert.equal(result.response.headers.get("location"), location, `${method} ${href}`);
+      assert.equal(result.response.headers.get("cache-control"), "no-store");
+      assert.equal(result.reason, "http_to_https");
+    }
+  }
+  // Never: a POST (the body already crossed), HTTPS, Cloudflare and validation paths, provider callbacks, dev hosts.
+  const untouched = [
+    ["http://adsbook.id/api/platform/masuk", "POST"],
+    ["http://adsbook.id/api/platform/signup", "POST"],
+    ["https://adsbook.id/masuk", "GET"],
+    ["http://adsbook.id/cdn-cgi/trace", "GET"],
+    ["http://adsbook.id/api/platform/webhooks/autolaris/abc", "GET"],
+    ["http://adsbook.id/api/platform/webhooks/autolaris/abc", "POST"],
+  ];
+  for (const [href, method] of untouched) {
+    const result = await moved(href, method);
+    assert.ok(!(result.kind === "refused" && result.reason === "http_to_https"), `${method} ${href}`);
+  }
+  const dcv = await moved("http://adsbook.id/.well-known/acme-challenge/t");
+  assert.equal(dcv.kind, "validation", "certificate validation passes through");
+  const local = await moved("http://app.localhost:8787/masuk", "GET", "app.localhost");
+  assert.ok(!(local.kind === "refused" && local.reason === "http_to_https"), "a development platform host is never moved");
+  // A forwarded header cannot pick the scheme or the target.
+  const spoofed = await gateRequest(
+    new Request("https://adsbook.id/masuk", { headers: { "x-forwarded-proto": "http", "x-forwarded-host": "evil.example" } }),
+    new URL("https://adsbook.id/masuk"),
+    {},
+    { ensureSchema: noSchema },
+  );
+  assert.ok(!(spoofed.kind === "refused" && spoofed.reason === "http_to_https"), "an HTTPS request with a forwarded http header is not moved");
+  const forwardedHost = await moved("http://adsbook.id/masuk");
+  assert.equal(forwardedHost.kind === "refused" && forwardedHost.response.headers.get("location"), "https://adsbook.id/masuk");
+});
