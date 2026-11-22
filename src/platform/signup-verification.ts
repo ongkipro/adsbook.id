@@ -27,7 +27,14 @@ export const SIGNUP_CODE_REQUESTS_PER_IP_PER_HOUR = 10;
 export const SIGNUP_CODE_SEND_TIMEOUT_MS = 8_000;
 
 const HOUR_MS = 60 * 60 * 1000;
-const KEY_INFO = "adsbook.id/signup-email-verification/v1";
+/**
+ * One HKDF `info` per purpose. The owner password reset (`owner-reset.ts`)
+ * shares this table and its caps machinery under its own key: its email and
+ * code digests never equal a signup's, so a code of one purpose can never be
+ * claimed by the other, and each purpose counts its own per-address cap.
+ */
+const KEY_INFO = { signup: "adsbook.id/signup-email-verification/v1", reset: "adsbook.id/owner-password-reset/v1" } as const;
+export type VerificationPurpose = keyof typeof KEY_INFO;
 const CHALLENGE_ID = /^[A-Za-z0-9_-]{43}$/;
 const EMAIL_CODE = /^[0-9]{8}$/;
 
@@ -38,12 +45,15 @@ export const isChallengeId = (value: unknown): value is string => typeof value =
 export const isEmailCode = (value: unknown): value is string => typeof value === "string" && EMAIL_CODE.test(value);
 
 /** The keyed digest's key, or null when the platform secret is missing or short (closed). */
-export async function verificationKey(env: Record<string, unknown> | null | undefined): Promise<CryptoKey | null> {
+export async function verificationKey(
+  env: Record<string, unknown> | null | undefined,
+  purpose: VerificationPurpose = "signup",
+): Promise<CryptoKey | null> {
   const secret = typeof env?.PLATFORM_AUTH_SECRET === "string" ? env.PLATFORM_AUTH_SECRET : "";
   if (secret.length < 32) return null;
   const root = await crypto.subtle.importKey("raw", utf8(secret), "HKDF", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: utf8(KEY_INFO) },
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: utf8(KEY_INFO[purpose]) },
     root,
     { name: "HMAC", hash: "SHA-256", length: 256 },
     false,
@@ -186,7 +196,21 @@ const AUTOMATIC = "Email ini dikirim otomatis dan tidak menerima balasan.";
  * previews). Plain text and HTML say the same.
  */
 export function signupCodeMessage(to: string, code: string): SellerEmailMessage {
-  const text = ["Kode verifikasi pendaftaran", "", LEAD, "", code, "", VALIDITY, "", SECURITY, AUTOMATIC].join("\n");
+  return codeMessage(to, code, { subject: SUBJECT, heading: "Kode verifikasi pendaftaran", lead: LEAD, security: SECURITY });
+}
+
+const RESET_SUBJECT = "Kode reset password adsbook.id";
+const RESET_LEAD = "Masukkan kode ini di halaman Lupa Password adsbook.id untuk membuat password baru pemilik toko:";
+const RESET_SECURITY = "Jangan berikan kode ini kepada siapa pun, termasuk yang mengaku dari adsbook.id. Jika Anda tidak meminta reset password, abaikan email ini: password Anda tidak berubah.";
+
+/** The owner password reset code mail: the same shape as the signup mail, its own subject and words. */
+export function resetCodeMessage(to: string, code: string): SellerEmailMessage {
+  return codeMessage(to, code, { subject: RESET_SUBJECT, heading: "Kode reset password", lead: RESET_LEAD, security: RESET_SECURITY });
+}
+
+function codeMessage(to: string, code: string, copy: { subject: string; heading: string; lead: string; security: string }): SellerEmailMessage {
+  const { subject: SUBJECT, heading, lead: LEAD, security: SECURITY } = copy;
+  const text = [heading, "", LEAD, "", code, "", VALIDITY, "", SECURITY, AUTOMATIC].join("\n");
   const cell = (style: string, inner: string) => `<tr><td style="${style}">${inner}</td></tr>`;
   const body = `font-family:${FONT};font-size:16px;line-height:24px;color:${INK};padding:0 24px 16px 24px;`;
   const html =
@@ -196,7 +220,7 @@ export function signupCodeMessage(to: string, code: string): SellerEmailMessage 
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;width:100%;">` +
     `<tr><td height="4" style="height:4px;line-height:4px;font-size:4px;background:${BLUE};" bgcolor="${BLUE}">&nbsp;</td></tr>` +
     cell(`font-family:${FONT};font-size:28px;line-height:32px;font-weight:700;letter-spacing:-0.02em;color:${INK};padding:28px 24px 20px 24px;`, `adsbook<span style="color:${BLUE};">.</span>id`) +
-    cell(`font-family:${FONT};font-size:22px;line-height:28px;font-weight:700;color:${INK};padding:0 24px 12px 24px;`, "Kode verifikasi pendaftaran") +
+    cell(`font-family:${FONT};font-size:22px;line-height:28px;font-weight:700;color:${INK};padding:0 24px 12px 24px;`, heading) +
     cell(body, LEAD) +
     cell(`font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:32px;line-height:40px;font-weight:700;letter-spacing:0.2em;color:${INK};padding:4px 24px 20px 24px;`, code) +
     cell(body, VALIDITY) +

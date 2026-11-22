@@ -1257,6 +1257,116 @@ test("T-26: a provisioning row older than 15 minutes is moved to purging and pur
   assert.equal(tenant("mati-tengah"), undefined);
 });
 
+test("Lupa password: the owner of a real store gets a mailed code, resets once, every session is revoked, the old password stops and the new one signs in; staff, other stores and signup codes are refused", async () => {
+  const { requestOwnerReset, completeOwnerReset } = await import("./owner-reset.ts");
+  const { storeLogin, LOGIN_REFUSED } = await import("./login.ts");
+  const { readActiveAdminSession } = await import("../lib/admin-session.ts");
+  const accessRoute = await import("../pages/api/admin/access.ts");
+  const { platformDb, stores, env, run } = await signupHarness();
+  const a = await run("toko-lupa-a", {}, "lupa@contoh.example");
+  const b = await run("toko-lupa-b", {}, "lain@contoh.example");
+  if (a.status !== 201 || b.status !== 201) return assert.fail("signup");
+  const storeA = createTenantDb(stores.get(a.tenantId).stub);
+  const openStore = async (tenantId: string) => createTenantDb(stores.get(tenantId).stub);
+  const mails: Array<{ to: string; subject: string; text: string }> = [];
+  const transport = async (message: { to: string; subject: string; text: string }) => (mails.push(message), { messageId: "m" });
+  let clock = Date.now() + 10 * 60_000;
+  const deps = { verifyTurnstile: async () => true, emailTransport: transport, openStore, now: () => new Date(clock) };
+  const codeOf = (to: string) => mails.filter((mail) => mail.to === to).at(-1)?.text.match(/^(\d{8})$/m)?.[1] ?? "";
+
+  // A staff member and two live sessions (owner and staff) in store A.
+  const request = new Request("https://x.adsbook.my.id/api/admin/access", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "cs_lupa", display_name: "CS", email: "cs@contoh.example", password: "cs-password-123", role: "customer_service" }) });
+  assert.equal((await accessRoute.POST({ request, locals: { admin: { username: "lupa@contoh.example", role: "owner" }, tenantDb: storeA, runtimeEnv: env, tenantContext: { tenantId: a.tenantId } } } as never)).status, 201);
+  const secret = await resolveAuthSecret(storeA, a.tenantId);
+  const owner = await getAdminCredential(storeA, "lupa@contoh.example");
+  const staff = await getAdminCredential(storeA, "cs_lupa");
+  assert.ok(owner && staff);
+  const { session: ownerSession } = await signJwt({ username: owner.username, role: "owner" }, secret);
+  const { session: staffSession } = await signJwt({ username: staff.username, role: staff.role }, secret);
+  await storeAdminSession(storeA, ownerSession, { mustChangePassword: false, updatedAt: owner.updatedAt });
+  await storeAdminSession(storeA, staffSession, { mustChangePassword: false, updatedAt: staff.updatedAt });
+  assert.ok(await readActiveAdminSession(storeA, ownerSession), "owner session live before");
+  const storeBHash = (stores.get(b.tenantId).storage.db.prepare("SELECT password_hash FROM admin_credentials WHERE role = 'owner'").get() as { password_hash: string }).password_hash;
+
+  // Unknown, staff and owner addresses all answer the same; only the owner gets a mail.
+  const neutral = async (email: string) => {
+    const result = await requestOwnerReset(env, { email, turnstileToken: "ok" }, `198.51.100.${(clock += 61_000) % 200}`, deps);
+    assert.equal(result.status, 200, email);
+    return result.status === 200 ? result.challengeId : "";
+  };
+  await neutral("siapa@contoh.example");
+  await neutral("cs@contoh.example");
+  await neutral("cs_lupa@contoh.example");
+  assert.equal(mails.length, 0, "no mail for an unknown or a staff address");
+  const challengeId = await neutral("  LUPA@contoh.example ");
+  assert.equal(mails.length, 1);
+  assert.equal(mails[0].to, "lupa@contoh.example");
+  assert.match(mails[0].subject, /reset password/i);
+  const code = codeOf("lupa@contoh.example");
+  assert.match(code, /^\d{8}$/);
+
+  // A signup code (another purpose) for the same address never resets the password.
+  const { requestSignupEmailCode } = await import("./signup.ts");
+  const signupCode = await requestSignupEmailCode(env, { email: "baru-lupa@contoh.example", turnstileToken: "ok" }, "198.51.100.199", { ...deps, verifyTurnstile: async () => true });
+  assert.equal(signupCode.status, 200);
+  const finish = (over: Record<string, unknown> = {}) =>
+    completeOwnerReset(env, { email: "lupa@contoh.example", challengeId, emailCode: code, password: "password-baru-aman-1", turnstileToken: "ok", ...over }, `203.0.113.${(clock += 1000) % 200}`, deps);
+  if (signupCode.status === 200) assert.equal((await finish({ challengeId: signupCode.challengeId, emailCode: codeOf("baru-lupa@contoh.example") })).status, 400, "a signup challenge");
+  assert.equal((await finish({ email: "lain@contoh.example" })).status, 400, "another store's owner with A's code");
+  assert.equal((await finish({ emailCode: code === "00000000" ? "00000001" : "00000000" })).status, 400, "a wrong code");
+  assert.equal((await finish({ password: "pendek" })).status, 400, "a weak password, before the code is touched");
+
+  const done = await finish();
+  assert.equal(done.status, 200);
+  assert.equal(await readActiveAdminSession(storeA, ownerSession), null, "the owner session is revoked");
+  assert.equal(await readActiveAdminSession(storeA, staffSession), null, "the staff session is revoked");
+  assert.equal((await finish()).status, 400, "single use");
+
+  const login = (identifier: string, password: string) => storeLogin(env, { identifier, password }, "198.51.100.150", { openStore });
+  assert.deepEqual(await login("lupa@contoh.example", "kata-sandi-panjang-1"), { status: 401, error: LOGIN_REFUSED }, "the old password stops");
+  assert.equal((await login("lupa@contoh.example", "password-baru-aman-1")).status, 200, "the new one signs in");
+  assert.equal((await login("cs_lupa", "cs-password-123")).status, 200, "staff credentials are untouched");
+  assert.equal((stores.get(b.tenantId).storage.db.prepare("SELECT password_hash FROM admin_credentials WHERE role = 'owner'").get() as { password_hash: string }).password_hash, storeBHash, "store B untouched");
+  const events = platformDb.sqlite.prepare("SELECT kind FROM tenant_events WHERE tenant_id = ? AND kind LIKE 'owner_reset%' ORDER BY id").all(a.tenantId).map((row) => (row as { kind: string }).kind);
+  assert.deepEqual(events, ["owner_reset_code_sent", "owner_reset_redeemed", "owner_reset_completed"]);
+  assert.doesNotMatch(JSON.stringify(platformDb.sqlite.prepare("SELECT * FROM signup_email_challenges").all()), new RegExp(`${code}|lupa@contoh`), "no code or address stored");
+});
+
+test("Lupa password: a credential changed after the code was issued is not overwritten; the code is spent and the failure audited", async () => {
+  const { requestOwnerReset, completeOwnerReset } = await import("./owner-reset.ts");
+  const { platformDb, stores, env, run } = await signupHarness();
+  const a = await run("toko-lupa-race", {}, "race@contoh.example");
+  if (a.status !== 201) return assert.fail("signup");
+  const openStore = async (tenantId: string) => {
+    const db = createTenantDb(stores.get(tenantId).stub);
+    return {
+      prepare: (sql: string) => db.prepare(sql),
+      batch: async (statements: D1PreparedStatement[]) => {
+        // The owner changes the password between the read and the reset batch.
+        stores.get(tenantId).storage.db.prepare("UPDATE admin_credentials SET updated_at = '2099-01-01T00:00:00.000Z' WHERE role = 'owner'").run();
+        return db.batch(statements);
+      },
+    } as unknown as D1Database;
+  };
+  const mails: Array<{ to: string; text: string }> = [];
+  const deps = { verifyTurnstile: async () => true, emailTransport: async (m: { to: string; text: string }) => (mails.push(m), { messageId: "m" }), openStore };
+  const requested = await requestOwnerReset(env, { email: "race@contoh.example", turnstileToken: "ok" }, "198.51.100.61", deps);
+  if (requested.status !== 200) return assert.fail("request");
+  const code = mails[0].text.match(/^(\d{8})$/m)?.[1];
+  const before = (stores.get(a.tenantId).storage.db.prepare("SELECT password_hash FROM admin_credentials WHERE role = 'owner'").get() as { password_hash: string }).password_hash;
+  const original = console.error;
+  console.error = () => undefined;
+  try {
+    const result = await completeOwnerReset(env, { email: "race@contoh.example", challengeId: requested.challengeId, emailCode: code, password: "password-baru-aman-1", turnstileToken: "ok" }, "198.51.100.62", deps);
+    assert.equal(result.status, 500);
+  } finally {
+    console.error = original;
+  }
+  assert.equal((stores.get(a.tenantId).storage.db.prepare("SELECT password_hash FROM admin_credentials WHERE role = 'owner'").get() as { password_hash: string }).password_hash, before);
+  const kinds = platformDb.sqlite.prepare("SELECT kind, detail_json FROM tenant_events WHERE tenant_id = ? AND kind LIKE 'owner_reset%' ORDER BY id").all(a.tenantId).map((row) => `${(row as { kind: string }).kind}:${(row as { detail_json: string }).detail_json}`);
+  assert.deepEqual(kinds.slice(-2), ['owner_reset_redeemed:{"outcome":"pending"}', 'owner_reset_failed:{"reason":"credential_changed"}']);
+});
+
 test("T-26/IAM-8: a handoff redeems once on its own host and purpose; replay, expiry, wrong host or purpose, foreign origin are refused; the token is never logged", async () => {
   const { platformDb, stores, env, run } = await signupHarness();
   const a = await run("serah-a");
