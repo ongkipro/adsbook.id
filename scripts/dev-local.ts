@@ -136,6 +136,8 @@ const worker = spawn(
     "--var", "PLATFORM_AUTOLARIS_API_KEY:dev-platform-autolaris-key",
     "--var", `PLATFORM_AUTOLARIS_BASE_URL:${providerBase}`,
     "--var", "PLATFORM_AUTOLARIS_WEBHOOK_TOKEN:dev-local-billing-webhook-token-0123456789",
+    // T-57: seller two-step enrollment is open locally (production keeps it off until its gates pass).
+    "--var", "SELLER_TWO_STEP:on",
     "--var", "CF_SAAS_ZONE_ID:dev-zone",
     "--var", "CF_SAAS_TOKEN:dev-token",
     "--var", `CF_API_BASE:${providerBase}/client/v4`,

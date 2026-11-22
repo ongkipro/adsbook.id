@@ -1,11 +1,26 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
+import TwoStepSettings from '../../components/admin/TwoStepSettings.astro';
+import { getRuntimeEnv } from '../../lib/env.ts';
+import { getAdminCredential } from '../../lib/admin-credentials.ts';
+import { twoStepEnabled, twoStepEnrollmentOpen } from '../../lib/seller-two-step.ts';
+import { tenantDatabase } from '../../lib/tenant-database.ts';
 export const prerender = false;
 const mustChangePassword = Astro.locals.admin?.mustChangePassword ?? false;
 const mayManageIntegrations = !mustChangePassword && (
   Astro.locals.admin?.role === 'owner' || Astro.locals.admin?.role === 'admin'
 );
+// T-57: the card shows while enrollment is open, or for a user who already has it on (so they can turn it off).
+let showTwoStep = false;
+if (!mustChangePassword) {
+  showTwoStep = twoStepEnrollmentOpen(getRuntimeEnv(Astro.locals) as Record<string, unknown>);
+  const database = tenantDatabase(Astro.locals);
+  if (!showTwoStep && database && Astro.locals.admin) {
+    const credential = await getAdminCredential(database, Astro.locals.admin.username).catch(() => null);
+    showTwoStep = credential ? await twoStepEnabled(database, credential.id).catch(() => false) : false;
+  }
+}
 const pageTitle = mustChangePassword
   ? 'Amankan akun admin'
   : mayManageIntegrations ? 'Profil Admin & Integrasi API' : 'Profil Akun';
@@ -59,6 +74,8 @@ const pageTitle = mustChangePassword
         <button id="saveProfile" type="submit" class="btn-primary">Simpan Profil</button>
       </div>
     </form>
+
+    {showTwoStep && <TwoStepSettings />}
 
     {mayManageIntegrations && <>
     <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">

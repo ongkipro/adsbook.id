@@ -22,6 +22,8 @@ interface SharedEnvVars {
    * credential is read or stored. `_PREVIOUS` holds the prior key during rotation.
    */
   PLATFORM_CREDENTIAL_KEY?: string;
+  /** T-57: "on" opens seller two-step enrollment. Default off until the release gates pass. */
+  SELLER_TWO_STEP?: string;
   PLATFORM_CREDENTIAL_KEY_PREVIOUS?: string;
   /** The platform admin origin for links in notices (default https://app.adsbook.id). */
   PLATFORM_ADMIN_URL?: string;

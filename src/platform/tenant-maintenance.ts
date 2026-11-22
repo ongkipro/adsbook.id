@@ -1,5 +1,6 @@
 import { syncTenantIdentities } from "./identities.ts";
 import { encryptStoredCredentials } from "../lib/credential-crypto.ts";
+import { sealTwoStepSecrets } from "../lib/seller-two-step.ts";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import { tenantKv } from "./keys.ts";
 import { purgeExpiredAbandonedOrders } from "../lib/order-persistence.ts";
@@ -76,7 +77,7 @@ export async function runTenantMaintenance(
   // in the platform registry, so staff made before 0010 can use adsbook.id/masuk too.
   await housekeeping("scheduled-identity-sync-failed", async () => (await syncTenantIdentities(env, tenantId, database, new Date(scheduledTime))).synced);
   const sealedCredentials = await housekeeping("scheduled-credential-seal-failed", async () =>
-    (await encryptStoredCredentials(database)).sealed + (await sealPluginSecrets(database)),
+    (await encryptStoredCredentials(database)).sealed + (await sealPluginSecrets(database)) + (await sealTwoStepSecrets(database)),
   );
   await housekeeping("scheduled-heartbeat-failed", async () => {
     await recordSchedulerRun(database, new Date(scheduledTime));

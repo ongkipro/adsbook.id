@@ -1,0 +1,236 @@
+---
+// T-57 / PR-35: the signed-in user's own two-step verification. Enrolling needs the
+// current password and a code from the scanned secret; turning it off needs the
+// password and a current code (or a backup code). API: /api/admin/profile/two-step.
+---
+
+<section id="twoStep" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-7" aria-labelledby="twoStepTitle" aria-busy="true">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <h2 id="twoStepTitle" class="font-semibold text-slate-950">Verifikasi dua langkah <span class="ml-1 align-middle rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">Disarankan</span></h2>
+      <p class="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Setelah password benar, masuk juga meminta 6 digit kode dari aplikasi autentikator di ponsel Anda (Google Authenticator, Microsoft Authenticator, 1Password, dan sejenisnya). Berlaku di adsbook.id/masuk dan di /hello toko ini.</p>
+      <p id="twoStepAdvice" class="mt-2 max-w-2xl text-xs leading-5 text-slate-600" hidden>Opsional, tapi kami sarankan diaktifkan: kalau password Anda bocor, orang lain tetap tidak bisa masuk tanpa ponsel Anda.</p>
+    </div>
+    <span id="twoStepBadge" class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Memuat…</span>
+  </div>
+
+  <p id="twoStepMessage" class="mt-4 hidden rounded-lg p-3 text-sm font-semibold" role="status" aria-live="polite"></p>
+
+  <!-- Off: start with the password. -->
+  <div id="twoStepBeginWrap" hidden>
+  <form id="twoStepBegin" class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end" novalidate>
+    <label class="block text-xs font-semibold text-slate-700" for="twoStepBeginPassword">
+      Password saat ini
+      <input id="twoStepBeginPassword" type="password" required maxlength="1024" autocomplete="current-password" class="admin-input-flat mt-2 sm:text-sm" />
+    </label>
+    <button type="submit" class="btn-primary">Aktifkan</button>
+  </form>
+  </div>
+
+  <!-- Scan and prove. -->
+  <form id="twoStepConfirm" class="mt-5 space-y-4" novalidate hidden>
+    <ol class="list-decimal space-y-1 pl-5 text-sm leading-6 text-slate-700">
+      <li>Buka aplikasi autentikator, pilih tambah akun, lalu pindai kode QR ini.</li>
+      <li>Masukkan 6 digit kode yang muncul di aplikasi.</li>
+    </ol>
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+      <canvas id="twoStepQr" width="200" height="200" class="h-[200px] w-[200px] shrink-0 rounded-lg border border-slate-200" role="img" aria-label="Kode QR untuk aplikasi autentikator"></canvas>
+      <div class="min-w-0 text-xs text-slate-500">
+        <p>Tidak bisa memindai? Ketik kunci ini di aplikasi:</p>
+        <p id="twoStepSecret" class="mt-1 break-all font-mono text-sm font-semibold tracking-wider text-slate-900"></p>
+      </div>
+    </div>
+    <label class="block max-w-xs text-xs font-semibold text-slate-700" for="twoStepConfirmCode">
+      Kode dari aplikasi
+      <input id="twoStepConfirmCode" type="text" inputmode="numeric" pattern="[0-9]{6}" required maxlength="6" autocomplete="one-time-code" class="admin-input-flat mt-2 sm:text-sm" />
+    </label>
+    <div class="flex flex-wrap gap-3">
+      <button type="submit" class="btn-primary">Verifikasi &amp; Aktifkan</button>
+      <button id="twoStepCancel" type="button" class="btn-secondary">Batal</button>
+    </div>
+  </form>
+
+  <!-- Shown once: the backup codes. -->
+  <div id="twoStepCodes" hidden class="mt-5 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+    <p class="text-sm font-semibold text-amber-900">Simpan 10 kode cadangan ini sekarang. Masing-masing hanya bisa dipakai sekali, untuk masuk saat ponsel tidak ada. Kode ini tidak akan ditampilkan lagi.</p>
+    <ul id="twoStepCodeList" class="grid grid-cols-2 gap-2 font-mono text-sm font-semibold text-slate-900 sm:grid-cols-5"></ul>
+    <div class="flex flex-wrap gap-3">
+      <button id="twoStepCopy" type="button" class="btn-secondary">Salin kode</button>
+      <a href="/hello" class="btn-primary">Sudah saya simpan, masuk lagi</a>
+    </div>
+  </div>
+
+  <!-- On: turning it off. -->
+  <div id="twoStepDisableWrap" hidden>
+  <form id="twoStepDisable" class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end" novalidate>
+    <label class="block text-xs font-semibold text-slate-700" for="twoStepDisablePassword">
+      Password saat ini
+      <input id="twoStepDisablePassword" type="password" required maxlength="1024" autocomplete="current-password" class="admin-input-flat mt-2 sm:text-sm" />
+    </label>
+    <label class="block text-xs font-semibold text-slate-700" for="twoStepDisableCode">
+      Kode verifikasi atau kode cadangan
+      <input id="twoStepDisableCode" type="text" required maxlength="9" autocomplete="one-time-code" class="admin-input-flat mt-2 sm:text-sm" />
+    </label>
+    <button type="submit" class="btn-secondary">Matikan</button>
+  </form>
+  </div>
+</section>
+
+<script>
+  import QRCode from 'qrcode';
+
+  const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
+  const root = byId('twoStep');
+  const badge = byId('twoStepBadge');
+  const message = byId('twoStepMessage');
+  const begin = byId<HTMLFormElement>('twoStepBegin');
+  const confirmForm = byId<HTMLFormElement>('twoStepConfirm');
+  const codes = byId('twoStepCodes');
+  const disable = byId<HTMLFormElement>('twoStepDisable');
+  let pendingSecret = '';
+  let pendingPassword = '';
+
+  const show = (element: HTMLElement | null, visible: boolean) => {
+    if (element) element.hidden = !visible;
+  };
+  const beginWrap = byId('twoStepBeginWrap');
+  const disableWrap = byId('twoStepDisableWrap');
+  const say = (text: string, tone: 'ok' | 'error' | 'none' = 'none') => {
+    if (!message) return;
+    message.textContent = text;
+    message.className = `mt-4 rounded-lg p-3 text-sm font-semibold ${tone === 'error' ? 'bg-rose-50 text-rose-800' : 'bg-blue-50 text-blue-800'}${text ? '' : ' hidden'}`;
+    message.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+  };
+  const advice = byId('twoStepAdvice');
+  // Enrollment may be closed platform-wide (SELLER_TWO_STEP); then an off account is told so, never offered a button that answers 403.
+  let available = true;
+  const paint = (enabled: boolean, left = 0) => {
+    show(advice, !enabled && available);
+    if (badge) {
+      badge.textContent = enabled ? 'Aktif' : 'Belum aktif';
+      badge.className = `rounded-full px-2.5 py-1 text-xs font-semibold ${enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`;
+    }
+    show(beginWrap, !enabled && available);
+    if (!enabled && !available) say('Verifikasi dua langkah belum bisa diaktifkan lagi saat ini.');
+    show(confirmForm, false);
+    show(codes, false);
+    show(disableWrap, enabled);
+    if (enabled && left <= 3) say(available ? `Sisa ${left} kode cadangan. Matikan lalu aktifkan lagi untuk mendapat kode baru.` : `Sisa ${left} kode cadangan. Simpan baik-baik.`);
+    root?.setAttribute('aria-busy', 'false');
+  };
+  const call = async (body: Record<string, string>) => {
+    const response = await fetch('/api/admin/profile/two-step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) throw new Error(payload.error || 'Permintaan gagal. Coba lagi.');
+    return payload;
+  };
+  const busy = (form: HTMLFormElement | null, on: boolean) => {
+    form?.querySelectorAll('button').forEach((button) => { button.disabled = on; });
+    form?.setAttribute('aria-busy', String(on));
+  };
+
+  const load = async () => {
+    try {
+      const response = await fetch('/api/admin/profile/two-step', { headers: { Accept: 'application/json' } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) throw new Error(payload.error || 'Gagal memuat status verifikasi dua langkah.');
+      available = payload.data.available !== false;
+      paint(Boolean(payload.data.enabled), Number(payload.data.recovery_codes_left) || 0);
+    } catch (error) {
+      say(error instanceof Error ? error.message : 'Gagal memuat status.', 'error');
+      if (badge) badge.textContent = 'Tidak diketahui';
+    }
+  };
+
+  begin?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const password = byId<HTMLInputElement>('twoStepBeginPassword');
+    if (!password?.value) return say('Masukkan password saat ini.', 'error');
+    busy(begin, true);
+    try {
+      const payload = await call({ action: 'begin', current_password: password.value });
+      pendingSecret = payload.data.secret;
+      pendingPassword = password.value;
+      password.value = '';
+      const secretText = byId('twoStepSecret');
+      if (secretText) secretText.textContent = pendingSecret.replace(/(.{4})/g, '$1 ').trim();
+      const canvas = byId<HTMLCanvasElement>('twoStepQr');
+      if (canvas) await QRCode.toCanvas(canvas, payload.data.otpauth_uri, { width: 200, margin: 1 });
+      say('');
+      show(beginWrap, false);
+      show(confirmForm, true);
+      byId<HTMLInputElement>('twoStepConfirmCode')?.focus();
+    } catch (error) {
+      say(error instanceof Error ? error.message : 'Gagal memulai.', 'error');
+    } finally {
+      busy(begin, false);
+    }
+  });
+
+  byId('twoStepCancel')?.addEventListener('click', () => {
+    pendingSecret = '';
+    pendingPassword = '';
+    say('');
+    paint(false);
+  });
+
+  confirmForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const code = byId<HTMLInputElement>('twoStepConfirmCode');
+    if (!code || !/^\d{6}$/.test(code.value.trim())) return say('Masukkan 6 digit kode dari aplikasi.', 'error');
+    busy(confirmForm, true);
+    try {
+      const payload = await call({ action: 'confirm', current_password: pendingPassword, secret: pendingSecret, code: code.value.trim() });
+      pendingSecret = '';
+      pendingPassword = '';
+      const list = byId('twoStepCodeList');
+      if (list) list.replaceChildren(...(payload.data.recovery_codes as string[]).map((value) => Object.assign(document.createElement('li'), { textContent: value })));
+      show(confirmForm, false);
+      show(codes, true);
+      if (badge) { badge.textContent = 'Aktif'; badge.className = 'rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800'; }
+      show(advice, false);
+      say(payload.message || 'Verifikasi dua langkah aktif.', 'ok');
+    } catch (error) {
+      say(error instanceof Error ? error.message : 'Gagal mengaktifkan.', 'error');
+      code.value = '';
+      code.focus();
+    } finally {
+      busy(confirmForm, false);
+    }
+  });
+
+  byId('twoStepCopy')?.addEventListener('click', async () => {
+    const values = Array.from(document.querySelectorAll('#twoStepCodeList li'), (item) => item.textContent).join('\n');
+    try {
+      await navigator.clipboard.writeText(values);
+      say('Kode cadangan disalin. Simpan di tempat aman.', 'ok');
+    } catch {
+      say('Tidak bisa menyalin otomatis. Catat kode di atas secara manual.', 'error');
+    }
+  });
+
+  disable?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const password = byId<HTMLInputElement>('twoStepDisablePassword');
+    const code = byId<HTMLInputElement>('twoStepDisableCode');
+    if (!password?.value || !code?.value.trim()) return say('Masukkan password dan kode verifikasi.', 'error');
+    busy(disable, true);
+    try {
+      const payload = await call({ action: 'disable', current_password: password.value, code: code.value.trim() });
+      password.value = '';
+      code.value = '';
+      paint(false);
+      say(payload.message || 'Verifikasi dua langkah dimatikan.', 'ok');
+    } catch (error) {
+      say(error instanceof Error ? error.message : 'Gagal mematikan.', 'error');
+    } finally {
+      busy(disable, false);
+    }
+  });
+
+  void load();
+</script>
