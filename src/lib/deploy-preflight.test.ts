@@ -5,6 +5,7 @@ import {
   findProductOwnedEdits,
   findUnbundledMigrations,
   findUnregisteredNativeLandings,
+  foreignZoneRoutes,
   checkDeployTarget,
   evaluateDeployPreflight,
   parseWranglerConfig,
@@ -306,4 +307,14 @@ test("each D1 ledger is compared with its own chain: PLATFORM_DB with the contro
     migrationLedgerTargets(repository).find((entry) => entry.binding === "PLATFORM_DB")?.migrationsDir,
     "src/platform/migrations",
   );
+});
+
+test("the seller zone routes only to the platform Worker; any other script on it is reported", () => {
+  assert.deepEqual(foreignZoneRoutes([{ pattern: "*/*", script: "adsbook-platform" }], "adsbook-platform"), []);
+  const incident = [
+    { pattern: "*/*", script: "adsbook-platform" },
+    { pattern: "*adsbook.my.id/*", script: "cf-w-ca58f2ac" },
+  ];
+  assert.deepEqual(foreignZoneRoutes(incident, "adsbook-platform"), [{ pattern: "*adsbook.my.id/*", script: "cf-w-ca58f2ac" }]);
+  assert.deepEqual(foreignZoneRoutes([{ pattern: "x.adsbook.my.id/*", script: null }], "adsbook-platform"), [{ pattern: "x.adsbook.my.id/*", script: null }], "a route with no script disables the Worker there");
 });

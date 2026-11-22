@@ -281,3 +281,16 @@ export function findProductOwnedEdits(changed: string[], nativeSlugs: string[] =
     (path) => path && !nativeRoutes.has(path) && !INSTALL_OWNED.some((owned) => owned.test(path)),
   );
 }
+
+/** A Worker route as the Cloudflare API lists it for a zone. */
+export type ZoneRoute = { pattern: string; script?: string | null };
+
+/**
+ * The seller zone may route to this Worker only. A second route there, even a
+ * narrower one to another script, silently takes every store request (on
+ * 2026-11-22 `*adsbook.my.id/*` → `cf-w-ca58f2ac` answered 522 for every store
+ * for four hours). Returns the routes that do not belong; empty is healthy.
+ */
+export function foreignZoneRoutes(routes: readonly ZoneRoute[], worker: string): ZoneRoute[] {
+  return routes.filter((route) => route.script !== worker);
+}
