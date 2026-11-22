@@ -485,3 +485,158 @@
   }
 }
 
+
+/* ── /hello, "Whiteprint" (owner direction B, 2026-11-23) ─────────────────
+   A drafting sheet of the adsbook.id system: on a desktop the left column,
+   below 1024px a fixed background behind a centred card. Scoped to
+   `.hello-page` so the platform console login keeps its own stage. Paper
+   #F4F7FB, ink the brand blue, one white card. */
+.hello-page {
+  --bp-paper: #f4f7fb; --bp-ink: #2563eb; --bp-ink-soft: rgb(37 99 235 / 0.28);
+  --bp-grid: rgb(37 99 235 / 0.07); --bp-grid-major: rgb(37 99 235 / 0.12);
+  background: var(--bp-paper);
+}
+.hello-page .admin-login-stage { position: relative; isolation: isolate; }
+
+/* The sheet: millimetre-style grid, minor 24px and major 120px. */
+.login-blueprint {
+  position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+  display: grid; place-items: center; color: var(--bp-ink);
+  background-color: var(--bp-paper);
+  background-image:
+    linear-gradient(var(--bp-grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bp-grid-major) 1px, transparent 1px),
+    linear-gradient(var(--bp-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bp-grid) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  background-position: -1px -1px;
+}
+.login-blueprint-sheet { width: min(140vmin, 1100px); opacity: 0.5; }
+.login-blueprint-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.login-blueprint-caption, .login-blueprint-titleblock { display: none; }
+
+/* Drawing. */
+.bp-line { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.bp-ring-track { stroke-dasharray: 1; }
+.bp-guide { fill: none; stroke: currentColor; stroke-width: 1; stroke-dasharray: 6 6; opacity: 0.45; }
+.bp-mark { fill: none; stroke: currentColor; stroke-width: 9; stroke-linejoin: round; }
+.bp-dot { stroke-width: 7; }
+.bp-dim line, .bp-dim path { stroke: currentColor; stroke-width: 1.1; fill: none; }
+.bp-dim .bp-fill { fill: currentColor; stroke: none; }
+.bp-dim .bp-paper { fill: var(--bp-paper); stroke: none; }
+.bp-dim text { fill: currentColor; font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.04em; }
+.bp-node-box { fill: var(--bp-paper); stroke: currentColor; stroke-width: 1.4; }
+.bp-node-label { fill: currentColor; font: 600 16px/1 system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: 0.01em; }
+.bp-packet { fill: var(--bp-ink); }
+
+/* Motion: the sheet draws itself once, then the loop keeps running. */
+.bp-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bp-draw 1.8s cubic-bezier(.4,0,.2,1) .2s forwards; }
+.bp-draw-late { animation-delay: 1s; animation-duration: 2.4s; }
+.bp-fade { opacity: 0; animation: bp-fade .8s ease-out 1.6s forwards; }
+.bp-guide.bp-fade { animation-name: bp-fade-guide; }
+.bp-node { opacity: 0; animation: bp-fade .5s ease-out calc(1.9s + var(--bp-i) * 120ms) forwards; }
+.bp-node-box { animation: bp-pulse 9s linear calc(var(--bp-i) * 1.5s) infinite; }
+.bp-packets { opacity: 0; animation: bp-fade .6s ease-out 2.6s forwards; }
+@keyframes bp-draw { to { stroke-dashoffset: 0; } }
+@keyframes bp-fade { to { opacity: 1; } }
+@keyframes bp-fade-guide { to { opacity: 0.45; } }
+@keyframes bp-pulse {
+  0%, 12%, 100% { fill: var(--bp-paper); }
+  4% { fill: rgb(37 99 235 / 0.12); }
+}
+
+/* The card. */
+.hello-page .admin-login-form-wrapper { position: relative; justify-content: center; background: transparent; }
+.hello-page .admin-login-card {
+  margin: auto; max-width: 25rem; padding: 2rem 1.75rem 1.75rem;
+  border-radius: 1.25rem; background: #fff;
+  border: 1px solid rgb(37 99 235 / 0.1);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 24px 60px -28px rgb(30 64 175 / 0.35);
+}
+.hello-page .admin-login-header { display: grid; gap: 0.75rem; justify-items: start; padding-bottom: 1.5rem; text-align: left; }
+.hello-page .login-wordmark { justify-content: flex-start; }
+.login-wordmark-img { display: block; height: 24px; width: auto; }
+.login-subtitle { font-size: 0.9375rem; line-height: 1.4; color: rgb(71 85 105); }
+.login-subtitle strong { font-weight: 600; color: rgb(15 23 42); }
+.login-label { display: block; font-size: 0.875rem; font-weight: 600; color: rgb(15 23 42); }
+.hello-page .admin-login-card .admin-input-flat { height: 48px; border-radius: 0.75rem; background: #fff; }
+.login-code-input { letter-spacing: 0.3em; font-variant-numeric: tabular-nums; }
+.login-eye {
+  position: absolute; right: 0.25rem; display: grid; place-items: center;
+  width: 44px; height: 40px; border-radius: 0.5rem; color: rgb(100 116 139);
+  transition: background-color 150ms, color 150ms;
+}
+.login-eye:hover { background: rgb(241 245 249); color: rgb(15 23 42); }
+.login-eye:focus-visible { outline: 2px solid var(--bp-ink); outline-offset: 1px; }
+.login-eye svg { width: 20px; height: 20px; }
+.login-eye .login-eye-shut, .login-eye[aria-pressed="true"] .login-eye-open { display: none; }
+.login-eye[aria-pressed="true"] .login-eye-shut { display: block; }
+.login-submit {
+  display: inline-flex; align-items: center; justify-content: center; width: 100%;
+  min-height: 48px; margin-top: 0.5rem; padding: 0.5rem 1rem; border-radius: 0.75rem;
+  background: var(--bp-ink); color: #fff; font-size: 0.9375rem; font-weight: 600;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.2) inset, 0 8px 20px -10px rgb(37 99 235 / 0.8);
+  transition: background-color 150ms, box-shadow 150ms, transform 150ms;
+}
+.login-submit:hover { background: #1d4ed8; }
+.login-submit:active { transform: translateY(1px); }
+.login-submit:focus-visible { outline: 2px solid var(--bp-ink); outline-offset: 3px; }
+.login-submit:disabled { pointer-events: none; background: #1d4ed8; color: rgb(255 255 255 / 0.85); }
+.login-aside { text-align: center; font-size: 0.875rem; color: rgb(71 85 105); }
+.login-link { font-weight: 600; color: var(--bp-ink); text-underline-offset: 3px; }
+.login-link:hover { text-decoration: underline; }
+.login-link:focus-visible { outline: 2px solid var(--bp-ink); outline-offset: 2px; border-radius: 4px; }
+.login-note { border-radius: 0.75rem; background: rgb(37 99 235 / 0.06); padding: 0.875rem 1rem; font-size: 0.875rem; line-height: 1.5; color: rgb(30 58 138); }
+.login-error { margin-bottom: 1.25rem; border-radius: 0.75rem; border: 1px solid rgb(254 205 211); background: rgb(255 241 242); padding: 0.875rem 1rem; }
+.hello-page .admin-login-foot { justify-content: center; text-align: center; gap: 0.25rem 1rem; color: rgb(71 85 105); }
+.hello-page .admin-login-foot p { color: rgb(71 85 105); text-shadow: none; font-family: inherit; }
+.login-foot-secure { display: inline-flex; align-items: center; gap: 0.375rem; }
+.login-foot-secure svg { width: 14px; height: 14px; }
+
+/* Phone and tablet: the sheet behind, the card centred, no scroll. */
+@media (max-width: 1023px) {
+  .hello-page { background: var(--bp-paper); }
+  .hello-page .admin-login-form-wrapper { background: transparent; padding-inline: max(1rem, env(safe-area-inset-left)); }
+  .hello-page .admin-login-card { margin: auto; padding: 1.75rem 1.25rem 1.5rem; border-radius: 1.25rem; box-shadow: 0 24px 60px -24px rgb(30 64 175 / 0.4); }
+  .hello-page .admin-login-card .text-slate-500 { color: rgb(71 85 105); }
+  .hello-page .admin-login-header { padding-bottom: 1.25rem; }
+  /* The whole loop fits a tablet; a phone crops its sides, so the top and bottom nodes clear the card. */
+  .login-blueprint-sheet { width: clamp(720px, 100vw, 980px); opacity: 0.45; }
+}
+@media (max-height: 640px) and (max-width: 1023px) {
+  .hello-page .admin-login-card { padding-block: 1.25rem; }
+  .login-blueprint-sheet { opacity: 0.3; }
+}
+
+/* Desktop: the sheet is the left column, with a caption and a title block. */
+@media (min-width: 1024px) {
+  .hello-page .admin-login-stage { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(440px, 1fr); }
+  .login-blueprint {
+    position: relative; inset: auto; z-index: 0; height: 100dvh;
+    grid-template-rows: 1fr auto; align-items: center; justify-items: center;
+    padding: 2.5rem 3rem 2rem; border-right: 1px solid rgb(37 99 235 / 0.12);
+  }
+  .login-blueprint-sheet { width: min(100%, 680px, calc((100dvh - 10rem) * 1.11)); opacity: 1; }
+  .login-blueprint-caption {
+    display: block; justify-self: start; max-width: 32rem; margin-top: 1rem; text-wrap: balance;
+    font-size: 1.25rem; line-height: 1.4; font-weight: 600; color: rgb(15 23 42); letter-spacing: -0.01em;
+  }
+  .login-blueprint-caption span { color: var(--bp-ink); }
+  .login-blueprint-titleblock {
+    position: absolute; top: 1.5rem; right: 1.5rem; display: flex;
+    border: 1px solid rgb(37 99 235 / 0.35); background: rgb(244 247 251 / 0.9);
+    font: 600 0.75rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.06em; text-transform: uppercase; color: var(--bp-ink);
+  }
+  .login-blueprint-titleblock span { padding: 0.5rem 0.75rem; }
+  .login-blueprint-titleblock span + span { border-left: 1px solid rgb(37 99 235 / 0.35); }
+  .hello-page .admin-login-form-wrapper { padding-inline: 3rem; background: #fff; }
+  .hello-page .admin-login-card { border: 0; box-shadow: none; padding: 0; max-width: 24rem; }
+  .hello-page .admin-login-foot { justify-content: flex-start; text-align: left; max-width: 24rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-draw, .bp-fade, .bp-node, .bp-packets, .bp-node-box { animation: none; stroke-dashoffset: 0; opacity: 1; }
+  .bp-guide.bp-fade { opacity: 0.45; }
+  .bp-packets { display: none; }
+  .login-submit { transition: none; }
+}

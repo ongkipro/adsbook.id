@@ -1,5 +1,6 @@
 ---
-import { BRAND_MARK, BRAND_WORDMARK, BRAND_WORDMARK_ON_DARK, FAVICON_PNG, FAVICON_192 } from '../lib/brand-assets';
+import { BRAND_MARK, BRAND_WORDMARK, BRAND_WORDMARK_ANIMATED, FAVICON_PNG, FAVICON_192 } from '../lib/brand-assets';
+import LoginBlueprint from '../components/admin/LoginBlueprint.astro';
 import { tenantDatabase } from '../lib/tenant-database.ts';
 import '../styles/admin.css';
 import {
@@ -182,39 +183,34 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
          stylesheet for a family it never applied, which told Google the address
          of every operator opening the admin and bought nothing back. -->
   </head>
-  <body class="admin-login-page bg-slate-50 text-slate-900 antialiased selection:bg-blue-200 selection:text-blue-900">
+  <body class="admin-login-page hello-page text-slate-900 antialiased selection:bg-blue-200 selection:text-blue-900">
     <main class="admin-login-stage" aria-labelledby="loginTitle">
-      <!-- Left Brand Panel (Desktop) -->
-      <div class="admin-login-brand relative isolate hidden overflow-hidden lg:flex flex-col justify-center bg-slate-950 p-10 text-white xl:p-14">
-        <!-- Ornament: a dot grid that fades toward the edges. Decorative only. -->
-        <div class="login-brand-grid" aria-hidden="true"></div>
-        <!-- T-29: the platform's name and one line about the admin; the
-             inherited tip-jar panel is gone (PR-18). -->
-        <section class="relative max-w-md" aria-labelledby="loginBrandTitle">
-          <img src={BRAND_WORDMARK_ON_DARK} alt="adsbook.id" width="126" height="20" loading="eager" class="h-5 w-auto opacity-90" />
-          <h2 id="loginBrandTitle" class="mt-4 text-3xl font-semibold leading-tight">Pesanan, pengiriman, dan iklan {Astro.locals.tenant.name} di satu admin.</h2>
-        </section>
+      <!-- The blueprint (owner direction "Whiteprint", 2026-11-23): the left
+           column on a desktop, a fixed background behind the card below
+           1024px. Decorative only; the heading names the admin for a reader. -->
+      <div class="login-blueprint" aria-hidden="true">
+        <div class="login-blueprint-sheet"><LoginBlueprint /></div>
+        <p class="login-blueprint-caption">Pesanan, pengiriman, dan iklan <span>{Astro.locals.tenant.name}</span> di satu admin.</p>
+        <p class="login-blueprint-titleblock"><span>adsbook.id</span><span>Sistem toko</span><span>v{CMS_VERSION.version}</span></p>
       </div>
 
-      <!-- Right Form Panel -->
-      <!-- One screen, no scroll, on a phone and on a desktop: the form centred,
-           a short footer pinned to the bottom of the same column. -->
+      <!-- The form: centred, one screen, no scroll, on every device. -->
       <div class="admin-login-form-wrapper">
         <div class="admin-login-card">
-          <div class="admin-login-header text-center lg:text-left">
-            <!-- The wordmark: "adsbook.id" as one name, ".id" in the brand blue. -->
-            <!-- The wordmark leads back to the store's homepage, on a phone and
-                 on a desktop alike: an operator who reached the login by mistake,
-                 or who wants to see the shop, has one obvious way out. -->
+          <div class="admin-login-header">
+            <!-- The wordmark draws itself on a loop (the platform home's signal
+                 logo) and leads back to the store's homepage. Under reduced
+                 motion the still wordmark stands in. -->
             <h1 id="loginTitle" class="login-wordmark">
               <a href="/" class="login-wordmark-link" aria-label={`adsbook.id, kembali ke beranda ${Astro.locals.tenant.name}`} title={`Ke beranda ${Astro.locals.tenant.name}`}>
-                <img src={BRAND_WORDMARK} alt="" width="138" height="22" loading="eager" class="h-[22px] w-auto shrink-0" />
+                <img id="loginWordmark" src={BRAND_WORDMARK} data-animated={BRAND_WORDMARK_ANIMATED} alt="" width="150" height="24" loading="eager" decoding="async" class="login-wordmark-img" />
               </a>
             </h1>
+            <p class="login-subtitle">{codeStep ? 'Satu langkah lagi untuk masuk ke' : 'Masuk ke admin'} <strong>{Astro.locals.tenant.name}</strong></p>
           </div>
           <div class="admin-login-form-content">
         {errorMessage && (
-          <div id="loginError" class="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4" role="alert" aria-live="assertive">
+          <div id="loginError" class="login-error" role="alert" aria-live="assertive">
             <div class="flex items-start gap-3">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="mt-0.5 h-5 w-5 flex-shrink-0 text-rose-600" aria-hidden="true">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
@@ -228,49 +224,53 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
         {codeStep ? (
         <form id="codeForm" method="POST" class="space-y-4" novalidate aria-busy="false" aria-describedby={[errorMessage && 'loginError'].filter(Boolean).join(' ') || undefined}>
           <input type="hidden" name="step" value="code" />
-          <div class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900">
+          <div class="login-note">
             <p class="font-semibold text-slate-900">Verifikasi dua langkah</p>
             <p class="mt-1">Masukkan 6 digit kode dari aplikasi autentikator Anda. Tidak bisa membuka aplikasinya? Pakai salah satu kode cadangan.</p>
           </div>
           <div class="space-y-2">
-            <label for="code" class="text-sm font-semibold text-slate-900">Kode verifikasi</label>
-            <input id="code" type="text" name="code" required maxlength="9" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" autofocus placeholder="123456" class="admin-input-flat" aria-describedby="code-error" data-msg-missing="Masukkan kode verifikasi." />
+            <label for="code" class="login-label">Kode verifikasi</label>
+            <input id="code" type="text" name="code" required maxlength="9" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" autofocus inputmode="text" placeholder="123456" class="admin-input-flat login-code-input" aria-describedby="code-error" data-msg-missing="Masukkan kode verifikasi." />
             <p id="code-error" class="admin-field-error" hidden></p>
           </div>
-          <button id="loginSubmit" type="submit" class="mt-1 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[#1D4ED8] disabled:text-white/80">
+          <button id="loginSubmit" type="submit" class="login-submit">
             Verifikasi &amp; Masuk
           </button>
-          <p class="text-center text-sm"><a href="/hello" class="font-semibold text-[#2563EB] hover:underline">← Masuk dengan akun lain</a></p>
+          <p class="login-aside"><a href="/hello" class="login-link">← Masuk dengan akun lain</a></p>
           <p id="loginStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
         </form>
         ) : (
         <form id="loginForm" method="POST" class="space-y-4" novalidate aria-busy="false" aria-describedby={[errorMessage && 'loginError'].filter(Boolean).join(' ') || undefined}>
           <div class="space-y-2">
-            <label for="username" class="text-sm font-semibold text-slate-900">Email atau username</label>
+            <label for="username" class="login-label">Email atau username</label>
             <input id="username" type="text" name="username" required maxlength="254" autocomplete="username" autofocus={!focusPassword} value={submittedUsername} placeholder="nama@email.com" class="admin-input-flat" spellcheck="false" aria-describedby="username-error" data-msg-missing="Masukkan email atau username Anda." />
             <p id="username-error" class="admin-field-error" hidden></p>
           </div>
 
           <div class="space-y-2">
-            <label for="password" class="text-sm font-semibold text-slate-900">Password</label>
+            <label for="password" class="login-label">Password</label>
             <div class="relative flex items-center">
-              <input id="password" type="password" name="password" required autocomplete="current-password" autofocus={focusPassword} placeholder="Masukkan password" class="admin-input-flat pr-20" aria-describedby="password-error" data-msg-missing="Masukkan password Anda." />
-              <button id="togglePassword" type="button" class="absolute right-1 flex items-center justify-center rounded px-3 text-sm font-normal text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-1" aria-controls="password" aria-label="Tampilkan password" aria-pressed="false">Lihat</button>
+              <input id="password" type="password" name="password" required autocomplete="current-password" autofocus={focusPassword} placeholder="Masukkan password" class="admin-input-flat pr-12" aria-describedby="password-error" data-msg-missing="Masukkan password Anda." />
+              <button id="togglePassword" type="button" class="login-eye" aria-controls="password" aria-label="Tampilkan password" aria-pressed="false">
+                <svg class="login-eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="login-eye-shut" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.6 8.5 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+              </button>
             </div>
             <p id="password-error" class="admin-field-error" hidden></p>
           </div>
 
-          <button id="loginSubmit" type="submit" class="mt-1 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[#1D4ED8] disabled:text-white/80">
+          <button id="loginSubmit" type="submit" class="login-submit">
             Masuk
           </button>
           <p id="loginStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
-          <p class="text-center text-sm text-slate-500">Lupa password? <a id="forgotPassword" href={lupaPasswordUrl} class="font-semibold text-[#2563EB] hover:underline">Buat password baru</a></p>
+          <p class="login-aside">Lupa password? <a id="forgotPassword" href={lupaPasswordUrl} class="login-link">Buat password baru</a></p>
         </form>
         )}
       </div>
         </div>
         <footer class="admin-login-foot">
-          <p class="font-mono text-slate-400">adsbook.id v{CMS_VERSION.version}</p>
+          <p class="login-foot-secure"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>Koneksi terenkripsi</p>
+          <p>adsbook.id v{CMS_VERSION.version}</p>
         </footer>
       <script>
         import { bindInlineValidation, validateInline } from '../lib/form-validation-id.ts';
@@ -315,11 +315,26 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
 
         if (form) bindInlineValidation(form);
 
+        // The wordmark draws itself, rests, and draws again (the platform
+        // home's signal logo, looped). A fresh URL restarts an SVG image's
+        // animation; a hidden tab and reduced motion keep the still one.
+        const wordmark = document.getElementById('loginWordmark') as HTMLImageElement | null;
+        const animated = wordmark?.dataset.animated;
+        if (wordmark && animated && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          let round = 0;
+          const replay = () => {
+            if (document.hidden) return;
+            round += 1;
+            wordmark.src = `${animated}#r${round}`;
+          };
+          replay();
+          window.setInterval(replay, 5200);
+        }
+
         toggle?.addEventListener('click', () => {
           if (!password) return;
           const visible = password.type === 'text';
           password.type = visible ? 'password' : 'text';
-          toggle.textContent = visible ? 'Lihat' : 'Sembunyikan';
           toggle.setAttribute('aria-label', visible ? 'Tampilkan password' : 'Sembunyikan password');
           toggle.setAttribute('aria-pressed', String(!visible));
         });

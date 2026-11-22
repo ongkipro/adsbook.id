@@ -1,0 +1,95 @@
+---
+// The /hello blueprint (owner direction "Whiteprint", 2026-11-23): a drafting
+// sheet of the adsbook.id system. The `a.` mark drawn as a construction sketch
+// (its real path from public/images/brand/adsbook-mark.svg), and around it the
+// loop a store runs: ad → form → order → ship → pay → ad signal.
+// Decorative only (aria-hidden); the page reads the same without it.
+// Desktop: the left column. Below 1024px: a fixed background behind the form.
+// Motion: CSS draw-in and node pulses, SMIL packets; all stop under
+// prefers-reduced-motion (CSS here, `pauseAnimations()` in hello.astro).
+const NODES = [
+  { label: "Iklan", x: 265, y: 126 },
+  { label: "Form", x: 535, y: 126 },
+  { label: "Pesanan", x: 670, y: 360 },
+  { label: "Kirim", x: 535, y: 594 },
+  { label: "Bayar", x: 265, y: 594 },
+  { label: "Sinyal", x: 130, y: 360 },
+];
+// Clockwise arrowheads at each arc's midpoint (angle θ on the r=270 ring; tangent θ+90°).
+const ARROWS = [
+  [400, 90, 0], [633.8, 225, 60], [633.8, 495, 120], [400, 630, 180], [166.2, 495, 240], [166.2, 225, 300],
+];
+const RING = "M 265 126.2 A 270 270 0 0 1 535 593.8 A 270 270 0 0 1 265 126.2 Z";
+const MARK_A = "M344 757q-59 0-102-19t-66-54.5-23-84.5q0-46 21-81.5t64.5-59.5T347 424l167-27v110l-140 25q-32 6-49 20.5T308 594q0 25 19 39t47 14q37 0 65-16t43.5-43.5T498 527V385q0-31-24.5-52T407 312q-40 0-70.5 22T292 392l-120-57q16-46 51-79t84-51 107-18q69 0 122 25t82.5 69.5T648 385v360H508v-88l34-6q-24 36-53 59.5t-65 35-80 11.5";
+---
+
+<svg class="login-blueprint-svg" viewBox="0 0 800 720" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
+  <defs>
+    <pattern id="bpHatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" stroke-width="2" opacity="0.55" />
+    </pattern>
+  </defs>
+
+  <!-- The system loop. -->
+  <g class="bp-ring">
+    <circle cx="400" cy="360" r="270" class="bp-line bp-draw bp-ring-track" pathLength="1" />
+    {ARROWS.map(([x, y, r]) => (
+      <path d="M -7 -6 L 3 0 L -7 6" transform={`translate(${x} ${y}) rotate(${r})`} class="bp-line bp-fade" />
+    ))}
+  </g>
+
+  <!-- The mark, as a construction sketch: square, radius, centre lines, guide circle, dimensions. -->
+  <g class="bp-construction">
+    <line x1="236" y1="360" x2="564" y2="360" class="bp-guide bp-fade" />
+    <line x1="400" y1="200" x2="400" y2="520" class="bp-guide bp-fade" />
+    <circle cx="385" cy="385" r="44" class="bp-guide bp-fade" />
+
+    <g transform="translate(300 260) scale(0.21186)">
+      <rect width="944" height="944" rx="208" class="bp-mark bp-draw" pathLength="1" />
+      <path d={MARK_A} class="bp-mark bp-draw bp-draw-late" pathLength="1" />
+      <rect x="674" y="595" width="150" height="150" fill="url(#bpHatch)" class="bp-mark bp-dot bp-fade" />
+    </g>
+
+    <!-- Width, above. -->
+    <g class="bp-fade bp-dim">
+      <line x1="300" y1="252" x2="300" y2="222" />
+      <line x1="500" y1="252" x2="500" y2="222" />
+      <line x1="300" y1="230" x2="500" y2="230" />
+      <path d="M 300 230 l 9 -4 v 8 z M 500 230 l -9 -4 v 8 z" class="bp-fill" />
+      <rect x="374" y="216" width="52" height="24" class="bp-paper" />
+      <text x="400" y="234" text-anchor="middle">944</text>
+    </g>
+    <!-- Height, left. -->
+    <g class="bp-fade bp-dim">
+      <line x1="292" y1="260" x2="262" y2="260" />
+      <line x1="292" y1="460" x2="262" y2="460" />
+      <line x1="270" y1="260" x2="270" y2="460" />
+      <path d="M 270 260 l -4 9 h 8 z M 270 460 l -4 -9 h 8 z" class="bp-fill" />
+      <rect x="244" y="334" width="52" height="52" class="bp-paper" />
+      <text x="270" y="366" text-anchor="middle" transform="rotate(-90 270 360)">944</text>
+    </g>
+    <!-- Corner radius (top right) and the precision dot. -->
+    <g class="bp-fade bp-dim">
+      <line x1="456" y1="304" x2="480" y2="280" />
+      <line x1="480" y1="280" x2="506" y2="280" />
+      <text x="512" y="285">R 208</text>
+      <line x1="475" y1="410" x2="540" y2="440" />
+      <line x1="540" y1="440" x2="560" y2="440" />
+      <text x="566" y="446">1 modul</text>
+    </g>
+  </g>
+
+  <!-- Nodes; one pulses as a packet passes it. -->
+  {NODES.map((node, index) => (
+    <g class="bp-node" style={`--bp-i:${index}`} transform={`translate(${node.x} ${node.y})`}>
+      <rect x="-58" y="-22" width="116" height="44" rx="10" class="bp-node-box" />
+      <text y="7" text-anchor="middle" class="bp-node-label">{node.label}</text>
+    </g>
+  ))}
+
+  <!-- Packets travelling the loop (SMIL; paused under reduced motion). -->
+  <g class="bp-packets">
+    <circle r="6" class="bp-packet"><animateMotion dur="9s" repeatCount="indefinite" path={RING} begin="0s" /></circle>
+    <circle r="6" class="bp-packet"><animateMotion dur="9s" repeatCount="indefinite" path={RING} begin="-4.5s" /></circle>
+  </g>
+</svg>

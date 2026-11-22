@@ -12,6 +12,8 @@
 export const BRAND_MARK = "/images/brand/adsbook-mark.svg";
 export const BRAND_WORDMARK = "/images/brand/adsbook-wordmark.svg";
 export const BRAND_WORDMARK_ON_DARK = "/images/brand/adsbook-wordmark-on-dark.svg";
+/** The wordmark that draws itself (the platform home's signal band); /hello replays it on a loop. */
+export const BRAND_WORDMARK_ANIMATED = "/platform/brand/adsbook-id-wordmark-animated.svg";
 
 const FAVICON_VERSION = "2";
 export const FAVICON_PNG = `/favicon.png?v=${FAVICON_VERSION}`;

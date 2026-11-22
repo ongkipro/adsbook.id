@@ -326,7 +326,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `auto-load-more` | 2 | — | — | 1 | `/produk` |
 | `autolaris-client` | 20 | — | — | 4 | `/api/order-status` `/api/payment-methods` `/admin/payments` `/api/admin/settings` |
 | `autolaris-payment` | 23 | `autolaris_callbacks` `order_items` `orders` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `stores` `warehouses` | — | 2 | `/api/meta-event` `/api/order-status` `/api/submit-order` `/api/v1/checkout` `/api/v1/tracking/events` `/api/admin/orders/[id]` |
-| `brand-assets` | 6 | — | — | **none** | `/thanks` `/api/handoff` `/hello` `/pemulihan` `/admin/settings/store` `/platform/login` |
+| `brand-assets` | 7 | — | — | **none** | `/thanks` `/api/handoff` `/hello` `/pemulihan` `/admin/settings/store` `/platform/login` |
 | `bundled-migrations` | 1 | — | — | **none** | — |
 | `capi-outbox` | 20 | `capi_event_outbox` | — | 2 | `/api/meta-event` `/api/v1/tracking/events` `/api/admin/ads` |
 | `catalog-data` | 4 | — | — | 3 | `/api/admin/products` |
