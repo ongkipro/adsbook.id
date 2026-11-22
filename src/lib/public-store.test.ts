@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getStoreSupportWhatsapp } from "./public-store.ts";
+import { descriptionBlocks, getStoreSupportWhatsapp, productWhatsappHref, storefrontTrustSignals } from "./public-store.ts";
 
 function locals(database: unknown) {
   return { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
@@ -73,4 +73,42 @@ test("the public payment summary names only what the checkout offers (revenleath
   assert.equal(joinIndonesian(["JNE"]), "JNE");
   assert.equal(joinIndonesian(["JNE", "SPX"]), "JNE dan SPX");
   assert.equal(joinIndonesian(["JNE", "J&T", "SPX"]), "JNE, J&T, dan SPX");
+});
+
+test("the storefront trust strip claims only what the store's settings honour", () => {
+  assert.deepEqual(storefrontTrustSignals({ couriers: [], payments: [] }), [], "nothing configured, nothing claimed");
+  assert.deepEqual(
+    storefrontTrustSignals({ couriers: ["JNE", "J&T", "SiCepat", "AnterAja"], payments: ["COD (bayar di tempat)", "QRIS", "Virtual Account BCA, Mandiri"] }),
+    [
+      { icon: "wallet", label: "Bisa bayar di tempat (COD)" },
+      { icon: "credit-card", label: "Bayar via QRIS dan Virtual Account" },
+      { icon: "truck", label: "Dikirim JNE, J&T, SiCepat +1" },
+    ],
+  );
+  const noCod = storefrontTrustSignals({ couriers: ["JNE"], payments: ["transfer bank Mandiri"] });
+  assert.ok(!noCod.some((signal) => /COD/.test(signal.label)), "no COD claim without an active COD method");
+  assert.deepEqual(noCod.map((signal) => signal.label), ["Bayar via transfer bank", "Dikirim JNE"]);
+});
+
+test("a product question link is built only from a wa.me-ready number", () => {
+  assert.equal(productWhatsappHref("", "Madu"), "");
+  assert.equal(productWhatsappHref("0812345678", "Madu"), "", "local form is not a wa.me number");
+  assert.equal(productWhatsappHref("62812345678", "Madu & Lebah"), "https://wa.me/62812345678?text=Halo%2C%20saya%20mau%20tanya%20tentang%20Madu%20%26%20Lebah.");
+});
+
+test("a description's dash runs become a list, the rest stays text, and nothing becomes markup", () => {
+  assert.deepEqual(
+    descriptionBlocks("Kaos katun combed 30s yang adem. Jahitan rantai di bahu. - Bahan katun combed 30s - Ukuran S, M, L - Cuci dengan air dingin"),
+    [
+      { kind: "p", text: "Kaos katun combed 30s yang adem. Jahitan rantai di bahu." },
+      { kind: "ul", items: ["Bahan katun combed 30s", "Ukuran S, M, L", "Cuci dengan air dingin"] },
+    ],
+  );
+  assert.deepEqual(descriptionBlocks("Baris satu\nbaris dua\n\n• poin\n* poin dua\nPenutup"), [
+    { kind: "p", text: "Baris satu baris dua" },
+    { kind: "ul", items: ["poin", "poin dua"] },
+    { kind: "p", text: "Penutup" },
+  ]);
+  assert.deepEqual(descriptionBlocks("Harga 10-20 ribu, tahan-lama"), [{ kind: "p", text: "Harga 10-20 ribu, tahan-lama" }], "a hyphen inside words is not a bullet");
+  assert.deepEqual(descriptionBlocks("<b>x</b>"), [{ kind: "p", text: "<b>x</b>" }], "kept as text; Astro escapes it");
 });

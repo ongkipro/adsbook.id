@@ -1,32 +1,35 @@
 ---
 import SiteBrand from './SiteBrand.astro';
+import Icon from './Icon.astro';
 
-// One bar (DESIGN-SYSTEM §3): the wordmark (or uploaded logo), centred, and
-// under it the store's "Official Store" line (Paduka, 2026-11-01; it was an
-// announcement bar above the header). The catalogue, the landing pages and the
-// policies are reached from the footer. It scrolls away with the page; a
-// hairline that fades at both ends closes it.
+// "Pasar Rapi" header (2026-11-23): the store's brand and a search box in one
+// bar that stays at the top, as Indonesian marketplaces do. Search submits to
+// /produk?q=…, where the catalogue filters; no per-visitor value, so the page
+// stays edge-cacheable. The old "Official Store" line is gone: an English
+// claim every store made about itself.
+const query = Astro.url.pathname === '/produk' ? (Astro.url.searchParams.get('q') ?? '').slice(0, 80) : '';
 ---
 
-<!-- Not sticky: the column is short-form commerce and the PDP's own sticky buy
-     bar is the action that follows the reader. The rule under the bar fades
-     out toward both edges instead of cutting the column. -->
-<header class="relative bg-white">
-  <div class="flex flex-col items-center justify-center px-4 pb-2.5 pt-2">
-    <SiteBrand href="/" />
-    {/* The store's own site is its official store (owner decision
-        2026-10-31). A solid blue badge-check, drawn inline: the icon subset is
-        for line icons. */}
-    <p class="-mt-1.5 flex items-center gap-1 text-[11px] font-semibold leading-4 text-[#555555]">
-      <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
-        <path fill="#1D6FEB" d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/>
-        <path fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m8.5 12.2 2.4 2.4 4.6-4.9"/>
-      </svg>
-      Official Store
-    </p>
+<header class="sticky top-0 z-30 border-b border-[#EDEDEF] bg-white/95 backdrop-blur-md">
+  <div class="sf-wrap flex h-14 items-center gap-3 md:h-16 md:gap-6">
+    <div class="shrink-0">
+      <SiteBrand href="/" />
+    </div>
+    <form action="/produk" method="get" role="search" class="relative min-w-0 flex-1 md:max-w-xl">
+      <label for="site-search" class="sr-only">Cari produk di {Astro.locals.tenant.name}</label>
+      <Icon name="lucide:search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#767676]" aria-hidden="true" />
+      <input
+        id="site-search"
+        name="q"
+        type="search"
+        value={query}
+        maxlength="80"
+        autocomplete="off"
+        enterkeyhint="search"
+        placeholder={`Cari di ${Astro.locals.tenant.name}`}
+        class="h-10 w-full rounded-md border border-[#E2E2E5] bg-[#F6F6F7] pl-9 pr-3 text-base text-[#111111] placeholder:text-[#767676] focus:border-[#111111] focus:bg-white focus:outline-none md:text-sm"
+      />
+    </form>
+    <a href="/produk" class="hidden shrink-0 text-sm font-semibold text-[#111111] underline-offset-4 hover:underline md:inline">Semua produk</a>
   </div>
-  <div
-    aria-hidden="true"
-    class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,#E5E5E5_20%,#E5E5E5_80%,transparent)]"
-  ></div>
 </header>

@@ -39,8 +39,8 @@ function defaultHomeContent(
     },
     catalog: {
       eyebrow: "Produk kami",
-      title: "Pilih Sesuai Kebutuhan",
-      description: "Semua produk siap kirim dari gudang kami.",
+      title: "Produk pilihan",
+      description: "Pilih produk, cek varian dan harga, lalu pesan langsung dari halamannya.",
     },
     solutionsHeading: {
       eyebrow: "Halaman",

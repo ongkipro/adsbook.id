@@ -26,30 +26,32 @@ interface Props {
 const { slides } = Astro.props;
 ---
 
-<section class="px-4 pt-4">
+<section class="sf-wrap pt-3 md:pt-5">
   <h1 class="sr-only">{Astro.locals.tenant.defaultTitle}</h1>
   {/* Inset with a soft radius and the caption under the photo, not over it:
       no gradient to keep legible, and the slide reads as a card the buyer can
       flick through rather than a full-bleed poster. */}
-  <div class="overflow-hidden rounded-2xl bg-[#F3F3F3]">
+  {/* "Pasar Rapi": a phone keeps the square card; from 768px a slide is a
+      banner row (photo left, caption right) on a 6px radius. */}
+  <div class="overflow-hidden rounded-md border border-[#E7E7E9] bg-white">
     <div id="hero-track" class="hero-track flex snap-x snap-mandatory overflow-x-auto">
       {
         slides.map((slide, index) => (
-          <article class="min-w-full snap-start" aria-roledescription="slide" aria-label={`${index + 1} dari ${slides.length}`}>
+          <article class="min-w-full snap-start md:grid md:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] md:items-center" aria-roledescription="slide" aria-label={`${index + 1} dari ${slides.length}`}>
             <img
               src={slide.image}
               alt={`${slide.alt} - ${Astro.locals.tenant.name}`}
               width="600"
               height="600"
-              class="aspect-square w-full object-cover object-center"
+              class="aspect-square w-full bg-[#F3F3F3] object-cover object-center md:aspect-[5/3] md:max-h-[420px]"
               loading={index === 0 ? 'eager' : 'lazy'}
               decoding={index === 0 ? 'sync' : 'async'}
               fetchpriority={index === 0 ? 'high' : undefined}
               draggable={false}
             />
-            <div class="bg-white px-1 pt-3">
+            <div class="bg-white px-3 py-3 md:px-10 md:py-8">
               {slide.badge && <p class="text-xs font-medium text-[#767676]">{slide.badge}</p>}
-              <p class="mt-0.5 line-clamp-2 text-base font-semibold leading-snug text-[#111111]">{slide.text}</p>
+              <p class="mt-0.5 line-clamp-2 text-base font-semibold leading-snug text-[#111111] md:line-clamp-3 md:text-2xl md:leading-tight">{slide.text}</p>
             </div>
           </article>
         ))

@@ -87,3 +87,19 @@
      ink is #111111; admin keeps its slate. */
   --text-main: #111111;
 }
+
+
+/* "Pasar Rapi" (default storefront, 2026-11-23). One content width for the
+   wide pages, and figures that line up in a grid of prices. */
+@layer components {
+  .sf-wrap { width: 100%; max-width: 1200px; margin-inline: auto; padding-inline: 1rem; }
+  @media (min-width: 768px) { .sf-wrap { padding-inline: 1.5rem; } }
+  .sf-num { font-variant-numeric: tabular-nums; }
+}
+
+/* The PDP's right column (GeoIpResolvedForm `fill`): the form's own side
+   gutters go, so it lines up with the offer above. Unlayered on purpose: it
+   must beat the form's `px-4` utility, which a layered rule cannot. */
+@media (min-width: 1024px) {
+  .sf-form-fill :is(div.px-4, form.px-4) { padding-inline: 0; }
+}

@@ -50,7 +50,7 @@ const brandMark = Astro.locals.tenant.brandMark;
         {/* Text wordmark, Shopify-theme style: the name in capitals, slightly
             tracked, one line; leading-tight keeps the glyphs inside the
             truncation box. */}
-        <span class="min-w-0 truncate text-[15px] font-bold uppercase leading-tight tracking-[0.08em] text-[#111111]">{storeName}</span>
+        <span class="block min-w-0 max-w-[9.5rem] truncate text-[15px] font-bold uppercase leading-tight tracking-[0.06em] text-[#111111] sm:max-w-[16rem]">{storeName}</span>
       </>
     )
   }
