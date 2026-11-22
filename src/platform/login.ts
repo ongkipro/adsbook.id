@@ -28,6 +28,7 @@ import {
 } from "../lib/admin-credentials.ts";
 import { getDefaultAdminRoute, verifyPasswordHash } from "../lib/auth.ts";
 import { checkRateLimit, clearAdminLoginFailures, recordAdminLoginFailure } from "../lib/rate-limit.ts";
+import { challengeRefusal, createLoginChallenge, redeemLoginChallenge, twoStepEnabled } from "../lib/seller-two-step.ts";
 import { CMS_VERSION } from "../lib/version.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { issueHandoff } from "./handoff.ts";
@@ -44,6 +45,8 @@ const pairKey = (ip: string, identifier: string) => `platform-login-pair:${ip}|$
 
 export type StoreLoginResult =
   | { status: 200; host: string; token: string; next: string }
+  /** T-57: the password was right for an enrolled credential; no handoff until the code. */
+  | { status: 202; challenge: string }
   | { status: 401 | 429 | 503; error: string };
 
 export type StoreLoginDeps = {
@@ -106,7 +109,16 @@ export async function storeLogin(
     platformDb.prepare("DELETE FROM rate_limits WHERE key = ?").bind(`${pairKey(ip, identifier)}:${Math.floor(Date.now() / WINDOW_MS) * WINDOW_MS}`).run(),
     clearAdminLoginFailures(store, credential.username, ip),
   ]);
-  const token = await issueHandoff(platformDb, identity.tenantId, identity.host, "login", (deps.now ?? (() => new Date()))(), {
+  const now = (deps.now ?? (() => new Date()))();
+  // T-57: an enrolled credential gets a challenge in its own store, never a handoff, until the code.
+  if (await twoStepEnabled(store, credential.id)) {
+    return { status: 202, challenge: await createLoginChallenge(store, { id: credential.id, updatedAt: credential.updatedAt }, now) };
+  }
+  return loginHandoff(platformDb, identity, credential, now);
+}
+
+async function loginHandoff(platformDb: D1Database, identity: ResolvedIdentity, credential: AdminCredential, now: Date): Promise<StoreLoginResult> {
+  const token = await issueHandoff(platformDb, identity.tenantId, identity.host, "login", now, {
     id: credential.id,
     username: credential.username,
     updatedAt: credential.updatedAt,
@@ -117,4 +129,38 @@ export async function storeLogin(
     token,
     next: credential.mustChangePassword ? "/admin/profile" : getDefaultAdminRoute(credential.role),
   };
+}
+
+/**
+ * T-57, the second step on adsbook.id/masuk: the identifier again (it names the
+ * store; the password is not sent twice), the challenge from the first step
+ * and a code. The handoff is issued only for the exact credential revision the
+ * password was checked against. Every attempt spends the address ceiling; a
+ * wrong code spends the challenge and the credential's own failure budget.
+ */
+export async function storeLoginSecondStep(
+  env: Record<string, unknown>,
+  input: { identifier?: unknown; challenge?: unknown; code?: unknown },
+  ip: string,
+  deps: StoreLoginDeps = {},
+): Promise<StoreLoginResult> {
+  const platformDb = env.PLATFORM_DB as D1Database | undefined;
+  if (!platformDb?.prepare) return { status: 503, error: "Masuk belum tersedia. Coba lagi beberapa saat lagi." };
+  await ensureControlPlane(platformDb);
+  const address = await checkRateLimit(platformDb, addressKey(ip), PLATFORM_LOGIN_LIMITS.perAddress, WINDOW_MS, true);
+  if (!address.allowed) return { status: 429, error: LOGIN_RATE_LIMITED };
+  const expired = { status: 401 as const, error: challengeRefusal("invalid") };
+  const identifier = identityKey(input.identifier);
+  const identity = identifier ? await resolvePlatformIdentity(platformDb, identifier) : null;
+  if (!identity) return expired;
+  const store = await (deps.openStore
+    ? deps.openStore(identity.tenantId, identity.cacheVersion)
+    : openTenantDb(env as TenantDbEnv, { tenantId: identity.tenantId, cacheVersion: identity.cacheVersion }, CMS_VERSION.schemaVersion));
+  const credential = await credentialFor(store, identity, identifier);
+  if (!credential || isDefaultAdminCredential(credential)) return expired;
+  const now = (deps.now ?? (() => new Date()))();
+  const outcome = await redeemLoginChallenge(store, input.challenge, typeof input.code === "string" ? input.code : "", now, credential.id);
+  if (!outcome.ok) return { status: 401, error: challengeRefusal(outcome.reason) };
+  if (outcome.credentialUpdatedAt !== credential.updatedAt) return expired;
+  return loginHandoff(platformDb, identity, credential, now);
 }

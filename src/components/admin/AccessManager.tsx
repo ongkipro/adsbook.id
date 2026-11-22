@@ -12,6 +12,7 @@ import {
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
+  ShieldOff,
   Sparkles,
   Trash2,
   UserCheck,
@@ -62,6 +63,8 @@ type AccessUser = {
   role: AdminRole;
   must_change_password: number | boolean;
   updated_at: string;
+  /** T-57: two-step verification is on for this user. */
+  two_step?: number | boolean;
 };
 
 
@@ -391,6 +394,29 @@ export function AccessManager() {
     }
   };
 
+  /** T-57: a staff member who lost their authenticator; they enroll again from their own profile. */
+  const disableTwoStep = async (user: AccessUser) => {
+    if (!(await confirm({ title: "Matikan verifikasi dua langkah?", description: `"${user.username}" bisa masuk hanya dengan password sampai mengaktifkannya lagi dari Profil. Sesinya berakhir sekarang.`, confirmLabel: "Matikan" }))) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await fetch("/api/admin/access", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, disable_two_step: true }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) throw new Error(payload.error || "Gagal mematikan verifikasi dua langkah.");
+      reload();
+      toast.success(payload.message || "Verifikasi dua langkah dimatikan.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal mematikan verifikasi dua langkah.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const remove = async (user: AccessUser) => {
     if (!(await confirm({ title: "Cabut akses akun?", description: `Akun "${user.username}" kehilangan seluruh hak akses dan sesinya berakhir.`, confirmLabel: "Cabut akses" }))) {
       return;
@@ -570,6 +596,12 @@ export function AccessManager() {
                             )}
                           </div>
 
+                          {Boolean(user.two_step) && (
+                            <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                              <ShieldCheck className="size-3.5 text-emerald-600" aria-hidden="true" />
+                              Verifikasi dua langkah aktif
+                            </p>
+                          )}
                           {Boolean(user.must_change_password) && (
                             <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-amber-700">
                               <AlertTriangle className="size-3.5 text-amber-600" />
@@ -604,6 +636,20 @@ export function AccessManager() {
                             <KeyRound className="mr-1 size-3.5" />
                             Reset
                           </Button>
+                          {Boolean(user.two_step) && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              title="Matikan verifikasi dua langkah"
+                              disabled={saving}
+                              onClick={() => void disableTwoStep(user)}
+                              className="px-2.5 text-slate-700 hover:bg-slate-200/60"
+                            >
+                              <ShieldOff className="mr-1 size-3.5" />
+                              Matikan 2 langkah
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             variant="ghost"

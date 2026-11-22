@@ -1,0 +1,174 @@
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import { createSqliteD1, type SqliteD1 } from "../platform/testing/sqlite-d1.ts";
+import { withTestCredentials } from "../platform/testing/credentials.ts";
+import { bindCredentials } from "./credential-crypto.ts";
+import { totpCode } from "../platform/admin/totp.ts";
+import { hashAdminPassword } from "./admin-credentials.ts";
+import { splitMigrationStatements } from "./schema-version.ts";
+import {
+  CHALLENGE_MAX_ATTEMPTS,
+  FACTOR_FAILURE_LIMIT,
+  beginEnrollment,
+  clearTwoStep,
+  confirmEnrollment,
+  createLoginChallenge,
+  disableOwnTwoStep,
+  forgotPasswordUrl,
+  proveSecondFactor,
+  recoveryCodesLeft,
+  redeemLoginChallenge,
+  twoStepEnabled,
+} from "./seller-two-step.ts";
+
+const PASSWORD = "kata-sandi-panjang-1";
+const T0 = Date.parse("2026-11-22T10:00:00Z");
+
+/** The full checked-in chain: the test breaks if the columns drift. */
+async function store(tenantId = "t_alfa"): Promise<SqliteD1> {
+  const sqlite = new DatabaseSync(":memory:");
+  const dir = new URL("../db/migrations/", import.meta.url);
+  for (const name of readdirSync(dir).filter((file) => file.endsWith(".sql")).sort()) {
+    for (const statement of splitMigrationStatements(readFileSync(new URL(name, dir), "utf8"))) sqlite.exec(statement);
+  }
+  sqlite.exec("DELETE FROM admin_credentials");
+  const hash = await hashAdminPassword(PASSWORD);
+  sqlite.prepare("INSERT INTO admin_credentials (id, username, email, role, password_hash, must_change_password, updated_at) VALUES (1, 'owner@alfa.test', 'owner@alfa.test', 'owner', ?, 0, '2026-11-01T00:00:00.000Z'), (2, 'cs_rina', NULL, 'customer_service', ?, 0, '2026-11-01T00:00:00.000Z')").run(hash, hash);
+  return withTestCredentials(createSqliteD1(sqlite), tenantId);
+}
+
+const col = (db: SqliteD1, sql: string, ...args: (string | number)[]) => db.sqlite.prepare(sql).get(...args) as Record<string, unknown> | undefined;
+
+async function enroll(db: SqliteD1, id = 1, at = T0) {
+  const begun = await beginEnrollment(db, id, PASSWORD, "owner@alfa.test");
+  assert.ok(begun.ok);
+  const done = await confirmEnrollment(db, id, { password: PASSWORD, secret: begun.secret, code: await totpCode(begun.secret, Math.floor(at / 30_000)) }, at);
+  assert.ok(done.ok, JSON.stringify(done));
+  return { secret: begun.secret, codes: done.recoveryCodes, uri: begun.uri };
+}
+
+test("T-57 enrollment: needs the password, activates only on a proven code, seals the secret, ends the user's sessions and moves the revision", async () => {
+  const db = await store();
+  assert.deepEqual(await beginEnrollment(db, 1, "salah-salah-salah", "x"), { ok: false, error: "Password saat ini salah." });
+  const begun = await beginEnrollment(db, 1, PASSWORD, "owner@alfa.test");
+  assert.ok(begun.ok);
+  assert.match(begun.secret, /^[A-Z2-7]{32}$/);
+  assert.match(begun.uri, /^otpauth:\/\/totp\/adsbook\.id:owner%40alfa\.test\?secret=/);
+  assert.equal(await twoStepEnabled(db, 1), false, "nothing stored before it is proven");
+
+  db.sqlite.exec("INSERT INTO admin_sessions (jti, username, role, credential_updated_at, expires_at, created_at) VALUES ('s1', 'owner@alfa.test', 'owner', '2026-11-01T00:00:00.000Z', '2099-01-01', '2026-11-01'), ('s2', 'cs_rina', 'customer_service', '2026-11-01T00:00:00.000Z', '2099-01-01', '2026-11-01')");
+  const step = Math.floor(T0 / 30_000);
+  const wrong = await confirmEnrollment(db, 1, { password: PASSWORD, secret: begun.secret, code: (await totpCode(begun.secret, step + 5)) }, T0);
+  assert.equal(wrong.ok, false);
+  const noPassword = await confirmEnrollment(db, 1, { password: "salah-salah-salah", secret: begun.secret, code: await totpCode(begun.secret, step) }, T0);
+  assert.equal(noPassword.ok, false);
+  assert.equal(await twoStepEnabled(db, 1), false);
+
+  const done = await confirmEnrollment(db, 1, { password: PASSWORD, secret: begun.secret, code: await totpCode(begun.secret, step) }, T0);
+  assert.ok(done.ok);
+  assert.equal(done.recoveryCodes.length, 10);
+  assert.equal(new Set(done.recoveryCodes).size, 10);
+  const row = col(db, "SELECT totp_secret, recovery_codes, updated_at FROM admin_credentials WHERE id = 1")!;
+  assert.match(String(row.totp_secret), /^enc:v1:/, "sealed, never plaintext");
+  assert.ok(!String(row.totp_secret).includes(begun.secret));
+  assert.ok(!String(row.recovery_codes).includes(done.recoveryCodes[0]), "only digests are stored");
+  assert.notEqual(row.updated_at, "2026-11-01T00:00:00.000Z", "the revision moved, so password-only handoffs die");
+  assert.equal(col(db, "SELECT COUNT(*) AS n FROM admin_sessions WHERE username = 'owner@alfa.test'")!.n, 0, "the owner's sessions ended");
+  assert.equal(col(db, "SELECT COUNT(*) AS n FROM admin_sessions WHERE username = 'cs_rina'")!.n, 1, "nobody else's");
+  assert.deepEqual(await beginEnrollment(db, 1, PASSWORD, "x"), { ok: false, error: "Verifikasi dua langkah sudah aktif." });
+});
+
+test("T-57 enrollment fails closed without the platform credential key: nothing is stored", async () => {
+  const db = await store();
+  const keyless = bindCredentials(createSqliteD1(db.sqlite), "t_alfa", {});
+  const begun = await beginEnrollment(keyless, 1, PASSWORD, "x");
+  assert.ok(begun.ok);
+  const done = await confirmEnrollment(keyless, 1, { password: PASSWORD, secret: begun.secret, code: await totpCode(begun.secret, Math.floor(T0 / 30_000)) }, T0);
+  assert.equal(done.ok, false);
+  assert.equal(await twoStepEnabled(keyless, 1), false);
+});
+
+test("T-57 second factor: each step once, a recovery code once, and a secret moved to another tenant or user does not open", async () => {
+  const db = await store();
+  const { secret, codes } = await enroll(db);
+  const later = T0 + 60_000;
+  const code = await totpCode(secret, Math.floor(later / 30_000));
+  assert.equal(await proveSecondFactor(db, 1, code, later), true);
+  assert.equal(await proveSecondFactor(db, 1, code, later), false, "replay of the same step");
+  assert.equal(await proveSecondFactor(db, 1, await totpCode(secret, Math.floor(T0 / 30_000)), later), false, "an older step");
+
+  assert.equal(await proveSecondFactor(db, 1, codes[0].toUpperCase(), later), true, "a recovery code, any case");
+  assert.equal(await proveSecondFactor(db, 1, codes[0], later), false, "used once");
+  assert.equal(await recoveryCodesLeft(db, 1), 9);
+
+  // The sealed row copied to another tenant's store, or onto another user, opens nowhere.
+  const sealed = col(db, "SELECT totp_secret FROM admin_credentials WHERE id = 1")!.totp_secret as string;
+  const other = await store("t_beta");
+  other.sqlite.prepare("UPDATE admin_credentials SET totp_secret = ? WHERE id = 1").run(sealed);
+  db.sqlite.prepare("UPDATE admin_credentials SET totp_secret = ? WHERE id = 2").run(sealed);
+  const fresh = later + 120_000;
+  const valid = await totpCode(secret, Math.floor(fresh / 30_000));
+  assert.equal(await proveSecondFactor(other, 1, valid, fresh), false, "another tenant");
+  assert.equal(await proveSecondFactor(db, 2, valid, fresh), false, "another user");
+  assert.equal(await twoStepEnabled(db, 2), true, "an unreadable secret still counts as on (fail closed)");
+});
+
+test("T-57 second factor: a credential's wrong guesses are capped across every challenge", async () => {
+  const db = await store();
+  const { secret } = await enroll(db);
+  for (let index = 0; index < FACTOR_FAILURE_LIMIT; index += 1) assert.equal(await proveSecondFactor(db, 1, "000000", T0 + 60_000), false);
+  const now = T0 + 90_000;
+  assert.equal(await proveSecondFactor(db, 1, await totpCode(secret, Math.floor(now / 30_000)), now), false, "even the right code, once the budget is spent");
+});
+
+test("T-57 challenge: single use, 5 attempts, 5 minutes, bound to one credential", async () => {
+  const db = await store();
+  const { secret } = await enroll(db);
+  const revision = col(db, "SELECT updated_at FROM admin_credentials WHERE id = 1")!.updated_at as string;
+  const at = new Date(T0 + 60_000);
+  const token = await createLoginChallenge(db, { id: 1, updatedAt: revision }, at);
+  assert.equal(col(db, "SELECT COUNT(*) AS n FROM admin_login_challenges WHERE token_hash = ?", token)!.n, 0, "only the digest is stored");
+
+  assert.deepEqual(await redeemLoginChallenge(db, token, "123456", at, 2), { ok: false, reason: "invalid" }, "another credential's challenge");
+  assert.deepEqual(await redeemLoginChallenge(db, "f".repeat(64), "123456", at), { ok: false, reason: "invalid" });
+  assert.deepEqual(await redeemLoginChallenge(db, token, "000000", at), { ok: false, reason: "wrong_code" });
+  const good = await redeemLoginChallenge(db, token, await totpCode(secret, Math.floor(at.getTime() / 30_000)), at, 1);
+  assert.deepEqual(good, { ok: true, credentialId: 1, credentialUpdatedAt: revision });
+  assert.deepEqual(await redeemLoginChallenge(db, token, await totpCode(secret, Math.floor(at.getTime() / 30_000) + 1), at), { ok: false, reason: "invalid" }, "single use");
+
+  const second = await createLoginChallenge(db, { id: 1, updatedAt: revision }, at);
+  for (let index = 1; index < CHALLENGE_MAX_ATTEMPTS; index += 1) assert.equal((await redeemLoginChallenge(db, second, "000000", at)).ok, false);
+  assert.deepEqual(await redeemLoginChallenge(db, second, "000000", at), { ok: false, reason: "exhausted" });
+  const next = new Date(at.getTime() + 30_000);
+  assert.deepEqual(await redeemLoginChallenge(db, second, await totpCode(secret, Math.floor(next.getTime() / 30_000)), next), { ok: false, reason: "exhausted" }, "the right code no longer helps");
+
+  const third = await createLoginChallenge(db, { id: 1, updatedAt: revision }, at);
+  const expired = new Date(at.getTime() + 5 * 60_000 + 1);
+  assert.deepEqual(await redeemLoginChallenge(db, third, await totpCode(secret, Math.floor(expired.getTime() / 30_000)), expired), { ok: false, reason: "invalid" });
+});
+
+test("T-57 turning off: the own path needs password and factor; the owner path clears and kills pending challenges; a password reset keeps it", async () => {
+  const db = await store();
+  const { secret } = await enroll(db, 2);
+  const at = T0 + 60_000;
+  assert.equal((await disableOwnTwoStep(db, 2, { password: PASSWORD, code: "000000" }, at)).ok, false);
+  assert.equal((await disableOwnTwoStep(db, 2, { password: "salah-salah-salah", code: await totpCode(secret, Math.floor(at / 30_000)) }, at)).ok, false);
+  assert.equal(await twoStepEnabled(db, 2), true);
+
+  // A password reset (owner-managed or /lupa-password) writes password_hash and updated_at only.
+  db.sqlite.exec("UPDATE admin_credentials SET password_hash = 'x', updated_at = '2026-12-01T00:00:00.000Z' WHERE id = 2");
+  assert.equal(await twoStepEnabled(db, 2), true, "a reset neither disables the factor");
+
+  await createLoginChallenge(db, { id: 2, updatedAt: "2026-12-01T00:00:00.000Z" }, new Date(at));
+  await clearTwoStep(db, 2);
+  assert.equal(await twoStepEnabled(db, 2), false);
+  assert.equal(col(db, "SELECT COUNT(*) AS n FROM admin_login_challenges WHERE credential_id = 2")!.n, 0);
+});
+
+test("T-57 the /hello 'Lupa password' link points at the platform page, keeping a local dev host", () => {
+  assert.equal(forgotPasswordUrl(new URL("https://toko.adsbook.my.id/hello")), "https://adsbook.id/lupa-password");
+  assert.equal(forgotPasswordUrl(new URL("https://www.tokosaya.com/hello")), "https://adsbook.id/lupa-password");
+  assert.equal(forgotPasswordUrl(new URL("http://toko-alfa.localhost:4399/hello")), "http://app.localhost:4399/lupa-password");
+});

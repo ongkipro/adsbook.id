@@ -1,8 +1,9 @@
 /**
  * IAM-9 on the seller host: the owner redeems the `owner_recovery` token a
  * platform_owner issued after out-of-band verification, and sets a new
- * password here. Every tenant session is revoked. The platform never sees,
- * sets or reads the password; the redemption is audited.
+ * password here. Every tenant session is revoked, and the owner's two-step
+ * verification is cleared (T-57: the lost-factor path; the owner enrolls again).
+ * The platform never sees, sets or reads the password; the redemption is audited.
  */
 import { hashAdminPassword } from "../../lib/admin-credentials.ts";
 import { handoffIssuanceId, peekHandoff, spendHandoff } from "../handoff.ts";
@@ -73,6 +74,15 @@ export async function redeemOwnerRecovery(
         .bind(passwordHash, now.toISOString(), owner.owner_email),
       // Only when the owner's password really changed.
       tenantDb.prepare("DELETE FROM admin_sessions WHERE changes() = 1"),
+      // T-57 lost-factor recovery: the platform verified the owner out of band, which a
+      // self-service reset (/lupa-password) never does, so this one also clears two-step.
+      tenantDb
+        .prepare(
+          `UPDATE admin_credentials SET totp_secret = NULL, totp_last_step = NULL, recovery_codes = NULL
+           WHERE id = (SELECT id FROM admin_credentials WHERE role = 'owner' AND (username = ?1 OR email = ?1) ORDER BY id LIMIT 1)`,
+        )
+        .bind(owner.owner_email),
+      tenantDb.prepare("DELETE FROM admin_login_challenges"),
     ]);
     if (Number(updated.meta?.changes ?? 0) !== 1) return failed("owner_missing");
   } catch (error) {

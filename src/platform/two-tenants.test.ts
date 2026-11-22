@@ -1114,6 +1114,54 @@ test("AUTH §1.3: adsbook.id/masuk signs an owner or a staff member into the rig
   assert.equal((await login("alfa@contoh.example", "kata-sandi-panjang-1", "2.2.2.2")).status, 200, "the owner from another network");
 });
 
+test("T-57/PR-35: adsbook.id/masuk issues no handoff to a seller with two-step on until the code, for exactly that credential and store", async () => {
+  const { storeLogin, storeLoginSecondStep } = await import("./login.ts");
+  const { consumeSessionHandoff } = await import("./handoff.ts");
+  const { getAdminCredentialById } = await import("../lib/admin-credentials.ts");
+  const { beginEnrollment, confirmEnrollment } = await import("../lib/seller-two-step.ts");
+  const { totpCode } = await import("./admin/totp.ts");
+  const { platformDb, stores, env, run } = await signupHarness();
+  const a = await run("toko-dua-langkah", {}, "dua@contoh.example");
+  const b = await run("toko-satu-langkah", {}, "satu@contoh.example");
+  if (a.status !== 201 || b.status !== 201) return assert.fail("signup");
+  // As production's openTenantDb: each store handle carries its tenant's credential binding.
+  const open = (tenantId: string) => bindCredentials(createTenantDb(stores.get(tenantId).stub), tenantId, env);
+  const storeA = open(a.tenantId);
+  const deps = { openStore: async (tenantId: string) => open(tenantId) };
+  const handoffs = () => (platformDb.sqlite.prepare("SELECT COUNT(*) AS n FROM handoff_tokens WHERE purpose = 'login'").get() as { n: number }).n;
+
+  // A password-only handoff issued before enrollment dies with it (the revision moved).
+  const early = await storeLogin(env, { identifier: "dua@contoh.example", password: "kata-sandi-panjang-1" }, "198.51.100.50", deps);
+  assert.equal(early.status, 200);
+  const begun = await beginEnrollment(storeA, 1, "kata-sandi-panjang-1", "dua@contoh.example");
+  if (!begun.ok) return assert.fail(begun.error);
+  const now = Date.now();
+  const enrolled = await confirmEnrollment(storeA, 1, { password: "kata-sandi-panjang-1", secret: begun.secret, code: await totpCode(begun.secret, Math.floor(now / 30_000) - 1) }, now);
+  assert.ok(enrolled.ok, JSON.stringify(enrolled));
+  if (early.status === 200) assert.equal((await consumeSessionHandoff(platformDb, early.token, early.host))?.credential?.updatedAt === (await getAdminCredentialById(storeA, 1))?.updatedAt, false, "the early token names an old revision, which /api/handoff refuses");
+
+  const before = handoffs();
+  const first = await storeLogin(env, { identifier: "dua@contoh.example", password: "kata-sandi-panjang-1" }, "198.51.100.50", deps);
+  assert.equal(first.status, 202);
+  assert.equal(handoffs(), before, "the right password alone issues no handoff");
+  if (first.status !== 202) return;
+  const second = (code: string, identifier = "dua@contoh.example", challenge = first.challenge) =>
+    storeLoginSecondStep(env, { identifier, challenge, code }, "198.51.100.50", deps);
+
+  assert.equal((await second("000000")).status, 401);
+  assert.equal((await second(await totpCode(begun.secret, Math.floor(Date.now() / 30_000)), "satu@contoh.example")).status, 401, "another store's identifier");
+  assert.equal(handoffs(), before);
+  const done = await second(await totpCode(begun.secret, Math.floor(Date.now() / 30_000)));
+  assert.equal(done.status, 200);
+  if (done.status !== 200) return;
+  assert.equal(done.host, "toko-dua-langkah.adsbook.my.id");
+  assert.equal((await consumeSessionHandoff(platformDb, done.token, done.host))?.credential?.id, 1);
+  assert.equal((await second(await totpCode(begun.secret, Math.floor(Date.now() / 30_000) + 1))).status, 401, "the challenge is single use");
+
+  // A store without two-step is unchanged.
+  assert.equal((await storeLogin(env, { identifier: "satu@contoh.example", password: "kata-sandi-panjang-1" }, "198.51.100.51", deps)).status, 200);
+});
+
 test("seller password floor: a profile change and owner-managed staff passwords refuse 9 characters and accept 10, at the API; an older shorter password still signs in", async () => {
   const accessRoute = await import("../pages/api/admin/access.ts");
   const profileRoute = await import("../pages/api/admin/profile.ts");
@@ -1316,6 +1364,8 @@ test("Lupa password: the owner of a real store gets a mailed code, resets once, 
   assert.equal((await finish({ emailCode: code === "00000000" ? "00000001" : "00000000" })).status, 400, "a wrong code");
   assert.equal((await finish({ password: "pendek" })).status, 400, "a weak password, before the code is touched");
 
+  // T-57: two-step is on for the owner before the reset (a sealed value stands in; it is never opened here).
+  stores.get(a.tenantId).storage.db.prepare("UPDATE admin_credentials SET totp_secret = 'enc:v1:x', recovery_codes = '[]' WHERE role = 'owner'").run();
   const done = await finish();
   assert.equal(done.status, 200);
   assert.equal(await readActiveAdminSession(storeA, ownerSession), null, "the owner session is revoked");
@@ -1324,7 +1374,7 @@ test("Lupa password: the owner of a real store gets a mailed code, resets once, 
 
   const login = (identifier: string, password: string) => storeLogin(env, { identifier, password }, "198.51.100.150", { openStore });
   assert.deepEqual(await login("lupa@contoh.example", "kata-sandi-panjang-1"), { status: 401, error: LOGIN_REFUSED }, "the old password stops");
-  assert.equal((await login("lupa@contoh.example", "password-baru-aman-1")).status, 200, "the new one signs in");
+  assert.equal((await login("lupa@contoh.example", "password-baru-aman-1")).status, 202, "the new one signs in, and a self-service reset neither disables two-step nor satisfies it (PR-35)");
   assert.equal((await login("cs_lupa", "cs-password-123")).status, 200, "staff credentials are untouched");
   assert.equal((stores.get(b.tenantId).storage.db.prepare("SELECT password_hash FROM admin_credentials WHERE role = 'owner'").get() as { password_hash: string }).password_hash, storeBHash, "store B untouched");
   const events = platformDb.sqlite.prepare("SELECT kind FROM tenant_events WHERE tenant_id = ? AND kind LIKE 'owner_reset%' ORDER BY id").all(a.tenantId).map((row) => (row as { kind: string }).kind);
@@ -1858,6 +1908,8 @@ test("T-27/IAM-9: owner recovery sets the password on the seller host and revoke
   const secret = await resolveAuthSecret(database, tenant.tenantId);
   const { session } = await signJwt({ username: "owner@pulih.example", role: "owner" }, secret);
   await storeAdminSession(database, session, { mustChangePassword: false, updatedAt: "2026-11-16T00:00:00.000Z" });
+  // T-57: the owner lost the phone; out-of-band recovery is the lost-factor path.
+  stores.get(tenant.tenantId).storage.db.prepare("UPDATE admin_credentials SET totp_secret = 'enc:v1:x', recovery_codes = '[]' WHERE role = 'owner'").run();
   const owner = { id: "pu_o", email: "owner@ops.example", role: "platform_owner" as const };
   const issued = await runTenantAction(platformDb, owner, tenant.tenantId, "recover", { evidence: "telepon ke nomor pendaftaran, cocok" });
   assert.ok(issued.ok && issued.recoveryToken);
@@ -1871,6 +1923,8 @@ test("T-27/IAM-9: owner recovery sets the password on the seller host and revoke
   assert.equal(await verifyAdminLoginPassword("kata-sandi-panjang-1", credential!), false, "the old password is gone");
   const sessions = stores.get(tenant.tenantId).storage.db.prepare("SELECT COUNT(*) AS n FROM admin_sessions").get() as { n: number };
   assert.equal(sessions.n, 0, "every session revoked");
+  const factor = stores.get(tenant.tenantId).storage.db.prepare("SELECT totp_secret FROM admin_credentials WHERE role = 'owner'").get() as { totp_secret: string | null };
+  assert.equal(factor.totp_secret, null, "T-57: platform recovery clears the owner's two-step");
   assert.equal((await redeemOwnerRecovery(platformDb, database, context, issued.recoveryToken, "password-lain-panjang")).ok, false, "single use");
   const kinds = (platformDb.sqlite.prepare("SELECT kind FROM tenant_events WHERE tenant_id = ? ORDER BY id").all(tenant.tenantId) as Array<{ kind: string }>).map((row) => row.kind);
   assert.ok(kinds.includes("owner_recovery") && kinds.includes("owner_recovery_redeemed"));

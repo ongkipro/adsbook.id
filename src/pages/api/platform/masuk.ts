@@ -1,11 +1,11 @@
 import type { APIRoute } from "astro";
 import { getRuntimeEnv } from "../../../lib/env.ts";
 import { getClientIp } from "../../../lib/rate-limit.ts";
-import { storeLogin } from "../../../platform/login.ts";
+import { storeLogin, storeLoginSecondStep } from "../../../platform/login.ts";
 
 export const prerender = false;
 
-/** An email or username and a password fit in far less; nothing larger is read. */
+/** An email or username and a password (or a challenge and a code) fit in far less; nothing larger is read. */
 const MAX_BODY_BYTES = 2048;
 
 /** The body as text, or null past `limit` bytes — read from the stream, so a lying Content-Length buys nothing. */
@@ -38,7 +38,8 @@ async function readBoundedText(request: Request, limit: number): Promise<string 
 /**
  * adsbook.id/masuk's form post (AUTH-LOGIN-REGISTER-UX-SPEC §1.3): an email or
  * username and a password in, a two-minute `login` handoff for the store's
- * subdomain out. Same-origin only. The token is in this body alone and is
+ * subdomain out — or, for a seller with two-step verification on (T-57), a
+ * challenge, which a second post redeems with a code for that handoff. Same-origin only. The token is in this body alone and is
  * posted on to the store; no cookie is set here. (`/api/platform/login` is the
  * platform console's own sign-in and stays separate.)
  */
@@ -57,7 +58,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     body = null;
   }
   const env = (getRuntimeEnv(locals) ?? {}) as Record<string, unknown>;
-  const result = await storeLogin(env, { identifier: body?.identifier, password: body?.password }, getClientIp(request.headers));
+  const ip = getClientIp(request.headers);
+  // T-57: the second step names the challenge the first one returned; the password is not sent again.
+  const result = body && typeof body.challenge === "string"
+    ? await storeLoginSecondStep(env, { identifier: body.identifier, challenge: body.challenge, code: body.code }, ip)
+    : await storeLogin(env, { identifier: body?.identifier, password: body?.password }, ip);
+  if (result.status === 202) {
+    return Response.json({ success: true, data: { two_step: true, challenge: result.challenge } }, { status: 200, headers: { "cache-control": "no-store" } });
+  }
   if (result.status !== 200) {
     return Response.json({ success: false, error: result.error }, { status: result.status, headers: { "cache-control": "no-store" } });
   }

@@ -5,9 +5,11 @@ import '../styles/admin.css';
 import {
   DEFAULT_ADMIN_PASSWORD_HASH,
   getAdminCredential,
+  getAdminCredentialById,
   isDefaultAdminCredential,
   normalizeAdminUsername,
   verifyAdminLoginPassword,
+  type AdminCredential,
 } from '../lib/admin-credentials';
 import {
   SESSION_COOKIE_NAME,
@@ -27,12 +29,25 @@ import {
 } from '../lib/rate-limit';
 
 import { CMS_VERSION } from '../lib/version';
+import {
+  CHALLENGE_TTL_MS,
+  TWO_STEP_COOKIE_NAME,
+  TWO_STEP_COOKIE_OPTIONS,
+  challengeRefusal,
+  createLoginChallenge,
+  forgotPasswordUrl,
+  redeemLoginChallenge,
+  twoStepEnabled,
+} from '../lib/seller-two-step';
 
 export const prerender = false;
 
 let errorMessage = '';
 let submittedUsername = '';
 let focusPassword = false;
+// T-57 / PR-35: the second step, rendered only after a correct password for an enrolled seller.
+let codeStep = false;
+const lupaPasswordUrl = forgotPasswordUrl(Astro.url);
 
 const database = tenantDatabase(Astro.locals);
 
@@ -55,67 +70,93 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
   const authSecret = await resolveAuthSecret(database, Astro.locals.tenantContext?.tenantId);
   const clientIp = getClientIp(Astro.request.headers);
 
+  // The one place a session opens on this page: after the password alone, or after the code.
+  const openSession = async (credential: AdminCredential) => {
+    const { token, session } = await signJwt({ username: credential.username, role: credential.role }, authSecret);
+    await Promise.all([
+      storeAdminSession(database!, session, credential),
+      clearAdminLoginFailures(database!, credential.username, clientIp),
+    ]);
+    Astro.cookies.set(SESSION_COOKIE_NAME, token, { ...SESSION_COOKIE_OPTIONS, maxAge: 60 * 60 * 24 });
+    return Astro.redirect(credential.mustChangePassword ? '/admin/profile' : '/admin/dashboard');
+  };
+
   try {
     if (!database || authSecret.length < 32) {
       Astro.response.status = 503;
       errorMessage = 'Login admin belum dikonfigurasi di server.';
     } else {
       const data = await Astro.request.formData();
-      const username = normalizeAdminUsername(data.get('username'));
-      submittedUsername = username;
-      const password = String(data.get('password') || '').slice(0, 1024);
-
-      // LOGIN-19. Checked before the credential is even looked up, so the limit
-      // behaves identically for a username that exists and one that does not —
-      // otherwise the rate limiter itself answers the question the error message
-      // refuses to. Nothing is spent here; only a failure is recorded, below.
-      // The wave brake first: spent atomically by every attempt, so parallel
-      // guesses cannot all slip past the peek below (see spendAdminLoginAttempt).
-      const wave = await spendAdminLoginAttempt(database, username, clientIp);
-      const attempts = wave.allowed
-        ? await checkAdminLoginRateLimit(database, username, clientIp)
-        : wave;
-      if (!attempts.allowed) {
-        Astro.response.status = 429;
-        Astro.response.headers.set(
-          'retry-after',
-          String(Math.max(1, Math.ceil((attempts.resetAt - Date.now()) / 1000))),
-        );
-        errorMessage = 'Terlalu banyak percobaan login. Coba lagi dalam beberapa menit.';
-      } else {
-        const credential = await getAdminCredential(database, username);
-
-        // LOGIN-13. Every branch here must cost the same. Verifying a rotated
-        // password is one PBKDF2 pass at 100k iterations; the seeded credential
-        // is a digest compare, and an unknown username used to cost nothing at
-        // all — so those two run a discarded verification against the seeded
-        // hash. Without it a fast 401 means "no such operator" and a slow one
-        // means "that one exists", which is the fact the message withholds.
-        const needsWorkFloor = credential === null || isDefaultAdminCredential(credential);
-        const [usernameMatches, passwordMatches] = await Promise.all([
-          credential ? secureEqual(username, credential.username) : Promise.resolve(false),
-          credential
-            ? verifyAdminLoginPassword(password, credential)
-            : Promise.resolve(false),
-          needsWorkFloor
-            ? verifyPasswordHash(password, DEFAULT_ADMIN_PASSWORD_HASH)
-            : Promise.resolve(false),
-        ]);
-
-        if (credential && usernameMatches && passwordMatches) {
-          const { token, session } = await signJwt({ username: credential.username, role: credential.role }, authSecret);
-          await Promise.all([
-            storeAdminSession(database, session, credential),
-            clearAdminLoginFailures(database, username, clientIp),
-          ]);
-          Astro.cookies.set(SESSION_COOKIE_NAME, token, { ...SESSION_COOKIE_OPTIONS, maxAge: 60 * 60 * 24 });
-          return Astro.redirect(credential.mustChangePassword ? '/admin/profile' : '/admin/dashboard');
+      if (data.get('step') === 'code') {
+        // T-57: the challenge the password step set. No session exists until this succeeds,
+        // and only for the credential revision the password was checked against.
+        const outcome = await redeemLoginChallenge(database, Astro.cookies.get(TWO_STEP_COOKIE_NAME)?.value, String(data.get('code') || '').slice(0, 32));
+        const credential = outcome.ok ? await getAdminCredentialById(database, outcome.credentialId) : null;
+        if (outcome.ok && credential && credential.updatedAt === outcome.credentialUpdatedAt && !isDefaultAdminCredential(credential)) {
+          Astro.cookies.delete(TWO_STEP_COOKIE_NAME, TWO_STEP_COOKIE_OPTIONS);
+          return await openSession(credential);
         }
-
-        await recordAdminLoginFailure(database, username, clientIp);
+        const reason = outcome.ok ? 'invalid' : outcome.reason;
         Astro.response.status = 401;
-        focusPassword = true;
-        errorMessage = 'Username atau password salah.';
+        errorMessage = challengeRefusal(reason);
+        codeStep = reason === 'wrong_code';
+        if (!codeStep) Astro.cookies.delete(TWO_STEP_COOKIE_NAME, TWO_STEP_COOKIE_OPTIONS);
+      } else {
+        const username = normalizeAdminUsername(data.get('username'));
+        submittedUsername = username;
+        const password = String(data.get('password') || '').slice(0, 1024);
+
+        // LOGIN-19. Checked before the credential is even looked up, so the limit
+        // behaves identically for a username that exists and one that does not —
+        // otherwise the rate limiter itself answers the question the error message
+        // refuses to. Nothing is spent here; only a failure is recorded, below.
+        // The wave brake first: spent atomically by every attempt, so parallel
+        // guesses cannot all slip past the peek below (see spendAdminLoginAttempt).
+        const wave = await spendAdminLoginAttempt(database, username, clientIp);
+        const attempts = wave.allowed
+          ? await checkAdminLoginRateLimit(database, username, clientIp)
+          : wave;
+        if (!attempts.allowed) {
+          Astro.response.status = 429;
+          Astro.response.headers.set(
+            'retry-after',
+            String(Math.max(1, Math.ceil((attempts.resetAt - Date.now()) / 1000))),
+          );
+          errorMessage = 'Terlalu banyak percobaan login. Coba lagi dalam beberapa menit.';
+        } else {
+          const credential = await getAdminCredential(database, username);
+
+          // LOGIN-13. Every branch here must cost the same. Verifying a rotated
+          // password is one PBKDF2 pass at 100k iterations; the seeded credential
+          // is a digest compare, and an unknown username used to cost nothing at
+          // all — so those two run a discarded verification against the seeded
+          // hash. Without it a fast 401 means "no such operator" and a slow one
+          // means "that one exists", which is the fact the message withholds.
+          const needsWorkFloor = credential === null || isDefaultAdminCredential(credential);
+          const [usernameMatches, passwordMatches] = await Promise.all([
+            credential ? secureEqual(username, credential.username) : Promise.resolve(false),
+            credential
+              ? verifyAdminLoginPassword(password, credential)
+              : Promise.resolve(false),
+            needsWorkFloor
+              ? verifyPasswordHash(password, DEFAULT_ADMIN_PASSWORD_HASH)
+              : Promise.resolve(false),
+          ]);
+
+          if (credential && usernameMatches && passwordMatches) {
+            if (!(await twoStepEnabled(database, credential.id))) return await openSession(credential);
+            // PR-35: the password was right; the session waits for the code, on its own step.
+            const challenge = await createLoginChallenge(database, { id: credential.id, updatedAt: credential.updatedAt });
+            await clearAdminLoginFailures(database, username, clientIp);
+            Astro.cookies.set(TWO_STEP_COOKIE_NAME, challenge, { ...TWO_STEP_COOKIE_OPTIONS, maxAge: CHALLENGE_TTL_MS / 1000 });
+            codeStep = true;
+          } else {
+            await recordAdminLoginFailure(database, username, clientIp);
+            Astro.response.status = 401;
+            focusPassword = true;
+            errorMessage = 'Username atau password salah.';
+          }
+        }
       }
     }
   } catch (error) {
@@ -184,6 +225,25 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
         )}
 
 
+        {codeStep ? (
+        <form id="codeForm" method="POST" class="space-y-4" novalidate aria-busy="false" aria-describedby={[errorMessage && 'loginError'].filter(Boolean).join(' ') || undefined}>
+          <input type="hidden" name="step" value="code" />
+          <div class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900">
+            <p class="font-semibold text-slate-900">Verifikasi dua langkah</p>
+            <p class="mt-1">Masukkan 6 digit kode dari aplikasi autentikator Anda. Tidak bisa membuka aplikasinya? Pakai salah satu kode cadangan.</p>
+          </div>
+          <div class="space-y-2">
+            <label for="code" class="text-sm font-semibold text-slate-900">Kode verifikasi</label>
+            <input id="code" type="text" name="code" required maxlength="9" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" autofocus placeholder="123456" class="admin-input-flat" aria-describedby="code-error" data-msg-missing="Masukkan kode verifikasi." />
+            <p id="code-error" class="admin-field-error" hidden></p>
+          </div>
+          <button id="loginSubmit" type="submit" class="mt-1 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-[#1D4ED8] disabled:text-white/80">
+            Verifikasi &amp; Masuk
+          </button>
+          <p class="text-center text-sm"><a href="/hello" class="font-semibold text-[#2563EB] hover:underline">← Masuk dengan akun lain</a></p>
+          <p id="loginStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+        </form>
+        ) : (
         <form id="loginForm" method="POST" class="space-y-4" novalidate aria-busy="false" aria-describedby={[errorMessage && 'loginError'].filter(Boolean).join(' ') || undefined}>
           <div class="space-y-2">
             <label for="username" class="text-sm font-semibold text-slate-900">Email atau username</label>
@@ -204,7 +264,9 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
             Masuk
           </button>
           <p id="loginStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+          <p class="text-center text-sm text-slate-500">Lupa password? <a id="forgotPassword" href={lupaPasswordUrl} class="font-semibold text-[#2563EB] hover:underline">Buat password baru</a></p>
         </form>
+        )}
       </div>
         </div>
         <footer class="admin-login-foot">
@@ -213,7 +275,7 @@ if (Astro.request.method === 'POST' && crossSiteLogin) {
       <script>
         import { bindInlineValidation, validateInline } from '../lib/form-validation-id.ts';
 
-        const form = document.getElementById('loginForm') as HTMLFormElement | null;
+        const form = (document.getElementById('loginForm') ?? document.getElementById('codeForm')) as HTMLFormElement | null;
         const submit = document.getElementById('loginSubmit') as HTMLButtonElement | null;
         const password = document.getElementById('password') as HTMLInputElement | null;
         const toggle = document.getElementById('togglePassword') as HTMLButtonElement | null;

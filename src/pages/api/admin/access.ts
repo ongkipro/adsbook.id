@@ -6,6 +6,7 @@ import {
   validateNewAdminPassword,
 } from "../../../lib/admin-credentials";
 import { revokeAdminSessions } from "../../../lib/admin-session";
+import { clearTwoStep } from "../../../lib/seller-two-step.ts";
 import { jsonError, jsonOk } from "../../../lib/api";
 import { isAdminRole } from "../../../lib/auth";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
@@ -43,7 +44,8 @@ export const GET: APIRoute = async ({ locals }) => {
   try {
     const result = await database
       .prepare(
-        `SELECT id, username, display_name, email, role, must_change_password, updated_at
+        `SELECT id, username, display_name, email, role, must_change_password, updated_at,
+          totp_secret IS NOT NULL AS two_step
         FROM admin_credentials
         ORDER BY CASE role
           WHEN 'owner' THEN 0
@@ -174,6 +176,14 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
     if (!existing) return jsonError("Pengguna tidak ditemukan.", 404);
     if (existing.role === "owner") {
       return jsonError("Akun owner tidak dapat diubah dari halaman ini.", 409);
+    }
+
+    // T-57: a staff member who lost their authenticator. Only this, never with other edits;
+    // their sessions end, and they enroll again from their own profile.
+    if (body.disable_two_step === true) {
+      await clearTwoStep(database, existing.id);
+      await revokeAdminSessions(database, existing.username);
+      return jsonOk({ message: `Verifikasi dua langkah ${existing.username} dimatikan. Sesi pengguna telah dicabut.` });
     }
 
     const updates: string[] = [];
