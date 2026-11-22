@@ -102,17 +102,20 @@
     message.setAttribute('role', tone === 'error' ? 'alert' : 'status');
   };
   const advice = byId('twoStepAdvice');
+  // Enrollment may be closed platform-wide (SELLER_TWO_STEP); then an off account is told so, never offered a button that answers 403.
+  let available = true;
   const paint = (enabled: boolean, left = 0) => {
-    show(advice, !enabled);
+    show(advice, !enabled && available);
     if (badge) {
       badge.textContent = enabled ? 'Aktif' : 'Belum aktif';
       badge.className = `rounded-full px-2.5 py-1 text-xs font-semibold ${enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`;
     }
-    show(beginWrap, !enabled);
+    show(beginWrap, !enabled && available);
+    if (!enabled && !available) say('Verifikasi dua langkah belum bisa diaktifkan lagi saat ini.');
     show(confirmForm, false);
     show(codes, false);
     show(disableWrap, enabled);
-    if (enabled && left <= 3) say(`Sisa ${left} kode cadangan. Matikan lalu aktifkan lagi untuk mendapat kode baru.`);
+    if (enabled && left <= 3) say(available ? `Sisa ${left} kode cadangan. Matikan lalu aktifkan lagi untuk mendapat kode baru.` : `Sisa ${left} kode cadangan. Simpan baik-baik.`);
     root?.setAttribute('aria-busy', 'false');
   };
   const call = async (body: Record<string, string>) => {
@@ -135,6 +138,7 @@
       const response = await fetch('/api/admin/profile/two-step', { headers: { Accept: 'application/json' } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Gagal memuat status verifikasi dua langkah.');
+      available = payload.data.available !== false;
       paint(Boolean(payload.data.enabled), Number(payload.data.recovery_codes_left) || 0);
     } catch (error) {
       say(error instanceof Error ? error.message : 'Gagal memuat status.', 'error');
@@ -219,8 +223,8 @@
       const payload = await call({ action: 'disable', current_password: password.value, code: code.value.trim() });
       password.value = '';
       code.value = '';
-      say(payload.message || 'Verifikasi dua langkah dimatikan.', 'ok');
       paint(false);
+      say(payload.message || 'Verifikasi dua langkah dimatikan.', 'ok');
     } catch (error) {
       say(error instanceof Error ? error.message : 'Gagal mematikan.', 'error');
     } finally {

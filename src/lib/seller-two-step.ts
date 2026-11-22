@@ -30,13 +30,43 @@ import { newTotpSecret, otpauthUri, verifyTotp } from "../platform/admin/totp.ts
 
 /** The sealing context: one per credential, so a sealed secret copied onto another user does not open. */
 export const twoStepColumn = (credentialId: number) => `admin_credentials.totp_secret:${credentialId}`;
+/** The recovery-code digests are sealed too: a database copy alone cannot test guesses against them. */
+export const recoveryColumn = (credentialId: number) => `admin_credentials.recovery_codes:${credentialId}`;
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 export const CHALLENGE_MAX_ATTEMPTS = 5;
 export const RECOVERY_CODE_COUNT = 10;
 /** Wrong second factors per credential per window, across every challenge and the profile: a password holder gets a few guesses, not a million. */
 export const FACTOR_FAILURE_LIMIT = 10;
 export const FACTOR_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+/** A second, daily ceiling: a leaked password buys at most this many code checks a day. */
+export const FACTOR_DAILY_LIMIT = 30;
+export const FACTOR_DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Password checks on the profile two-step endpoint, per credential. */
+export const PASSWORD_CHECK_LIMIT = 10;
 const factorBucket = (credentialId: number) => `two-step-fail:${credentialId}`;
+const factorDailyBucket = (credentialId: number) => `two-step-day:${credentialId}`;
+const passwordBucket = (credentialId: number) => `two-step-password:${credentialId}`;
+
+/** The stored recovery list, opened; null when it cannot be read here (treated as no codes left). */
+async function openRecoveryList(database: D1Database, credentialId: number, stored: string | null): Promise<string[] | null> {
+  if (!stored) return [];
+  const opened = await openCredential(database, recoveryColumn(credentialId), stored);
+  if (opened === null) return null;
+  const list: unknown = JSON.parse(opened);
+  return Array.isArray(list) ? list.filter((entry): entry is string => typeof entry === "string") : null;
+}
+const sealRecoveryList = (database: D1Database, credentialId: number, list: string[]) =>
+  sealCredential(database, recoveryColumn(credentialId), JSON.stringify(list));
+
+/**
+ * The password check behind every profile two-step action, spent up front per
+ * credential so a stolen session cannot use the endpoint to guess the password.
+ */
+export async function checkTwoStepPassword(database: D1Database, credentialId: number, password: string, passwordHash: string): Promise<boolean> {
+  const budget = await checkRateLimit(database, passwordBucket(credentialId), PASSWORD_CHECK_LIMIT, FACTOR_FAILURE_WINDOW_MS, true, "closed");
+  if (!budget.allowed) return false;
+  return verifyPasswordHash(password, passwordHash);
+}
 
 const hex = (bytes: ArrayBuffer | Uint8Array) =>
   Array.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -71,7 +101,7 @@ export async function twoStepEnabled(database: D1Database, credentialId: number)
 /** Step 1 of enrollment: the password, then a fresh secret to scan. Nothing is stored until it is proven. */
 export async function beginEnrollment(database: D1Database, credentialId: number, password: string, label: string) {
   const current = await row(database, credentialId);
-  if (!current || !(await verifyPasswordHash(password, current.password_hash))) return { ok: false as const, error: "Password saat ini salah." };
+  if (!current || !(await checkTwoStepPassword(database, credentialId, password, current.password_hash))) return { ok: false as const, error: "Password saat ini salah." };
   if (current.totp_secret) return { ok: false as const, error: "Verifikasi dua langkah sudah aktif." };
   const secret = newTotpSecret();
   return { ok: true as const, secret, uri: otpauthUri(secret, label) };
@@ -90,7 +120,7 @@ export async function confirmEnrollment(
   now = Date.now(),
 ) {
   const current = await row(database, credentialId);
-  if (!current || !(await verifyPasswordHash(input.password, current.password_hash))) return { ok: false as const, error: "Password saat ini salah." };
+  if (!current || !(await checkTwoStepPassword(database, credentialId, input.password, current.password_hash))) return { ok: false as const, error: "Password saat ini salah." };
   if (current.totp_secret) return { ok: false as const, error: "Verifikasi dua langkah sudah aktif." };
   if (!/^[A-Z2-7]{32}$/.test(input.secret)) return { ok: false as const, error: "Mulai ulang pengaturan verifikasi dua langkah." };
   const step = await verifyTotp(input.secret, input.code, now);
@@ -103,13 +133,19 @@ export async function confirmEnrollment(
   }
   const codes = Array.from({ length: RECOVERY_CODE_COUNT }, newRecoveryCode);
   const digests = await Promise.all(codes.map((code) => sha256(normalizeRecovery(code))));
+  let sealedCodes: string;
+  try {
+    sealedCodes = await sealRecoveryList(database, credentialId, digests);
+  } catch {
+    return { ok: false as const, error: "Verifikasi dua langkah belum bisa diaktifkan di toko ini. Hubungi tim adsbook.id." };
+  }
   // Only while still off and still the same revision. `updated_at` moves, so
   // every session, pending challenge and platform handoff issued on the
   // password alone stops working: the next sign-in is a two-step one.
   const revision = new Date(Math.max(now, Date.parse(current.updated_at) + 1 || 0)).toISOString();
   const updated = await database
     .prepare("UPDATE admin_credentials SET totp_secret = ?, totp_last_step = ?, recovery_codes = ?, updated_at = ? WHERE id = ? AND totp_secret IS NULL AND updated_at = ?")
-    .bind(sealed, step, JSON.stringify(digests), revision, credentialId, current.updated_at)
+    .bind(sealed, step, sealedCodes, revision, credentialId, current.updated_at)
     .run();
   if (Number(updated.meta?.changes ?? 0) !== 1) return { ok: false as const, error: "Akun berubah saat pengaturan. Muat ulang halaman lalu coba lagi." };
   await database.batch([
@@ -132,6 +168,8 @@ export async function proveSecondFactor(database: D1Database, credentialId: numb
   // it. Fail closed on a store error: a limiter that cannot count lets nothing through.
   const budget = await checkRateLimit(database, factorBucket(credentialId), FACTOR_FAILURE_LIMIT, FACTOR_FAILURE_WINDOW_MS, true, "closed");
   if (!budget.allowed) return false;
+  const daily = await checkRateLimit(database, factorDailyBucket(credentialId), FACTOR_DAILY_LIMIT, FACTOR_DAILY_WINDOW_MS, true, "closed");
+  if (!daily.allowed) return false;
   return checkFactor(database, credentialId, code, now);
 }
 
@@ -153,12 +191,12 @@ async function checkFactor(database: D1Database, credentialId: number, code: str
   const normalized = normalizeRecovery(value);
   if (normalized.length !== 8) return false;
   const digest = await sha256(normalized);
-  const list: string[] = JSON.parse(current.recovery_codes || "[]");
-  if (!list.includes(digest)) return false;
-  const next = list.filter((entry) => entry !== digest);
+  const list = await openRecoveryList(database, credentialId, current.recovery_codes);
+  if (!list || !list.includes(digest)) return false;
+  const next = await sealRecoveryList(database, credentialId, list.filter((entry) => entry !== digest));
   const spent = await database
     .prepare("UPDATE admin_credentials SET recovery_codes = ? WHERE id = ? AND recovery_codes = ?")
-    .bind(JSON.stringify(next), credentialId, current.recovery_codes)
+    .bind(next, credentialId, current.recovery_codes)
     .run();
   return Number(spent.meta?.changes ?? 0) === 1;
 }
@@ -166,13 +204,13 @@ async function checkFactor(database: D1Database, credentialId: number, code: str
 /** How many recovery codes this credential has left (shown in the profile). */
 export async function recoveryCodesLeft(database: D1Database, credentialId: number): Promise<number> {
   const current = await row(database, credentialId);
-  return current?.recovery_codes ? (JSON.parse(current.recovery_codes) as string[]).length : 0;
+  return (await openRecoveryList(database, credentialId, current?.recovery_codes ?? null))?.length ?? 0;
 }
 
 /** Turns two-step off: the user's own password and a current factor. */
 export async function disableOwnTwoStep(database: D1Database, credentialId: number, input: { password: string; code: string }, now = Date.now()) {
   const current = await row(database, credentialId);
-  if (!current || !(await verifyPasswordHash(input.password, current.password_hash))) return { ok: false as const, error: "Password saat ini salah." };
+  if (!current || !(await checkTwoStepPassword(database, credentialId, input.password, current.password_hash))) return { ok: false as const, error: "Password saat ini salah." };
   if (!current.totp_secret) return { ok: false as const, error: "Verifikasi dua langkah belum aktif." };
   if (!(await proveSecondFactor(database, credentialId, input.code, now))) return { ok: false as const, error: "Kode verifikasi salah." };
   await clearTwoStep(database, credentialId);
@@ -196,17 +234,23 @@ export async function clearTwoStep(database: D1Database, credentialId: number) {
 export async function sealTwoStepSecrets(database: D1Database): Promise<number> {
   if (!credentialsAvailable(database)) return 0;
   const { results } = await database
-    .prepare("SELECT id, totp_secret FROM admin_credentials WHERE totp_secret IS NOT NULL")
-    .all<{ id: number; totp_secret: string }>();
+    .prepare("SELECT id, totp_secret, recovery_codes FROM admin_credentials WHERE totp_secret IS NOT NULL")
+    .all<{ id: number; totp_secret: string; recovery_codes: string | null }>();
   let sealed = 0;
   for (const row of results ?? []) {
-    const next = await resealedCredential(database, twoStepColumn(row.id), row.totp_secret);
-    if (next === null) continue;
-    const result = await database
-      .prepare("UPDATE admin_credentials SET totp_secret = ? WHERE id = ? AND totp_secret = ?")
-      .bind(next, row.id, row.totp_secret)
-      .run();
-    sealed += Number(result.meta?.changes ?? 0);
+    for (const [column, name, stored] of [
+      ["totp_secret", twoStepColumn(row.id), row.totp_secret],
+      ["recovery_codes", recoveryColumn(row.id), row.recovery_codes],
+    ] as const) {
+      if (!stored) continue;
+      const next = await resealedCredential(database, name, stored);
+      if (next === null) continue;
+      const result = await database
+        .prepare(`UPDATE admin_credentials SET ${column} = ? WHERE id = ? AND ${column} = ?`)
+        .bind(next, row.id, stored)
+        .run();
+      sealed += Number(result.meta?.changes ?? 0);
+    }
   }
   return sealed;
 }

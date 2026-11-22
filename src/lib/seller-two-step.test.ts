@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
@@ -18,6 +19,9 @@ import {
   disableOwnTwoStep,
   forgotPasswordUrl,
   proveSecondFactor,
+  FACTOR_DAILY_LIMIT,
+  PASSWORD_CHECK_LIMIT,
+  RECOVERY_CODE_COUNT,
   sealTwoStepSecrets,
   twoStepEnrollmentOpen,
   recoveryCodesLeft,
@@ -214,10 +218,42 @@ test("T-57 review: a key rotation re-seals the two-step secret, so retiring the 
   const oldKey = Buffer.alloc(32, 1).toString("base64");
   const newKey = Buffer.alloc(32, 2).toString("base64");
   bindCredentials(db, "t_alfa", { PLATFORM_CREDENTIAL_KEY: newKey, PLATFORM_CREDENTIAL_KEY_PREVIOUS: oldKey });
-  assert.equal(await sealTwoStepSecrets(db), 1);
+  assert.equal(await sealTwoStepSecrets(db), 2, "the secret and the recovery-code list");
   assert.equal(await sealTwoStepSecrets(db), 0, "idempotent");
   bindCredentials(db, "t_alfa", { PLATFORM_CREDENTIAL_KEY: newKey });
   const stored = col(db, "SELECT totp_secret FROM admin_credentials WHERE id = 1")!.totp_secret;
   assert.match(String(await openCredential(db, "admin_credentials.totp_secret:1", stored)), /^[A-Z2-7]{32}$/, "the new key alone opens it");
   assert.equal(await openCredential(db, "admin_credentials.totp_secret:2", stored), null, "still bound to its own credential");
+  assert.equal(await recoveryCodesLeft(db, 1), RECOVERY_CODE_COUNT, "the recovery codes still open under the new key alone");
+});
+
+test("T-57 hardening: recovery-code digests are sealed, so a database copy cannot test guesses offline", async () => {
+  const db = await store();
+  const { codes } = await enroll(db);
+  const stored = String(col(db, "SELECT recovery_codes FROM admin_credentials WHERE id = 1")!.recovery_codes);
+  assert.ok(!stored.startsWith("["), "not a plain JSON list of digests");
+  const digest = createHash("sha256").update(codes[0].replace("-", "")).digest("hex");
+  assert.ok(!stored.includes(digest), "no digest is readable in the row");
+  assert.equal(await openCredential(db, "admin_credentials.recovery_codes:2", stored), null, "bound to its own credential");
+  assert.equal(await recoveryCodesLeft(db, 1), RECOVERY_CODE_COUNT);
+  assert.equal(await proveSecondFactor(db, 1, codes[0], T0 + 60_000), true);
+  assert.equal(await proveSecondFactor(db, 1, codes[0], T0 + 60_000), false, "still single use");
+  assert.equal(await recoveryCodesLeft(db, 1), RECOVERY_CODE_COUNT - 1);
+});
+
+test("T-57 hardening: a daily ceiling on code checks, and a limit on password checks behind the profile endpoint", async () => {
+  const db = await store();
+  const { secret: enrolledSecret } = await enroll(db);
+  // Spend the whole daily ceiling in 15-minute rounds (each round's budget is cleared, as if the window passed).
+  for (let spent = 0; spent < FACTOR_DAILY_LIMIT; spent += 1) {
+    if (spent % FACTOR_FAILURE_LIMIT === 0) db.sqlite.exec("DELETE FROM rate_limits WHERE key LIKE 'two-step-fail:%'");
+    assert.equal(await proveSecondFactor(db, 1, "000000", T0), false);
+  }
+  db.sqlite.exec("DELETE FROM rate_limits WHERE key LIKE 'two-step-fail:%'");
+  const totp = await totpCode(enrolledSecret, Math.floor((T0 + 90_000) / 30_000));
+  assert.equal(await proveSecondFactor(db, 1, totp, T0 + 90_000), false, "past the daily ceiling even the right code is not checked");
+
+  assert.equal(PASSWORD_CHECK_LIMIT, 10);
+  for (let index = 0; index < PASSWORD_CHECK_LIMIT; index += 1) assert.equal((await beginEnrollment(db, 2, "salah-salah-salah", "x")).ok, false);
+  assert.deepEqual(await beginEnrollment(db, 2, PASSWORD, "cs"), { ok: false, error: "Password saat ini salah." }, "the right password waits out the window");
 });
