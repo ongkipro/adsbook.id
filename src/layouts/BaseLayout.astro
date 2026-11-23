@@ -57,12 +57,6 @@ interface Props {
    * are paused. Every buyer-facing page leaves it at the default.
    */
   buyerTracking?: boolean;
-  /**
-   * "Pasar Rapi" (2026-11-23): the page spans the screen (header, grid, PDP
-   * two columns) instead of the phone-width column. Home, /produk and the
-   * PDP opt in; forms, landing pages, policies and /thanks keep the column.
-   */
-  wide?: boolean;
 }
 
 const {
@@ -72,7 +66,6 @@ const {
   canonical: canonicalProp,
   hideHeader = false,
   hideFooter = false,
-  wide = false,
   noindex: noindexProp = false,
   follow = false,
   ogType = 'website',
@@ -309,30 +302,18 @@ const preloadImageUrls =
         </a>
       </p>
     )}
-    {wide ? (
-      /* "Pasar Rapi" (2026-11-23): home, catalogue and PDP span the screen,
-         content inside `.sf-wrap` (max 1200px). The header stays on top. */
-      <div class="min-h-screen w-full bg-white">
+    {/* The storefront is a phone-width column on every screen (owner, 2026-11-23:
+        the business is an ad tapped on a phone landing on a COD form). On a wide
+        screen the grey canvas says the column is deliberate. */}
+    <div class="flex min-h-screen w-full justify-center bg-[#F3F3F3]">
+      <div class="min-h-screen w-full max-w-[480px] bg-white sm:shadow-[0_0_0_1px_#EDEDED]">
         {!hideHeader && <SiteHeader />}
         <div id="main-content" tabindex="-1" class="outline-none">
           <slot />
         </div>
         {!hideFooter && <SiteFooter />}
       </div>
-    ) : (
-      /* The phone-width column (compact template, DESIGN-SYSTEM §3): forms,
-         landing pages, policies and /thanks. On a wide screen the grey canvas
-         says the column is deliberate rather than a page that failed to stretch. */
-      <div class="flex min-h-screen w-full justify-center bg-[#F3F3F3]">
-        <div class="sf-column min-h-screen w-full max-w-[480px] bg-white sm:shadow-[0_0_0_1px_#EDEDED]">
-          {!hideHeader && <SiteHeader />}
-          <div id="main-content" tabindex="-1" class="outline-none">
-            <slot />
-          </div>
-          {!hideFooter && <SiteFooter />}
-        </div>
-      </div>
-    )}
+    </div>
 
     <script>
       // Constraint validation speaks Indonesian on every page, whatever the browser's language.

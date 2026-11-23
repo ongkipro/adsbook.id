@@ -321,7 +321,7 @@ export const GET: APIRoute = async ({ locals }) => {
           description: row.description ?? "",
           tagline: row.tagline ?? "",
           logo: row.logo ?? "",
-          storefront_template: row.storefront_template ?? "pasar-rapi",
+          storefront_template: row.storefront_template ?? "compact-market",
           theme_color: row.theme_color ?? "",
           locale: row.locale ?? "",
           admin_name: row.admin_name ?? "",
@@ -803,7 +803,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       // The site address is the tenant's primary host (T-25), chosen at
       // /admin/settings/domains; a free-text `site_url` is no longer saved.
       const storefrontTemplate =
-        clean(body.storefront_template, 40) || "pasar-rapi";
+        clean(body.storefront_template, 40) || "compact-market";
       const templateResolution = await resolveStorefrontTemplate(
         db,
         storefrontTemplate,

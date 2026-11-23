@@ -71,7 +71,6 @@ const ready = homeResolution.state === 'ready' && templateResolution.state === '
 const unavailable = homeResolution.state === 'unavailable' || templateResolution.state !== 'ready';
 const content = homeResolution.state === 'ready' ? homeResolution.content : null;
 const template = templateResolution.state === 'ready' ? templateResolution.definition : null;
-const wideLayout = template?.composition.layout !== 'compact';
 if (unavailable) Astro.response.status = 503;
 const homepageTitle = ready
   ? homeTitle(Astro.locals.tenant.name, Astro.locals.tenant.tagline || Astro.locals.tenant.description)
@@ -115,7 +114,6 @@ const itemList = {
   itemList={ready ? itemList : undefined}
   noindex={bannerPreview.granted}
   buyerTracking={!bannerPreview.granted}
-  wide={wideLayout}
 >
   {bannerPreview.granted && (
     <div role="status" data-banner-preview class="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950">

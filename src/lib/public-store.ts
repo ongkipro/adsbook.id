@@ -155,28 +155,35 @@ export async function getStorePublicFacts(locals: App.Locals): Promise<{
 }
 
 /**
- * The storefront trust strip (default storefront "Pasar Rapi", 2026-11-23):
+ * The storefront trust strip (compact storefront, 2026-11-23):
  * at most three short claims, each true of this store's live settings, in the
  * order a buyer weighs them. Nothing is said that the checkout would not honour:
  * no COD claim without an active COD method, no courier without an enabled rule.
  */
 export function storefrontTrustSignals(facts: { couriers: readonly string[]; payments: readonly string[] }): Array<{
   icon: "wallet" | "credit-card" | "truck";
+  /** The full claim, read by assistive technology. */
   label: string;
+  /** What the 480px strip shows: two short lines at most. */
+  short: string;
 }> {
-  const signals: Array<{ icon: "wallet" | "credit-card" | "truck"; label: string }> = [];
+  const signals: Array<{ icon: "wallet" | "credit-card" | "truck"; label: string; short: string }> = [];
   const payments = facts.payments;
-  if (payments.some((payment) => payment.startsWith("COD"))) signals.push({ icon: "wallet", label: "Bisa bayar di tempat (COD)" });
+  if (payments.some((payment) => payment.startsWith("COD"))) signals.push({ icon: "wallet", label: "Bisa bayar di tempat (COD)", short: "Bisa COD" });
   const online = [
     payments.some((payment) => payment === "QRIS") && "QRIS",
     payments.some((payment) => payment.startsWith("Virtual Account")) && "Virtual Account",
     payments.some((payment) => payment.startsWith("transfer bank")) && "transfer bank",
   ].filter((item): item is string => Boolean(item));
-  if (online.length) signals.push({ icon: "credit-card", label: `Bayar via ${joinIndonesian(online)}` });
+  if (online.length) {
+    const shortNames: Record<string, string> = { QRIS: "QRIS", "Virtual Account": "VA", "transfer bank": "Transfer" };
+    signals.push({ icon: "credit-card", label: `Bayar via ${joinIndonesian(online)}`, short: online.map((item) => shortNames[item]).join(" · ") });
+  }
   const couriers = facts.couriers.filter(Boolean);
   if (couriers.length) {
     const shown = couriers.slice(0, 3);
-    signals.push({ icon: "truck", label: `Dikirim ${shown.join(", ")}${couriers.length > shown.length ? ` +${couriers.length - shown.length}` : ""}` });
+    const extra = couriers.length > shown.length ? ` +${couriers.length - shown.length}` : "";
+    signals.push({ icon: "truck", label: `Dikirim ${shown.join(", ")}${extra}`, short: `${couriers.slice(0, 2).join(", ")}${couriers.length > 2 ? ` +${couriers.length - 2}` : ""}` });
   }
   return signals;
 }

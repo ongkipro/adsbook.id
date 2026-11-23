@@ -17,8 +17,6 @@ interface Props {
   selectedVariantId?: string;
   province?: string;
   embedded?: boolean;
-  /** The wide PDP's right column: the form spans the column, aligned left, from 1024px. */
-  fill?: boolean;
 }
 
 const {
@@ -26,7 +24,6 @@ const {
   province = '',
   productSlug = 'asahan-portable',
   embedded = false,
-  fill = false,
   selectedVariantId,
   bannerImage,
 } = Astro.props;
@@ -47,7 +44,7 @@ const resolvedMode =
 const resolvedProvince = province || formContext.province;
 ---
 
-<div class:list={['mx-auto w-full max-w-[480px] bg-white', fill && 'sf-form-fill lg:mx-0 lg:max-w-none']} data-canonical-order-form data-resolved-mode={digital ? 'digital' : resolvedMode}>
+<div class="mx-auto w-full max-w-[480px] bg-white" data-canonical-order-form data-resolved-mode={digital ? 'digital' : resolvedMode}>
   {
     digital ? (
       <FormDigitalContent productSlug={productSlug} selectedVariantId={selectedVariantId} embedded={embedded} />

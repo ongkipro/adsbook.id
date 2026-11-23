@@ -1,6 +1,5 @@
 ---
 import { tenantDatabase } from '../../lib/tenant-database.ts';
-import { isWideTheme } from '../../lib/storefront-theme';
 import { geoHeadersFromCf } from '../../lib/geo';
 import Breadcrumb from '../../components/storefront/shared/Breadcrumb.astro';
 import MetaLandingTracker from '../../components/storefront/tracking/MetaLandingTracker.astro';
@@ -43,7 +42,7 @@ const [productPageLanding, socialProofOrders, publicFacts, csPhone] = await Prom
   getProductPageLanding(Astro.locals, String(product.productId)),
   // The store's real orders (A-300); under the threshold the toast renders nothing.
   recentOrderCount(tenantDatabase(Astro.locals)),
-  // "Pasar Rapi": the trust strip and the WhatsApp question, from the store's
+  // The trust strip and the WhatsApp question, from the store's
   // own settings; the same for every visitor, so the page stays cacheable.
   getStorePublicFacts(Astro.locals),
   getStoreSupportWhatsapp(Astro.locals),
@@ -132,7 +131,6 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
   ogType="product"
   hideHeader={false}
   hideFooter={false}
-  wide={isWideTheme(Astro.locals.tenant.storefrontTemplate)}
   breadcrumbs={[
     { name: 'Beranda', url: '/' },
     { name: 'Produk', url: '/produk' },
@@ -149,8 +147,8 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
       `product`, which would emit a second, conflicting Product block. */}
   <script is:inline type="application/ld+json" set:html={productSchemaJson} />
 
-  <main class="bg-white pb-24 lg:pb-12">
-    <div class="sf-wrap max-lg:px-4">
+  <main class="bg-white pb-24">
+    <div class="px-4">
       <Breadcrumb
         items={[
           { label: 'Produk', href: '/produk' },
@@ -159,20 +157,16 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
         ]}
       />
     </div>
-    <!-- "Pasar Rapi" PDP: one column on a phone (photo edge to edge first);
-         from 1024px the gallery sticks on the left and the offer, details and
-         order form run on the right. -->
-    <div class="pdp-grid sf-wrap max-lg:px-0 lg:mt-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
-    <div class="mt-2 lg:sticky lg:top-20 lg:mt-0 lg:overflow-hidden lg:rounded-md lg:border lg:border-[#E7E7E9]">
+    <!-- Edge to edge on purpose: the photo is the first thing the page says. -->
+    <div class="mt-2">
       <ProductImageGallery
         images={productImages}
         productName={product.productName}
       />
     </div>
 
-    <div class="min-w-0">
     <!-- Offer: name, proof, price, the choices, and the way to order. -->
-    <section class="px-4 pb-6 pt-4 lg:px-0 lg:pt-0">
+    <section class="px-4 pb-5 pt-4">
       <h1 class="text-xl font-bold leading-snug tracking-[-0.02em] text-[#111111]">
         {product.productName}
       </h1>
@@ -225,13 +219,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
         </p>
       )}
 
-      <a
-        href="#form-pemesanan"
-        class="mt-4 hidden min-h-12 w-full items-center justify-center rounded-md bg-[var(--sf-accent,#2563EB)] px-6 text-[15px] font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--sf-accent,#2563EB)] lg:inline-flex"
-      >
-        Beli sekarang
-      </a>
-      {trustSignals.length > 0 && <TrustStrip signals={trustSignals} class="mt-4 sm:grid-cols-1" />}
+      {trustSignals.length > 0 && <TrustStrip signals={trustSignals} class="mt-4" />}
       {askHref && (
         <a
           href={askHref}
@@ -247,7 +235,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
     </section>
 
     {(product.description || product.benefits?.length || product.keyPoints?.length || product.idealFor?.length) && (
-      <section class="border-t-8 border-[#F3F3F3] px-4 py-6 lg:border-t lg:border-[#E7E7E9] lg:px-0">
+      <section class="border-t-8 border-[#F3F3F3] px-4 py-5">
         <h2 class="text-base font-bold text-[#111111]">Tentang produk</h2>
         {product.description && product.description !== product.subheadline && (
           <div class="mt-2 space-y-2 text-sm leading-6 text-[#555555]">
@@ -311,7 +299,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
 
     {
       (hasAggregateRating || product.reviews.length > 0) && (
-        <section class="border-t-8 border-[#F3F3F3] px-4 py-6 lg:border-t lg:border-[#E7E7E9] lg:px-0">
+        <section class="border-t-8 border-[#F3F3F3] px-4 py-5">
           <div class="flex items-baseline justify-between gap-3">
             <h2 class="text-base font-bold text-[#111111]">Ulasan pembeli</h2>
             {hasAggregateRating && (
@@ -354,11 +342,9 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
     }
 
     <!-- Direct order form -->
-    <section id="form-pemesanan" class="pdp-form scroll-mt-20 border-t-8 border-[#F3F3F3] px-2 pb-2 pt-4 lg:border-t lg:border-[#E7E7E9] lg:px-0">
-      <GeoIpResolvedForm mode={formContext.mode} province={formContext.province} productSlug={product.slug} embedded={true} fill />
+    <section id="form-pemesanan" class="scroll-mt-16 border-t-8 border-[#F3F3F3] px-2 pb-2 pt-4">
+      <GeoIpResolvedForm mode={formContext.mode} province={formContext.province} productSlug={product.slug} embedded={true} />
     </section>
-    </div>
-    </div>
 
     <SocialProofToast
       orderCount={socialProofOrders}
@@ -367,7 +353,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
     <!-- Sticky purchase bar. Hidden while the photo or the order form is on
          screen: over the photo it covers what the buyer came to look at, and
          over the form its button points at a form already in view. -->
-    <div id="sticky-purchase-bar" class="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full items-center justify-between gap-3 border-t border-[#EDEDED] bg-white/95 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300 lg:hidden" style="transform: translateY(100%); opacity: 0; pointer-events: none;" inert>
+    <div id="sticky-purchase-bar" class="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full max-w-[480px] items-center justify-between gap-3 border-t border-[#EDEDED] bg-white/95 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300" style="transform: translateY(100%); opacity: 0; pointer-events: none;" inert>
       <div class="min-w-0">
         <p class="truncate text-xs text-[#555555]">{product.productName}</p>
         <p class="sf-num text-base font-bold leading-tight text-[#111111]">{hasPriceRange && <span class="text-xs font-normal text-[#555555]">Mulai </span>}Rp{Math.round(displayPrice).toLocaleString('id-ID')}</p>

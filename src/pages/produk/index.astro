@@ -1,11 +1,10 @@
 ---
-import { isWideTheme } from '../../lib/storefront-theme';
 import Breadcrumb from '../../components/storefront/shared/Breadcrumb.astro';
 import ProductsSection from '../../components/storefront/home/ProductsSection.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getStorefrontProducts } from '../../lib/catalog';
 
-// "Pasar Rapi" (2026-11-23): the whole catalogue in the same grid, chips and
+// Compact storefront (2026-11-23): the whole catalogue in the same grid, chips and
 // card as the home page (one component, one answer). The header's search
 // submits `?q=` here and the grid filters in the browser, so the HTML is the
 // same for every visitor and stays edge-cacheable.
@@ -33,10 +32,9 @@ const products = catalog.map((product) => ({
     { name: 'Beranda', url: '/' },
     { name: 'Produk', url: '/produk' },
   ]}
-  wide={isWideTheme(Astro.locals.tenant.storefrontTemplate)}
 >
   <main id="konten-utama" class="min-h-screen bg-white text-[#111111]">
-    <div class="sf-wrap"><Breadcrumb items={[{ label: 'Beranda', href: '/' }, { label: 'Produk' }]} /></div>
+    <div class="px-4"><Breadcrumb items={[{ label: 'Beranda', href: '/' }, { label: 'Produk' }]} /></div>
     <ProductsSection
       products={products}
       heading={{

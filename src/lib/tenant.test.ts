@@ -73,7 +73,7 @@ test("an invalid stored value degrades instead of taking the storefront down", (
   assert.equal(tenant.locale, "id-ID", "invalid locale rejected");
   assert.equal(
     tenant.storefrontTemplate,
-    "pasar-rapi",
+    "compact-market",
     "malformed template ID degrades to the default rather than throwing",
   );
 });

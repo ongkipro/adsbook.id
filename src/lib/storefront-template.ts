@@ -9,9 +9,10 @@ const templateIdSchema = z
 
 const compositionSchema = z
   .object({
-    // "wide": the full-width storefront ("Pasar Rapi", 2026-11-23);
-    // "compact": the phone column ("Klasik").
-    layout: z.enum(["wide", "compact"]),
+    // The phone column only (owner, 2026-11-23). A full-width "wide" layout
+    // existed for a day (PR #61/#62) and was withdrawn; 0087 moves any store
+    // that held it back here.
+    layout: z.literal("compact"),
     sections: z
       .object({
         hero: z.boolean(),
@@ -38,36 +39,24 @@ export type StorefrontTemplateDefinition = z.infer<
   typeof storefrontTemplateDefinitionSchema
 >;
 
-/** The default theme: full width, store search, compact cards (PR #61). */
-const pasarRapi = storefrontTemplateDefinitionSchema.parse({
-  id: "pasar-rapi",
-  name: "Pasar Rapi",
-  composition: {
-    layout: "wide",
-    sections: { hero: true, catalog: true, landingPages: true },
-  },
-});
-
-/** The phone column every store rendered before PR #61, kept as "Klasik". */
+/** The storefront: one 480px column, store search, compact cards, trust strip. */
 const compactMarket = storefrontTemplateDefinitionSchema.parse({
   id: "compact-market",
-  name: "Klasik",
+  name: "Compact",
   composition: {
     layout: "compact",
     sections: { hero: true, catalog: true, landingPages: true },
   },
 });
 
-export const DEFAULT_STOREFRONT_TEMPLATE_ID = pasarRapi.id;
+export const DEFAULT_STOREFRONT_TEMPLATE_ID = compactMarket.id;
 
 export const BUILT_IN_STOREFRONT_TEMPLATES = Object.freeze([
-  pasarRapi,
   compactMarket,
 ] as const);
 
 const builtInById: Readonly<Record<string, StorefrontTemplateDefinition>> =
   Object.freeze({
-    [pasarRapi.id]: pasarRapi,
     [compactMarket.id]: compactMarket,
   });
 

@@ -139,12 +139,3 @@ export async function loadThemeSettings(database: D1Database | null | undefined)
     return DEFAULT_THEME_SETTINGS;
   }
 }
-
-/**
- * Whether the store's theme is the wide layout ("Pasar Rapi"). Reads the
- * built-in definition only: a persisted runtime template is "compact" unless
- * it says otherwise, and an unknown id falls back to the default (wide).
- */
-export function isWideTheme(templateId: string | null | undefined): boolean {
-  return (templateId ?? "") !== "compact-market";
-}

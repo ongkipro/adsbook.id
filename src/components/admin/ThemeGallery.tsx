@@ -11,63 +11,52 @@ type ThemeCard = {
   name: string;
   summary: string;
   points: string[];
-  preview: "wide" | "column";
+  /** Not selectable yet: shown so a seller knows more 480px themes are coming. */
+  soon?: boolean;
 };
 
-/** The two built-in themes (storefront-template.ts), described for a seller. */
+/**
+ * Every storefront theme is the 480px column (owner, 2026-11-23: an ad tapped
+ * on a phone lands on a COD form). "Compact" is the one built-in theme
+ * (storefront-template.ts); the second card announces the next one.
+ */
 const THEMES: ThemeCard[] = [
   {
-    id: "pasar-rapi",
-    name: "Pasar Rapi",
-    summary: "Tampilan default. Lebar penuh di desktop, seperti marketplace.",
-    points: ["Header dengan kolom cari", "Grid 2–5 kolom, kartu ringkas", "Halaman produk 2 kolom di desktop"],
-    preview: "wide",
+    id: "compact-market",
+    name: "Compact",
+    summary: "Satu kolom 480px, dibuat untuk pembeli dari iklan di ponsel.",
+    points: ["Header dengan kolom cari", "Kartu produk ringkas, 2 kolom", "Form pesan COD di halaman produk"],
   },
   {
-    id: "compact-market",
-    name: "Klasik",
-    summary: "Satu kolom selebar ponsel di semua layar.",
-    points: ["Cocok untuk 1–5 produk", "Terasa seperti landing page", "Form pesan selalu di tengah"],
-    preview: "column",
+    id: "soon",
+    name: "Tema berikutnya",
+    summary: "Variasi tampilan 480px lain sedang disiapkan.",
+    points: ["Tetap satu kolom untuk ponsel", "Bisa diganti tanpa mengubah produk"],
+    soon: true,
   },
 ];
 
-/** A drawn sketch of the layout, in the store's accent: no screenshot to go stale. */
-function Preview({ kind, accent }: { kind: ThemeCard["preview"]; accent: string }) {
+/** A drawn sketch of the column, in the store's accent: no screenshot to go stale. */
+function Preview({ accent, muted }: { accent: string; muted?: boolean }) {
+  const ink = muted ? "#CBD5E1" : "#0F172A";
+  const dot = muted ? "#CBD5E1" : accent;
   const tile = (x: number, y: number, w: number) => (
     <g key={`${x}-${y}`}>
       <rect x={x} y={y} width={w} height={w} rx="2" fill="#E2E8F0" />
       <rect x={x} y={y + w + 3} width={w * 0.8} height="3" rx="1.5" fill="#CBD5E1" />
-      <rect x={x} y={y + w + 9} width={w * 0.5} height="4" rx="1.5" fill="#0F172A" />
+      <rect x={x} y={y + w + 9} width={w * 0.5} height="4" rx="1.5" fill={ink} />
     </g>
   );
-  if (kind === "wide") {
-    return (
-      <svg viewBox="0 0 240 150" className="h-full w-full" aria-hidden="true">
-        <rect width="240" height="150" fill="#F8FAFC" />
-        <rect x="0" y="0" width="240" height="16" fill="#fff" />
-        <rect x="12" y="5" width="26" height="6" rx="1.5" fill="#0F172A" />
-        <rect x="46" y="4" width="120" height="8" rx="2" fill="#F1F5F9" stroke="#E2E8F0" />
-        <rect x="12" y="22" width="216" height="34" rx="3" fill="#fff" stroke="#E2E8F0" />
-        <rect x="12" y="22" width="120" height="34" rx="3" fill="#E2E8F0" />
-        <rect x="142" y="33" width="60" height="6" rx="1.5" fill="#0F172A" />
-        <rect x="12" y="61" width="216" height="8" rx="2" fill="#fff" stroke="#E2E8F0" />
-        <rect x="16" y="63.5" width="4" height="3" rx="1" fill={accent} />
-        <rect x="88" y="63.5" width="4" height="3" rx="1" fill={accent} />
-        <rect x="160" y="63.5" width="4" height="3" rx="1" fill={accent} />
-        {[0, 1, 2, 3, 4].map((index) => tile(12 + index * 44, 76, 40))}
-      </svg>
-    );
-  }
   return (
     <svg viewBox="0 0 240 150" className="h-full w-full" aria-hidden="true">
       <rect width="240" height="150" fill="#E2E8F0" />
       <rect x="80" y="0" width="80" height="150" fill="#fff" />
-      <rect x="92" y="5" width="34" height="6" rx="1.5" fill="#0F172A" />
-      <rect x="86" y="16" width="68" height="44" rx="3" fill="#E2E8F0" />
+      <rect x="86" y="5" width="22" height="6" rx="1.5" fill={ink} />
+      <rect x="112" y="4" width="42" height="8" rx="2" fill="#F1F5F9" stroke="#E2E8F0" />
+      <rect x="86" y="16" width="68" height="44" rx="2" fill="#E2E8F0" />
       <rect x="86" y="64" width="68" height="18" rx="2" fill="#fff" stroke="#E2E8F0" />
-      <rect x="90" y="68" width="4" height="3" rx="1" fill={accent} />
-      <rect x="90" y="75" width="4" height="3" rx="1" fill={accent} />
+      <rect x="90" y="68" width="4" height="3" rx="1" fill={dot} />
+      <rect x="90" y="75" width="4" height="3" rx="1" fill={dot} />
       {tile(86, 88, 32)}
       {tile(122, 88, 32)}
     </svg>
@@ -132,20 +121,21 @@ export function ThemeGallery() {
       )}
       <ul className="grid grid-cols-1 gap-4 md:grid-cols-2" aria-label="Tema toko">
         {THEMES.map((theme) => {
-          const active = !state.custom && state.active === theme.id;
+          const active = !theme.soon && !state.custom && state.active === theme.id;
           return (
             <li
               key={theme.id}
               data-theme-card={theme.id}
-              className={`flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm ${active ? "border-blue-600 ring-1 ring-blue-600" : "border-slate-200"}`}
+              aria-disabled={theme.soon || undefined}
+              className={`flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm ${active ? "border-blue-600 ring-1 ring-blue-600" : "border-slate-200"} ${theme.soon ? "opacity-70" : ""}`}
             >
               <div className="aspect-[8/5] border-b border-slate-100 bg-slate-50">
-                <Preview kind={theme.preview} accent={state.accent} />
+                <Preview accent={state.accent} muted={theme.soon} />
               </div>
               <div className="flex flex-1 flex-col gap-3 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-base font-semibold text-slate-950">{theme.name}</h2>
-                  {active ? <Badge>Aktif</Badge> : <Badge variant="outline">Tersedia</Badge>}
+                  {active ? <Badge>Aktif</Badge> : <Badge variant="outline">{theme.soon ? "Segera hadir" : "Tersedia"}</Badge>}
                 </div>
                 <p className="text-sm text-slate-600">{theme.summary}</p>
                 <ul className="space-y-1.5 text-sm text-slate-700">
@@ -157,7 +147,7 @@ export function ThemeGallery() {
                   ))}
                 </ul>
                 <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                  {active ? (
+                  {theme.soon ? null : active ? (
                     <a href="/admin/settings/theme/beranda" className={buttonVariants({ variant: "default" })}>
                       Atur beranda
                     </a>
@@ -166,9 +156,11 @@ export function ThemeGallery() {
                       {pending === theme.id ? "Mengaktifkan…" : "Pakai tema ini"}
                     </Button>
                   )}
-                  <a href="/" target="_blank" rel="noopener" className={buttonVariants({ variant: "ghost" })}>
-                    Lihat toko
-                  </a>
+                  {!theme.soon && (
+                    <a href="/" target="_blank" rel="noopener" className={buttonVariants({ variant: "ghost" })}>
+                      Lihat toko
+                    </a>
+                  )}
                 </div>
               </div>
             </li>

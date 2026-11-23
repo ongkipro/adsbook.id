@@ -80,7 +80,7 @@ const defaults = {
   tagline: "",
   themeColor: "#2563EB",
   locale: "id-ID",
-  storefrontTemplate: "pasar-rapi" as StorefrontTemplateId,
+  storefrontTemplate: "compact-market" as StorefrontTemplateId,
   adminName: "Admin Toko",
 } as const;
 
