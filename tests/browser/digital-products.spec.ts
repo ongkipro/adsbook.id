@@ -298,10 +298,10 @@ test("digital store: signup → menu without shipping → digital product → op
   await page.locator('button[aria-label="Aksi produk E-book Resep Nusantara"]:visible').first().click();
   await page.getByRole("menuitem", { name: "Embed checkout form" }).click();
   const embedDialog = page.getByRole("dialog");
-  const snippet = embedDialog.getByLabel("adsbook.id widget embed");
+  const snippet = embedDialog.getByLabel("Snippet widget");
   await expect(snippet).not.toHaveValue("", { timeout: 15_000 });
   await expect(embedDialog.locator("[data-form-lock=digital]")).toContainText("Form digital (terkunci)");
-  await expect(embedDialog.getByRole("combobox", { name: "Mode form" })).toHaveCount(0);
+  await expect(embedDialog.getByRole("radiogroup", { name: "Mode form" })).toHaveCount(0);
   const frameSrc = (await snippet.inputValue()).match(/<iframe[^>]+src="([^"]+)"/)![1].replace(/&amp;/g, "&");
   expect(await (await page.request.get(frameSrc)).text(), "the pasted frame is the digital checkout").toContain('data-resolved-mode="digital"');
   await embedDialog.screenshot({ path: "test-results/embed-dialog-digital.png" });

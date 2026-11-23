@@ -4,7 +4,6 @@ import {
   ExternalLink,
   MoreHorizontal,
   Trash2,
-  ChevronDown,
   Package,
   CheckCircle2,
   Layers,
@@ -30,7 +29,6 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { Input } from "../ui/input";
 import { Button, buttonVariants } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Skeleton } from "../ui/skeleton";
@@ -52,12 +50,12 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { EMBED_SNIPPET_VERSION, buildEmbedMarkup } from "../../lib/embed-markup";
-import { DIGITAL_FORM, effectiveFormMode, PHYSICAL_FORM_MODES, physicalFormMode, productKind } from "../../lib/checkout-forms";
+import { effectiveFormMode, PHYSICAL_FORM_MODES, physicalFormMode, productKind } from "../../lib/checkout-forms";
+import { Separator } from "../ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
-// The modes on offer come from src/lib/checkout-forms.ts (owner, 2026-11-23):
-// a physical product picks hybrid, middle or full; a digital product has one form.
-const EMBED_MODE_LABELS: Record<string, string> = Object.fromEntries(PHYSICAL_FORM_MODES.map((mode) => [mode.value, mode.label]));
 
 export type ProductVariant = {
   id: number | string;
@@ -89,6 +87,13 @@ type EmbedConfig = {
     id: number | string;
     content_id: string;
   };
+};
+
+type EmbedFormat = "widget" | "iframe" | "link";
+const EMBED_FORMATS: Record<EmbedFormat, { label: string; short: string; hint: string }> = {
+  widget: { label: "Snippet widget", short: "snippet", hint: "Disarankan. Tinggi form menyesuaikan isi otomatis." },
+  iframe: { label: "Iframe HTML", short: "iframe", hint: "Tanpa JavaScript. Tinggi tetap 1000 px." },
+  link: { label: "Link form", short: "link", hint: "Untuk tombol di landing page atau bio. Tidak perlu mendaftarkan domain." },
 };
 
 const FORM_PATHS = Object.fromEntries(PHYSICAL_FORM_MODES.map((mode) => [mode.value, mode.path])) as Record<FormMode, string>;
@@ -204,6 +209,7 @@ export function ProductCatalog({
   const [embedVariantId, setEmbedVariantId] = useState("");
   const [embedLoading, setEmbedLoading] = useState(false);
   const [embedError, setEmbedError] = useState("");
+  const [embedFormat, setEmbedFormat] = useState<EmbedFormat>("widget");
 
   useEffect(() => {
     setError("");
@@ -474,8 +480,8 @@ export function ProductCatalog({
         mode: linkMode,
       })
     : null;
-  const iframeHtml = embedMarkup?.plainIframe || "";
-  const widgetHtml = embedMarkup?.widget || "";
+  const embedOutput =
+    embedFormat === "widget" ? embedMarkup?.widget || "" : embedFormat === "iframe" ? embedMarkup?.plainIframe || "" : standaloneUrl;
 
   const copyText = async (value: string, label: string) => {
     try {
@@ -1039,210 +1045,117 @@ export function ProductCatalog({
         )}
       </section>
 
-      {/* Embed Dialog */}
+      {/* Embed dialog (owner, 2026-11-23: "rapikan, minimalist, shadcn"): one
+          choice block (form, variant), one output with three formats, one copy
+          action. The form choice follows the product (checkout-forms.ts). */}
       <Dialog
         open={Boolean(embedTarget)}
         onOpenChange={(open) => {
           if (!open) setEmbedTarget(null);
         }}
       >
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Code2 className="size-5 text-emerald-600" />
-              <span>Embed Checkout Form - {embedTarget?.title}</span>
-            </DialogTitle>
+            <DialogTitle className="truncate pr-8">Embed form · {embedTarget?.title}</DialogTitle>
             <DialogDescription>
-              {embedKind === "digital"
-                ? "Produk digital: satu form (nama, WhatsApp, email opsional, bayar online). Pilih varian awal, lalu salin snippet."
-                : "Produk fisik: pilih jenis form dan varian awal, lalu salin snippet."}
+              {embedKind === "digital" ? "Produk digital · satu form checkout." : "Produk fisik · form COD."}
             </DialogDescription>
           </DialogHeader>
 
           {embedLoading ? (
-            <Skeleton className="h-48 rounded-xl bg-slate-100" />
+            <Skeleton className="h-64 rounded-lg" />
           ) : embedError ? (
-            <section
-              className="rounded-xl border border-amber-200 bg-amber-50 p-4"
-              role="alert"
-            >
-              <p className="text-sm font-semibold text-slate-950">
-                Form belum dapat di-embed
-              </p>
-              <p className="mt-1 text-xs leading-5 text-amber-900">
-                {embedError}
-              </p>
-            </section>
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {embedError}
+            </p>
           ) : embedConfig ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-5">
+              <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-4">
+                <span className="pt-2 text-sm font-medium">Form</span>
                 {embedKind === "digital" ? (
-                  <div data-form-lock="digital" className="rounded-lg border border-blue-200 bg-blue-50/70 p-3 text-blue-950">
-                    <p className="text-xs font-semibold">{DIGITAL_FORM.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-blue-900/80">{DIGITAL_FORM.hint}</p>
-                  </div>
+                  <p data-form-lock="digital" className="flex min-w-0 flex-col gap-0.5 pt-2 text-sm">
+                    <span className="font-medium">Form digital (terkunci)</span>
+                    <span className="text-xs text-muted-foreground">Nama, WhatsApp, email opsional, bayar online. Tanpa alamat dan COD.</span>
+                  </p>
                 ) : (
-                  <div className="block">
-                    <span className="mb-1.5 block text-xs font-semibold text-slate-700">
-                      Jenis form (produk fisik)
-                    </span>
-                    <Select
-                      items={EMBED_MODE_LABELS}
-                      value={embedMode}
-                      onValueChange={(value) => value && setEmbedMode(value as FormMode)}
-                    >
-                      <SelectTrigger aria-label="Mode form" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PHYSICAL_FORM_MODES.map((mode) => (
-                          <SelectItem key={mode.value} value={mode.value}>{mode.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="mt-1.5 text-xs leading-5 text-slate-500">{physicalFormMode(embedMode).hint}</p>
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <div role="radiogroup" aria-label="Mode form" className="inline-flex w-full rounded-lg bg-muted p-[3px]">
+                      {PHYSICAL_FORM_MODES.map((mode) => (
+                        <button
+                          key={mode.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={embedMode === mode.value}
+                          onClick={() => setEmbedMode(mode.value)}
+                          className="flex-1 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm"
+                        >
+                          {mode.label.replace(/ \(.*\)$/, "")}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{physicalFormMode(embedMode).hint}</p>
                   </div>
                 )}
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold text-slate-700">
-                    Varian Awal (Default)
-                  </span>
-                  <Select
-                    items={Object.fromEntries(embedConfig.variants.map((variant) => [String(variant.id), variant.label]))}
-                    value={embedVariantId}
-                    onValueChange={(value) => value && setEmbedVariantId(String(value))}
-                  >
-                    <SelectTrigger aria-label="Varian awal" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {embedConfig.variants.map((variant) => (
-                        <SelectItem key={String(variant.id)} value={String(variant.id)}>
-                          {variant.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
+
+                <span className="pt-2 text-sm font-medium">Varian</span>
+                <Select
+                  items={Object.fromEntries(embedConfig.variants.map((variant) => [String(variant.id), variant.label]))}
+                  value={embedVariantId}
+                  onValueChange={(value) => value && setEmbedVariantId(String(value))}
+                >
+                  <SelectTrigger aria-label="Varian awal" className="w-full min-w-0">
+                    <SelectValue className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    {embedConfig.variants.map((variant) => (
+                      <SelectItem key={String(variant.id)} value={String(variant.id)}>
+                        <span className="truncate">{variant.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Recommended Widget Code */}
-              <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-950">
-                      adsbook.id Widget Snippet
-                    </h3>
-                    <Badge variant="default" className="bg-emerald-700 text-white font-semibold text-xs uppercase">
-                      Direkomendasikan
-                    </Badge>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="gap-1.5 bg-emerald-700 text-white hover:bg-emerald-800"
-                    onClick={() => void copyText(widgetHtml, "adsbook.id Widget")}
-                  >
-                    <Copy className="size-3.5" />
-                    Salin Snippet
-                  </Button>
-                </div>
-                <p className="mt-1.5 text-xs leading-5 text-emerald-900">
-                  Tempel snippet ini di website atau Landing Page Anda. Form akan tampil langsung, responsif, dan tinggi otomatis menyesuaikan isi.
-                </p>
-                <textarea
-                  value={widgetHtml}
+              <Separator />
+
+              <Tabs value={embedFormat} onValueChange={(value) => setEmbedFormat(value as EmbedFormat)} className="min-w-0">
+                <TabsList className="w-full">
+                  <TabsTrigger value="widget">Snippet</TabsTrigger>
+                  <TabsTrigger value="iframe">Iframe</TabsTrigger>
+                  <TabsTrigger value="link">Link</TabsTrigger>
+                </TabsList>
+                <Textarea
+                  data-code-editor
                   readOnly
-                  rows={6}
-                  aria-label="adsbook.id widget embed"
-                  className="mt-3 w-full resize-y rounded-lg border border-emerald-300 bg-white p-3 font-mono text-xs leading-5 text-slate-800 outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+                  value={embedOutput}
+                  rows={embedFormat === "link" ? 2 : 6}
+                  aria-label={EMBED_FORMATS[embedFormat].label}
+                  onFocus={(event) => event.currentTarget.select()}
+                  className="mt-2 max-h-40 resize-none overflow-y-auto break-all font-mono text-xs leading-5 [field-sizing:fixed]"
                 />
-              </section>
+                <p className="mt-1.5 text-xs text-muted-foreground">{EMBED_FORMATS[embedFormat].hint}</p>
+              </Tabs>
 
-              {/* Advanced / Alternative Options */}
-              <details className="group [&_summary::-webkit-details-marker]:hidden">
-                <summary className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none">
-                  <span>Opsi Lanjutan (Link Form Direct & Plain Iframe)</span>
-                  <ChevronDown className="size-4 text-slate-500 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
-                </summary>
+              {embedFormat !== "link" && (
+                <p className="text-xs text-muted-foreground">
+                  Website Anda harus terdaftar di{" "}
+                  <a href="/admin/settings/store#embedOriginsForm" className="font-medium text-foreground underline underline-offset-2">
+                    Domain untuk embed
+                  </a>
+                  , atau browser menolak memuat form. Versi snippet v{EMBED_SNIPPET_VERSION}.
+                </p>
+              )}
 
-                <div className="mt-3 space-y-4 rounded-xl border border-slate-200 p-4 bg-white">
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-950">Direct Form URL</h4>
-                        <p className="mt-0.5 text-xs text-slate-500">Untuk tombol redirect CTA di Landing Page eksternal.</p>
-                      </div>
-                      <a
-                        href={standaloneUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        <span>Preview</span>
-                        <ExternalLink className="size-3" aria-hidden="true" />
-                      </a>
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      <Input
-                        value={standaloneUrl}
-                        readOnly
-                        aria-label="Link form produk"
-                        className="min-w-0 font-mono"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="shrink-0 px-3 gap-1.5"
-                        onClick={() => void copyText(standaloneUrl, "Link Form URL")}
-                      >
-                        <Copy className="size-3.5" />
-                        Salin
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="h-px bg-slate-100" />
-
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-semibold text-slate-950">Plain Iframe (Tanpa Script JS)</h4>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => void copyText(iframeHtml, "Iframe HTML")}
-                      >
-                        <Copy className="size-3.5" />
-                        Salin Iframe
-                      </Button>
-                    </div>
-                    <textarea
-                      value={iframeHtml}
-                      readOnly
-                      rows={3}
-                      aria-label="Iframe embed tanpa JavaScript"
-                      className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-mono text-xs leading-5 text-slate-800"
-                    />
-                  </div>
-                </div>
-              </details>
-
-              <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
-                <strong>Versi snippet: v{EMBED_SNIPPET_VERSION}.</strong>{" "}
-                Snippet yang sudah ditempel tidak ikut ter-update saat sistem
-                di-deploy. Setiap kali halaman merchant memuat form dengan versi
-                lama, sistem mencatat <code className="font-mono">embed-snippet-stale</code>{" "}
-                beserta domain halaman tersebut di Workers Logs — minta merchant
-                menyalin ulang snippet di atas bila itu muncul.
-              </p>
-
-              <p className="rounded-lg border border-blue-200 bg-blue-50/80 p-3 text-xs leading-5 text-blue-900">
-                <strong>Wajib sebelum menempel snippet:</strong> daftarkan domain website Anda (mis. <code className="font-mono">https://lp.tokoanda.com</code>) di{" "}
-                <a href="/admin/settings/store#embedOriginsForm" className="font-semibold underline underline-offset-2">Pengaturan › Toko › Domain untuk embed</a>.
-                Tanpa itu browser menolak memuat form di website lain. Link Form Direct tidak memerlukannya.
-              </p>
+              <DialogFooter className="gap-2 sm:justify-end">
+                <a href={standaloneUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "outline" })}>
+                  <ExternalLink data-icon="inline-start" aria-hidden="true" />
+                  Pratinjau
+                </a>
+                <Button type="button" onClick={() => void copyText(embedOutput, EMBED_FORMATS[embedFormat].label)}>
+                  <Copy data-icon="inline-start" aria-hidden="true" />
+                  Salin {EMBED_FORMATS[embedFormat].short}
+                </Button>
+              </DialogFooter>
             </div>
           ) : null}
         </DialogContent>
