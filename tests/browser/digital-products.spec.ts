@@ -283,6 +283,30 @@ test("digital store: signup → menu without shipping → digital product → op
   await expect(page.locator("[data-send-digital-access]")).toHaveAttribute("href", /^https:\/\/wa\.me\/62\d+\?text=/);
   await expect(page.getByText("Riwayat penerima (RTS)")).toHaveCount(0);
 
+  // 8b. One form for a digital product (owner, 2026-11-23): the landing editor
+  // locks it and the Embed dialog offers no mode; the pasted frame is the digital checkout.
+  await page.goto(`${STORE}/admin/landing-pages/new`);
+  await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  await page.getByRole("combobox").filter({ hasText: /Pilih produk/ }).click();
+  await page.getByRole("option", { name: /E-book Resep Nusantara/ }).first().click();
+  await page.getByRole("button", { name: /Form COD|Form checkout/ }).click();
+  await expect(page.locator("[data-form-lock=digital]")).toContainText("Form digital (terkunci)");
+  await expect(page.getByRole("combobox", { name: "Jenis form" })).toHaveCount(0);
+  await page.goto(`${STORE}/admin/products`);
+  await page.waitForLoadState("networkidle");
+  await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  await page.locator('button[aria-label="Aksi produk E-book Resep Nusantara"]:visible').first().click();
+  await page.getByRole("menuitem", { name: "Embed checkout form" }).click();
+  const embedDialog = page.getByRole("dialog");
+  const snippet = embedDialog.getByLabel("adsbook.id widget embed");
+  await expect(snippet).not.toHaveValue("", { timeout: 15_000 });
+  await expect(embedDialog.locator("[data-form-lock=digital]")).toContainText("Form digital (terkunci)");
+  await expect(embedDialog.getByRole("combobox", { name: "Mode form" })).toHaveCount(0);
+  const frameSrc = (await snippet.inputValue()).match(/<iframe[^>]+src="([^"]+)"/)![1].replace(/&amp;/g, "&");
+  expect(await (await page.request.get(frameSrc)).text(), "the pasted frame is the digital checkout").toContain('data-resolved-mode="digital"');
+  await embedDialog.screenshot({ path: "test-results/embed-dialog-digital.png" });
+  await page.keyboard.press("Escape");
+
   // 9. Refunded: the access closes again.
   const refunded = await adminFetch(page, `/api/admin/orders/${encodeURIComponent(orderNumber)}`, "PATCH", { payment_status: "refunded", shipping_status: "cancelled" });
   expect(refunded.status, JSON.stringify(refunded.json)).toBe(200);

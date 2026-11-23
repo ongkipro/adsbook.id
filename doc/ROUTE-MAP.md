@@ -306,7 +306,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-209 modules under `src/lib` and `src/platform`; 10 that no test imports.
+210 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -336,6 +336,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `catalog-feed` | 10 | — | — | 4 | `/produk/[slug]` `/[slug]` `/full-form` `/geoipform` `/hybrid-form` `/middle-form` `/feed/google-catalog.xml` `/feed/meta-catalog.xml` `/feed/tiktok-catalog.xml` `/api/form-config` `/api/v1/products` `/api/v1/products/[slug]` |
 | `catalog-page-size` | 1 | — | — | **none** | — |
 | `catalog` | 3 | `product_variants` `products` `stores` | — | 3 | `/` `/404` `/llms.txt` `/produk` `/produk/[slug]` `/thanks` `/sitemap` `/[slug]` `/embed/form` `/full-form` `/geoipform` `/hybrid-form` `/middle-form` `/feed/google-catalog.xml` `/feed/meta-catalog.xml` `/feed/tiktok-catalog.xml` `/sitemap.xml` `/api/form-config` `/api/v1/products` `/api/v1/products/[slug]` `/admin/ads/utm` |
+| `checkout-forms` | 7 | — | — | 1 | — |
 | `checkout-navigation` | 2 | — | — | 1 | — |
 | `click-ids` | 19 | — | — | 6 | `/api/meta-event` `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/tiktok-event` `/api/v1/checkout` `/api/v1/tracking/events` |
 | `client-image` | 3 | — | — | 1 | — |

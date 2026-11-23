@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DIGITAL_FORM, PHYSICAL_FORM_MODES, physicalFormMode } from "../../lib/checkout-forms";
 import {
   ArrowDown,
   ArrowUp,
@@ -15,6 +16,7 @@ import {
   Image,
   List,
   Type,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
@@ -42,8 +44,12 @@ type Product = {
   category?: string;
   image_url?: string | null;
   is_active?: boolean;
+  product_type?: "physical" | "digital";
   variants?: Variant[];
 };
+
+// The forms on offer come from src/lib/checkout-forms.ts: a digital product's
+// form is locked to the digital checkout; a physical product picks one of three.
 
 type FormConfig = {
   mode?: "hybrid" | "middle" | "full";
@@ -582,6 +588,7 @@ export default function LandingPageEditor({ landingPageId }: Props) {
                                 {/* The price rides the second line so a range never squeezes the title. */}
                                 <div className="truncate text-xs text-slate-500">
                                   <span className="font-medium text-slate-700 tabular-nums">{priceLabel}</span>
+                                  {p.product_type === "digital" ? " · Digital" : " · Fisik"}
                                   {p.category && <span className="capitalize"> · {p.category}</span>}
                                   <span> · {p.variants?.length || 0} varian</span>
                                 </div>
@@ -612,7 +619,7 @@ export default function LandingPageEditor({ landingPageId }: Props) {
                         {selectedProduct.title}
                       </div>
                       <div className="truncate text-slate-500">
-                        <span className="font-mono">/{selectedProduct.slug}</span> · {selectedProduct.variants?.length || 0} varian aktif
+                        <span className="font-mono">/{selectedProduct.slug}</span> · {selectedProduct.product_type === "digital" ? "Digital" : "Fisik"} · {selectedProduct.variants?.length || 0} varian aktif
                       </div>
                     </div>
                   </div>
@@ -908,27 +915,38 @@ export default function LandingPageEditor({ landingPageId }: Props) {
                           <div className="space-y-3">
                             {isEditing ? (
                               <div className="space-y-2 text-xs">
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-600">Layout Mode</label>
-                                  <Select
-                                    value={section.form_config?.mode || "hybrid"}
-                                    onValueChange={(value) => {
-                                      if (!value) return;
-                                      updateSection(section.id, {
-                                        form_config: { ...section.form_config, mode: value },
-                                      });
-                                    }}
-                                  >
-                                    <SelectTrigger >
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="hybrid">Hybrid (Accordion Varian Auto-detect)</SelectItem>
-                                      <SelectItem value="middle">Middle (Form Ringkas Instant)</SelectItem>
-                                      <SelectItem value="full">Full (Form Detail Lengkap)</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+                                {selectedProduct?.product_type === "digital" ? (
+                                  <div data-form-lock="digital" className="rounded-lg border border-blue-200 bg-blue-50/70 p-3 text-blue-950">
+                                    <p className="flex items-center gap-1.5 text-xs font-semibold"><Lock className="size-3.5" aria-hidden="true" />{DIGITAL_FORM.label}</p>
+                                    <p className="mt-1 text-xs leading-5 text-blue-900/80">{DIGITAL_FORM.hint}</p>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <label className="text-xs font-semibold text-slate-600">Jenis form (produk fisik)</label>
+                                    <Select
+                                      items={Object.fromEntries(PHYSICAL_FORM_MODES.map((option) => [option.value, option.label]))}
+                                      value={section.form_config?.mode || "hybrid"}
+                                      onValueChange={(value) => {
+                                        if (!value) return;
+                                        updateSection(section.id, {
+                                          form_config: { ...section.form_config, mode: value as FormConfig["mode"] },
+                                        });
+                                      }}
+                                    >
+                                      <SelectTrigger aria-label="Jenis form">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {PHYSICAL_FORM_MODES.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                                      {physicalFormMode(section.form_config?.mode).hint}
+                                    </p>
+                                  </div>
+                                )}
 
                                 <div>
                                   <label className="text-xs font-semibold text-slate-600">Varian Default</label>
@@ -974,9 +992,14 @@ export default function LandingPageEditor({ landingPageId }: Props) {
                                 <div className="flex items-center gap-2">
                                   <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
                                   <div>
-                                    <span className="font-semibold">Native Form Checkout COD</span>
+                                    <span className="font-semibold">
+                                      {selectedProduct?.product_type === "digital" ? "Form checkout digital" : "Form checkout COD"}
+                                    </span>
                                     <div className="text-xs text-emerald-700">
-                                      Mode: {section.form_config?.mode || "hybrid"} • Anchor: #checkout-form
+                                      {selectedProduct?.product_type === "digital"
+                                        ? "Digital (terkunci)"
+                                        : physicalFormMode(section.form_config?.mode).label}{" "}
+                                      • Anchor: #checkout-form
                                     </div>
                                   </div>
                                 </div>
