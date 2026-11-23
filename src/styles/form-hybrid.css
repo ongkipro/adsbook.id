@@ -3,7 +3,7 @@
 [data-hybrid-form-root],
 [data-middle-form-root],
 [data-digital-form-root] {
-  color: #1a1a1a;
+  color: var(--sf-ink);
   /* Ink for text, brand blue for the one action (ADR-019, amended 2026-11-17):
      --sf-accent carries every selected / focused / primary control, a pale
      tint of it marks what is chosen, and empty fields are plain white with a
@@ -20,9 +20,10 @@
   /* An empty input is white; a filled one takes --sf-accent-soft, so a buyer
      can still see at a glance which fields are waiting. */
   --sf-field-empty: #ffffff;
+  /* Field frame, alternate fill and hairline come from the storefront tokens
+     (storefront.css); only the field's own fills are declared here. */
   --sf-field-border: #c7c7c7;
-  --sf-surface-alt: #f7f7f7;
-  --sf-line: #e3e3e3;
+  --sf-surface-alt: var(--sf-surface);
 }
 /* One spacing system (owner, 2026-11-23: "presisikan"): 16px side inset
    (the wrappers' px-4), 28px between blocks, 12px between a block's heading
@@ -60,7 +61,7 @@
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.01em;
-  color: #111111;
+  color: var(--sf-ink);
 }
 .section-title::before {
   content: '';
@@ -77,7 +78,7 @@
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.45;
-  color: #555555;
+  color: var(--sf-text);
 }
 .variant-group,
 .field-grid,
@@ -96,14 +97,14 @@
   display: flex;
   gap: 0.65rem;
   padding: 0.65rem 0.85rem;
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--sf-line);
   border-radius: 0.375rem;
   background: #ffffff;
   transition: 0.18s ease;
 }
 .simple-variant-copy {
   padding: 0.75rem 0.875rem;
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--sf-line);
   border-radius: 0.375rem;
   background: #ffffff;
   box-shadow: none;
@@ -112,9 +113,9 @@
   width: 1.1rem;
   height: 1.1rem;
   border-radius: 999px;
-  /* #E5E5E5 sat at 1.05:1 on the row fill - invisible, and this ring is now the
-     primary selection signal. #767676 clears the 3:1 floor for controls. */
-  border: 2px solid #767676;
+  /* var(--sf-line) sat at 1.05:1 on the row fill - invisible, and this ring is now the
+     primary selection signal. var(--sf-muted) clears the 3:1 floor for controls. */
+  border: 2px solid var(--sf-muted);
   margin-top: 0.12rem;
   flex: 0 0 auto;
 }
@@ -162,7 +163,7 @@
   width: 0.28rem;
   height: 0.28rem;
   border-radius: 999px;
-  background: #E5E5E5;
+  background: var(--sf-line);
   flex: 0 0 auto;
   align-self: center;
 }
@@ -172,7 +173,7 @@
   /* 600 at rest so the checked rule's 700 is an actual step, not a no-op. */
   font-weight: 600;
   line-height: 1.3;
-  color: #111111;
+  color: var(--sf-ink);
 }
 .variant-price-row {
   margin-top: 0.08rem;
@@ -183,16 +184,16 @@
 .variant-price {
   font-size: 0.9375rem;
   font-weight: 700;
-  color: #111111;
+  color: var(--sf-ink);
   line-height: 1.1;
 }
 .variant-compare {
   font-size: 0.75rem;
-  /* #555555, not #767676: a selected variant's card takes --sf-accent-soft,
+  /* var(--sf-text), not var(--sf-muted): a selected variant's card takes --sf-accent-soft,
      and the lighter grey measures 4.1:1 on it — under the 4.5 AA floor. The
      price a customer is comparing against is the wrong thing to make hard to
-     read. #767676 stays where it sits on white, which is everywhere else. */
-  color: #555555;
+     read. var(--sf-muted) stays where it sits on white, which is everywhere else. */
+  color: var(--sf-text);
   text-decoration: line-through;
 }
 .simple-variant-price-row {
@@ -235,7 +236,7 @@
      rest of the checkout uses, so a buyer can see at a glance which fields are
      still waiting. */
   background: var(--sf-field-empty);
-  color: #1a1a1a;
+  color: var(--sf-ink);
   font: inherit;
   font-size: 1rem;
   font-weight: 400;
@@ -270,7 +271,7 @@
      as sitting on the floor. */
   top: 1.3rem;
   margin: 0;
-  color: #555555;
+  color: var(--sf-text);
   /* At rest the label is the only prompt in the field, so it is sized to be
      read like one — close to the value's own size. It shrinks to 0.625rem once
      the field is filled or focused, which is what makes the transition read as
@@ -303,7 +304,7 @@
 .form-field textarea:required ~ span::after {
   content: "*";
   margin-left: 0.2rem;
-  color: #dc2626;
+  color: var(--sf-danger);
   font-weight: 700;
 }
 .form-field input:focus ~ label,
@@ -340,12 +341,12 @@
 }
 .form-field input.field-invalid ~ label,
 .form-field textarea.field-invalid ~ label {
-  color: #b42318;
+  color: var(--sf-danger);
 }
 .field-grid small {
   display: block;
   margin-top: 0.35rem;
-  color: #555555;
+  color: var(--sf-text);
   font-weight: 400;
   font-size: 0.75rem;
 }
@@ -357,7 +358,7 @@
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.45;
-  color: #d92d20;
+  color: var(--sf-danger);
   animation: fieldFeedbackIn 0.18s ease-out;
 }
 .field-feedback::before {
@@ -370,8 +371,8 @@
   margin-top: 0.1rem;
   margin-right: 0.45rem;
   border-radius: 999px;
-  background: #fee4e2;
-  color: #d92d20;
+  background: var(--sf-danger-soft);
+  color: var(--sf-danger);
   font-size: 0.75rem;
   font-weight: 700;
   flex: 0 0 auto;
@@ -383,7 +384,7 @@
 .field-grid textarea.field-invalid,
 .form-field input.field-invalid,
 .form-field textarea.field-invalid {
-  border-color: #dc2626 !important;
+  border-color: var(--sf-danger) !important;
   background: var(--sf-field) !important;
   box-shadow: none !important;
 }
@@ -418,17 +419,17 @@
 .district-help {
   display: block;
   margin-top: 0.1rem;
-  color: #555555;
+  color: var(--sf-text);
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.45;
 }
 .district-help[data-tone='error'] {
-  color: #d92d20;
+  color: var(--sf-danger);
   font-weight: 600;
 }
 .district-help[data-tone='success'] {
-  color: #111111;
+  color: var(--sf-ink);
   font-weight: 600;
 }
 .district-help:empty {
@@ -453,7 +454,7 @@
   gap: 0.75rem;
 }
 .shipping-address-summary-head strong {
-  color: #767676;
+  color: var(--sf-muted);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -461,7 +462,7 @@
 }
 #shipping-address-line {
   margin: 0.65rem 0 0;
-  color: #111111;
+  color: var(--sf-ink);
   font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.45;
@@ -469,7 +470,7 @@
 }
 #district-picked-subtitle {
   margin: 0.2rem 0 0;
-  color: #555555;
+  color: var(--sf-text);
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.45;
@@ -509,12 +510,12 @@
   margin-top: 0.35rem;
   max-height: 16rem;
   overflow-y: auto;
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--sf-line);
   border-radius: 0.375rem;
   background: #fff;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
   scrollbar-width: thin;
-  scrollbar-color: #E5E5E5 transparent;
+  scrollbar-color: var(--sf-line) transparent;
   transform-origin: top center;
 }
 .district-list:not([hidden]) {
@@ -524,7 +525,7 @@
   width: 6px;
 }
 .district-list::-webkit-scrollbar-thumb {
-  background: #E5E5E5;
+  background: var(--sf-line);
   border-radius: 999px;
 }
 .district-item {
@@ -538,14 +539,14 @@
   width: 100%;
   border: 0;
   border-left: 3px solid transparent;
-  border-bottom: 1px solid #E5E5E5;
+  border-bottom: 1px solid var(--sf-line);
   background: #fff;
   padding: 0.55rem 0.85rem;
   margin: 0;
   text-align: left !important;
   font: inherit;
   cursor: pointer;
-  color: #111111;
+  color: var(--sf-ink);
   transition: all 0.12s ease;
 }
 .district-item:first-child {
@@ -570,7 +571,7 @@
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.01em;
-  color: #111111;
+  color: var(--sf-ink);
 }
 .district-item small {
   display: block;
@@ -579,7 +580,7 @@
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.25;
-  color: #555555;
+  color: var(--sf-text);
 }
 .district-item:hover,
 .district-item:focus-visible {
@@ -589,11 +590,11 @@
 }
 .district-item:active {
   transform: scale(0.99);
-  background: #F5F5F5;
+  background: var(--sf-surface);
 }
 .district-empty {
   padding: 0.65rem 0.85rem;
-  color: #555555;
+  color: var(--sf-text);
   font-size: 0.75rem;
   font-weight: 400;
 }
@@ -619,7 +620,7 @@
 .payment-block-anchor span {
   flex: 1;
   height: 1px;
-  background: #E5E5E5;
+  background: var(--sf-line);
 }
 .payment-block-anchor small {
   flex: 0 0 auto;
@@ -629,7 +630,7 @@
   line-height: 1;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #767676;
+  color: var(--sf-muted);
 }
 .payment-options {
   /* One framed card, Shopify-style: every method is a row inside it, divided by
@@ -700,7 +701,7 @@
 .payment-brand-mark--text {
   border-color: var(--sf-field-border);
   background: var(--sf-surface-alt);
-  color: #4a4a4a;
+  color: var(--sf-text);
   font-size: 0.75rem;
   /* was 900: the only 900 in the tree, and no Inter 900 is loaded, so it already
      resolved to the 700 face. Declaring what ships (A-32). */
@@ -712,7 +713,7 @@
   width: 0.95rem;
   height: 0.95rem;
   border-radius: 999px;
-  border: 2px solid #767676;
+  border: 2px solid var(--sf-muted);
   flex: 0 0 auto;
 }
 .payment-option-label {
@@ -720,7 +721,7 @@
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.25;
-  color: #111111;
+  color: var(--sf-ink);
   letter-spacing: -0.01em;
 }
 .payment-option-desc {
@@ -728,7 +729,7 @@
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.4;
-  color: #555555;
+  color: var(--sf-text);
 }
 .payment-option:hover .payment-option-copy,
 .payment-option input:focus-visible + .payment-option-copy {
@@ -745,7 +746,7 @@
   background: radial-gradient(circle, var(--sf-accent) 0 45%, #ffffff 46% 100%);
 }
 .payment-option input:checked + .payment-option-copy .payment-option-label {
-  color: #111111;
+  color: var(--sf-ink);
 }
 .payment-group {
   border: 0;
@@ -786,7 +787,7 @@
   width: 1rem;
   height: 1rem;
   flex: 0 0 auto;
-  color: #555555;
+  color: var(--sf-text);
   transition: transform 0.18s ease;
 }
 .payment-group-head[aria-expanded='true'] .payment-group-caret {
@@ -797,7 +798,7 @@
   background: radial-gradient(circle, var(--sf-accent) 0 45%, #ffffff 46% 100%);
 }
 .payment-group.is-selected .payment-group-head .payment-option-label {
-  color: #111111;
+  color: var(--sf-ink);
 }
 .payment-group-body {
   display: grid;
@@ -841,7 +842,7 @@
   display: grid;
   gap: 0;
   overflow: hidden;
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--sf-line);
   border-radius: 0.5rem;
   background: #ffffff;
   box-shadow: none;
@@ -853,22 +854,22 @@
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.55rem 0.85rem;
-  color: #555555;
+  color: var(--sf-text);
   /* Dashed rather than solid: it divides the rows without adding another solid
      rule beside the card frame. */
-  border-bottom: 1px dashed #E5E5E5;
+  border-bottom: 1px dashed var(--sf-line);
 }
 .summary-card > .summary-row span {
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.3;
-  color: #555555;
+  color: var(--sf-text);
 }
 .summary-card > .summary-row strong {
   font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.25;
-  color: #111111;
+  color: var(--sf-ink);
   text-align: right;
   /* Proportional digits make a stacked column of Rp figures ragged; tabular
      ones line the thousands up. */
@@ -908,7 +909,7 @@
      right column - quieter than the product name, but still ink. */
   font-size: 0.75rem !important;
   font-weight: 600 !important;
-  color: #111111 !important;
+  color: var(--sf-ink) !important;
   line-height: 1.2 !important;
 }
 .summary-price-figures {
@@ -929,7 +930,7 @@
 }
 #summary-compare {
   font-weight: 400 !important;
-  color: #767676 !important;
+  color: var(--sf-muted) !important;
   text-decoration: line-through;
 }
 .total-box {
@@ -948,14 +949,14 @@
   font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.15;
-  color: #111111;
+  color: var(--sf-ink);
 }
 .total-box small {
   display: block;
   margin-top: 0.1rem;
   font-size: 0.75rem;
   line-height: 1.2;
-  color: #555555;
+  color: var(--sf-text);
   font-weight: 600;
 }
 .total-box-side {
@@ -1042,10 +1043,10 @@
    An incomplete form looks ready (owner, 2026-11-23): the tap names the
    missing field under it. */
 .submit-main[data-state='disabled'] {
-  background: #E5E5E5 !important;
-  border-color: #E5E5E5 !important;
+  background: var(--sf-line) !important;
+  border-color: var(--sf-line) !important;
   box-shadow: none !important;
-  color: #555555 !important;
+  color: var(--sf-text) !important;
   opacity: 1;
   cursor: not-allowed;
 }
@@ -1075,10 +1076,10 @@
 .form-error {
   margin: 0;
   padding: 0.72rem 0.85rem;
-  border: 1px solid #f3d0cc;
+  border: 1px solid var(--sf-danger-line);
   border-radius: 0.375rem;
-  background: #fef3f2;
-  color: #b42318;
+  background: var(--sf-danger-soft);
+  color: var(--sf-danger);
   font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.45;
@@ -1097,16 +1098,16 @@
   gap: 0.34rem;
   min-height: 3.5rem;
   padding: 0.68rem 0.4rem;
-  color: #555555;
+  color: var(--sf-text);
   text-align: center;
 }
 .trust-strip span + span {
-  border-left: 1px solid #E5E5E5;
+  border-left: 1px solid var(--sf-line);
 }
 .trust-icon {
   width: 1.08rem;
   height: 1.08rem;
-  stroke: #555555;
+  stroke: var(--sf-text);
   fill: none;
   stroke-width: 1.85;
   stroke-linecap: round;
@@ -1136,8 +1137,8 @@
 [data-digital-form-root] {
   /* The frame of the field being typed in. Ink, not the accent: an orange frame
      reads as the red error frame; the accent stays in the ring around it. */
-  --sf-focus-frame: #1a1a1a;
-  --sf-valid: #15803d;
+  --sf-focus-frame: var(--sf-ink);
+  --sf-valid: var(--sf-success);
   --sf-valid-border: rgba(21, 128, 61, 0.45);
   --sf-invalid-ring: rgba(220, 38, 38, 0.18);
 }
@@ -1185,7 +1186,7 @@
 .field-grid textarea.field-invalid:focus,
 .form-field input.field-invalid:focus,
 .form-field textarea.field-invalid:focus {
-  border-color: #dc2626 !important;
+  border-color: var(--sf-danger) !important;
   box-shadow: 0 0 0 3px var(--sf-invalid-ring) !important;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1194,7 +1195,7 @@
     transition: none;
   }
 }
-/* Variant choice, same family as the fields. The row's hairline was #E5E5E5,
+/* Variant choice, same family as the fields. The row's hairline was var(--sf-line),
    1.05:1 on the canvas and gone on most phones; it now takes the field
    border, darkens on hover, and the chosen row doubles its ink edge with an
    inset shadow (2px to the eye, nothing moves). The radio was `display:none`,
@@ -1222,7 +1223,7 @@
     background-color 0.15s ease;
 }
 .variant-option:hover input:not(:checked) + .variant-copy {
-  border-color: #8a8a8a;
+  border-color: var(--sf-muted);
 }
 .variant-option input:checked + .variant-copy,
 .simple-variant-option input:checked + .simple-variant-copy {

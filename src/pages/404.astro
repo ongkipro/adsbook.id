@@ -22,20 +22,20 @@ Astro.response.status = 404;
   description={`Maaf, halaman ${Astro.locals.tenant.name} yang Anda cari tidak ditemukan. Kembali ke beranda atau katalog produk.`}
   noindex={true}
 >
-  <main id="konten-utama" class="not-found-page min-h-screen bg-[#FAFAFA] px-5 py-12 text-[#111111]">
+  <main id="konten-utama" class="min-h-screen bg-white px-4 py-12 text-sf-ink">
     <section class="mx-auto max-w-[480px] py-6">
       <div class="text-center">
         <div
-          class="not-found-mark relative mx-auto flex h-[92px] w-[92px] items-center justify-center rounded-full bg-white"
+          class="relative mx-auto flex h-[92px] w-[92px] items-center justify-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--sf-line)]"
         >
-          <span class="text-[34px] font-semibold tracking-[-0.06em] text-[#111111]">404</span>
+          <span class="text-[34px] font-semibold tracking-[-0.06em] text-sf-ink">404</span>
         </div>
 
-        <h1 class="mt-5 text-2xl font-bold leading-tight tracking-[-0.02em] text-[#111111]">
+        <h1 class="mt-5 text-2xl font-bold leading-tight tracking-[-0.02em] text-sf-ink">
           Halaman tidak ditemukan
         </h1>
 
-        <p class="mx-auto mt-2 max-w-[340px] text-sm leading-6 text-[#555555]">
+        <p class="mx-auto mt-2 max-w-[340px] text-sm leading-6 text-sf-text">
           Link yang Anda buka mungkin sudah dipindahkan atau produknya tidak dijual lagi.
         </p>
       </div>
@@ -44,36 +44,36 @@ Astro.response.status = 404;
         <a
           href="/"
           title={`Kembali ke beranda ${Astro.locals.tenant.name}`}
-          class="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[var(--sf-accent,#2563EB)] px-5 text-[15px] font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]"
+          class="inline-flex min-h-12 items-center justify-center gap-2 rounded-sf bg-sf-accent px-5 text-[15px] font-semibold text-white transition-colors hover:bg-sf-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink"
         >
           <Icon name="lucide:home" class="h-4 w-4" aria-hidden="true" />
           <span>Kembali ke beranda</span>
         </a>
       </div>
 
-      <section class="mt-10 border-t border-[#E5E5E5] pt-6" aria-labelledby="produk-terkait-title">
+      <section class="mt-10 border-t border-sf-line pt-6" aria-labelledby="produk-terkait-title">
         <div class="flex items-end justify-between gap-4">
           <div>
-            <h2 id="produk-terkait-title" class="text-lg font-bold tracking-[-0.01em] text-[#111111]">
+            <h2 id="produk-terkait-title" class="text-lg font-bold tracking-[-0.01em] text-sf-ink">
               Mungkin ini yang Anda cari
             </h2>
           </div>
           <a
             href="/produk"
             title={`Lihat semua produk ${Astro.locals.tenant.name}`}
-            class="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-[var(--sf-accent,#2563EB)] underline-offset-4 hover:underline"
+            class="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-sf-accent underline-offset-4 hover:underline"
           >
             Lihat semua
           </a>
         </div>
 
-        <div class="mt-4 divide-y divide-[#E5E5E5]">
+        <div class="mt-4 divide-y divide-sf-line">
           {
             relatedProducts.map((product, index) => (
               <a
                 href={product.href}
                 title={`Lihat detail produk ${product.name}`}
-                class="related-product group grid grid-cols-[58px_1fr_auto] items-center gap-3 py-3 first:pt-0 last:pb-0"
+                class="group grid grid-cols-[58px_1fr_auto] items-center gap-3 py-3 first:pt-0 last:pb-0"
                 style={`animation-delay: ${index * 70}ms`}
               >
                 <img
@@ -87,12 +87,12 @@ Astro.response.status = 404;
                   decoding="async"
                 />
                 <div class="min-w-0">
-                  <p class="truncate text-[14px] font-semibold text-[#111111]">{product.name}</p>
-                  <p class="mt-1 line-clamp-1 text-[12px] leading-5 text-[#555555]">{product.category}</p>
+                  <p class="truncate text-[14px] font-semibold text-sf-ink">{product.name}</p>
+                  <p class="mt-1 line-clamp-1 text-[12px] leading-5 text-sf-text">{product.category}</p>
                 </div>
                 <Icon
                   name="lucide:arrow-right"
-                  class="h-4 w-4 text-[#111111] transition-transform duration-200 group-hover:translate-x-0.5"
+                  class="h-4 w-4 text-sf-ink transition-transform duration-200 group-hover:translate-x-0.5"
                   aria-hidden="true"
                 />
               </a>
@@ -103,89 +103,4 @@ Astro.response.status = 404;
     </section>
   </main>
 
-  <style>
-    .not-found-page {
-      /* Was a green radial tint over a three-stop gradient - the last colour
-         cast on the public surface, and the gradient collapsed to white on
-         white once the neutrals were unified. */
-      background: #ffffff;
-    }
-
-    .not-found-mark {
-      animation: float-soft 4.8s ease-in-out infinite;
-      box-shadow: inset 0 0 0 1px #E5E5E5;
-    }
-
-    .not-found-mark::before,
-    .not-found-mark::after {
-      content: '';
-      position: absolute;
-      border-radius: 999px;
-      background: rgba(27, 94, 32, 0.12);
-      transform: translateZ(0);
-    }
-
-    .not-found-mark::before {
-      width: 10px;
-      height: 10px;
-      margin-left: -82px;
-      margin-top: -28px;
-      animation: dot-drift 5.2s ease-in-out infinite;
-    }
-
-    .not-found-mark::after {
-      width: 7px;
-      height: 7px;
-      margin-left: 76px;
-      margin-top: 34px;
-      background: rgba(249, 168, 37, 0.3);
-      animation: dot-drift 4.4s ease-in-out infinite reverse;
-    }
-
-    .related-product {
-      opacity: 0;
-      transform: translateY(8px);
-      animation: list-in 520ms ease forwards;
-    }
-
-    @keyframes float-soft {
-      0%,
-      100% {
-        transform: translateY(0);
-      }
-      50% {
-        transform: translateY(-6px);
-      }
-    }
-
-    @keyframes dot-drift {
-      0%,
-      100% {
-        transform: translate3d(0, 0, 0);
-      }
-      50% {
-        transform: translate3d(0, -8px, 0);
-      }
-    }
-
-    @keyframes list-in {
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .not-found-mark,
-      .not-found-mark::before,
-      .not-found-mark::after,
-      .related-product {
-        animation: none;
-      }
-      .related-product {
-        opacity: 1;
-        transform: none;
-      }
-    }
-  </style>
 </BaseLayout>

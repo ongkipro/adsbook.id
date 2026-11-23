@@ -17,7 +17,7 @@ import SiteBrand from './SiteBrand.astro';
     {/* The store's own site is its official store (owner decision
         2026-10-31). A solid blue badge-check, drawn inline: the icon subset is
         for line icons. */}
-    <p class="-mt-1.5 flex items-center gap-1 text-xs font-semibold leading-4 text-[#555555]">
+    <p class="-mt-1.5 flex items-center gap-1 text-xs font-semibold leading-4 text-sf-text">
       <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
         <path fill="#1D6FEB" d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/>
         <path fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m8.5 12.2 2.4 2.4 4.6-4.9"/>
@@ -27,6 +27,6 @@ import SiteBrand from './SiteBrand.astro';
   </div>
   <div
     aria-hidden="true"
-    class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,#E5E5E5_20%,#E5E5E5_80%,transparent)]"
+    class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,var(--sf-line)_20%,var(--sf-line)_80%,transparent)]"
   ></div>
 </header>
