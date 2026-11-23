@@ -1,8 +1,12 @@
 ---
+import AnnouncementBar from '../home/AnnouncementBar.astro';
+import FeaturedProducts from '../home/FeaturedProducts.astro';
 import HeroSection from '../home/HeroSection.astro';
+import HowToOrder from '../home/HowToOrder.astro';
 import ProductsSection from '../home/ProductsSection.astro';
 import TrustStrip from '../shared/TrustStrip.astro';
 import type { TenantHomeContent } from '../../../lib/tenant-content';
+import type { HomeSectionId } from '../../../lib/storefront-theme';
 
 interface ProductCard {
   slug: string;
@@ -38,16 +42,31 @@ interface Props {
   trustSignals?: Array<{ icon: string; label: string; short: string }>;
   /** admin › Tema's catalogue heading; the published home content's otherwise. */
   catalogHeading?: { eyebrow: string; title: string; description: string };
+  /** Admin › Tema › Atur beranda: the seller's section order and the parts each needs. Absent = the theme's own order. */
+  layout?: {
+    order: readonly HomeSectionId[];
+    announcement: { text: string; href: string } | null;
+    featured: { title: string; products: ProductCard[] } | null;
+    howToOrder: Array<{ title: string; text: string }> | null;
+    categories: boolean;
+  };
 }
 
-const { content, products, heroSlides, sections, trustSignals = [], catalogHeading } = Astro.props;
+const { content, products, heroSlides, sections, trustSignals = [], catalogHeading, layout } = Astro.props;
+const order: readonly HomeSectionId[] = layout?.order ?? ['hero', 'trust', 'catalog'];
 ---
 
 <main id="konten-utama" class="overflow-x-hidden bg-white font-sans text-sf-ink antialiased">
   <div id="home" class="flex w-full flex-col">
-    {sections.hero && <HeroSection slides={heroSlides} highlights={content.heroHighlights} content={content.hero} />}
-    {trustSignals.length > 0 && <div class="px-4 pt-3"><TrustStrip signals={trustSignals} /></div>}
-    {sections.catalog && <ProductsSection products={products} heading={catalogHeading ?? content.catalog} />}
+    {order.map((id) => {
+      if (id === 'announcement') return layout?.announcement && <AnnouncementBar text={layout.announcement.text} href={layout.announcement.href} />;
+      if (id === 'hero') return sections.hero && heroSlides.length > 0 && <HeroSection slides={heroSlides} highlights={content.heroHighlights} content={content.hero} />;
+      if (id === 'trust') return trustSignals.length > 0 && <div class="px-4 pt-3"><TrustStrip signals={trustSignals} /></div>;
+      if (id === 'featured') return layout?.featured && <FeaturedProducts title={layout.featured.title} products={layout.featured.products} />;
+      if (id === 'catalog') return sections.catalog && <ProductsSection products={products} heading={catalogHeading ?? content.catalog} categories={layout?.categories ?? true} />;
+      if (id === 'howToOrder') return layout?.howToOrder && <HowToOrder steps={layout.howToOrder} />;
+      return null;
+    })}
     {/* Landing pages are not listed on the home page (Paduka, 2026-11-01):
         they live on /landing-page, reached from the header and footer
         "Halaman" link. `sections.landingPages` still parses for saved

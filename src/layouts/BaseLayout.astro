@@ -57,6 +57,8 @@ interface Props {
    * are paused. Every buyer-facing page leaves it at the default.
    */
   buyerTracking?: boolean;
+  /** Admin › Tema live preview only: the unsaved accent, already checked (UI-2). */
+  accentOverride?: string;
 }
 
 const {
@@ -75,6 +77,7 @@ const {
   itemList,
   preloadImages,
   buyerTracking = true,
+  accentOverride,
 } = Astro.props;
 // A store-wide PUBLIC_SITE_NOINDEX must not leave the meta saying "index"
 // beside the middleware's noindex header.
@@ -125,7 +128,7 @@ const preloadImageUrls =
 ---
 
 <!doctype html>
-<html lang={Astro.locals.tenant.locale} style={accentTokens(Astro.locals.tenant.themeColor) || undefined}>
+<html lang={Astro.locals.tenant.locale} style={accentTokens(accentOverride ?? Astro.locals.tenant.themeColor) || undefined}>
   <head>
     <meta charset="UTF-8" />
     <slot name="head" />

@@ -35,12 +35,14 @@ interface Props {
   asPage?: boolean;
   /** The first row is the LCP element on /produk. */
   eager?: boolean;
+  /** Admin › Tema: the category chips can be switched off on the homepage. */
+  categories?: boolean;
 }
 
-const { products, heading, asPage = false, eager = false } = Astro.props;
+const { products, heading, asPage = false, eager = false, categories: chipsOn = true } = Astro.props;
 // Chips only when they narrow something: one category is the whole list.
 const categories = [...new Set(products.map((product) => product.category).filter(Boolean))];
-const showChips = categories.length > 1;
+const showChips = chipsOn && categories.length > 1;
 const chipClass =
   'catalog-chip inline-flex min-h-10 shrink-0 items-center rounded-sf border border-sf-line bg-white px-3 text-sm text-sf-text transition-colors hover:border-sf-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink aria-pressed:border-sf-accent aria-pressed:bg-sf-accent-soft aria-pressed:font-semibold aria-pressed:text-sf-accent-strong';
 

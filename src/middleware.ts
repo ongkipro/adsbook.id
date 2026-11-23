@@ -504,7 +504,12 @@ export function createMiddleware(
   }
   const isEmbedForm =
     url.pathname === '/embed/form' || url.pathname === '/embed/form/';
-  const embedFrameAncestors = isEmbedForm
+  // Admin › Tema › Atur beranda frames `/?preview=home` from its own origin;
+  // the page renders preview settings only behind an admin session.
+  const isHomePreview = url.pathname === '/' && url.searchParams.get('preview') === 'home';
+  const embedFrameAncestors = isHomePreview
+    ? "frame-ancestors 'self'"
+    : isEmbedForm
     ? buildEmbedFrameAncestors(
         resolveEmbedAllowedOrigins(
           await loadStoredEmbedAllowedOrigins(identityDb),
@@ -619,7 +624,7 @@ export function createMiddleware(
   }
   const response = applySecurityHeaders(
     rendered,
-    isPrivate || isLoginPage || isEmbedForm,
+    isPrivate || isLoginPage || isEmbedForm || isHomePreview,
     embedFrameAncestors,
   );
 
