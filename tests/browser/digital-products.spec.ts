@@ -159,6 +159,21 @@ test("digital store: signup → menu without shipping → digital product → op
   const name = form.getByLabel("Nama lengkap");
   const phone = form.getByLabel("Nomor WhatsApp aktif");
   const email = form.getByLabel("Email (opsional)");
+  // A required field left empty turns red with its message; the optional email does not.
+  await name.focus();
+  await phone.focus();
+  await email.focus();
+  await email.blur();
+  await expect(form.locator(".field-feedback").filter({ hasText: "Maaf, nama Anda belum terisi." })).toBeVisible();
+  await expect(form.locator(".field-feedback").filter({ hasText: "Maaf, nomor WhatsApp Anda belum terisi." })).toBeVisible();
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  await expect(email).not.toHaveAttribute("aria-invalid", "true");
+  // The danger red (--sf-danger #C81E1E), once the border transition settles.
+  await expect(name).toHaveCSS("border-top-color", "rgb(200, 30, 30)");
+  await form.locator(".field-grid").screenshot({ path: "test-results/digital-form-empty-390.png" });
+  // Tapping the grey button with nothing filled marks every required field and focuses the first.
+  await pay.click({ force: true });
+  await expect(name).toBeFocused();
   await name.pressSequentially("Budi123 Pembeli");
   await expect(name).toHaveValue("Budi Pembeli");
   await phone.pressSequentially("08abc12-3456-7801");

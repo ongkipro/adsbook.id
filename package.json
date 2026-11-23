@@ -35,7 +35,8 @@
     "db:migrate:local": "wrangler d1 migrations apply OMS_DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply OMS_DB --remote",
     "platform-visuals": "node scripts/generate-platform-visuals.mjs",
-    "card-images": "node scripts/generate-card-derivatives.mjs"
+    "card-images": "node scripts/generate-card-derivatives.mjs",
+    "backfill:images": "node --experimental-strip-types scripts/backfill-image-copies.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.4.8",
