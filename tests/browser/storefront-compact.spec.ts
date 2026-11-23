@@ -153,6 +153,11 @@ test("order form: grey 'Pesan Sekarang' until the contact is complete, lit after
   });
   expect(geometry.insets, "one left/right inset for every row").toEqual(["16,16"]);
   expect(geometry.gaps, "one gap between blocks").toEqual([28]);
+  const fieldGaps = await form.evaluate((root) => {
+    const fields = [...root.querySelectorAll(".form-field")].filter((field) => (field as HTMLElement).offsetParent);
+    return [...new Set(fields.slice(1).map((field, index) => Math.round(field.getBoundingClientRect().top - fields[index].getBoundingClientRect().bottom)))];
+  });
+  expect(fieldGaps, "8px between fields").toEqual([8]);
   await form.screenshot({ path: "test-results/storefront-form-ready-390.png" });
 });
 
