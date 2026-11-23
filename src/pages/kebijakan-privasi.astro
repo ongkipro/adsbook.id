@@ -36,22 +36,22 @@ const title = firstHeading.replace('{nama_toko}', storeName) || 'Kebijakan Priva
 ---
 
 <BaseLayout title={withStoreName('Kebijakan Privasi', storeName)} description={`Cara ${storeName} memproses data Anda.`}>
-  <main id="konten-utama" class="min-h-screen bg-white text-[#111111]">
+  <main id="konten-utama" class="min-h-screen bg-white text-sf-ink">
     <PageIntro
       title={title}
       description={`Versi ${template.version} · ${template.date}`}
       breadcrumbs={[{ label: 'Beranda', href: '/' }, { label: 'Kebijakan Privasi', href: '/kebijakan-privasi' }]}
     />
-    <article class="legal px-4 pb-12 pt-2 text-[15px] leading-7 text-[#444444]" set:html={html} />
+    <article class="legal px-4 pb-12 pt-2 text-[15px] leading-7 text-sf-text" set:html={html} />
   </main>
 </BaseLayout>
 
 <style>
-  .legal :global(h2) { margin-top: 1.75rem; font-size: 1rem; font-weight: 700; color: #111111; }
-  .legal :global(h3) { margin-top: 1.25rem; font-weight: 600; color: #111111; }
+  .legal :global(h2) { margin-top: 1.75rem; font-size: 1rem; font-weight: 700; color: var(--sf-ink); }
+  .legal :global(h3) { margin-top: 1.25rem; font-weight: 600; color: var(--sf-ink); }
   .legal :global(p), .legal :global(ul), .legal :global(ol), .legal :global(blockquote) { margin-top: 0.5rem; }
   .legal :global(ul) { list-style: disc; padding-left: 1.25rem; }
   .legal :global(ol) { list-style: decimal; padding-left: 1.25rem; }
-  .legal :global(blockquote) { border-left: 3px solid #e5e5e5; padding-left: 0.75rem; color: #666666; }
+  .legal :global(blockquote) { border-left: 3px solid var(--sf-line); padding-left: 0.75rem; color: var(--sf-text); }
   .legal :global(mark) { background: #fff3c4; color: inherit; }
 </style>

@@ -15,15 +15,15 @@ const { signals, class: className = '' } = Astro.props;
 
 {signals.length > 0 && (
   <ul
-    class={`sf-trust grid gap-px overflow-hidden rounded-md border border-[#E7E7E9] bg-[#E7E7E9] ${className}`}
+    class={`sf-trust grid gap-px overflow-hidden rounded-sf border border-sf-line bg-sf-line ${className}`}
     style={`grid-template-columns: repeat(${signals.length}, minmax(0, 1fr))`}
     aria-label="Belanja di toko ini"
   >
     {signals.map((signal) => (
       <li class="flex min-h-12 items-center gap-2 bg-white px-2.5 py-2" title={signal.label}>
-        <Icon name={`lucide:${signal.icon}`} class="h-4 w-4 shrink-0 text-[var(--sf-accent,#2563EB)]" aria-hidden="true" />
+        <Icon name={`lucide:${signal.icon}`} class="h-4 w-4 shrink-0 text-sf-accent" aria-hidden="true" />
         <span class="sr-only">{signal.label}</span>
-        <span class="line-clamp-2 min-w-0 text-xs font-medium leading-4 text-[#333333]" aria-hidden="true">{signal.short}</span>
+        <span class="line-clamp-2 min-w-0 text-xs font-medium leading-4 text-sf-text" aria-hidden="true">{signal.short}</span>
       </li>
     ))}
   </ul>

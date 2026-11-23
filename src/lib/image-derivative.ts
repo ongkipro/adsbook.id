@@ -27,3 +27,17 @@ export function cardImageSrc(
   if (/-sm\.[a-z0-9]+$/i.test(trimmed)) return trimmed;
   return trimmed.replace(/(\.[a-z0-9]+)$/i, '-sm$1');
 }
+
+/**
+ * The home hero's sources (PageSpeed, 2026-11-23: the first slide is the LCP
+ * image and shipped a 1280 px, 203 KB original into a column at most 480 CSS
+ * px wide). A 1x screen takes the 480 px card derivative; 2x and up take the
+ * upload. Same fallback as `cardImageSrc`: a missing `-sm` serves the original.
+ */
+export function heroImageSources(url: string, derivatives: ReadonlySet<string> = CARD_DERIVATIVES): { src: string; srcset: string; sizes: string } {
+  const original = url?.trim() ?? '';
+  const small = cardImageSrc(original, derivatives);
+  const sizes = '(max-width: 480px) 100vw, 480px';
+  if (small === original) return { src: original, srcset: '', sizes };
+  return { src: small, srcset: `${small} 480w, ${original} 960w`, sizes };
+}

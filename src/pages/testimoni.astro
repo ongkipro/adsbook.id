@@ -13,7 +13,7 @@ import PageIntro from '../components/storefront/shared/PageIntro.astro';
     { name: 'Ulasan Pembeli', url: '/testimoni' },
   ]}
 >
-  <main id="konten-utama" class="min-h-screen bg-white text-[#111111]">
+  <main id="konten-utama" class="min-h-screen bg-white text-sf-ink">
     <PageIntro
       badge="Informasi"
       title="Ulasan Belum Tersedia"
@@ -22,13 +22,13 @@ import PageIntro from '../components/storefront/shared/PageIntro.astro';
     />
 
     <div class="mx-auto max-w-[480px] px-5 py-12 text-center">
-      <div class="rounded-xl border border-[#E5E5E5] bg-[#F5F5F5] p-8">
-        <h2 class="text-[15px] font-semibold text-[#111111]">Belum ada ulasan</h2>
-        <p class="mt-2 text-[13px] text-[#555555]">
+      <div class="rounded-sf-lg border border-sf-line bg-sf-surface p-8">
+        <h2 class="text-[15px] font-semibold text-sf-ink">Belum ada ulasan</h2>
+        <p class="mt-2 text-[13px] text-sf-text">
           Kami sedang mempersiapkan sistem baru untuk menampilkan ulasan pembeli yang terverifikasi.
         </p>
         <div class="mt-6">
-          <a href="/" class="inline-flex w-full items-center justify-center rounded-md bg-[var(--sf-accent,#2563EB)] px-6 py-2.5 text-[12px] font-semibold uppercase tracking-widest text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--sf-accent,#2563EB)] focus-visible:ring-offset-2">
+          <a href="/" class="inline-flex w-full items-center justify-center rounded-sf bg-[var(--sf-accent,#2563EB)] px-6 py-2.5 text-[12px] font-semibold uppercase tracking-widest text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--sf-accent,#2563EB)] focus-visible:ring-offset-2">
             Kembali ke Beranda
           </a>
         </div>

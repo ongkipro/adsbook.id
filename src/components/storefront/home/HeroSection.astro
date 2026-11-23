@@ -1,4 +1,5 @@
 ---
+import { heroImageSources } from '../../../lib/image-derivative';
 
 interface Slide {
   image: string;
@@ -38,13 +39,15 @@ const { slides } = Astro.props;
      never starts under prefers-reduced-motion. -->
 <section class="hero" aria-roledescription="carousel" aria-label="Produk unggulan" data-hero>
   <h1 class="sr-only">{Astro.locals.tenant.defaultTitle}</h1>
-  <div id="hero-track" class="hero-track flex snap-x snap-mandatory overflow-x-auto bg-[#F3F3F3]" aria-live="off">
+  <div id="hero-track" class="hero-track flex snap-x snap-mandatory overflow-x-auto bg-sf-surface" aria-live="off">
     {
       slides.map((slide, index) => {
         const body = (
           <>
             <img
-              src={slide.image}
+              src={heroImageSources(slide.image).src}
+              srcset={heroImageSources(slide.image).srcset || undefined}
+              sizes={heroImageSources(slide.image).srcset ? heroImageSources(slide.image).sizes : undefined}
               alt={`${slide.alt} - ${Astro.locals.tenant.name}`}
               width="600"
               height="600"

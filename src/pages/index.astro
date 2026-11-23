@@ -9,6 +9,7 @@ import { resolveAuthSecret } from '../lib/auth-secret';
 import { resolveStorefrontTemplate } from '../lib/storefront-template';
 import { dailySeed, heroSummary, pickHeroProducts } from '../lib/daily-rotation';
 import { homeDescription, homeTitle } from '../lib/home-seo';
+import { heroImageSources } from '../lib/image-derivative';
 import { getStorePublicFacts, storefrontTrustSignals } from '../lib/public-store';
 import { loadThemeSettings } from '../lib/storefront-theme';
 
@@ -114,7 +115,9 @@ const itemList = {
   title={homepageTitle}
   description={homepageDescription}
   image={heroSlides[0]?.image || undefined}
-  preloadImages={themeSettings.sections.banner ? heroSlides[0]?.image : undefined}
+  preloadImages={themeSettings.sections.banner && heroSlides[0]?.image
+    ? (({ src, srcset, sizes }) => (srcset ? { srcset, imagesizes: sizes } : src))(heroImageSources(heroSlides[0].image))
+    : undefined}
   itemList={ready ? itemList : undefined}
   noindex={bannerPreview.granted}
   buyerTracking={!bannerPreview.granted}
@@ -128,13 +131,13 @@ const itemList = {
   {
       unavailable || !content || !template ? (
       <section class="mx-auto flex min-h-[70vh] max-w-2xl items-center px-6 py-20 text-center">
-        <div class="w-full rounded-3xl border border-slate-200 bg-white p-8 md:p-12" role="alert">
+        <div class="w-full rounded-sf-lg border border-slate-200 bg-white p-8 md:p-12" role="alert">
           <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-600">Storefront tidak tersedia</p>
           <h1 class="mt-3 text-3xl font-bold tracking-tight text-slate-950">Halaman belum dapat ditampilkan</h1>
           <p class="mx-auto mt-4 max-w-lg text-sm leading-7 text-slate-600">
             Konfigurasi storefront sedang tidak dapat dibaca. Silakan coba lagi beberapa saat lagi.
           </p>
-          <a href="/" class="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950">
+          <a href="/" class="mt-6 inline-flex min-h-11 items-center justify-center rounded-sf-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950">
             Coba lagi
           </a>
         </div>

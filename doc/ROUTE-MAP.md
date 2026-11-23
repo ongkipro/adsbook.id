@@ -34,7 +34,7 @@ under both headings wherever they are named; which database a statement meant is
 
 | Route | Methods | Auth | Roles | File | Modules | Store tables | Platform tables | Tests |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `/` | GET | public | — | `src/pages/index.astro` | `admin-session` `auth-secret` `catalog` `daily-rotation` `home-seo` `public-store` `storefront-template` `storefront-theme` `tenant-content` `tenant-database` | `admin_credentials` `admin_sessions` `courier_rules` `install_secrets` `product_variants` `products` `storefront_content` `storefront_templates` `stores` | — | `lib/admin-session.test.ts` `lib/auth-secret.test.ts` `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/daily-rotation.test.ts` `lib/home-banner.test.ts` `lib/home-seo.test.ts` `lib/public-store.test.ts` `lib/storefront-template.test.ts` `lib/storefront-theme.test.ts` `lib/tenant-content.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
+| `/` | GET | public | — | `src/pages/index.astro` | `admin-session` `auth-secret` `catalog` `daily-rotation` `home-seo` `image-derivative` `public-store` `storefront-template` `storefront-theme` `tenant-content` `tenant-database` | `admin_credentials` `admin_sessions` `courier_rules` `install_secrets` `product_variants` `products` `storefront_content` `storefront_templates` `stores` | — | `lib/admin-session.test.ts` `lib/auth-secret.test.ts` `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/daily-rotation.test.ts` `lib/home-banner.test.ts` `lib/home-seo.test.ts` `lib/image-derivative.test.ts` `lib/public-store.test.ts` `lib/storefront-template.test.ts` `lib/storefront-theme.test.ts` `lib/tenant-content.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
 | `/404` | GET | public | — | `src/pages/404.astro` | `catalog` `image-derivative` | `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/image-derivative.test.ts` `platform/two-tenants.test.ts` |
 | `/llms.txt` | GET | public | — | `src/pages/llms.txt.ts` | `catalog` `llms-txt` | `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/llms-txt.test.ts` `platform/two-tenants.test.ts` |
 | `/payment` | GET | public | — | `src/pages/payment.astro` | `format-idr` `payment-brand` `payment-display` | — | — | `lib/format-idr.test.ts` `lib/payment-brand.test.ts` `lib/payment-display.test.ts` |
@@ -375,7 +375,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `home-seo` | 2 | — | — | 1 | `/` |
 | `host-redirect` | 1 | — | — | 1 | — |
 | `html-escape` | 1 | — | — | 1 | — |
-| `image-derivative` | 1 | — | — | 1 | `/404` `/landing-page` |
+| `image-derivative` | 2 | — | — | 1 | `/` `/404` `/landing-page` |
 | `image-rules` | 12 | — | — | 1 | `/api/admin/media` `/api/admin/upload-r2` |
 | `insights-period` | 10 | — | — | 1 | — |
 | `insights-view` | 14 | — | — | 2 | — |

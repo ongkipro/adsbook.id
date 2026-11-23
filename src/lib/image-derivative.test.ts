@@ -39,3 +39,14 @@ test("a listed static image is swapped for its card twin; an unlisted one is lef
   );
   assert.equal(cardImageSrc("/images/landing/b/hero-product.webp", new Set()), "/images/landing/b/hero-product.webp");
 });
+
+test("the hero serves the 480 px derivative to a 1x screen and the upload to 2x, inside a 480 px column", async () => {
+  const { heroImageSources } = await import("./image-derivative.ts");
+  assert.deepEqual(heroImageSources("/assets/uploads/2026-11-17/a.webp", new Set()), {
+    src: "/assets/uploads/2026-11-17/a-sm.webp",
+    srcset: "/assets/uploads/2026-11-17/a-sm.webp 480w, /assets/uploads/2026-11-17/a.webp 960w",
+    sizes: "(max-width: 480px) 100vw, 480px",
+  });
+  // An outside or static image has no derivative: the original alone, no srcset.
+  assert.deepEqual(heroImageSources("https://cdn.example.test/b.jpg", new Set()), { src: "https://cdn.example.test/b.jpg", srcset: "", sizes: "(max-width: 480px) 100vw, 480px" });
+});

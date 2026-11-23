@@ -166,11 +166,11 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
 
     <!-- Offer: name, proof, price, the choices, and the way to order. -->
     <section class="px-4 pb-5 pt-4">
-      <h1 class="text-xl font-bold leading-snug tracking-[-0.02em] text-[#111111]">
+      <h1 class="text-xl font-bold leading-snug tracking-[-0.02em] text-sf-ink">
         {product.productName}
       </h1>
       {(hasAggregateRating || hasSoldCount) && (
-        <div class="mt-1.5 flex items-center gap-2 text-[13px] text-[#555555]">
+        <div class="mt-1.5 flex items-center gap-2 text-[13px] text-sf-text">
           {hasAggregateRating && (
             <span class="flex items-center gap-1">
               <RatingStars
@@ -178,7 +178,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
                 starClass="h-[13px] w-[13px]"
                 label={`Rating produk ${formattedRating} dari 5 bintang`}
               />
-              <span class="font-semibold text-[#111111]">{formattedRating}</span>
+              <span class="font-semibold text-sf-ink">{formattedRating}</span>
               <span>({reviewCount})</span>
             </span>
           )}
@@ -188,20 +188,20 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
       )}
 
       <div class="mt-3 flex flex-wrap items-baseline gap-x-2">
-        {hasPriceRange && <span class="text-sm text-[#555555]">Mulai</span>}
-        <span class="sf-num text-[26px] font-bold leading-none tracking-tight text-[#111111]">
+        {hasPriceRange && <span class="text-sm text-sf-text">Mulai</span>}
+        <span class="sf-num text-[26px] font-bold leading-none tracking-tight text-sf-ink">
           Rp{Math.round(displayPrice).toLocaleString('id-ID')}
         </span>
         {
           displayComparePrice > displayPrice && (
-            <span class="text-sm text-[#767676] line-through">
+            <span class="text-sm text-sf-muted line-through">
               Rp{Math.round(displayComparePrice).toLocaleString('id-ID')}
             </span>
           )
         }
         {
           displayDiscount > 0 && (
-            <span class="rounded-sm bg-[#FDECEC] px-1.5 py-0.5 text-xs font-semibold leading-5 text-[#C81E1E]">
+            <span class="rounded-sf-sm bg-sf-danger-soft px-1.5 py-0.5 text-xs font-semibold leading-5 text-sf-danger">
               {displayDiscount}%
             </span>
           )
@@ -209,12 +209,12 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
       </div>
 
       {(product.subheadline || product.description) && (
-        <p class="mt-3 text-sm leading-6 text-[#555555]">{product.subheadline || product.description}</p>
+        <p class="mt-3 text-sm leading-6 text-sf-text">{product.subheadline || product.description}</p>
       )}
 
       {product.variants.length > 1 && (
-        <p class="mt-3 text-sm text-[#111111]">
-          <span class="text-[#555555]">{product.variants.length} pilihan:</span> {product.variants.map((v) => v.label).join(', ')}
+        <p class="mt-3 text-sm text-sf-ink">
+          <span class="text-sf-text">{product.variants.length} pilihan:</span> {product.variants.map((v) => v.label).join(', ')}
         </p>
       )}
 
@@ -222,10 +222,10 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
     </section>
 
     {(product.description || product.benefits?.length || product.keyPoints?.length || product.idealFor?.length) && (
-      <section class="border-t-8 border-[#F3F3F3] px-4 py-5">
-        <h2 class="text-base font-bold text-[#111111]">Tentang produk</h2>
+      <section class="border-t-8 border-sf-surface px-4 py-5">
+        <h2 class="text-base font-bold text-sf-ink">Tentang produk</h2>
         {product.description && product.description !== product.subheadline && (
-          <div class="mt-2 space-y-2 text-sm leading-6 text-[#555555]">
+          <div class="mt-2 space-y-2 text-sm leading-6 text-sf-text">
             {descriptionBlocks(product.description).map((block) =>
               block.kind === 'p' ? (
                 <p>{block.text}</p>
@@ -233,7 +233,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
                 <ul class="space-y-1">
                   {block.items.map((item) => (
                     <li class="flex items-start gap-2.5">
-                      <span class="mt-2.5 h-1 w-1 shrink-0 bg-[#111111]" aria-hidden="true" />
+                      <span class="mt-2.5 h-1 w-1 shrink-0 bg-sf-ink" aria-hidden="true" />
                       <span class="min-w-0">{item}</span>
                     </li>
                   ))}
@@ -245,11 +245,11 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
 
         {product.benefits && product.benefits.length > 0 && (
           <div class="mt-5">
-            <h3 class="text-sm font-semibold text-[#111111]">Manfaat utama</h3>
+            <h3 class="text-sm font-semibold text-sf-ink">Manfaat utama</h3>
             <ul class="mt-2 space-y-2">
               {product.benefits.map((benefit) => (
-                <li class="flex items-start gap-2.5 text-sm leading-6 text-[#555555]">
-                  <Icon name="lucide:check" class="mt-1 h-4 w-4 shrink-0 text-[#15803D]" aria-hidden="true" />
+                <li class="flex items-start gap-2.5 text-sm leading-6 text-sf-text">
+                  <Icon name="lucide:check" class="mt-1 h-4 w-4 shrink-0 text-sf-success" aria-hidden="true" />
                   <span class="min-w-0">{benefit}</span>
                 </li>
               ))}
@@ -259,11 +259,11 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
 
         {product.keyPoints && product.keyPoints.length > 0 && (
           <div class="mt-5">
-            <h3 class="text-sm font-semibold text-[#111111]">Poin penting</h3>
+            <h3 class="text-sm font-semibold text-sf-ink">Poin penting</h3>
             <ul class="mt-2 space-y-2">
               {product.keyPoints.map((point) => (
-                <li class="flex items-start gap-2.5 text-sm leading-6 text-[#555555]">
-                  <span class="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#111111]" aria-hidden="true" />
+                <li class="flex items-start gap-2.5 text-sm leading-6 text-sf-text">
+                  <span class="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sf-ink" aria-hidden="true" />
                   <span class="min-w-0">{point}</span>
                 </li>
               ))}
@@ -273,10 +273,10 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
 
         {product.idealFor && product.idealFor.length > 0 && (
           <div class="mt-5">
-            <h3 class="text-sm font-semibold text-[#111111]">Cocok untuk</h3>
+            <h3 class="text-sm font-semibold text-sf-ink">Cocok untuk</h3>
             <ul class="mt-2 flex flex-wrap gap-2">
               {product.idealFor.map((item) => (
-                <li class="rounded-sm bg-[#F3F3F3] px-2.5 py-1 text-[13px] text-[#111111]">{item}</li>
+                <li class="rounded-sf-sm bg-sf-surface px-2.5 py-1 text-[13px] text-sf-ink">{item}</li>
               ))}
             </ul>
           </div>
@@ -286,40 +286,40 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
 
     {
       (hasAggregateRating || product.reviews.length > 0) && (
-        <section class="border-t-8 border-[#F3F3F3] px-4 py-5">
+        <section class="border-t-8 border-sf-surface px-4 py-5">
           <div class="flex items-baseline justify-between gap-3">
-            <h2 class="text-base font-bold text-[#111111]">Ulasan pembeli</h2>
+            <h2 class="text-base font-bold text-sf-ink">Ulasan pembeli</h2>
             {hasAggregateRating && (
-              <span class="text-sm text-[#555555]"><span class="font-semibold text-[#111111]">★ {formattedRating}</span> · {reviewCount} ulasan</span>
+              <span class="text-sm text-sf-text"><span class="font-semibold text-sf-ink">★ {formattedRating}</span> · {reviewCount} ulasan</span>
             )}
           </div>
 
           {product.reviews.length > 0 && (
             <ul class="mt-4 space-y-3">
               {product.reviews.map((review) => (
-                <li class="rounded-md border border-[#E7E7E9] p-4">
+                <li class="rounded-sf border border-sf-line p-4">
                   <div class="flex items-center gap-3">
                     <span
-                      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold uppercase text-[#111111]"
+                      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold uppercase text-sf-ink"
                       aria-hidden="true"
                     >
                       {review.name.charAt(0)}
                     </span>
                     <div class="min-w-0 flex-1">
-                      <p class="flex items-center gap-1.5 text-sm font-semibold text-[#111111]">
+                      <p class="flex items-center gap-1.5 text-sm font-semibold text-sf-ink">
                         <span class="truncate">{review.name}</span>
                         {review.verified && (
-                          <span class="inline-flex shrink-0 items-center gap-0.5 text-xs font-normal text-[#15803D]">
+                          <span class="inline-flex shrink-0 items-center gap-0.5 text-xs font-normal text-sf-success">
                             <Icon name="lucide:circle-check" class="h-3.5 w-3.5" aria-hidden="true" />
                             Pembeli terverifikasi
                           </span>
                         )}
                       </p>
-                      <p class="text-xs text-[#555555]">{[review.location, review.date].filter(Boolean).join(' · ')}</p>
+                      <p class="text-xs text-sf-text">{[review.location, review.date].filter(Boolean).join(' · ')}</p>
                     </div>
                   </div>
                   <RatingStars rating={review.rating} class="mt-2.5" starClass="h-3 w-3" />
-                  <p class="mt-1.5 text-sm leading-6 text-[#333333]">{review.comment}</p>
+                  <p class="mt-1.5 text-sm leading-6 text-sf-text">{review.comment}</p>
                 </li>
               ))}
             </ul>
@@ -329,7 +329,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
     }
 
     <!-- Direct order form -->
-    <section id="form-pemesanan" class="scroll-mt-16 border-t-8 border-[#F3F3F3] pb-2 pt-4">
+    <section id="form-pemesanan" class="scroll-mt-16 border-t-8 border-sf-surface pb-2 pt-4">
       <GeoIpResolvedForm mode={formContext.mode} province={formContext.province} productSlug={product.slug} embedded={true} />
     </section>
 
@@ -340,14 +340,14 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
     <!-- Sticky purchase bar. Hidden while the photo or the order form is on
          screen: over the photo it covers what the buyer came to look at, and
          over the form its button points at a form already in view. -->
-    <div id="sticky-purchase-bar" class="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full max-w-[480px] items-center justify-between gap-3 border-t border-[#EDEDED] bg-white/95 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300" style="transform: translateY(100%); opacity: 0; pointer-events: none;" inert>
+    <div id="sticky-purchase-bar" class="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full max-w-[480px] items-center justify-between gap-3 border-t border-sf-line bg-white/95 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300" style="transform: translateY(100%); opacity: 0; pointer-events: none;" inert>
       <div class="min-w-0">
-        <p class="truncate text-xs text-[#555555]">{product.productName}</p>
-        <p class="sf-num text-base font-bold leading-tight text-[#111111]">{hasPriceRange && <span class="text-xs font-normal text-[#555555]">Mulai </span>}Rp{Math.round(displayPrice).toLocaleString('id-ID')}</p>
+        <p class="truncate text-xs text-sf-text">{product.productName}</p>
+        <p class="sf-num text-base font-bold leading-tight text-sf-ink">{hasPriceRange && <span class="text-xs font-normal text-sf-text">Mulai </span>}Rp{Math.round(displayPrice).toLocaleString('id-ID')}</p>
       </div>
       <a
         href="#form-pemesanan"
-        class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-[var(--sf-accent,#2563EB)] px-6 text-sm font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--sf-accent,#2563EB)]"
+        class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-sf bg-sf-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-sf-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-accent"
       >
         Beli sekarang
       </a>

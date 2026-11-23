@@ -42,7 +42,7 @@ const { products, heading, asPage = false, eager = false } = Astro.props;
 const categories = [...new Set(products.map((product) => product.category).filter(Boolean))];
 const showChips = categories.length > 1;
 const chipClass =
-  'catalog-chip inline-flex min-h-10 shrink-0 items-center rounded-md border border-[#E2E2E5] bg-white px-3 text-sm text-[#333333] transition-colors hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] aria-pressed:border-[var(--sf-accent,#2563EB)] aria-pressed:bg-[var(--sf-accent-soft,#EFF6FF)] aria-pressed:font-semibold aria-pressed:text-[var(--sf-accent-strong,#1D4ED8)]';
+  'catalog-chip inline-flex min-h-10 shrink-0 items-center rounded-sf border border-sf-line bg-white px-3 text-sm text-sf-text transition-colors hover:border-sf-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink aria-pressed:border-sf-accent aria-pressed:bg-sf-accent-soft aria-pressed:font-semibold aria-pressed:text-sf-accent-strong';
 
 const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
 ---
@@ -51,11 +51,11 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
   <div class="mb-3">
     <div class="flex items-baseline justify-between gap-4">
       {asPage
-        ? <h1 class="text-xl font-bold tracking-[-0.01em] text-[#111111]">{heading.title}</h1>
-        : <h2 class="text-lg font-bold tracking-[-0.01em] text-[#111111]">{heading.title}</h2>}
-      {!asPage && <a href="/produk" class="-my-2.5 inline-flex min-h-10 shrink-0 items-center text-sm font-semibold text-[var(--sf-accent,#2563EB)] underline-offset-4 hover:underline">Lihat semua</a>}
+        ? <h1 class="text-xl font-bold tracking-[-0.01em] text-sf-ink">{heading.title}</h1>
+        : <h2 class="text-lg font-bold tracking-[-0.01em] text-sf-ink">{heading.title}</h2>}
+      {!asPage && <a href="/produk" class="-my-2.5 inline-flex min-h-10 shrink-0 items-center text-sm font-semibold text-sf-accent underline-offset-4 hover:underline">Lihat semua</a>}
     </div>
-    {heading.description && <p class="mt-0.5 text-sm leading-5 text-[#555555]">{heading.description}</p>}
+    {heading.description && <p class="mt-0.5 text-sm leading-5 text-sf-text">{heading.description}</p>}
   </div>
 
   <div class="mb-4 flex flex-col gap-3" hidden={products.length === 0}>
@@ -69,9 +69,9 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
         autocomplete="off"
         enterkeyhint="search"
         placeholder="Cari produk"
-        class="h-10 w-full rounded-md border border-[#E2E2E5] bg-[#F6F6F7] pl-9 pr-3 text-base text-[#111111] placeholder:text-[#767676] focus:border-[#111111] focus:bg-white focus:outline-none"
+        class="h-10 w-full rounded-sf border border-sf-line bg-sf-surface pl-9 pr-3 text-base text-sf-ink placeholder:text-sf-muted focus:border-sf-ink focus:bg-white focus:outline-none"
       />
-      <Icon name="lucide:search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#767676]" aria-hidden="true" />
+      <Icon name="lucide:search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sf-muted" aria-hidden="true" />
     </form>
     {showChips && (
       <div role="group" aria-label="Kategori" class="catalog-chips -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
@@ -85,19 +85,19 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
 
   {
     products.length === 0 && (
-      <div class="rounded-md bg-[#F6F6F7] px-5 py-10 text-center">
-        <p class="text-sm font-semibold text-[#111111]">Katalog sedang disiapkan</p>
-        <p class="mx-auto mt-1 max-w-[26rem] text-sm leading-6 text-[#555555]">
+      <div class="rounded-sf bg-sf-surface px-5 py-10 text-center">
+        <p class="text-sm font-semibold text-sf-ink">Katalog sedang disiapkan</p>
+        <p class="mx-auto mt-1 max-w-[26rem] text-sm leading-6 text-sf-text">
           Produk akan tampil di sini setelah diterbitkan.
         </p>
       </div>
     )
   }
 
-  <div id="catalog-empty" class="hidden rounded-md bg-[#F6F6F7] px-5 py-8 text-center" role="status">
-    <p class="text-sm font-semibold text-[#111111]">Produk tidak ditemukan</p>
-    <p class="mt-1 text-sm text-[#555555]">Coba kata lain, atau lihat semua produk.</p>
-    <button type="button" id="catalog-reset" class="mt-4 inline-flex min-h-10 items-center rounded-md border border-[#E2E2E5] bg-white px-4 text-sm font-semibold text-[#111111] hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]">Hapus pencarian</button>
+  <div id="catalog-empty" class="hidden rounded-sf bg-sf-surface px-5 py-8 text-center" role="status">
+    <p class="text-sm font-semibold text-sf-ink">Produk tidak ditemukan</p>
+    <p class="mt-1 text-sm text-sf-text">Coba kata lain, atau lihat semua produk.</p>
+    <button type="button" id="catalog-reset" class="mt-4 inline-flex min-h-10 items-center rounded-sf border border-sf-line bg-white px-4 text-sm font-semibold text-sf-ink hover:border-sf-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink">Hapus pencarian</button>
   </div>
 
   <div id="product-grid" class="grid grid-cols-2 gap-2" hidden={products.length === 0}>
@@ -135,7 +135,7 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
     class="mt-6 flex flex-col items-center gap-3"
     hidden={products.length === 0}
   >
-    <p id="catalog-status" class="text-xs text-[#555555]" aria-live="polite">
+    <p id="catalog-status" class="text-xs text-sf-text" aria-live="polite">
       Menampilkan <span id="product-visible-count">{Math.min(CATALOG_PAGE_SIZE, products.length)}</span> dari <span id="product-total-count">{products.length}</span> produk
     </p>
     {
@@ -143,7 +143,7 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
         <button
           type="button"
           id="load-more-btn"
-          class="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[#E2E2E5] bg-white px-6 text-sm font-semibold text-[#111111] transition-colors hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]"
+          class="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-sf border border-sf-line bg-white px-6 text-sm font-semibold text-sf-ink transition-colors hover:border-sf-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink"
         >
           <span>Lihat produk lainnya</span>
           <Icon name="lucide:chevron-down" class="h-4 w-4" aria-hidden="true" />

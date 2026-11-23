@@ -56,9 +56,9 @@ const sold = product.soldCount && product.soldCount > 0
 <article class="sf-card group h-full">
   <a
     href={`/produk/${product.slug}`}
-    class="flex h-full flex-col overflow-hidden rounded-md border border-[#E7E7E9] bg-white transition-[border-color,box-shadow] hover:border-[#CFCFD4] hover:shadow-[0_2px_10px_rgba(17,17,17,0.06)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]"
+    class="flex h-full flex-col overflow-hidden rounded-sf border border-sf-line bg-white transition-[border-color,box-shadow] hover:border-sf-line-strong hover:shadow-[0_2px_10px_rgba(17,17,17,0.06)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink"
   >
-    <div class="relative aspect-square overflow-hidden bg-[#F3F3F3]">
+    <div class="relative aspect-square overflow-hidden bg-sf-surface">
       <img
         src={cardImageSrc(product.heroImage)}
         alt={`Foto produk ${product.productName}`}
@@ -75,23 +75,23 @@ const sold = product.soldCount && product.soldCount > 0
         lines held, a short one keeps its space), the price, the compare price
         and discount, then one meta line. 13px body, tabular figures. */}
     <div class="flex flex-1 flex-col px-2 pb-2 pt-1.5">
-      <h2 class="line-clamp-2 h-9 text-[13px] leading-[18px] text-[#111111]" title={product.productName}>{product.productName}</h2>
+      <h2 class="line-clamp-2 h-9 text-[13px] leading-[18px] text-sf-ink" title={product.productName}>{product.productName}</h2>
       <p class="sf-num mt-1 flex h-5 items-baseline gap-1 leading-5">
-        {hasRange && <span class="text-xs text-[#555555]">Mulai</span>}
-        <span class="text-[15px] font-bold text-[#111111]">{formatPrice(product.price)}</span>
+        {hasRange && <span class="text-xs text-sf-text">Mulai</span>}
+        <span class="text-[15px] font-bold text-sf-ink">{formatPrice(product.price)}</span>
       </p>
       <p class="sf-num flex h-4 items-center gap-1.5 text-xs leading-4">
-        {hasDiscount && <span class="text-[#767676] line-through">{formatPrice(comparePrice)}</span>}
-        {discountPercentage > 0 && <span class="font-semibold text-[#C81E1E]">{discountPercentage}%</span>}
+        {hasDiscount && <span class="text-sf-muted line-through">{formatPrice(comparePrice)}</span>}
+        {discountPercentage > 0 && <span class="font-semibold text-sf-danger">{discountPercentage}%</span>}
       </p>
-      <p class="sf-num mt-1 flex h-4 items-center gap-1 truncate text-xs leading-4 text-[#555555]">
+      <p class="sf-num mt-1 flex h-4 items-center gap-1 truncate text-xs leading-4 text-sf-text">
         {rating && (
           <>
             <svg viewBox="0 0 24 24" class="h-3 w-3 shrink-0" aria-hidden="true"><path fill="#111111" d="m12 2.5 2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9Z"/></svg>
-            <span class="text-[#111111]">{rating}</span>
+            <span class="text-sf-ink">{rating}</span>
           </>
         )}
-        {rating && sold && <span aria-hidden="true" class="text-[#B4B4B4]">·</span>}
+        {rating && sold && <span aria-hidden="true" class="text-sf-line-strong">·</span>}
         {sold && <span>{sold}</span>}
         {!rating && !sold && product.variants.length > 1 && <span>{product.variants.length} pilihan</span>}
       </p>

@@ -31,7 +31,7 @@ const gallery = images.filter((image) => image.trim());
 {gallery.length > 0 && (
   <div class="w-full" data-gallery>
     {gallery.map((imgUrl, idx) => (
-      <div class="relative w-full bg-[#F3F3F3]">
+      <div class="relative w-full bg-sf-surface">
         <img
           src={imgUrl}
           alt={idx === 0 ? `Foto ${productName}` : `${productName} foto ${idx + 1}`}

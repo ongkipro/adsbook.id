@@ -22,7 +22,7 @@ const { title, description, breadcrumbs = [] } = Astro.props;
 {breadcrumbs.length > 0 && <div class="px-4"><Breadcrumb items={breadcrumbs} /></div>}
 <section class="bg-white px-4 pb-2 pt-4">
   <div class="mx-auto max-w-[480px]">
-    <h1 class="text-2xl font-bold leading-tight tracking-[-0.02em] text-[#111111]">{title}</h1>
-    <p class="mt-1.5 max-w-[32rem] text-sm leading-6 text-[#555555]">{description}</p>
+    <h1 class="text-2xl font-bold leading-tight tracking-[-0.02em] text-sf-ink">{title}</h1>
+    <p class="mt-1.5 max-w-[32rem] text-sm leading-6 text-sf-text">{description}</p>
   </div>
 </section>

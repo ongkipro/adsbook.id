@@ -12,7 +12,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     { name: 'Tentang Kami', url: '/tentang' },
   ]}
 >
-  <main id="konten-utama" class="min-h-screen bg-[#FAFAFA] text-[#16191F]">
+  <main id="konten-utama" class="min-h-screen bg-sf-surface-soft text-sf-ink">
     <PageIntro
       badge="Tentang Kami"
       title={`Tentang ${Astro.locals.tenant.name}`}
@@ -21,12 +21,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     />
 
     <section class="mx-auto max-w-[480px] px-5 py-8">
-      <div class="border-b border-[#EAEDED] pb-6">
-        <p class="text-[11px] font-normal uppercase tracking-[0.12em] text-[#232F3E]">Profil Toko</p>
-        <h2 class="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-[#16191F]">
+      <div class="border-b border-sf-line pb-6">
+        <p class="text-[11px] font-normal uppercase tracking-[0.12em] text-sf-ink">Profil Toko</p>
+        <h2 class="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-sf-ink">
           Selamat datang di {Astro.locals.tenant.name}
         </h2>
-        <div class="mt-4 space-y-4 text-[14px] leading-7 text-[#545B64]">
+        <div class="mt-4 space-y-4 text-[14px] leading-7 text-sf-text">
           <p>
             {Astro.locals.tenant.description}
           </p>

@@ -43,7 +43,7 @@ interface Props {
 const { content, products, heroSlides, sections, trustSignals = [], catalogHeading } = Astro.props;
 ---
 
-<main id="konten-utama" class="overflow-x-hidden bg-white font-sans text-[#111111] antialiased">
+<main id="konten-utama" class="overflow-x-hidden bg-white font-sans text-sf-ink antialiased">
   <div id="home" class="flex w-full flex-col">
     {sections.hero && <HeroSection slides={heroSlides} highlights={content.heroHighlights} content={content.hero} />}
     {trustSignals.length > 0 && <div class="px-4 pt-3"><TrustStrip signals={trustSignals} /></div>}

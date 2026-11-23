@@ -273,14 +273,14 @@ const preloadImageUrls =
          checkout routes, so tabbing into a page the design system requires to carry
          no green painted a solid emerald block across it. Square, like everything
          else on these routes. -->
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-[#111111] focus:text-white focus:px-4 focus:py-2 focus:font-bold">Lewati ke konten utama</a>
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-sf-ink focus:text-white focus:px-4 focus:py-2 focus:font-bold">Lewati ke konten utama</a>
     {/* PR-26 (T-41): the demo store says so on every page; ordering is off there. */}
     {Astro.locals.tenantContext?.isDemo && (
-      <p role="note" class="bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">Toko contoh adsbook.id: lihat-lihat saja, pemesanan tidak aktif.</p>
+      <p role="note" class="bg-sf-ink px-4 py-2 text-center text-sm font-semibold text-white">Toko contoh adsbook.id: lihat-lihat saja, pemesanan tidak aktif.</p>
     )}
     {/* PR-23: the owner previewing a store that buyers cannot see yet. */}
     {Astro.locals.ownerPreview && (
-      <p role="note" id="ownerPreviewBar" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#1d4ed8] px-4 py-2 text-center text-sm font-semibold text-white">
+      <p role="note" id="ownerPreviewBar" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-sf-accent-strong px-4 py-2 text-center text-sm font-semibold text-white">
         <span>Mode Review Pemilik — pengunjung umum masih melihat "Toko belum siap".</span>
         <a href="/admin/setup" class="underline underline-offset-2 hover:no-underline">Lengkapi langkah wajib</a>
       </p>
@@ -291,7 +291,7 @@ const preloadImageUrls =
         The link takes the owner straight to billing (sign-in first if needed);
         it is a plain link, so the page stays edge-cacheable (ADR-029). */}
     {Astro.locals.billing?.adSignalsPaused && (
-      <p role="note" id="storePreviewBar" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#111111] px-4 py-2 text-center text-sm font-semibold text-white">
+      <p role="note" id="storePreviewBar" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-sf-ink px-4 py-2 text-center text-sm font-semibold text-white">
         <span>
           {Astro.locals.billing.state === 'expired'
             ? 'Toko ini sedang tidak menerima pesanan.'
@@ -305,8 +305,8 @@ const preloadImageUrls =
     {/* The storefront is a phone-width column on every screen (owner, 2026-11-23:
         the business is an ad tapped on a phone landing on a COD form). On a wide
         screen the grey canvas says the column is deliberate. */}
-    <div class="flex min-h-screen w-full justify-center bg-[#F3F3F3]">
-      <div class="min-h-screen w-full max-w-[480px] bg-white sm:shadow-[0_0_0_1px_#EDEDED]">
+    <div class="flex min-h-screen w-full justify-center bg-sf-surface">
+      <div class="min-h-screen w-full max-w-[480px] bg-white sm:shadow-[0_0_0_1px_var(--sf-line)]">
         {!hideHeader && <SiteHeader />}
         <div id="main-content" tabindex="-1" class="outline-none">
           <slot />

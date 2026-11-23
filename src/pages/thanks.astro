@@ -97,23 +97,23 @@ const productCatalog = products.map((item) => ({
     // never the PageView.
     window.__PS_META_AWAIT_MATCHING__ = true;
   </script>
-  <main id="thanks-shell" hidden class="min-h-screen bg-white py-4 font-sans text-[14px] text-[#111111] antialiased sm:py-8">
+  <main id="thanks-shell" hidden class="min-h-screen bg-white py-4 font-sans text-[14px] text-sf-ink antialiased sm:py-8">
     <MetaThanksTracker tenantName={Astro.locals.tenant.name} />
-    <div class="mx-auto w-full max-w-[480px] overflow-hidden rounded-none border border-[#E5E5E5] bg-white">
+    <div class="mx-auto w-full max-w-[480px] overflow-hidden rounded-sf border border-sf-line bg-white">
       <header
-        class="relative z-30 flex items-center justify-center border-b border-[#E5E5E5] bg-white px-5 py-4"
+        class="relative z-30 flex items-center justify-center border-b border-sf-line bg-white px-5 py-4"
       >
         <!-- The store's own name. The script used to overwrite this with the
              product name, so the page the customer trusts most was branded by
              whatever they happened to buy rather than by the shop. -->
         <span
           id="brand-logo"
-          class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#767676]">{Astro.locals.tenant.name}</span
+          class="text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-muted">{Astro.locals.tenant.name}</span
         >
       </header>
     <section class="px-5 pb-5 pt-7 text-center" data-motion="hero">
       <div
-        class="mx-auto mb-4 grid size-16 place-items-center rounded-full bg-[#121212] text-white"
+        class="mx-auto mb-4 grid size-16 place-items-center rounded-full bg-sf-ink text-white"
         data-motion="success-icon"
       >
         <!-- An unpaid online order is not a success yet: it gets the clock and
@@ -123,11 +123,11 @@ const productCatalog = products.map((item) => ({
       </div>
       <h1
         id="thanks-title"
-        class="mx-auto mt-2 max-w-[320px] text-[22px] font-semibold leading-tight tracking-[-0.03em] text-[#111111]"
+        class="mx-auto mt-2 max-w-[320px] text-[22px] font-semibold leading-tight tracking-[-0.03em] text-sf-ink"
       >
         Pesanan berhasil dibuat
       </h1>
-      <p id="thanks-subtitle" class="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-[#555555]">
+      <p id="thanks-subtitle" class="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-sf-text">
         Pesanan sudah kami terima. Konfirmasi ke admin agar proses verifikasi dan pengiriman lebih cepat.
       </p>
     </section>
@@ -135,37 +135,37 @@ const productCatalog = products.map((item) => ({
     <!-- DIGITAL-PRODUCTS-SPEC §5.2: filled from /api/order-status only when the order
          is digital, paid and live; the link never appears in this page's HTML. -->
     <section id="digital-access" hidden class="px-5 pb-5">
-      <div class="rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-5 text-left">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#1D4ED8]">Pembayaran berhasil</p>
-        <h2 class="mt-1 text-[18px] font-semibold leading-snug text-[#0F172A]">Produk Digital Siap Diakses</h2>
-        <p id="digital-access-product" class="mt-1 text-[13px] leading-6 text-[#475569]"></p>
+      <div class="rounded-sf-lg border border-sf-accent/30 bg-sf-accent-soft p-5 text-left">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-accent-strong">Pembayaran berhasil</p>
+        <h2 class="mt-1 text-[18px] font-semibold leading-snug text-sf-ink">Produk Digital Siap Diakses</h2>
+        <p id="digital-access-product" class="mt-1 text-[13px] leading-6 text-sf-text"></p>
         <a
           id="digital-access-link"
           href="#"
           target="_blank"
           rel="noopener noreferrer"
-          class="mt-4 flex min-h-12 items-center justify-center rounded-xl bg-[#2563EB] px-4 text-center text-[14px] font-semibold text-white hover:bg-[#1D4ED8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563EB]"
+          class="mt-4 flex min-h-12 items-center justify-center rounded-sf-lg bg-sf-accent px-4 text-center text-[14px] font-semibold text-white hover:bg-sf-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-accent"
         >Buka / Akses Produk Sekarang ↗</a>
-        <div id="digital-access-note-box" hidden class="mt-4 rounded-xl bg-white p-4">
-          <p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#64748B]">Instruksi akses</p>
-          <p id="digital-access-note" class="mt-1 whitespace-pre-line text-[13px] leading-6 text-[#0F172A]"></p>
+        <div id="digital-access-note-box" hidden class="mt-4 rounded-sf-lg bg-white p-4">
+          <p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-sf-muted">Instruksi akses</p>
+          <p id="digital-access-note" class="mt-1 whitespace-pre-line text-[13px] leading-6 text-sf-ink"></p>
         </div>
-        <p class="mt-3 text-[12px] leading-5 text-[#475569]">Simpan halaman ini: link akses bisa dibuka lagi kapan saja dari alamat halaman ini.</p>
+        <p class="mt-3 text-[12px] leading-5 text-sf-text">Simpan halaman ini: link akses bisa dibuka lagi kapan saja dari alamat halaman ini.</p>
       </div>
     </section>
 
-    <section class="border-y border-[#E5E5E5] bg-[#F5F5F5] px-5 py-5 text-center" data-motion="summary">
+    <section class="border-y border-sf-line bg-sf-surface px-5 py-5 text-center" data-motion="summary">
       <!-- #555555, not the #767676 used on white: on the #F5F5F5 panel that
            lighter grey measures 4.16:1, under the 4.5 AA floor. -->
-      <p id="payment-title" class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#555555]">
+      <p id="payment-title" class="text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-text">
         Bayar saat paket tiba
       </p>
-      <p id="total-payment-hero" class="mt-1.5 text-[32px] font-bold leading-none tracking-[-0.04em] text-[#111111]">
+      <p id="total-payment-hero" class="mt-1.5 text-[32px] font-bold leading-none tracking-[-0.04em] text-sf-ink">
         —
       </p>
       <span
         id="payment-badge"
-        class="mt-3 inline-flex items-center rounded-none border border-[#E5E5E5] bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#555555]"
+        class="mt-3 inline-flex items-center rounded-sf border border-sf-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-text"
       >
         COD · Bayar di Tempat
       </span>
@@ -173,16 +173,16 @@ const productCatalog = products.map((item) => ({
 
     <section class="px-5 py-5" data-motion="section">
       <div class="mb-3 flex items-center justify-between">
-        <h2 class="text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Produk dipesan</h2>
+        <h2 class="text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">Produk dipesan</h2>
         <span
           id="quantity-badge"
-          class="rounded-none border border-[#E5E5E5] bg-[#F5F5F5] px-2.5 py-1 text-[11px] font-normal text-[#555555]"
+          class="rounded-sf border border-sf-line bg-sf-surface px-2.5 py-1 text-[11px] font-normal text-sf-text"
           >Qty 1</span
         >
       </div>
 
       <div class="flex items-center gap-4">
-        <div class="relative grid size-[84px] shrink-0 place-items-center overflow-hidden border border-[#E5E5E5] bg-[#F5F5F5]">
+        <div class="relative grid size-[84px] shrink-0 place-items-center overflow-hidden border border-sf-line bg-sf-surface">
           <img
             id="product-image"
             src={storeLogo}
@@ -197,26 +197,26 @@ const productCatalog = products.map((item) => ({
         <div class="min-w-0 flex-1">
           <h3
             id="product-name"
-            class="line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.02em] text-[#111111]"
+            class="line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.02em] text-sf-ink"
           >
             —
           </h3>
-          <p id="variant-label" class="mt-1 text-[14px] font-normal leading-5 text-[#333333]">—</p>
-          <p id="product-headline" class="mt-1 line-clamp-2 text-[12px] leading-5 text-[#767676]"></p>
+          <p id="variant-label" class="mt-1 text-[14px] font-normal leading-5 text-sf-text">—</p>
+          <p id="product-headline" class="mt-1 line-clamp-2 text-[12px] leading-5 text-sf-muted"></p>
         </div>
       </div>
     </section>
 
-    <section class="border-t border-[#E5E5E5] px-5 py-5" data-motion="section">
-      <h2 class="mb-3 text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Ringkasan pembayaran</h2>
-      <div class="divide-y divide-[#E5E5E5] overflow-hidden rounded-none border border-[#E5E5E5]">
+    <section class="border-t border-sf-line px-5 py-5" data-motion="section">
+      <h2 class="mb-3 text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">Ringkasan pembayaran</h2>
+      <div class="divide-y divide-sf-line overflow-hidden rounded-sf border border-sf-line">
         <div class="flex justify-between gap-3 px-4 py-3 text-[13px]">
-          <span class="text-[#555555]">Harga produk</span><span id="product-price" class="font-normal text-[#111111]"
+          <span class="text-sf-text">Harga produk</span><span id="product-price" class="font-normal text-sf-ink"
             >—</span
           >
         </div>
         <div id="discount-row" class="flex justify-between gap-3 px-4 py-3 text-[13px]">
-          <span class="text-[#555555]">Diskon promo</span><span id="discount-display" class="font-normal text-[#a12626]"
+          <span class="text-sf-text">Diskon promo</span><span id="discount-display" class="font-normal text-sf-danger"
             >—</span
           >
         </div>
@@ -224,7 +224,7 @@ const productCatalog = products.map((item) => ({
           <span>Subtotal produk</span><span id="product-subtotal">—</span>
         </div>
         <div class="flex justify-between gap-3 px-4 py-3 text-[13px]">
-          <span class="text-[#555555]">Ongkos kirim</span><span id="shipping-cost" class="font-normal text-[#111111]"
+          <span class="text-sf-text">Ongkos kirim</span><span id="shipping-cost" class="font-normal text-sf-ink"
             >—</span
           >
         </div>
@@ -232,81 +232,81 @@ const productCatalog = products.map((item) => ({
              COD service fee or the payment admin fee was in the total and
              nowhere else (65.000 − 16.000 + 15.000 shown beside 70.500). -->
         <div id="fee-row" class="flex justify-between gap-3 px-4 py-3 text-[13px]" hidden>
-          <span id="fee-label" class="text-[#555555]">Biaya admin</span><span id="fee-display" class="font-normal text-[#111111]"
+          <span id="fee-label" class="text-sf-text">Biaya admin</span><span id="fee-display" class="font-normal text-sf-ink"
             >—</span
           >
         </div>
-        <div class="flex items-center justify-between gap-3 bg-[#F5F5F5] px-4 py-4">
+        <div class="flex items-center justify-between gap-3 bg-sf-surface px-4 py-4">
           <div>
-            <p id="total-label" class="text-[13px] font-normal text-[#111111]">Total COD</p>
-            <p id="total-note" class="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#555555]">
+            <p id="total-label" class="text-[13px] font-normal text-sf-ink">Total COD</p>
+            <p id="total-note" class="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-sf-text">
               Siapkan uang pas saat kurir tiba
             </p>
           </div>
-          <strong id="total-payment" class="text-[21px] font-bold tracking-[-0.03em] text-[#111111]"
+          <strong id="total-payment" class="text-[21px] font-bold tracking-[-0.03em] text-sf-ink"
             >—</strong
           >
         </div>
       </div>
     </section>
 
-    <section class="border-t border-[#E5E5E5] px-5 py-5" data-motion="section">
+    <section class="border-t border-sf-line px-5 py-5" data-motion="section">
       <div class="mb-3 flex items-center justify-between gap-3">
-        <h2 id="contact-title" class="text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Data pengiriman</h2>
+        <h2 id="contact-title" class="text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">Data pengiriman</h2>
       </div>
-      <div class="divide-y divide-[#E5E5E5] text-[13px]">
+      <div class="divide-y divide-sf-line text-[13px]">
         <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
-          <span class="text-[#555555]">No. Pesanan</span><span
+          <span class="text-sf-text">No. Pesanan</span><span
             id="order-id"
-            class="text-right font-normal text-[#111111]">—</span
+            class="text-right font-normal text-sf-ink">—</span
           >
         </div>
         <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
-          <span class="text-[#555555]">Nama</span><span id="customer-name" class="text-right font-normal text-[#111111]"
+          <span class="text-sf-text">Nama</span><span id="customer-name" class="text-right font-normal text-sf-ink"
             >—</span
           >
         </div>
         <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
-          <span class="text-[#555555]">WhatsApp</span><span
+          <span class="text-sf-text">WhatsApp</span><span
             id="customer-phone"
             data-format="phone"
-            class="text-right font-normal text-[#111111]">—</span
+            class="text-right font-normal text-sf-ink">—</span
           >
         </div>
         <div class="grid grid-cols-[112px_1fr] gap-3 py-3">
-          <span class="text-[#555555]">Alamat</span><span id="full-address" class="text-right leading-6 text-[#111111]"
+          <span class="text-sf-text">Alamat</span><span id="full-address" class="text-right leading-6 text-sf-ink"
             >—</span
           >
         </div>
         <div id="area-row" class="grid grid-cols-[112px_1fr] gap-3 py-3">
-          <span class="text-[#555555]">Area</span><span id="area-display" class="text-right font-normal text-[#111111]"
+          <span class="text-sf-text">Area</span><span id="area-display" class="text-right font-normal text-sf-ink"
             >—</span
           >
         </div>
       </div>
     </section>
 
-    <section class="border-t border-[#E5E5E5] bg-[#F5F5F5] px-5 py-5" data-motion="section">
-      <h2 id="status-title" class="mb-4 text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">Status pesanan</h2>
+    <section class="border-t border-sf-line bg-sf-surface px-5 py-5" data-motion="section">
+      <h2 id="status-title" class="mb-4 text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">Status pesanan</h2>
       <div class="space-y-4">
         <div class="grid grid-cols-[18px_1fr] gap-3">
-          <span class="mt-0.5 size-4 rounded-full bg-[#121212] ring-4 ring-[#F3F3F3]"></span>
+          <span class="mt-0.5 size-4 rounded-full bg-sf-ink ring-4 ring-sf-surface"></span>
           <div>
-            <p id="step-one-title" class="text-[13px] font-normal text-[#111111]">Pesanan diterima</p><p
+            <p id="step-one-title" class="text-[13px] font-normal text-sf-ink">Pesanan diterima</p><p
               id="step-one-copy"
-              class="mt-0.5 text-xs text-[#555555]"
+              class="mt-0.5 text-xs text-sf-text"
             >
               Data order berhasil masuk.
             </p>
           </div>
         </div>
         <div class="grid grid-cols-[18px_1fr] gap-3">
-          <span class="mt-1 size-3 rounded-full bg-white ring-2 ring-[#121212] ring-offset-2 ring-offset-[#F5F5F5]"
+          <span class="mt-1 size-3 rounded-full bg-white ring-2 ring-sf-ink ring-offset-2 ring-offset-[#F5F5F5]"
           ></span>
           <div>
-            <p id="step-two-title" class="text-[13px] font-normal text-[#111111]">Verifikasi admin</p><p
+            <p id="step-two-title" class="text-[13px] font-normal text-sf-ink">Verifikasi admin</p><p
               id="step-two-copy"
-              class="mt-0.5 text-xs text-[#555555]"
+              class="mt-0.5 text-xs text-sf-text"
             >
               Konfirmasi WhatsApp membantu proses lebih cepat.
             </p>
@@ -317,11 +317,11 @@ const productCatalog = products.map((item) => ({
              the #F5F5F5 panel — 2.74:1, well under the AA floor — so the step a
              customer most wants to read was the least legible one. -->
         <div class="grid grid-cols-[18px_1fr] gap-3">
-          <span class="mt-0.5 size-4 rounded-full bg-[#E5E5E5] ring-1 ring-[#E5E5E5]"></span>
+          <span class="mt-0.5 size-4 rounded-full bg-sf-line ring-1 ring-sf-line"></span>
           <div>
-            <p id="step-three-title" class="text-[13px] font-normal text-[#555555]">Packing & pengiriman</p><p
+            <p id="step-three-title" class="text-[13px] font-normal text-sf-text">Packing & pengiriman</p><p
               id="step-three-copy"
-              class="mt-0.5 text-xs text-[#555555]"
+              class="mt-0.5 text-xs text-sf-text"
             >
               Paket dikirim setelah data valid.
             </p>
@@ -330,67 +330,67 @@ const productCatalog = products.map((item) => ({
       </div>
     </section>
 
-    <section id="payment-note" class="border-t border-[#E5E5E5] bg-[#F5F5F5] px-5 py-5" data-motion="section">
-      <div class="rounded-none border border-[#E5E5E5] bg-white p-4">
+    <section id="payment-note" class="border-t border-sf-line bg-sf-surface px-5 py-5" data-motion="section">
+      <div class="rounded-sf border border-sf-line bg-white p-4">
         <div class="mb-3 flex items-center justify-between gap-3">
-          <h2 id="note-title" class="text-[15px] font-semibold tracking-[-0.02em] text-[#111111]">
+          <h2 id="note-title" class="text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">
             Catatan pembayaran COD
           </h2>
-          <span id="note-badge" class="shrink-0 rounded-none border border-[#E5E5E5] bg-[#F5F5F5] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#555555]">Wajib dibaca</span>
+          <span id="note-badge" class="shrink-0 rounded-sf border border-sf-line bg-sf-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sf-text">Wajib dibaca</span>
         </div>
-        <div id="payment-details" class="mb-4 divide-y divide-[#E5E5E5] rounded-none border border-[#E5E5E5] bg-white" hidden>
+        <div id="payment-details" class="mb-4 divide-y divide-sf-line rounded-sf border border-sf-line bg-white" hidden>
           <div class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
-            <span class="text-[#555555]">Channel</span><strong id="payment-channel" class="text-right font-semibold text-[#111111]">-</strong>
+            <span class="text-sf-text">Channel</span><strong id="payment-channel" class="text-right font-semibold text-sf-ink">-</strong>
           </div>
           <div class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
-            <span class="text-[#555555]">Nominal order</span><strong id="payment-amount" class="text-right font-semibold text-[#111111]">-</strong>
+            <span class="text-sf-text">Nominal order</span><strong id="payment-amount" class="text-right font-semibold text-sf-ink">-</strong>
           </div>
           <div id="payment-admin-fee-row" class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
-            <span class="text-[#555555]">Biaya admin</span><strong id="payment-admin-fee" class="text-right font-semibold text-[#111111]">-</strong>
+            <span class="text-sf-text">Biaya admin</span><strong id="payment-admin-fee" class="text-right font-semibold text-sf-ink">-</strong>
           </div>
           <div class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
-            <span class="text-[#555555]">Total tagihan</span><strong id="payment-billed-total" class="text-right font-semibold text-[#111111]">-</strong>
+            <span class="text-sf-text">Total tagihan</span><strong id="payment-billed-total" class="text-right font-semibold text-sf-ink">-</strong>
           </div>
           <div id="payment-va-row" class="flex justify-between gap-3 px-3 py-2.5 text-[13px]" hidden>
-            <span class="text-[#555555]">Virtual Account</span><strong id="payment-va" data-format="account" class="text-right font-mono font-bold tabular-nums text-[#111111]"></strong>
+            <span class="text-sf-text">Virtual Account</span><strong id="payment-va" data-format="account" class="text-right font-mono font-bold tabular-nums text-sf-ink"></strong>
           </div>
           <div id="payment-code-row" class="flex justify-between gap-3 px-3 py-2.5 text-[13px]" hidden>
-            <span class="text-[#555555]">Kode pembayaran</span><strong id="payment-code" class="break-all text-right font-mono font-bold text-[#111111]"></strong>
+            <span class="text-sf-text">Kode pembayaran</span><strong id="payment-code" class="break-all text-right font-mono font-bold text-sf-ink"></strong>
           </div>
           <!-- The QRIS payload used to be printed here as raw text. A customer
                cannot pay a 150-character string; it needs to be the code their
                banking app scans, which is what this canvas renders. -->
           <div id="payment-qr-row" class="px-3 py-3.5 text-center" hidden>
-            <span class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-[#767676]">Scan QRIS untuk membayar</span>
-            <div class="mx-auto mt-2.5 grid size-[220px] max-w-full place-items-center rounded-none border border-[#E5E5E5] bg-white p-2.5">
+            <span class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-muted">Scan QRIS untuk membayar</span>
+            <div class="mx-auto mt-2.5 grid size-[220px] max-w-full place-items-center rounded-sf border border-sf-line bg-white p-2.5">
               <canvas id="payment-qr-canvas" class="h-auto max-h-[200px] w-auto max-w-full" aria-label="QR code pembayaran"></canvas>
               <img id="payment-qr-image" class="h-auto max-h-[200px] w-auto max-w-full" alt="QR code pembayaran" hidden />
             </div>
-            <p class="mx-auto mt-2 max-w-[300px] text-[11px] leading-5 text-[#555555]">
+            <p class="mx-auto mt-2 max-w-[300px] text-[11px] leading-5 text-sf-text">
               Buka m-Banking atau e-Wallet, pilih menu Scan / QRIS, lalu arahkan ke kode di atas.
             </p>
           </div>
           <div id="payment-expiry-row" class="flex justify-between gap-3 px-3 py-2.5 text-[13px]" hidden>
-            <span class="text-[#555555]">Batas pembayaran</span><strong id="payment-expiry" class="text-right font-semibold text-[#111111]"></strong>
+            <span class="text-sf-text">Batas pembayaran</span><strong id="payment-expiry" class="text-right font-semibold text-sf-ink"></strong>
           </div>
         </div>
-        <p id="payment-failure" class="mb-4 rounded-none border border-[#f2c4c4] bg-[#fdf1f1] p-3 text-[13px] leading-5 text-[#a12626]" hidden></p>
-        <div id="note-list" class="space-y-3 text-[13px] leading-6 text-[#555555]">
+        <p id="payment-failure" class="mb-4 rounded-sf border border-sf-danger-line bg-sf-danger-soft p-3 text-[13px] leading-5 text-sf-danger" hidden></p>
+        <div id="note-list" class="space-y-3 text-[13px] leading-6 text-sf-text">
           <div class="grid grid-cols-[18px_1fr] gap-2.5">
-            <span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>
-              Siapkan uang tunai sesuai total tagihan: <span id="note-total" class="font-bold text-[#111111]"
+            <span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>
+              Siapkan uang tunai sesuai total tagihan: <span id="note-total" class="font-bold text-sf-ink"
                 >—</span
               >.
             </p>
           </div>
           <div class="grid grid-cols-[18px_1fr] gap-2.5">
-            <span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>
-              Pastikan nomor WhatsApp <span id="note-phone" data-format="phone" class="font-normal text-[#111111]">—</span> tetap
+            <span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>
+              Pastikan nomor WhatsApp <span id="note-phone" data-format="phone" class="font-normal text-sf-ink">—</span> tetap
               aktif untuk konfirmasi admin atau kurir.
             </p>
           </div>
           <div class="grid grid-cols-[18px_1fr] gap-2.5">
-            <span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>
+            <span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>
               Mohon terima paket saat kurir datang. Jika alamat sulit ditemukan, kurir dapat menghubungi nomor tersebut.
             </p>
           </div>
@@ -399,11 +399,11 @@ const productCatalog = products.map((item) => ({
     </section>
 
     <section id="whatsapp-section" class="px-5 py-6 text-center" data-motion="cta">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#767676]">Langkah berikutnya</p>
-      <h2 id="cta-title" class="mt-1.5 text-[20px] font-semibold tracking-[-0.03em] text-[#111111]">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-muted">Langkah berikutnya</p>
+      <h2 id="cta-title" class="mt-1.5 text-[20px] font-semibold tracking-[-0.03em] text-sf-ink">
         Konfirmasi ke admin
       </h2>
-      <p id="cta-copy" class="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-[#555555]">
+      <p id="cta-copy" class="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-sf-text">
         Kirim pesan konfirmasi supaya admin segera validasi order dan menyiapkan pengiriman.
       </p>
 
@@ -419,7 +419,7 @@ const productCatalog = products.map((item) => ({
         rel="nofollow noopener noreferrer"
         title={`Lanjutkan pembayaran pesanan ${Astro.locals.tenant.name}`}
         hidden
-        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-none bg-[var(--sf-accent,#2563EB)] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)]"
+        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf bg-sf-accent px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-sf-accent-strong"
         >Lanjutkan Pembayaran</a
       >
       <a
@@ -427,7 +427,7 @@ const productCatalog = products.map((item) => ({
         href="/payment"
         title={`Lihat instruksi pembayaran pesanan ${Astro.locals.tenant.name}`}
         hidden
-        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-none bg-[var(--sf-accent,#2563EB)] px-4 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)]"
+        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf bg-sf-accent px-4 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-sf-accent-strong"
       >
         <Icon name="lucide:wallet" class="size-4" aria-hidden="true" />
         <span id="payment-page-label">Lihat Instruksi Pembayaran</span>
@@ -440,18 +440,18 @@ const productCatalog = products.map((item) => ({
         title={`Konfirmasi pesanan ${Astro.locals.tenant.name} melalui WhatsApp`}
         data-auto-redirect={thanksWhatsappRedirect ? '1' : '0'}
         data-store-name={Astro.locals.tenant.name}
-        class="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-none border border-[var(--sf-accent,#2563EB)] bg-[var(--sf-accent,#2563EB)] px-4 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)] data-[tone=secondary]:bg-white data-[tone=secondary]:text-[#111111] data-[tone=secondary]:hover:bg-[#F5F5F5]"
+        class="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf border border-sf-accent bg-sf-accent px-4 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-sf-accent-strong data-[tone=secondary]:bg-white data-[tone=secondary]:text-sf-ink data-[tone=secondary]:hover:bg-sf-surface"
       >
         <Icon name="lucide:message-circle" class="size-5" aria-hidden="true" />
         <span id="wa-label">Konfirmasi via WhatsApp</span>
       </a>
-      <p id="wa-redirect-note" hidden role="status" aria-live="polite" class="mt-3 text-[12px] leading-5 text-[#555555]">
+      <p id="wa-redirect-note" hidden role="status" aria-live="polite" class="mt-3 text-[12px] leading-5 text-sf-text">
         Mengalihkan ke WhatsApp admin<span id="wa-redirect-count"></span>…
-        <button id="wa-redirect-cancel" type="button" class="ml-1 font-semibold text-[#121212] underline underline-offset-2">Tetap di halaman ini</button>
+        <button id="wa-redirect-cancel" type="button" class="ml-1 font-semibold text-sf-ink underline underline-offset-2">Tetap di halaman ini</button>
       </p>
     </section>
 
-    <footer class="border-t border-[#E5E5E5] px-5 py-5 text-center text-xs text-[#767676]">
+    <footer class="border-t border-sf-line px-5 py-5 text-center text-xs text-sf-muted">
       Terima kasih telah berbelanja di {Astro.locals.tenant.name}.
     </footer>
     </div>
@@ -698,9 +698,9 @@ const productCatalog = products.map((item) => ({
       document.getElementById('step-three-copy').textContent = 'Pesanan diproses setelah detail akhir disetujui.';
       document.getElementById('note-title').textContent = 'Catatan konfirmasi COD';
       document.getElementById('note-list').innerHTML = `
-        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Nominal saat ini hanya estimasi harga produk: <span class="font-bold text-[#111111]">${fmt(productTotal || productPrice || 0)}</span>.</p></div>
-        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Biaya admin, ongkir, dan total akhir dikonfirmasi Customer Service ke WhatsApp Anda di nomor <span class="font-normal text-[#111111]">${escapeHtml(phone)}</span>.</p></div>
-        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Pastikan nomor aktif agar pesanan COD bisa segera diproses.</p></div>`;
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>Nominal saat ini hanya estimasi harga produk: <span class="font-bold text-sf-ink">${fmt(productTotal || productPrice || 0)}</span>.</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>Biaya admin, ongkir, dan total akhir dikonfirmasi Customer Service ke WhatsApp Anda di nomor <span class="font-normal text-sf-ink">${escapeHtml(phone)}</span>.</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>Pastikan nomor aktif agar pesanan COD bisa segera diproses.</p></div>`;
       document.getElementById('cta-title').textContent = 'Hubungi admin';
       document.getElementById('cta-copy').textContent =
         'Jika ingin mempercepat proses, hubungi Customer Service untuk konfirmasi biaya dan pengiriman.';
@@ -713,8 +713,8 @@ const productCatalog = products.map((item) => ({
       paidBadge.textContent = `${paymentMethod === 'qris' ? 'QRIS' : channelName} · Lunas`;
       // Swap only the three colour classes; the shape and layout stay as the
       // server rendered them.
-      paidBadge.classList.remove('border-[#E5E5E5]', 'bg-white', 'text-[#555555]');
-      paidBadge.classList.add('border-[#121212]', 'bg-[#F3F3F3]', 'text-[#333333]');
+      paidBadge.classList.remove('border-sf-line', 'bg-white', 'text-sf-text');
+      paidBadge.classList.add('border-sf-ink', 'bg-sf-surface', 'text-sf-text');
       document.getElementById('total-label').textContent = 'Total lunas';
       document.getElementById('total-note').textContent = 'Pembayaran berhasil diverifikasi';
       document.getElementById('status-title').textContent = 'Status pesanan';
@@ -733,8 +733,8 @@ const productCatalog = products.map((item) => ({
       document.getElementById('payment-admin-fee-row').hidden = sellerBearsPaymentFee || !paymentAdminFee;
       document.getElementById('payment-billed-total').textContent = fmt(totalPayment);
       document.getElementById('note-list').innerHTML = `
-        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Pembayaran sebesar <span class="font-bold text-[#111111]">${fmt(totalPayment || productTotal || productPrice || 0)}</span> sudah diterima.</p></div>
-        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Simpan nomor pesanan <span class="font-semibold text-[#111111]">${escapeHtml(orderId)}</span> untuk mengecek proses berikutnya.</p></div>`;
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>Pembayaran sebesar <span class="font-bold text-sf-ink">${fmt(totalPayment || productTotal || productPrice || 0)}</span> sudah diterima.</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>Simpan nomor pesanan <span class="font-semibold text-sf-ink">${escapeHtml(orderId)}</span> untuk mengecek proses berikutnya.</p></div>`;
       document.getElementById('cta-title').textContent = 'Butuh bantuan?';
       document.getElementById('cta-copy').textContent =
         'Hubungi admin jika ada pertanyaan tentang pembayaran atau pengiriman.';
@@ -801,11 +801,11 @@ const productCatalog = products.map((item) => ({
           paymentError || 'Instruksi pembayaran belum berhasil dibuat. Jangan melakukan transfer sebelum menerima instruksi resmi.';
       }
       document.getElementById('note-list').innerHTML = `
-        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Bayar sesuai total tagihan: <span class="font-bold text-[#111111]">${fmt(totalPayment || productTotal || productPrice || 0)}</span>.</p></div>
-        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>${isManualTransfer
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>Bayar sesuai total tagihan: <span class="font-bold text-sf-ink">${fmt(totalPayment || productTotal || productPrice || 0)}</span>.</p></div>
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>${isManualTransfer
           ? 'Simpan bukti transfer, lalu kirim ke admin lewat tombol WhatsApp di bawah.'
           : 'Tidak perlu kirim bukti: status berubah otomatis setelah pembayaran diterima.'}</p></div>
-        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-[#121212]"></span><p>Pesanan diproses setelah pembayaran ${isManualTransfer ? 'dicek admin' : 'lunas'}.</p></div>`;
+        <div class="grid grid-cols-[18px_1fr] gap-2.5"><span class="mt-[11px] size-1.5 rounded-full bg-sf-ink"></span><p>Pesanan diproses setelah pembayaran ${isManualTransfer ? 'dicek admin' : 'lunas'}.</p></div>`;
       document.getElementById('cta-title').textContent = 'Selesaikan pembayaran';
       document.getElementById('cta-copy').textContent = isManualTransfer
         ? 'Buka rekening tujuan untuk menyalin nomornya, lalu kirim bukti transfer ke admin.'
