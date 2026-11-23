@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readdirSync, readFileSync } from "node:fs";
 import { splitMigrationStatements } from "./schema-version.ts";
 import { GET, POST } from "../pages/api/admin/settings/theme.ts";
+import { DEFAULT_THEME_SETTINGS } from "./storefront-theme.ts";
 
 function store(template: string | null = "compact-market", stop = "0086") {
   const sqlite = new DatabaseSync(":memory:");
@@ -37,7 +38,8 @@ function store(template: string | null = "compact-market", stop = "0086") {
     return { status: response.status, payload: (await response.json()) as { success: boolean; error?: string; data?: Record<string, unknown> } };
   };
   const get = async () => (await (await GET({ locals } as never)).json()) as { data: Record<string, unknown> };
-  return { row, post, get };
+  const setRaw = (json: string) => sqlite.prepare("UPDATE stores SET theme_settings = ? WHERE id = 1").run(json);
+  return { row, post, get, setRaw };
 }
 
 test("0086 + 0087: every store ends on Compact (the 480px column); a custom runtime template is kept", () => {
@@ -53,7 +55,7 @@ test("Tema API: Compact is active, only a built-in theme can be activated", asyn
     active: "compact-market",
     custom: false,
     accent: "#2563EB",
-    settings: { sections: { banner: true, trustStrip: true }, catalog: { title: "Produk pilihan", description: "Pilih produk, cek varian dan harga, lalu pesan langsung dari halamannya." } },
+    settings: DEFAULT_THEME_SETTINGS,
   });
   assert.equal((await theme.post({ action: "activate", theme: "compact-market" })).status, 200);
   assert.equal((await theme.post({ action: "activate", theme: "pasar-rapi" })).status, 400, "the withdrawn wide theme cannot come back through the API");
@@ -64,15 +66,19 @@ test("Tema API: Compact is active, only a built-in theme can be activated", asyn
 
 test("Tema API: a save stores accent and settings together; a refused value writes neither", async () => {
   const theme = store();
-  const settings = { sections: { banner: false, trustStrip: true }, catalog: { title: "Madu pilihan", description: "" } };
+  const settings = structuredClone(DEFAULT_THEME_SETTINGS);
+  settings.sections.hero.enabled = false;
+  settings.sections.catalog.title = "Madu pilihan";
+  settings.sections.catalog.description = "";
+  settings.order = ["hero", "catalog", "trust", "featured", "announcement", "howToOrder"];
   const saved = await theme.post({ action: "save", accent: "#0f766e", settings });
   assert.equal(saved.status, 200);
   assert.deepEqual(theme.row(), { storefront_template: "compact-market", theme_color: "#0F766E", theme_settings: JSON.stringify(settings) });
 
-  const tooLight = await theme.post({ action: "save", accent: "#FACC15", settings: { ...settings, catalog: { title: "Lain", description: "" } } });
+  const tooLight = await theme.post({ action: "save", accent: "#FACC15", settings: { ...settings, sections: { ...settings.sections, catalog: { ...settings.sections.catalog, title: "Lain" } } } });
   assert.equal(tooLight.status, 400);
   assert.match(tooLight.payload.error!, /terlalu terang/);
-  const markup = await theme.post({ action: "save", accent: "#0F766E", settings: { ...settings, catalog: { title: "<img src=x>", description: "" } } });
+  const markup = await theme.post({ action: "save", accent: "#0F766E", settings: { ...settings, sections: { ...settings.sections, catalog: { ...settings.sections.catalog, title: "<img src=x>" } } } });
   assert.equal(markup.status, 400);
   assert.deepEqual(theme.row(), { storefront_template: "compact-market", theme_color: "#0F766E", theme_settings: JSON.stringify(settings) }, "both refusals wrote nothing");
 
@@ -80,4 +86,18 @@ test("Tema API: a save stores accent and settings together; a refused value writ
   await theme.post({ action: "save", accent: "#2563EB", settings });
   assert.equal(theme.row().theme_color, null);
   assert.equal((await theme.post({ action: "nope" })).status, 400);
+});
+
+test("Tema API: a store saved in the v1 shape reads as v2 with its choices kept, and a v1 write is refused", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  const theme = store();
+  const v1 = { sections: { banner: false, trustStrip: false }, catalog: { title: "Madu pilihan", description: "Asli dari hutan." } };
+  theme.setRaw(JSON.stringify(v1));
+  const read = (await theme.get()).data.settings as typeof DEFAULT_THEME_SETTINGS;
+  assert.equal(read.version, 2);
+  assert.equal(read.sections.hero.enabled, false);
+  assert.equal(read.sections.trust.enabled, false);
+  assert.equal(read.sections.catalog.title, "Madu pilihan");
+  assert.equal(read.sections.catalog.description, "Asli dari hutan.");
+  assert.equal((await theme.post({ action: "save", accent: "#2563EB", settings: v1 })).status, 400, "writes are v2 only");
 });

@@ -1,0 +1,26 @@
+---
+// Admin › Tema › Pengumuman: one line at the top of the homepage, the
+// seller's own words, shown until the day they chose (liveAnnouncement). A
+// link is a store path or https:// only (storefront-theme.ts schema).
+interface Props {
+  text: string;
+  href?: string;
+}
+const { text, href = '' } = Astro.props;
+const external = href.startsWith('https://');
+---
+
+<div class="sf-announcement bg-sf-ink text-white">
+  {href ? (
+    <a
+      href={href}
+      {...(external ? { target: '_blank', rel: 'noopener' } : {})}
+      class="flex min-h-10 items-center justify-center gap-1 px-4 py-2 text-center text-[13px] font-medium leading-[18px] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white"
+    >
+      <span>{text}</span>
+      <span aria-hidden="true">›</span>
+    </a>
+  ) : (
+    <p class="flex min-h-10 items-center justify-center px-4 py-2 text-center text-[13px] font-medium leading-[18px]">{text}</p>
+  )}
+</div>

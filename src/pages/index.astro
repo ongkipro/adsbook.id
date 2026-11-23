@@ -11,7 +11,8 @@ import { dailySeed, heroSummary, pickHeroProducts } from '../lib/daily-rotation'
 import { homeDescription, homeTitle } from '../lib/home-seo';
 import { storefrontImageSrc } from '../lib/image-derivative';
 import { getStorePublicFacts, storefrontTrustSignals } from '../lib/public-store';
-import { loadThemeSettings } from '../lib/storefront-theme';
+import { checkAccent, howToOrderSteps, liveAnnouncement, loadThemeSettings, parseThemeSettingsInput, pickProductsById, sortCatalog, type StoreThemeSettings } from '../lib/storefront-theme';
+import { canAccessAdminRoute } from '../lib/auth';
 
 const database = tenantDatabase(Astro.locals);
 // R1b banner preview: only `?preview=banner` reads the session and the content
@@ -33,7 +34,28 @@ if (Astro.url.searchParams.get('preview') === 'banner' && database && typeof dat
     seed: seedHomeContent(Astro.locals.tenant),
   });
 }
-if (bannerPreview.granted) {
+// Admin › Tema › Atur beranda live preview: `?preview=home&s=<base64url JSON>`
+// renders unsaved settings, for a signed-in owner or admin only, in the
+// editor's same-origin frame (middleware allows `frame-ancestors 'self'` for
+// this URL alone). Anyone else gets the ordinary page: the settings are read
+// only behind the session check.
+let homePreview: { settings: StoreThemeSettings; accent: string | null } | null = null;
+if (Astro.url.searchParams.get('preview') === 'home' && database && typeof database === 'object') {
+  const db = database as D1Database;
+  const session = await resolveAdminSession(db, Astro.request, await resolveAuthSecret(db, Astro.locals.tenantContext?.tenantId));
+  if (session && !session.mustChangePassword && canAccessAdminRoute(session.role, '/admin/settings/theme')) {
+    try {
+      const raw = Astro.url.searchParams.get('s') ?? '';
+      const json = new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)));
+      const parsed = parseThemeSettingsInput(JSON.parse(json));
+      const accent = checkAccent(Astro.url.searchParams.get('accent') ?? '');
+      if (parsed.ok) homePreview = { settings: parsed.settings, accent: accent.ok ? accent.accent : null };
+    } catch {
+      homePreview = null;
+    }
+  }
+}
+if (bannerPreview.granted || homePreview) {
   // For the signed-in operator alone: never stored by any cache, never indexed.
   Astro.response.headers.set('Cache-Control', 'private, no-store');
   Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
@@ -46,12 +68,13 @@ const [catalog, homeResolution, templateResolution, publicFacts, themeSettings] 
     Astro.locals.tenant.storefrontTemplate,
   ),
   getStorePublicFacts(Astro.locals),
-  loadThemeSettings(database && typeof database === 'object' ? (database as D1Database) : undefined),
+  homePreview ? Promise.resolve(homePreview.settings) : loadThemeSettings(database && typeof database === 'object' ? (database as D1Database) : undefined),
 ]);
+const home = themeSettings.sections;
 // admin › Tema: the trust strip and the banner can be switched off; the
 // catalogue heading is the store's own.
-const trustSignals = themeSettings.sections.trustStrip ? storefrontTrustSignals(publicFacts) : [];
-const products = catalog.map((product) => ({
+const trustSignals = home.trust.enabled ? storefrontTrustSignals(publicFacts) : [];
+const toCard = (product: (typeof catalog)[number]) => ({
   slug: product.slug,
   name: product.productName,
   category: product.category,
@@ -67,7 +90,8 @@ const products = catalog.map((product) => ({
     label: variant.label,
     price: variant.price,
   })),
-}));
+});
+const products = sortCatalog(catalog.map(toCard), home.catalog.sort);
 const ready = homeResolution.state === 'ready' && templateResolution.state === 'ready';
 const unavailable = homeResolution.state === 'unavailable' || templateResolution.state !== 'ready';
 const content = homeResolution.state === 'ready' ? homeResolution.content : null;
@@ -88,17 +112,35 @@ const homepageDescription = homeDescription(
 // pick rotates daily rather than per request so visitors reuse cached bytes.
 // Owner, 2026-11-23: three to five catalogue products, each with a line of
 // its own description, linking to its page.
-const heroSlides =
-  content && content.heroSlides.length > 0
-    ? content.heroSlides
-    : pickHeroProducts(catalog, dailySeed(new Date())).map((product) => ({
-        image: product.image,
-        alt: product.productName,
-        badge: product.category,
-        text: product.productName,
-        summary: heroSummary(product.catalogDescription || product.description),
-        href: `/produk/${product.slug}`,
-      }));
+// Admin › Tema › Hero: "auto" is the seller's banner when they uploaded one,
+// otherwise a daily rotation; "products" is their own pick, in their order;
+// "banner" is the banner alone (a daily rotation stands in until one exists).
+const productSlide = (product: (typeof catalog)[number]) => ({
+  image: product.image,
+  alt: product.productName,
+  badge: product.category,
+  text: product.productName,
+  summary: home.hero.summary ? heroSummary(product.catalogDescription || product.description) : '',
+  href: `/produk/${product.slug}`,
+});
+const autoSlides = () => pickHeroProducts(catalog, dailySeed(new Date())).map(productSlide);
+const bannerSlides = content && content.heroSlides.length > 0 ? content.heroSlides : null;
+const pickedSlides = home.hero.source === 'products' ? pickProductsById(catalog, home.hero.productIds).map(productSlide) : [];
+const heroSlides = !home.hero.enabled
+  ? []
+  : home.hero.source === 'products' && pickedSlides.length > 0
+    ? pickedSlides
+    : home.hero.source !== 'products' && bannerSlides
+      ? bannerSlides
+      : autoSlides();
+const featuredProducts = home.featured.enabled ? pickProductsById(catalog, home.featured.productIds).map(toCard) : [];
+const layout = {
+  order: themeSettings.order,
+  announcement: liveAnnouncement(themeSettings, new Date()),
+  featured: featuredProducts.length > 1 ? { title: home.featured.title, products: featuredProducts } : null,
+  howToOrder: home.howToOrder.enabled ? howToOrderSteps(publicFacts) : null,
+  categories: home.catalog.categories,
+};
 const itemList = {
   name: `${Astro.locals.tenant.name} — Koleksi Produk pilihan`,
   items: products.map((p) => ({
@@ -115,12 +157,13 @@ const itemList = {
   title={homepageTitle}
   description={homepageDescription}
   image={heroSlides[0]?.image || undefined}
-  preloadImages={themeSettings.sections.banner && heroSlides[0]?.image
+  preloadImages={heroSlides[0]?.image
     ? storefrontImageSrc(heroSlides[0].image)
     : undefined}
   itemList={ready ? itemList : undefined}
-  noindex={bannerPreview.granted}
-  buyerTracking={!bannerPreview.granted}
+  noindex={bannerPreview.granted || Boolean(homePreview)}
+  buyerTracking={!bannerPreview.granted && !homePreview}
+  accentOverride={homePreview?.accent ?? undefined}
 >
   {bannerPreview.granted && (
     <div role="status" data-banner-preview class="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950">
@@ -143,7 +186,7 @@ const itemList = {
         </div>
       </section>
     ) : (
-      <CompactMarketHome content={content} products={products} heroSlides={heroSlides} sections={{ ...template.composition.sections, hero: template.composition.sections.hero && themeSettings.sections.banner }} trustSignals={trustSignals} catalogHeading={{ ...content.catalog, title: themeSettings.catalog.title, description: themeSettings.catalog.description }} />
+      <CompactMarketHome content={content} products={products} heroSlides={heroSlides} sections={{ ...template.composition.sections, hero: template.composition.sections.hero && home.hero.enabled }} trustSignals={trustSignals} catalogHeading={{ ...content.catalog, title: home.catalog.title, description: home.catalog.description }} layout={layout} />
     )
   }
 </BaseLayout>

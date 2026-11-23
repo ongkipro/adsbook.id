@@ -1,0 +1,58 @@
+---
+// Admin › Tema › Pilihan kami: two to six products the seller puts forward,
+// in their order, as a horizontal row inside the 480px column. The same card
+// as the catalogue (ProductListItem), so a product reads the same everywhere.
+import ProductListItem from '../shared/ProductListItem.astro';
+
+interface Product {
+  slug: string;
+  name: string;
+  category: string;
+  image: string;
+  price: number;
+  comparePrice?: number;
+  ratingValue?: number;
+  reviewCount?: number;
+  soldCount?: number;
+  variants?: Array<{ label: string; price: number }>;
+}
+interface Props {
+  title: string;
+  products: Product[];
+}
+const { title, products } = Astro.props;
+const formatPrice = (value: number) => `Rp${value.toLocaleString('id-ID')}`;
+---
+
+{products.length > 1 && (
+  <section class="pt-6" aria-labelledby="featured-title">
+    <h2 id="featured-title" class="px-4 text-lg font-bold tracking-[-0.01em] text-sf-ink">{title}</h2>
+    {/* Two products fill the row as two columns; three or more scroll, the next one peeking. */}
+    <ul class:list={['mt-3 px-4', products.length === 2 ? 'grid grid-cols-2 gap-2' : 'featured-row flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1']}>
+      {products.map((product) => (
+        <li class:list={[products.length !== 2 && 'w-[42%] shrink-0 snap-start']}>
+          <ProductListItem
+            product={{
+              slug: product.slug,
+              productName: product.name,
+              heroImage: product.image,
+              category: product.category,
+              price: product.price,
+              comparePrice: product.comparePrice,
+              variants: product.variants ?? [],
+              ratingValue: product.ratingValue,
+              reviewCount: product.reviewCount,
+              soldCount: product.soldCount,
+            }}
+            formatPrice={formatPrice}
+          />
+        </li>
+      ))}
+    </ul>
+  </section>
+)}
+
+<style>
+  .featured-row { scrollbar-width: none; scroll-padding-inline: 1rem; }
+  .featured-row::-webkit-scrollbar { display: none; }
+</style>

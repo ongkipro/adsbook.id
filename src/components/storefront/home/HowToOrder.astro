@@ -1,0 +1,24 @@
+---
+// Admin › Tema › Cara pesan: three numbered steps, written from what this
+// store actually offers (howToOrderSteps reads its payment methods), so a
+// prepaid-only store never promises COD and a COD store asks for an address.
+interface Props {
+  steps: Array<{ title: string; text: string }>;
+}
+const { steps } = Astro.props;
+---
+
+<section class="px-4 pb-8 pt-2" aria-labelledby="how-to-order-title">
+  <h2 id="how-to-order-title" class="text-lg font-bold tracking-[-0.01em] text-sf-ink">Cara pesan</h2>
+  <ol class="mt-3 grid gap-px overflow-hidden rounded-sf border border-sf-line bg-sf-line">
+    {steps.map((step, index) => (
+      <li class="flex items-start gap-3 bg-white px-3 py-3">
+        <span class="sf-num grid size-6 shrink-0 place-items-center rounded-full bg-sf-accent-soft text-xs font-bold text-sf-accent-strong" aria-hidden="true">{index + 1}</span>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold leading-5 text-sf-ink">{step.title}</p>
+          <p class="mt-0.5 text-[13px] leading-[18px] text-sf-text">{step.text}</p>
+        </div>
+      </li>
+    ))}
+  </ol>
+</section>
