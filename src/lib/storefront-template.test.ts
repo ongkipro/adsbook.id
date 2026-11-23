@@ -101,13 +101,20 @@ test("invalid and executable template definitions are rejected before persistenc
   );
   assert.throws(() =>
     validateStorefrontTemplateDefinition({
-      id: "unsupported-wide-proof",
-      name: "Unsupported Wide Proof",
+      id: "unsupported-grid-proof",
+      name: "Unsupported Grid Proof",
       composition: {
-        layout: "wide",
+        layout: "grid",
         sections: { hero: true, catalog: true, proofs: true },
       },
     }),
+    /invalid|layout|Invalid/i,
+    "only the wide and compact layouts exist",
+  );
+  assert.throws(
+    () => validateStorefrontTemplateDefinition({ id: "pasar-rapi", name: "Pasar Rapi", composition: { layout: "wide", sections: { hero: true, catalog: true } } }),
+    /Built-in/,
+    "a built-in id cannot be replaced",
   );
   assert.equal(rows.length, 0);
 });
@@ -154,5 +161,18 @@ test("built-in templates remain resolvable without template persistence", async 
   if (selected.state === "ready") {
     assert.equal(selected.source, "built-in");
     assert.equal(selected.definition.composition.layout, "compact");
+  }
+});
+
+test("Tema: Pasar Rapi (wide) is the default built-in and Klasik (compact) stays selectable", async () => {
+  const { DEFAULT_STOREFRONT_TEMPLATE_ID, BUILT_IN_STOREFRONT_TEMPLATES } = await import("./storefront-template.ts");
+  assert.equal(DEFAULT_STOREFRONT_TEMPLATE_ID, "pasar-rapi");
+  assert.deepEqual(BUILT_IN_STOREFRONT_TEMPLATES.map((theme) => [theme.id, theme.name, theme.composition.layout]), [
+    ["pasar-rapi", "Pasar Rapi", "wide"],
+    ["compact-market", "Klasik", "compact"],
+  ]);
+  for (const id of ["pasar-rapi", "compact-market"]) {
+    const resolved = await resolveStorefrontTemplate(undefined, id);
+    assert.equal(resolved.state, "ready", id);
   }
 });

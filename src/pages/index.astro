@@ -10,6 +10,7 @@ import { resolveStorefrontTemplate } from '../lib/storefront-template';
 import { dailySeed, pickDaily } from '../lib/daily-rotation';
 import { homeDescription, homeTitle } from '../lib/home-seo';
 import { getStorePublicFacts, storefrontTrustSignals } from '../lib/public-store';
+import { loadThemeSettings } from '../lib/storefront-theme';
 
 const database = tenantDatabase(Astro.locals);
 // R1b banner preview: only `?preview=banner` reads the session and the content
@@ -36,7 +37,7 @@ if (bannerPreview.granted) {
   Astro.response.headers.set('Cache-Control', 'private, no-store');
   Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
 }
-const [catalog, homeResolution, templateResolution, publicFacts] = await Promise.all([
+const [catalog, homeResolution, templateResolution, publicFacts, themeSettings] = await Promise.all([
   getStorefrontProducts(Astro.locals),
   getTenantHomeContent(Astro.locals, bannerPreview.granted ? bannerPreview.published ?? undefined : undefined),
   resolveStorefrontTemplate(
@@ -44,8 +45,11 @@ const [catalog, homeResolution, templateResolution, publicFacts] = await Promise
     Astro.locals.tenant.storefrontTemplate,
   ),
   getStorePublicFacts(Astro.locals),
+  loadThemeSettings(database && typeof database === 'object' ? (database as D1Database) : undefined),
 ]);
-const trustSignals = storefrontTrustSignals(publicFacts);
+// admin › Tema: the trust strip and the banner can be switched off; the
+// catalogue heading is the store's own.
+const trustSignals = themeSettings.sections.trustStrip ? storefrontTrustSignals(publicFacts) : [];
 const products = catalog.map((product) => ({
   slug: product.slug,
   name: product.productName,
@@ -67,6 +71,7 @@ const ready = homeResolution.state === 'ready' && templateResolution.state === '
 const unavailable = homeResolution.state === 'unavailable' || templateResolution.state !== 'ready';
 const content = homeResolution.state === 'ready' ? homeResolution.content : null;
 const template = templateResolution.state === 'ready' ? templateResolution.definition : null;
+const wideLayout = template?.composition.layout !== 'compact';
 if (unavailable) Astro.response.status = 503;
 const homepageTitle = ready
   ? homeTitle(Astro.locals.tenant.name, Astro.locals.tenant.tagline || Astro.locals.tenant.description)
@@ -106,16 +111,16 @@ const itemList = {
   title={homepageTitle}
   description={homepageDescription}
   image={heroSlides[0]?.image || undefined}
-  preloadImages={heroSlides[0]?.image}
+  preloadImages={themeSettings.sections.banner ? heroSlides[0]?.image : undefined}
   itemList={ready ? itemList : undefined}
   noindex={bannerPreview.granted}
   buyerTracking={!bannerPreview.granted}
-  wide
+  wide={wideLayout}
 >
   {bannerPreview.granted && (
     <div role="status" data-banner-preview class="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950">
       {bannerPreview.notice ?? 'Pratinjau banner: belum terlihat pembeli.'}{' '}
-      <a href="/admin/content/tampilan" class="font-semibold underline underline-offset-2">Kembali ke Tampilan toko</a>
+      <a href="/admin/settings/theme/beranda" class="font-semibold underline underline-offset-2">Kembali ke Atur beranda</a>
     </div>
   )}
   {
@@ -133,7 +138,7 @@ const itemList = {
         </div>
       </section>
     ) : (
-      <CompactMarketHome content={content} products={products} heroSlides={heroSlides} sections={template.composition.sections} trustSignals={trustSignals} />
+      <CompactMarketHome content={content} products={products} heroSlides={heroSlides} sections={{ ...template.composition.sections, hero: template.composition.sections.hero && themeSettings.sections.banner }} trustSignals={trustSignals} catalogHeading={{ ...content.catalog, title: themeSettings.catalog.title, description: themeSettings.catalog.description }} />
     )
   }
 </BaseLayout>

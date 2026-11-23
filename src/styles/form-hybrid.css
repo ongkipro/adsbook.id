@@ -10,10 +10,12 @@
      hairline. #2563eb is 5.17:1 under white text, #1d4ed8 on hover 6.70:1
      (and 6.16:1 over --sf-accent-soft #eff6ff, where #555555 is 6.85:1). A
      store re-brands by overriding these tokens (ADR-019), never a call site. */
-  --sf-accent: #2563eb;
-  --sf-accent-strong: #1d4ed8;
-  --sf-accent-soft: #eff6ff;
-  --sf-accent-ring: rgba(37, 99, 235, 0.28);
+  /* A store's own accent (admin › Tema, UI-2 checked) arrives as --sf-brand-*
+     on <body> (BaseLayout, `accentTokens`); without one the brand blue stands. */
+  --sf-accent: var(--sf-brand-accent, #2563eb);
+  --sf-accent-strong: var(--sf-brand-accent-strong, #1d4ed8);
+  --sf-accent-soft: var(--sf-brand-accent-soft, #eff6ff);
+  --sf-accent-ring: var(--sf-brand-accent-ring, rgba(37, 99, 235, 0.28));
   --sf-field: #ffffff;
   /* An empty input is white; a filled one takes --sf-accent-soft, so a buyer
      can still see at a glance which fields are waiting. */

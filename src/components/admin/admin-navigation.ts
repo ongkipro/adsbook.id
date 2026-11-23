@@ -17,7 +17,7 @@ import {
   Package,
   Puzzle,
   Globe,
-  LayoutTemplate,
+  Palette,
   Settings,
   ShoppingBag,
   Truck,
@@ -86,9 +86,6 @@ export const adminNavGroups: AdminNavGroup[] = [
         keywords: "products produk katalog varian stock landing pages tampilan toko banner beranda",
         children: [
           { href: "/admin/landing-pages", label: "Landing page", icon: FilePenLine },
-          // R1b: the manual home banner. Under Katalog because every role that sees
-          // Katalog (owner, admin, advertiser) may already open /admin/content*.
-          { href: "/admin/content/tampilan", label: "Tampilan toko", icon: LayoutTemplate },
         ],
       },
     ],
@@ -168,6 +165,16 @@ export const adminNavGroups: AdminNavGroup[] = [
       // below Pengaturan, so this link never moves when that list opens or closes.
       // Its pages (/admin/settings/plugins and each plugin's page beneath it)
       // pass activeMenu="plugins"; management stays owner-only on the page and API.
+      // Admin › Tema (2026-11-23): right above Plugin. The theme cards, and
+      // under the active one its homepage (banner, sections, heading, accent).
+      {
+        id: "theme",
+        href: "/admin/settings/theme",
+        label: "Tema",
+        description: "Tampilan toko dan beranda",
+        icon: Palette,
+        keywords: "tema theme tampilan toko beranda homepage banner warna aksen katalog pasar rapi klasik",
+      },
       {
         id: "plugins",
         href: "/admin/settings/plugins",
@@ -221,7 +228,7 @@ export const statusNavItem: AdminNavItem = {
 
 /** Menu items whose sub-pages are the item itself: each plugin's settings page
  *  lives under the plugin list (ADR-028). Every other item matches exactly. */
-const NESTED_NAV_HREFS = new Set(["/admin/settings/plugins"]);
+const NESTED_NAV_HREFS = new Set(["/admin/settings/plugins", "/admin/settings/theme"]);
 
 export function isAdminNavHrefActive(currentPath: string, href: string) {
   const base = "https://admin.local";

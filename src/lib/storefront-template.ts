@@ -9,7 +9,9 @@ const templateIdSchema = z
 
 const compositionSchema = z
   .object({
-    layout: z.literal("compact"),
+    // "wide": the full-width storefront ("Pasar Rapi", 2026-11-23);
+    // "compact": the phone column ("Klasik").
+    layout: z.enum(["wide", "compact"]),
     sections: z
       .object({
         hero: z.boolean(),
@@ -36,23 +38,38 @@ export type StorefrontTemplateDefinition = z.infer<
   typeof storefrontTemplateDefinitionSchema
 >;
 
+/** The default theme: full width, store search, compact cards (PR #61). */
+const pasarRapi = storefrontTemplateDefinitionSchema.parse({
+  id: "pasar-rapi",
+  name: "Pasar Rapi",
+  composition: {
+    layout: "wide",
+    sections: { hero: true, catalog: true, landingPages: true },
+  },
+});
+
+/** The phone column every store rendered before PR #61, kept as "Klasik". */
 const compactMarket = storefrontTemplateDefinitionSchema.parse({
   id: "compact-market",
-  name: "Compact Market",
+  name: "Klasik",
   composition: {
     layout: "compact",
     sections: { hero: true, catalog: true, landingPages: true },
   },
 });
 
+export const DEFAULT_STOREFRONT_TEMPLATE_ID = pasarRapi.id;
+
 export const BUILT_IN_STOREFRONT_TEMPLATES = Object.freeze([
+  pasarRapi,
   compactMarket,
 ] as const);
 
 const builtInById: Readonly<Record<string, StorefrontTemplateDefinition>> =
   Object.freeze({
+    [pasarRapi.id]: pasarRapi,
     [compactMarket.id]: compactMarket,
-    });
+  });
 
 function parseDefinition(value: unknown): StorefrontTemplateDefinition {
   const serialized = JSON.stringify(value);

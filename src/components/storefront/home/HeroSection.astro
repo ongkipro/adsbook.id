@@ -37,7 +37,7 @@ const { slides } = Astro.props;
     <div id="hero-track" class="hero-track flex snap-x snap-mandatory overflow-x-auto">
       {
         slides.map((slide, index) => (
-          <article class="min-w-full snap-start md:grid md:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] md:items-center" aria-roledescription="slide" aria-label={`${index + 1} dari ${slides.length}`}>
+          <article data-hero-slide class="min-w-full snap-start md:grid md:grid-cols-[minmax(0,5fr)_minmax(0,4fr)] md:items-center" aria-roledescription="slide" aria-label={`${index + 1} dari ${slides.length}`}>
             <img
               src={slide.image}
               alt={`${slide.alt} - ${Astro.locals.tenant.name}`}

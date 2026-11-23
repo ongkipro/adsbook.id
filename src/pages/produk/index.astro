@@ -1,4 +1,5 @@
 ---
+import { isWideTheme } from '../../lib/storefront-theme';
 import Breadcrumb from '../../components/storefront/shared/Breadcrumb.astro';
 import ProductsSection from '../../components/storefront/home/ProductsSection.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
@@ -32,7 +33,7 @@ const products = catalog.map((product) => ({
     { name: 'Beranda', url: '/' },
     { name: 'Produk', url: '/produk' },
   ]}
-  wide
+  wide={isWideTheme(Astro.locals.tenant.storefrontTemplate)}
 >
   <main id="konten-utama" class="min-h-screen bg-white text-[#111111]">
     <div class="sf-wrap"><Breadcrumb items={[{ label: 'Beranda', href: '/' }, { label: 'Produk' }]} /></div>

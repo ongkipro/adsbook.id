@@ -114,3 +114,25 @@ test("Plugin is its own workspace right before Pengaturan for owner and admin, a
   assert.equal(isAdminNavHrefActive("/admin/settings/plugins", PLUGINS), true);
   assert.equal(isAdminNavHrefActive("/admin/settings/plugins/kelola", PLUGINS), true);
 });
+
+test("Tema sits right above Plugin for owner and admin, opens its beranda page, and is closed to the scoped roles", () => {
+  const THEME = "/admin/settings/theme";
+  for (const role of ["owner", "admin"] as const) {
+    const system = getVisibleNavGroups(role).find((group) => group.items.some((item) => item.id === "plugins"));
+    const ids = system?.items.map((item) => item.id) ?? [];
+    assert.equal(ids.indexOf("theme"), ids.indexOf("plugins") - 1, `${role}: Tema immediately above Plugin`);
+    assert.equal(canAccessAdminRoute(role, THEME), true, `${role}: page`);
+    assert.equal(canAccessAdminRoute(role, `${THEME}/beranda`), true, `${role}: beranda`);
+    assert.equal(canAccessAdminRoute(role, "/api/admin/settings/theme"), true, `${role}: API`);
+    assert.equal(getVisibleNavGroups(role, "digital").some((group) => group.items.some((item) => item.id === "theme")), true, `${role}: a digital store keeps Tema`);
+  }
+  for (const role of ["advertiser", "customer_service"] as const) {
+    assert.equal(getSearchableNavItems(role).some((item) => item.href.startsWith(THEME)), false, `${role}: no Tema link`);
+    assert.equal(canAccessAdminRoute(role, THEME), false, `${role}: no page`);
+    assert.equal(canAccessAdminRoute(role, "/api/admin/settings/theme"), false, `${role}: no API`);
+  }
+  assert.equal(isAdminNavHrefActive(`${THEME}/beranda`, THEME), true, "the beranda page lights Tema");
+  // "Tampilan toko" left Katalog: the banner lives under Tema now.
+  const katalog = getVisibleNavGroups("owner").flatMap((group) => group.items).find((item) => item.id === "products");
+  assert.equal(katalog?.children?.some((child) => child.href === "/admin/content/tampilan"), false);
+});

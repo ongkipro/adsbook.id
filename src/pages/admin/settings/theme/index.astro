@@ -1,0 +1,19 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import AdminPageHeader from '../../../../components/admin/AdminPageHeader.astro';
+import { ThemeGallery } from '../../../../components/admin/ThemeGallery';
+export const prerender = false;
+
+// Admin › Tema (2026-11-23): the store's theme as cards. The active one opens
+// its homepage configuration; the other can be switched on. Owner and admin.
+---
+
+<AdminLayout title="Tema" activeMenu="theme">
+  <div class="space-y-6">
+    <AdminPageHeader
+      title="Tema"
+      description="Pilih tampilan toko Anda. Mengganti tema langsung berlaku tanpa mengubah produk, pesanan, atau pengaturan lain."
+    />
+    <ThemeGallery client:load />
+  </div>
+</AdminLayout>

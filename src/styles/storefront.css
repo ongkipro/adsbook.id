@@ -103,3 +103,30 @@
 @media (min-width: 1024px) {
   .sf-form-fill :is(div.px-4, form.px-4) { padding-inline: 0; }
 }
+
+/* "Klasik" theme (compact-market): the wide components render inside the
+   480px column, so their screen-width breakpoints are folded back to the
+   phone layout there. Unlayered so it wins over the breakpoint utilities. */
+.sf-column .sf-wrap { max-width: none; padding-inline: 1rem; }
+.sf-column #product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.sf-column .pdp-grid { display: block; padding-inline: 0; margin-top: 0; }
+.sf-column .pdp-grid > div:first-child { position: static; margin-top: 0.5rem; border: 0; border-radius: 0; }
+.sf-column .pdp-grid section { padding-inline: 1rem; }
+.sf-column .pdp-grid section.lg\:border-t { border-top-width: 8px; border-color: #f3f3f3; }
+.sf-column #form-pemesanan { padding-inline: 0.5rem; }
+.sf-column .sf-trust { grid-template-columns: 1fr; }
+.sf-column .catalog-chips { margin-inline: -1rem; padding-inline: 1rem; flex-wrap: nowrap; }
+.sf-column header .sf-wrap { height: 3.5rem; }
+.sf-column header a[href="/produk"].md\:inline { display: none; }
+.sf-column footer .sf-wrap { grid-template-columns: 1fr; }
+.sf-column [data-hero-slide] { display: block; }
+.sf-column [data-hero-slide] img { aspect-ratio: 1 / 1; max-height: none; }
+.sf-column [data-hero-slide] > div { padding: 0.75rem; }
+.sf-column [data-hero-slide] > div p:last-child { font-size: 1rem; line-height: 1.375; -webkit-line-clamp: 2; }
+.sf-column #sticky-purchase-bar { max-width: 480px; }
+@media (min-width: 1024px) {
+  .sf-column #sticky-purchase-bar { display: flex; }
+  .sf-column a.lg\:inline-flex[href="#form-pemesanan"] { display: none; }
+  .sf-column .sf-form-fill { max-width: 480px; margin-inline: auto; }
+  .sf-column .sf-form-fill :is(div.px-4, form.px-4) { padding-inline: 1rem; }
+}

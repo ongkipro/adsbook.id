@@ -36,16 +36,18 @@ interface Props {
   };
   /** True claims from the store's checkout settings (`storefrontTrustSignals`). */
   trustSignals?: Array<{ icon: string; label: string }>;
+  /** admin › Tema's catalogue heading; the published home content's otherwise. */
+  catalogHeading?: { eyebrow: string; title: string; description: string };
 }
 
-const { content, products, heroSlides, sections, trustSignals = [] } = Astro.props;
+const { content, products, heroSlides, sections, trustSignals = [], catalogHeading } = Astro.props;
 ---
 
 <main id="konten-utama" class="overflow-x-hidden bg-white font-sans text-[#111111] antialiased">
   <div id="home" class="flex w-full flex-col">
     {sections.hero && <HeroSection slides={heroSlides} highlights={content.heroHighlights} content={content.hero} />}
     {trustSignals.length > 0 && <div class="sf-wrap pt-4"><TrustStrip signals={trustSignals} /></div>}
-    {sections.catalog && <ProductsSection products={products} heading={content.catalog} />}
+    {sections.catalog && <ProductsSection products={products} heading={catalogHeading ?? content.catalog} />}
     {/* Landing pages are not listed on the home page (Paduka, 2026-11-01):
         they live on /landing-page, reached from the header and footer
         "Halaman" link. `sections.landingPages` still parses for saved
