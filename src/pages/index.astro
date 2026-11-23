@@ -9,7 +9,7 @@ import { resolveAuthSecret } from '../lib/auth-secret';
 import { resolveStorefrontTemplate } from '../lib/storefront-template';
 import { dailySeed, heroSummary, pickHeroProducts } from '../lib/daily-rotation';
 import { homeDescription, homeTitle } from '../lib/home-seo';
-import { heroImageSources } from '../lib/image-derivative';
+import { storefrontImageSrc } from '../lib/image-derivative';
 import { getStorePublicFacts, storefrontTrustSignals } from '../lib/public-store';
 import { loadThemeSettings } from '../lib/storefront-theme';
 
@@ -116,7 +116,7 @@ const itemList = {
   description={homepageDescription}
   image={heroSlides[0]?.image || undefined}
   preloadImages={themeSettings.sections.banner && heroSlides[0]?.image
-    ? (({ src, srcset, sizes }) => (srcset ? { srcset, imagesizes: sizes } : src))(heroImageSources(heroSlides[0].image))
+    ? storefrontImageSrc(heroSlides[0].image)
     : undefined}
   itemList={ready ? itemList : undefined}
   noindex={bannerPreview.granted}

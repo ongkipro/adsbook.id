@@ -10,6 +10,7 @@ import Icon from '../../components/storefront/shared/Icon.astro';
 import RatingStars from '../../components/storefront/shared/RatingStars.astro';
 import GeoIpResolvedForm from '../../components/storefront/forms/GeoIpResolvedForm.astro';
 import ProductImageGallery from '../../components/storefront/ProductImageGallery.astro';
+import { storefrontImageSrc } from '../../lib/image-derivative';
 import SocialProofToast from '../../components/storefront/shared/SocialProofToast.astro';
 import { recentOrderCount } from '../../lib/social-proof';
 import { resolveFormModeContext } from '../../lib/form-mode';
@@ -125,7 +126,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
   title={productTitle}
   description={productDescription}
   image={product.heroImage}
-  preloadImages={product.heroImage}
+  preloadImages={storefrontImageSrc(product.heroImage)}
   canonical={canonical}
   ogType="product"
   hideHeader={false}

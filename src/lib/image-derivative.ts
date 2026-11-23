@@ -1,43 +1,32 @@
 import { CARD_DERIVATIVES } from '../data/card-derivatives.ts';
 
 /**
- * The catalogue card renders at 182 CSS px, which is 478 device pixels on the
- * phone Lighthouse emulates, while the product detail view renders at 480 CSS
- * px and genuinely wants the full upload. One file cannot serve both without
- * wasting most of its bytes on the card, so a card-sized derivative lives
- * beside the original as `<name>-sm.<ext>`.
+ * Every image the public storefront shows, at most 480 px wide (owner,
+ * 2026-11-23: "480px untuk storefront public biar maksimal dan ringan"; the
+ * catalog feeds take the 1024 px JPEG instead, see `feedImagePath`).
  *
- * `/assets/[...key].ts` falls back to the original when the derivative is
- * absent, so calling this on an image that has none is safe — it costs the old
- * number of bytes rather than breaking the tile.
+ * - An upload dated 2026-11-18 or later is already a WebP at most 480 px wide
+ *   (src/lib/image-rules.ts), so it is served as it is. Asking for a `-sm`
+ *   twin it never had cost a second R2 lookup and a stand-in the edge would
+ *   not cache, on every card.
+ * - An older upload can be 1024 to 1280 px; its 480 px `-sm` twin is asked for
+ *   instead. `/assets/[...key].ts` falls back to the original when a twin is
+ *   missing, so the swap is safe, never a broken tile.
+ * - A static image is swapped only when its twin is listed in
+ *   CARD_DERIVATIVES (a file under `public/` has no fallback).
+ * - Anything else (a remote URL, a `/media/` image, an empty field) is left
+ *   exactly as it is.
  */
-// lazy: since 2026-11-18 every upload is already 480 px wide (image-rules.ts),
-// so new uploads store no `-sm` twin and a card's `-sm` request falls back to
-// the 480 px original (one extra R2 lookup, 10-minute stand-in cache). Older
-// uploads keep their twins. Upgrade path: drop the swap for uploads dated
-// 2026-11-18 or later once their share of traffic makes the lookup matter.
-export function cardImageSrc(
+export const DISPLAY_SIZED_SINCE = '2026-11-18';
+const UPLOAD = /^\/assets\/uploads\/(\d{4}-\d{2}-\d{2})\/[0-9a-f-]+\.[a-z0-9]+$/i;
+
+export function storefrontImageSrc(
   url: string,
   derivatives: ReadonlySet<string> = CARD_DERIVATIVES,
 ): string {
   const trimmed = url?.trim() ?? '';
-  // A static image has no server-side fallback, so only a listed one is swapped.
   if (derivatives.has(trimmed)) return trimmed.replace(/(\.[a-z0-9]+)$/i, '-sm$1');
-  if (!trimmed.startsWith('/assets/uploads/')) return trimmed;
-  if (/-sm\.[a-z0-9]+$/i.test(trimmed)) return trimmed;
+  const upload = UPLOAD.exec(trimmed);
+  if (!upload || /-sm\.[a-z0-9]+$/i.test(trimmed) || upload[1] >= DISPLAY_SIZED_SINCE) return trimmed;
   return trimmed.replace(/(\.[a-z0-9]+)$/i, '-sm$1');
-}
-
-/**
- * The home hero's sources (PageSpeed, 2026-11-23: the first slide is the LCP
- * image and shipped a 1280 px, 203 KB original into a column at most 480 CSS
- * px wide). A 1x screen takes the 480 px card derivative; 2x and up take the
- * upload. Same fallback as `cardImageSrc`: a missing `-sm` serves the original.
- */
-export function heroImageSources(url: string, derivatives: ReadonlySet<string> = CARD_DERIVATIVES): { src: string; srcset: string; sizes: string } {
-  const original = url?.trim() ?? '';
-  const small = cardImageSrc(original, derivatives);
-  const sizes = '(max-width: 480px) 100vw, 480px';
-  if (small === original) return { src: original, srcset: '', sizes };
-  return { src: small, srcset: `${small} 480w, ${original} 960w`, sizes };
 }

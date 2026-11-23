@@ -1,4 +1,5 @@
 ---
+import { storefrontImageSrc } from '../../lib/image-derivative';
 /**
  * The product photo, full width, and nothing else.
  *
@@ -33,10 +34,10 @@ const gallery = images.filter((image) => image.trim());
     {gallery.map((imgUrl, idx) => (
       <div class="relative w-full bg-sf-surface">
         <img
-          src={imgUrl}
+          src={storefrontImageSrc(imgUrl)}
           alt={idx === 0 ? `Foto ${productName}` : `${productName} foto ${idx + 1}`}
-          width={1000}
-          height={1000}
+          width={480}
+          height={480}
           class="block aspect-square w-full object-cover"
           loading={idx === 0 ? 'eager' : 'lazy'}
           decoding={idx === 0 ? 'sync' : 'async'}
