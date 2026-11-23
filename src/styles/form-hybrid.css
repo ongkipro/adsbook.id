@@ -316,7 +316,7 @@
      (padding-top 1.4rem) so the two do not close up on each other. */
   top: 0.55rem;
   color: var(--sf-accent-strong);
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 /* Filled but not being edited: the soft grey that says "done". `placeholder=" "`
@@ -369,7 +369,7 @@
   border-radius: 999px;
   background: #fee4e2;
   color: #d92d20;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 700;
   flex: 0 0 auto;
 }
@@ -573,7 +573,7 @@
   display: block;
   width: 100%;
   margin: 0;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.25;
   color: #555555;
@@ -621,7 +621,7 @@
 .payment-block-anchor small {
   flex: 0 0 auto;
   margin: 0;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.08em;
@@ -698,7 +698,7 @@
   border-color: var(--sf-field-border);
   background: var(--sf-surface-alt);
   color: #4a4a4a;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   /* was 900: the only 900 in the tree, and no Inter 900 is loaded, so it already
      resolved to the 700 face. Declaring what ships (A-32). */
   font-weight: 700;
@@ -722,7 +722,7 @@
 }
 .payment-option-desc {
   margin: 0;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.4;
   color: #555555;
@@ -829,7 +829,7 @@
   font-size: 0.8125rem;
 }
 .payment-group-body .payment-option-desc {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 .summary-block {
   gap: 1rem;
@@ -950,7 +950,7 @@
 .total-box small {
   display: block;
   margin-top: 0.1rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   line-height: 1.2;
   color: #555555;
   font-weight: 600;
@@ -968,23 +968,6 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
-.info-box {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.88rem 0.95rem;
-  /* Flat. The note is set apart by its fill, never by an outline. */
-  border: 0;
-  border-radius: 0.68rem;
-  background: var(--sf-surface-alt);
-  color: #1a1a1a;
-}
-.info-box span {
-  font-size: 0.75rem;
-  line-height: 1.55;
-  font-weight: 400;
-  /* The box sits on --sf-surface-alt, where #767676 measures 4.26:1. */
-  color: #555555;
-}
 .submit-panel {
   display: grid;
   gap: 0.9rem;
@@ -992,7 +975,7 @@
 }
 .submit-main {
   width: 100%;
-  min-height: 2.75rem;
+  min-height: 3rem;
   border: 1px solid var(--sf-accent);
   padding: 0.72rem 1rem;
   background: var(--sf-accent) !important;
@@ -1052,6 +1035,9 @@
 .submit-main[data-state='ready']:hover .submit-main-icon {
   transform: translateX(2px);
 }
+/* Grey only while the hybrid form still loads its area, shipping or payment.
+   An incomplete form looks ready (owner, 2026-11-23): the tap names the
+   missing field under it. */
 .submit-main[data-state='disabled'] {
   background: #E5E5E5 !important;
   border-color: #E5E5E5 !important;
@@ -1126,11 +1112,9 @@
 }
 .trust-strip i {
   font-style: normal;
-  font-size: 0.625rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   line-height: 1.25;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 /* ── Field focus and validity (2026-11-01) ───────────────────────────────

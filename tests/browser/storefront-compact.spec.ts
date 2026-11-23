@@ -96,3 +96,55 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
 }
+
+test("order form: 'Pesan Sekarang' looks ready, a tap on an empty form marks the missing fields; nothing under 12px; no order is sent", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const posted: string[] = [];
+  page.on("request", (request) => { if (request.method() === "POST" && /submit-.*order/.test(request.url())) posted.push(request.url()); });
+  await page.goto(`${STORE}/`);
+  const href = await page.locator("#product-grid a[href^='/produk/']").first().getAttribute("href");
+  await page.goto(`${STORE}${href}`);
+  const form = page.locator("#form-pemesanan");
+  const submit = form.locator("#submit-button");
+  await submit.scrollIntoViewIfNeeded();
+  await expect(submit).toHaveText(/Pesan Sekarang/);
+  await expect(submit).not.toHaveAttribute("data-state", "waiting");
+  expect(await submit.evaluate((button) => getComputedStyle(button).backgroundColor)).not.toBe("rgb(229, 229, 229)");
+  expect((await submit.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+
+  await submit.click();
+  await expect(form.locator('[aria-invalid="true"]').first()).toBeVisible();
+  await expect(form.getByText("Maaf, masih ada data yang perlu dilengkapi dengan benar.")).toBeVisible();
+  expect(posted, "an incomplete form never posts").toEqual([]);
+
+  const tiny = await form.evaluate((root) =>
+    [...root.querySelectorAll("*")]
+      .filter((element) => (element as HTMLElement).offsetParent && [...element.childNodes].some((node) => node.nodeType === 3 && node.textContent!.trim()))
+      .filter((element) => parseFloat(getComputedStyle(element).fontSize) < 12)
+      .map((element) => `${element.tagName} ${getComputedStyle(element).fontSize} "${element.textContent!.trim().slice(0, 20)}"`),
+  );
+  expect(tiny, "the checkout text keeps the 12px floor").toEqual([]);
+  await form.screenshot({ path: "test-results/storefront-form-errors-390.png" });
+  await expect(form.getByText("Harga divalidasi ulang saat order diproses.")).toHaveCount(0);
+});
+
+test("an empty search says so and offers to clear it", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${STORE}/produk?q=zzzz-tidak-ada`);
+  await expect(page.getByText("Produk tidak ditemukan", { exact: true })).toBeVisible();
+  await page.screenshot({ path: "test-results/storefront-search-empty-390.png" });
+  await page.getByRole("button", { name: "Hapus pencarian" }).click();
+  await expect(page.locator("#product-grid .product-card:not(.hidden)").first()).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: /Cari produk di/ })).toHaveValue("");
+  expect(new URL(page.url()).search).toBe("");
+});
+
+test("404 is the storefront's own page: one heading, a 48px way home, related products", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${STORE}/produk/tidak-ada-produk-ini`);
+  await expect(page.getByRole("heading", { level: 1, name: "Halaman tidak ditemukan" })).toBeVisible();
+  const home = page.getByRole("link", { name: "Kembali ke beranda" });
+  expect((await home.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+  await expect(page.getByRole("heading", { name: "Mungkin ini yang Anda cari" })).toBeVisible();
+  await page.screenshot({ path: "test-results/storefront-404-390.png", fullPage: true });
+});
