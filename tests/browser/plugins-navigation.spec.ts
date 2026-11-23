@@ -52,10 +52,11 @@ test("owner: Plugin is its own workspace right before Pengaturan, lit on the lis
   await signInAtMasuk(page, owner(TENANTS[0].slug).username, owner(TENANTS[0].slug).password);
   await page.waitForURL(`${store}/admin/dashboard`, { timeout: 30_000 });
 
-  // Order: Pembayaran, Plugin, Pengaturan.
+  // Order: Pembayaran, Tema, Plugin, Pengaturan (Tema since 2026-11-23).
   const links = await workspaceLinks(page);
   expect(links.indexOf(PLUGINS), `order: ${links.join(" ")}`).toBe(links.indexOf("/admin/settings") - 1);
-  expect(links[links.indexOf(PLUGINS) - 1]).toBe("/admin/payments");
+  expect(links[links.indexOf(PLUGINS) - 1]).toBe("/admin/settings/theme");
+  expect(links[links.indexOf(PLUGINS) - 2]).toBe("/admin/payments");
   expect(await page.locator(`[data-sidebar="content"] a[href="${PLUGINS}"]`).count(), "one Plugin link, not also a Pengaturan child").toBe(1);
 
   // The list page lights Plugin, not Pengaturan; Pengaturan's sub-list stays closed.
@@ -81,10 +82,10 @@ test("owner: Plugin is its own workspace right before Pengaturan, lit on the lis
   await expect(page.locator('[data-sidebar="content"] a[href="/admin/settings"]')).toHaveAttribute("data-active", "false");
   await page.screenshot({ path: `${SHOTS}/plugins-owner-kelola-1366.png` });
 
-  // Keyboard: from Pembayaran, Tab reaches Plugin, then Pengaturan; the focus is visible; Enter opens Plugin.
+  // Keyboard: from Tema (between Pembayaran and Plugin since 2026-11-23), Tab reaches Plugin, then Pengaturan; the focus is visible; Enter opens Plugin.
   await page.goto(`${store}/admin/dashboard`);
   await hydrated(page);
-  await page.locator('[data-sidebar="content"] a[href="/admin/payments"]').focus();
+  await page.locator('[data-sidebar="content"] a[href="/admin/settings/theme"]').focus();
   await page.keyboard.press("Tab");
   expect(await page.evaluate(() => document.activeElement?.getAttribute("href"))).toBe(PLUGINS);
   const focusVisible = await page.evaluate(() => {

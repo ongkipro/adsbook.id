@@ -1,5 +1,6 @@
 ---
 import { tenantDatabase } from '../../lib/tenant-database.ts';
+import { isWideTheme } from '../../lib/storefront-theme';
 import { geoHeadersFromCf } from '../../lib/geo';
 import Breadcrumb from '../../components/storefront/shared/Breadcrumb.astro';
 import MetaLandingTracker from '../../components/storefront/tracking/MetaLandingTracker.astro';
@@ -131,7 +132,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
   ogType="product"
   hideHeader={false}
   hideFooter={false}
-  wide
+  wide={isWideTheme(Astro.locals.tenant.storefrontTemplate)}
   breadcrumbs={[
     { name: 'Beranda', url: '/' },
     { name: 'Produk', url: '/produk' },

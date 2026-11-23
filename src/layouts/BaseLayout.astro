@@ -1,4 +1,5 @@
 ---
+import { accentTokens } from '../lib/storefront-theme';
 import { BRAND_MARK, FAVICON_PNG, FAVICON_192 } from '../lib/brand-assets';
 import type { ComponentProps } from 'astro/types';
 import { SEO } from 'astro-seo';
@@ -131,7 +132,7 @@ const preloadImageUrls =
 ---
 
 <!doctype html>
-<html lang={Astro.locals.tenant.locale}>
+<html lang={Astro.locals.tenant.locale} style={accentTokens(Astro.locals.tenant.themeColor) || undefined}>
   <head>
     <meta charset="UTF-8" />
     <slot name="head" />
@@ -323,7 +324,7 @@ const preloadImageUrls =
          landing pages, policies and /thanks. On a wide screen the grey canvas
          says the column is deliberate rather than a page that failed to stretch. */
       <div class="flex min-h-screen w-full justify-center bg-[#F3F3F3]">
-        <div class="min-h-screen w-full max-w-[480px] bg-white sm:shadow-[0_0_0_1px_#EDEDED]">
+        <div class="sf-column min-h-screen w-full max-w-[480px] bg-white sm:shadow-[0_0_0_1px_#EDEDED]">
           {!hideHeader && <SiteHeader />}
           <div id="main-content" tabindex="-1" class="outline-none">
             <slot />

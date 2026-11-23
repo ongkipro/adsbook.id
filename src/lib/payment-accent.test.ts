@@ -19,9 +19,10 @@ test("primary controls take the accent token, not a hard-coded ink", () => {
 
 test("the default public & form accent is brand blue (#2563eb), with no orange or gold fallbacks", () => {
   const formCss = readFileSync(new URL("../styles/form-hybrid.css", import.meta.url), "utf8");
-  assert.match(formCss, /--sf-accent:\s*#2563eb;/i);
-  assert.match(formCss, /--sf-accent-strong:\s*#1d4ed8;/i);
-  assert.match(formCss, /--sf-accent-soft:\s*#eff6ff;/i);
+  // The default stands unless a store set its own accent (admin › Tema, UI-2).
+  assert.match(formCss, /--sf-accent:\s*var\(--sf-brand-accent,\s*#2563eb\);/i);
+  assert.match(formCss, /--sf-accent-strong:\s*var\(--sf-brand-accent-strong,\s*#1d4ed8\);/i);
+  assert.match(formCss, /--sf-accent-soft:\s*var\(--sf-brand-accent-soft,\s*#eff6ff\);/i);
   assert.doesNotMatch(formCss, /#c2410c|#9a3412|#fff7ed/i);
 
   for (const rel of [

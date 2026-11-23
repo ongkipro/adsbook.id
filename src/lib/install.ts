@@ -149,7 +149,7 @@ export function planInstall(
     return { ok: false, error: "Format bahasa tidak valid. Contoh: id-ID" };
   }
 
-  const storefrontTemplate = text(input.storefrontTemplate, 40) || "compact-market";
+  const storefrontTemplate = text(input.storefrontTemplate, 40) || "pasar-rapi";
   if (!(STOREFRONT_TEMPLATE_IDS as readonly string[]).includes(storefrontTemplate)) {
     return { ok: false, error: "Template storefront tidak dikenal." };
   }

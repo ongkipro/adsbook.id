@@ -1,4 +1,5 @@
 export const STOREFRONT_TEMPLATE_IDS = [
+  "pasar-rapi",
   "compact-market",
 ] as const;
 
