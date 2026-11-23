@@ -15,6 +15,7 @@ import { defaultCatalogContentId } from '../lib/catalog-feed';
 import SocialProofToast from '../components/storefront/shared/SocialProofToast.astro';
 import { recentOrderCount } from '../lib/social-proof';
 import { buildProductJsonLd } from '../lib/json-ld';
+import { storefrontImageSrc } from '../lib/image-derivative';
 
 export const prerender = false;
 
@@ -139,7 +140,7 @@ const productSchemaJson = JSON.stringify(productSchema).replace(/</g, '\\u003c')
   title={metaTitle}
   description={metaDescription}
   image={product.heroImage}
-  preloadImages={product.heroImage}
+  preloadImages={storefrontImageSrc(product.heroImage)}
   canonical={canonical}
   hideHeader={true}
   hideFooter={true}

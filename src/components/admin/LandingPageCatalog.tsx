@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cardImageSrc } from "../../lib/image-derivative";
+import { storefrontImageSrc } from "../../lib/image-derivative";
 import {
   Check,
   Layers,
@@ -59,7 +59,7 @@ function LandingThumb({ src, title }: { src?: string | null; title: string }) {
   }
   return (
     <img
-      src={cardImageSrc(src)}
+      src={storefrontImageSrc(src)}
       alt=""
       title={title}
       width={40}

@@ -1,5 +1,5 @@
 ---
-import { heroImageSources } from '../../../lib/image-derivative';
+import { storefrontImageSrc } from '../../../lib/image-derivative';
 
 interface Slide {
   image: string;
@@ -45,12 +45,10 @@ const { slides } = Astro.props;
         const body = (
           <>
             <img
-              src={heroImageSources(slide.image).src}
-              srcset={heroImageSources(slide.image).srcset || undefined}
-              sizes={heroImageSources(slide.image).srcset ? heroImageSources(slide.image).sizes : undefined}
+              src={storefrontImageSrc(slide.image)}
               alt={`${slide.alt} - ${Astro.locals.tenant.name}`}
-              width="600"
-              height="600"
+              width="480"
+              height="480"
               class="aspect-square w-full object-cover object-center"
               loading={index === 0 ? 'eager' : 'lazy'}
               decoding={index === 0 ? 'sync' : 'async'}
