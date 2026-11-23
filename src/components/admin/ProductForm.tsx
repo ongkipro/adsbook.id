@@ -699,7 +699,7 @@ export function ProductForm({
                   >
                     JPG, PNG, atau WebP, maksimal 2 MB. Sistem mengubahnya otomatis menjadi WebP
                     lebar 480 px untuk toko (tinggi mengikuti foto) dan salinan 1024 px untuk
-                    katalog Meta dan Google. Disarankan persegi 1:1, minimal 1024 × 1024 px, latar polos.
+                    katalog Meta dan Google (foto yang terlalu sempit otomatis diberi latar putih persegi). Disarankan persegi 1:1, minimal 1024 × 1024 px, latar polos.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button

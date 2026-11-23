@@ -376,7 +376,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `host-redirect` | 1 | — | — | 1 | — |
 | `html-escape` | 1 | — | — | 1 | — |
 | `image-derivative` | 2 | — | — | 1 | `/` `/404` `/produk/[slug]` `/[slug]` `/landing-page` |
-| `image-rules` | 12 | — | — | 1 | `/api/admin/media` `/api/admin/upload-r2` |
+| `image-rules` | 13 | — | — | 1 | `/api/admin/media` `/api/admin/upload-r2` |
 | `insights-period` | 10 | — | — | 1 | — |
 | `insights-view` | 14 | — | — | 2 | — |
 | `insights` | 32 | `capi_event_outbox` `order_items` `orders` `product_variants` `products` | — | 1 | `/api/admin/insights/landing` `/api/admin/insights/locations` `/api/admin/insights/products` `/api/admin/insights/times` `/api/admin/insights/trend` `/api/admin/insights/utm` |

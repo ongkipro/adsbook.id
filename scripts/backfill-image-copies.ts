@@ -14,6 +14,7 @@
 //
 //   node --experimental-strip-types scripts/backfill-image-copies.ts --host demo.adsbook.my.id --tenant <id>
 //   … --apply     writes the missing copies with `wrangler r2 object put --remote`
+//   … --replace-small-feed   also rewrites a stored `.jpg` under 500 px (padded to a square)
 //
 // Without --apply it only reports. --apply is a production write: ask first
 // (AGENTS.md §5).
@@ -22,7 +23,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { FEED_MIN_WIDTH, IMAGE_QUALITIES, IMAGE_VARIANTS, type ImageVariant } from "../src/lib/image-rules.ts";
+import { FEED_MIN_WIDTH } from "../src/lib/image-rules.ts";
+import { encode } from "./prepare-image.ts";
 import { DISPLAY_SIZED_SINCE } from "../src/lib/image-derivative.ts";
 import { tenantR2Key } from "../src/platform/keys.ts";
 
@@ -34,6 +36,7 @@ const arg = (name: string) => {
 const host = arg("host");
 const tenant = arg("tenant");
 const apply = process.argv.includes("--apply");
+const replaceSmallFeed = process.argv.includes("--replace-small-feed");
 if (!host || !tenant) {
   console.error("usage: --host <store host> --tenant <tenant id> [--apply]");
   process.exit(2);
@@ -46,24 +49,19 @@ async function text(path: string) {
   return response.ok ? response.text() : "";
 }
 
-/** True when the asset route answers with the object itself, not a fallback. */
+/**
+ * True when the asset route answers with the object itself, not a fallback.
+ * With --replace-small-feed a stored catalog JPEG under 500 px counts as missing.
+ */
 async function stored(key: string, type: string) {
   const response = await fetch(`${origin}/assets/${key}?backfill=${Date.now()}`, { method: "GET" });
-  await response.arrayBuffer().catch(() => undefined);
-  return response.ok && !response.headers.has("x-asset-stand-in") && (response.headers.get("content-type") || "").startsWith(type);
+  const bytes = Buffer.from(await response.arrayBuffer().catch(() => new ArrayBuffer(0)));
+  const own = response.ok && !response.headers.has("x-asset-stand-in") && (response.headers.get("content-type") || "").startsWith(type);
+  if (!own || !replaceSmallFeed || type !== "image/jpeg") return own;
+  const meta = await sharp(bytes).metadata().catch(() => ({ width: 0, height: 0 }));
+  return Math.min(meta.width ?? 0, meta.height ?? 0) >= FEED_MIN_WIDTH;
 }
 
-async function encode(source: Buffer, variant: ImageVariant) {
-  const rule = IMAGE_VARIANTS[variant];
-  for (const quality of IMAGE_QUALITIES) {
-    const pipeline = sharp(source).rotate().resize({ width: rule.maxWidth, withoutEnlargement: true });
-    const out = rule.type === "image/webp"
-      ? await pipeline.webp({ quality: Math.round(quality * 100) }).toBuffer()
-      : await pipeline.flatten({ background: "#ffffff" }).jpeg({ quality: Math.round(quality * 100), mozjpeg: true }).toBuffer();
-    if (out.byteLength <= rule.maxBytes) return out;
-  }
-  throw new Error(`too detailed for the ${variant} budget`);
-}
 
 const pages = ["/feed/meta-catalog.xml", "/", "/produk", "/sitemap"];
 const sitemap = await text("/sitemap");

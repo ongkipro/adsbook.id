@@ -6,12 +6,24 @@
 // lazy: `sharp` is Astro's own image dependency (see generate-card-derivatives.mjs);
 // if Astro ever drops it, add it as a devDependency.
 import sharp from "sharp";
-import { IMAGE_QUALITIES, IMAGE_VARIANTS, type ImageVariant } from "../src/lib/image-rules.ts";
+import { feedLayout, IMAGE_QUALITIES, IMAGE_VARIANTS, type ImageVariant } from "../src/lib/image-rules.ts";
 
-async function encode(source: Buffer, variant: ImageVariant): Promise<Buffer> {
+/** The catalog copy, laid out by `feedLayout`: a white square when the photo would be under 500 px on a side. */
+async function feedPipeline(source: Buffer) {
+  const upright = await sharp(source).rotate().toBuffer({ resolveWithObject: true });
+  const { canvas, draw } = feedLayout(upright.info.width, upright.info.height);
+  return () => sharp(upright.data).resize(draw.width, draw.height).extend({
+    top: draw.y, left: draw.x,
+    bottom: canvas.height - draw.height - draw.y, right: canvas.width - draw.width - draw.x,
+    background: "#ffffff",
+  });
+}
+
+export async function encode(source: Buffer, variant: ImageVariant): Promise<Buffer> {
   const rule = IMAGE_VARIANTS[variant];
+  const feed = variant === "feed" ? await feedPipeline(source) : null;
   for (const quality of IMAGE_QUALITIES) {
-    const pipeline = sharp(source).rotate().resize({ width: rule.maxWidth, withoutEnlargement: true });
+    const pipeline = feed ? feed() : sharp(source).rotate().resize({ width: rule.maxWidth, withoutEnlargement: true });
     const out = rule.type === "image/webp"
       ? await pipeline.webp({ quality: Math.round(quality * 100) }).toBuffer()
       : await pipeline.flatten({ background: "#ffffff" }).jpeg({ quality: Math.round(quality * 100), mozjpeg: true }).toBuffer();

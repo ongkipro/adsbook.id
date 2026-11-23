@@ -9,14 +9,17 @@
  *
  * Existing files in R2 are left alone; the rule governs uploads from here on.
  */
-import { checkUploadSource, fitWidth, IMAGE_QUALITIES, IMAGE_VARIANTS, type ImageVariant } from "./image-rules.ts";
+import { checkUploadSource, feedLayout, fitWidth, IMAGE_QUALITIES, IMAGE_VARIANTS, type ImageVariant } from "./image-rules.ts";
 
 /** Re-exported for callers that only need the limit. */
 export { MAX_UPLOAD_BYTES } from "./image-rules.ts";
 
 async function encodeVariant(bitmap: ImageBitmap, variant: ImageVariant, name: string): Promise<File> {
   const rule = IMAGE_VARIANTS[variant];
-  const size = fitWidth(bitmap.width, bitmap.height, rule.maxWidth);
+  const fitted = fitWidth(bitmap.width, bitmap.height, rule.maxWidth);
+  // The catalog copy may be padded to a white square (feedLayout); the store copy never is.
+  const layout = variant === "feed" ? feedLayout(bitmap.width, bitmap.height) : { canvas: fitted, draw: { x: 0, y: 0, ...fitted } };
+  const size = layout.canvas;
   const canvas = document.createElement("canvas");
   canvas.width = size.width;
   canvas.height = size.height;
@@ -29,7 +32,7 @@ async function encodeVariant(bitmap: ImageBitmap, variant: ImageVariant, name: s
   }
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, size.width, size.height);
+  ctx.drawImage(bitmap, layout.draw.x, layout.draw.y, layout.draw.width, layout.draw.height);
   const extension = rule.type === "image/webp" ? "webp" : "jpg";
   for (const quality of IMAGE_QUALITIES) {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, rule.type, quality));
