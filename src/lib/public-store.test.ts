@@ -80,9 +80,9 @@ test("the storefront trust strip claims only what the store's settings honour", 
   assert.deepEqual(
     storefrontTrustSignals({ couriers: ["JNE", "J&T", "SiCepat", "AnterAja"], payments: ["COD (bayar di tempat)", "QRIS", "Virtual Account BCA, Mandiri"] }),
     [
-      { icon: "wallet", label: "Bisa bayar di tempat (COD)" },
-      { icon: "credit-card", label: "Bayar via QRIS dan Virtual Account" },
-      { icon: "truck", label: "Dikirim JNE, J&T, SiCepat +1" },
+      { icon: "wallet", label: "Bisa bayar di tempat (COD)", short: "Bisa COD" },
+      { icon: "credit-card", label: "Bayar via QRIS dan Virtual Account", short: "QRIS · VA" },
+      { icon: "truck", label: "Dikirim JNE, J&T, SiCepat +1", short: "JNE, J&T +2" },
     ],
   );
   const noCod = storefrontTrustSignals({ couriers: ["JNE"], payments: ["transfer bank Mandiri"] });

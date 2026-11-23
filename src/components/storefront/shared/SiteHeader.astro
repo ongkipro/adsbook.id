@@ -2,7 +2,7 @@
 import SiteBrand from './SiteBrand.astro';
 import Icon from './Icon.astro';
 
-// "Pasar Rapi" header (2026-11-23): the store's brand and a search box in one
+// Compact header (2026-11-23): the store's brand and a search box in one
 // bar that stays at the top, as Indonesian marketplaces do. Search submits to
 // /produk?q=…, where the catalogue filters; no per-visitor value, so the page
 // stays edge-cacheable. The old "Official Store" line is gone: an English
@@ -11,11 +11,11 @@ const query = Astro.url.pathname === '/produk' ? (Astro.url.searchParams.get('q'
 ---
 
 <header class="sticky top-0 z-30 border-b border-[#EDEDEF] bg-white/95 backdrop-blur-md">
-  <div class="sf-wrap flex h-14 items-center gap-3 md:h-16 md:gap-6">
+  <div class="flex h-14 items-center gap-3 px-4">
     <div class="shrink-0">
       <SiteBrand href="/" />
     </div>
-    <form action="/produk" method="get" role="search" class="relative min-w-0 flex-1 md:max-w-xl">
+    <form action="/produk" method="get" role="search" class="relative min-w-0 flex-1">
       <label for="site-search" class="sr-only">Cari produk di {Astro.locals.tenant.name}</label>
       <Icon name="lucide:search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#767676]" aria-hidden="true" />
       <input
@@ -27,9 +27,8 @@ const query = Astro.url.pathname === '/produk' ? (Astro.url.searchParams.get('q'
         autocomplete="off"
         enterkeyhint="search"
         placeholder={`Cari di ${Astro.locals.tenant.name}`}
-        class="h-10 w-full rounded-md border border-[#E2E2E5] bg-[#F6F6F7] pl-9 pr-3 text-base text-[#111111] placeholder:text-[#767676] focus:border-[#111111] focus:bg-white focus:outline-none md:text-sm"
+        class="h-10 w-full rounded-md border border-[#E2E2E5] bg-[#F6F6F7] pl-9 pr-3 text-base text-[#111111] placeholder:text-[#767676] focus:border-[#111111] focus:bg-white focus:outline-none"
       />
     </form>
-    <a href="/produk" class="hidden shrink-0 text-sm font-semibold text-[#111111] underline-offset-4 hover:underline md:inline">Semua produk</a>
   </div>
 </header>

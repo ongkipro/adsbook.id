@@ -17,6 +17,6 @@ export const CMS_VERSION: CmsVersionInfo = {
   releaseTag: "2026.11-launch",
   // What the "What's new" footer shows: the product's own words, no vendor names.
   coreEngine: "Edge server-rendered · 348 kota · database per toko",
-  schemaVersion: 87,
+  schemaVersion: 88,
   lastUpdated: "2026-11-17",
 };

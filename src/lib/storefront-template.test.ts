@@ -109,10 +109,10 @@ test("invalid and executable template definitions are rejected before persistenc
       },
     }),
     /invalid|layout|Invalid/i,
-    "only the wide and compact layouts exist",
+    "only the compact layout exists",
   );
   assert.throws(
-    () => validateStorefrontTemplateDefinition({ id: "pasar-rapi", name: "Pasar Rapi", composition: { layout: "wide", sections: { hero: true, catalog: true } } }),
+    () => validateStorefrontTemplateDefinition({ id: "compact-market", name: "Compact", composition: { layout: "compact", sections: { hero: true, catalog: true } } }),
     /Built-in/,
     "a built-in id cannot be replaced",
   );
@@ -164,15 +164,11 @@ test("built-in templates remain resolvable without template persistence", async 
   }
 });
 
-test("Tema: Pasar Rapi (wide) is the default built-in and Klasik (compact) stays selectable", async () => {
+test("the storefront is the 480px column: Compact is the one built-in, and a wide layout is refused", async () => {
   const { DEFAULT_STOREFRONT_TEMPLATE_ID, BUILT_IN_STOREFRONT_TEMPLATES } = await import("./storefront-template.ts");
-  assert.equal(DEFAULT_STOREFRONT_TEMPLATE_ID, "pasar-rapi");
-  assert.deepEqual(BUILT_IN_STOREFRONT_TEMPLATES.map((theme) => [theme.id, theme.name, theme.composition.layout]), [
-    ["pasar-rapi", "Pasar Rapi", "wide"],
-    ["compact-market", "Klasik", "compact"],
-  ]);
-  for (const id of ["pasar-rapi", "compact-market"]) {
-    const resolved = await resolveStorefrontTemplate(undefined, id);
-    assert.equal(resolved.state, "ready", id);
-  }
+  assert.equal(DEFAULT_STOREFRONT_TEMPLATE_ID, "compact-market");
+  assert.deepEqual(BUILT_IN_STOREFRONT_TEMPLATES.map((theme) => [theme.id, theme.name, theme.composition.layout]), [["compact-market", "Compact", "compact"]]);
+  assert.equal((await resolveStorefrontTemplate(undefined, "compact-market")).state, "ready");
+  assert.equal((await resolveStorefrontTemplate(undefined, "pasar-rapi")).state, "unavailable", "the withdrawn theme is not a built-in");
+  assert.throws(() => validateStorefrontTemplateDefinition({ id: "lebar", name: "Lebar", composition: { layout: "wide", sections: { hero: true, catalog: true } } }));
 });

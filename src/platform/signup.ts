@@ -348,7 +348,7 @@ export async function signup(
       tagline: "",
       supportWhatsapp: plan.whatsapp ?? "",
       locale: "id-ID",
-      storefrontTemplate: "pasar-rapi",
+      storefrontTemplate: "compact-market",
     });
     if (!installed.ok) throw new Error(`install: ${installed.error}`);
     await database.prepare("UPDATE stores SET catalog_mode = ?").bind(plan.catalogMode).run();
