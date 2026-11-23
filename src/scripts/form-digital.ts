@@ -10,7 +10,7 @@
 import { trackTikTokFunnel } from "../lib/tiktok-browser.ts";
 import { META_EXTERNAL_ID_COOKIE } from "../lib/click-ids.ts";
 import { formatIdr } from "../lib/format-idr";
-import { isValidWa62, normalizePhone } from "../lib/validation";
+import { isValidWa62, missingCheckoutContact, normalizePhone } from "../lib/validation";
 import { pushGtmEcomEvent } from "../lib/gtm";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
 import { digitalEventId, digitalOrderBody, digitalPaymentOptions, digitalSubmitToken, type DigitalPaymentOption } from "../lib/digital-checkout.ts";
@@ -148,6 +148,19 @@ function initOne(root: HTMLElement) {
     if ((event.target as HTMLElement).matches('input[name="variant"]')) sync();
   });
 
+  // Grey until name, WhatsApp and a payment method are set (owner,
+  // 2026-11-23), like the COD forms; never natively disabled for that, so a
+  // tap still reaches the handler below, which says what is missing.
+  let submitting = false;
+  const syncSubmit = () => {
+    const ready = !submitting && missingCheckoutContact({ name: nameInput.value, phone: phoneInput.value, address: null }) === null && Boolean(chosen);
+    submit.dataset.state = submitting ? "loading" : ready ? "ready" : "disabled";
+    submit.setAttribute("aria-disabled", String(!ready));
+    if (ready) errorEl.hidden = true;
+  };
+  form.addEventListener("input", syncSubmit);
+  form.addEventListener("change", syncSubmit);
+
   const render = () => {
     optionsEl.replaceChildren();
     if (!options.length) {
@@ -179,6 +192,15 @@ function initOne(root: HTMLElement) {
       label.append(input, text);
       optionsEl.append(label);
     }
+    // One way to pay is no choice: select it, so the buyer is not asked.
+    if (options.length === 1) {
+      const only = optionsEl.querySelector<HTMLInputElement>('input[name="digital_payment"]');
+      if (only) {
+        only.checked = true;
+        chosen = options[0];
+      }
+    }
+    syncSubmit();
   };
 
   fetch("/api/payment-methods", { cache: "no-store" })
@@ -204,7 +226,9 @@ function initOne(root: HTMLElement) {
     if (!variant()) return showError("Pilih paket terlebih dahulu.");
     if (!chosen) return showError("Pilih metode pembayaran.");
     track("InitiateCheckout");
-    submit.disabled = true;
+    submitting = true;
+    syncSubmit();
+    submit.disabled = submitting;
     submitLabel.textContent = "Membuat pesanan…";
     try {
       const eventId = digitalEventId("order", config.productSlug);
@@ -272,11 +296,14 @@ function initOne(root: HTMLElement) {
       navigateAfterCheckout(`/payment#o=${encodeURIComponent(String(order.id ?? ""))}&t=${encodeURIComponent(String(order.status_token ?? ""))}`);
     } catch (error) {
       showError(error instanceof Error ? error.message : "Pesanan belum bisa dibuat. Coba lagi.");
-      submit.disabled = false;
+      submitting = false;
+      submit.disabled = submitting;
       submitLabel.textContent = "Bayar & Dapatkan Akses";
+      syncSubmit();
     }
   });
   sync();
+  syncSubmit();
 }
 
 export function initDigitalOrderForms(root: Document | HTMLElement = document) {

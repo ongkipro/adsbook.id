@@ -130,10 +130,15 @@ test("digital store: signup → menu without shipping → digital product → op
   await expect(form.locator('[name="address"]')).toHaveCount(0);
   await expect(form.getByRole("radio", { name: /QRIS/ })).toBeVisible({ timeout: 15_000 });
   await expect(form.getByRole("radio", { name: /COD/ })).toHaveCount(0);
+  // Grey until name, WhatsApp and a payment method are set (owner, 2026-11-23).
+  const pay = form.getByRole("button", { name: /Bayar/ });
+  await expect(pay).toHaveAttribute("data-state", "disabled");
   await form.getByLabel("Nama lengkap").fill("Budi Pembeli");
   await form.getByLabel("Nomor WhatsApp aktif").fill("081234567801");
   await form.getByLabel("Email (opsional)").fill("budi@example.test");
   await form.getByRole("radio", { name: /QRIS/ }).check();
+  await expect(pay).toHaveAttribute("data-state", "ready");
+  await form.screenshot({ path: "test-results/digital-form-ready-390.png" });
   await form.scrollIntoViewIfNeeded();
   if (shots) await visitor.screenshot({ path: `${shots}/dig-checkout-390.png`, fullPage: true });
   // COD is refused by the server whatever a request says.

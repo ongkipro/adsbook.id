@@ -8,7 +8,7 @@ import { paymentBrandAsset } from "../lib/payment-brand";
 
 import { createDistrictDiscoveryLocation, formatDeliveryLocation, groupLocationResults } from "../lib/location-search";
 import { pushGtmEcomEvent } from "../lib/gtm";
-import { isValidWa62 } from "../lib/validation";
+import { isValidWa62, missingCheckoutContact } from "../lib/validation";
 import { normalizeProvinceCode } from "../lib/province";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
 import { isStoreClosed, StoreClosedError, storeClosedMessage } from "../lib/store-closed";
@@ -739,8 +739,15 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
         disabled: true,
         label: submitButton.dataset.loadingLabel || "Memproses Pesanan...",
       };
-    // Grey only while something for the chosen area is still loading, and it
-    // says what. Missing contact or area is named by the submit handler.
+    // Grey until the contact and the area are complete (owner, 2026-11-23),
+    // saying "Pesan Sekarang" throughout; while the chosen area's shipping
+    // or payment loads it says what it waits for. A tap while grey still
+    // reaches the submit handler, which marks the missing field.
+    const missing = missingCheckoutContact({
+      name: customerNameInput?.value || "",
+      phone: phoneInput?.value || "",
+      address: addressInput?.value || "",
+    });
     if (state.districtLoading)
       return { disabled: true, label: "Mencari kecamatan..." };
     if (state.shippingLoading)
@@ -749,6 +756,8 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
       return { disabled: true, label: "Menyiapkan ongkir..." };
     if (state.locationId && !hasPaymentChoices)
       return { disabled: true, label: "Menyiapkan pembayaran..." };
+    if (missing !== null || !state.locationId)
+      return { disabled: true, label: "Pesan Sekarang" };
 
     return { disabled: false, label: "Pesan Sekarang" };
   };
@@ -759,6 +768,8 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
     // an incomplete form always reaches the handler that names what is missing.
     submitButton.disabled = state.submitting;
     submitButton.setAttribute("aria-disabled", String(next.disabled));
+    // The "masih ada data…" banner is stale once nothing is missing.
+    if (!next.disabled && !state.submitting) errorEl.hidden = true;
     submitButton.dataset.state = state.submitting
       ? "loading"
       : next.disabled

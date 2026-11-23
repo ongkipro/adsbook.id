@@ -97,7 +97,7 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
   });
 }
 
-test("order form: 'Pesan Sekarang' looks ready, a tap on an empty form marks the missing fields; nothing under 12px; no order is sent", async ({ page }) => {
+test("order form: grey 'Pesan Sekarang' until the contact is complete, lit after; a grey tap marks the fields; 12px floor; one spacing system; no order sent", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const posted: string[] = [];
   page.on("request", (request) => { if (request.method() === "POST" && /submit-.*order/.test(request.url())) posted.push(request.url()); });
@@ -108,14 +108,25 @@ test("order form: 'Pesan Sekarang' looks ready, a tap on an empty form marks the
   const submit = form.locator("#submit-button");
   await submit.scrollIntoViewIfNeeded();
   await expect(submit).toHaveText(/Pesan Sekarang/);
-  await expect(submit).not.toHaveAttribute("data-state", "waiting");
-  expect(await submit.evaluate((button) => getComputedStyle(button).backgroundColor)).not.toBe("rgb(229, 229, 229)");
+  await expect(submit).toHaveAttribute("data-state", "disabled");
   expect((await submit.boundingBox())!.height).toBeGreaterThanOrEqual(48);
 
-  await submit.click();
+  // A tap while grey still reaches the handler: it marks what is missing, posts nothing.
+  // `force`: Playwright waits out aria-disabled; a finger does not, and the button is not natively disabled.
+  expect(await submit.evaluate((button) => (button as HTMLButtonElement).disabled)).toBe(false);
+  await submit.click({ force: true });
   await expect(form.locator('[aria-invalid="true"]').first()).toBeVisible();
   await expect(form.getByText("Maaf, masih ada data yang perlu dilengkapi dengan benar.")).toBeVisible();
-  expect(posted, "an incomplete form never posts").toEqual([]);
+  await form.screenshot({ path: "test-results/storefront-form-errors-390.png" });
+
+  // Complete: the same label, lit.
+  await form.getByLabel(/Nama lengkap/).fill("Siti Pembeli");
+  await form.getByLabel(/Nomor WhatsApp/).fill("081234567890");
+  await form.getByLabel(/Alamat lengkap/).fill("Jl. Dago No. 12, Coblong, Bandung");
+  await expect(submit).toHaveAttribute("data-state", "ready");
+  await expect(submit).toHaveText(/Pesan Sekarang/);
+  await expect(form.getByText("Maaf, masih ada data yang perlu dilengkapi dengan benar."), "the stale banner goes").toBeHidden();
+  expect(posted, "no order is sent by this test").toEqual([]);
 
   const tiny = await form.evaluate((root) =>
     [...root.querySelectorAll("*")]
@@ -124,8 +135,20 @@ test("order form: 'Pesan Sekarang' looks ready, a tap on an empty form marks the
       .map((element) => `${element.tagName} ${getComputedStyle(element).fontSize} "${element.textContent!.trim().slice(0, 20)}"`),
   );
   expect(tiny, "the checkout text keeps the 12px floor").toEqual([]);
-  await form.screenshot({ path: "test-results/storefront-form-errors-390.png" });
-  await expect(form.getByText("Harga divalidasi ulang saat order diproses.")).toHaveCount(0);
+
+  // One spacing system: every block edge on the same 16px inset, 28px between blocks.
+  const geometry = await form.evaluate((root) => {
+    const r0 = root.getBoundingClientRect();
+    const blocks = [...root.querySelectorAll(".form-block")].filter((block) => (block as HTMLElement).offsetParent);
+    const insets = [...root.querySelectorAll(".section-title, .field-grid input:not([tabindex='-1']), .simple-variant-copy, .summary-card, .submit-main")]
+      .filter((element) => (element as HTMLElement).offsetParent)
+      .map((element) => { const r = element.getBoundingClientRect(); return [Math.round(r.left - r0.left), Math.round(r0.right - r.right)]; });
+    const gaps = blocks.slice(1).map((block, index) => Math.round(block.getBoundingClientRect().top - blocks[index].getBoundingClientRect().bottom));
+    return { insets: [...new Set(insets.map((pair) => pair.join(",")))], gaps: [...new Set(gaps)] };
+  });
+  expect(geometry.insets, "one left/right inset for every row").toEqual(["16,16"]);
+  expect(geometry.gaps, "one gap between blocks").toEqual([28]);
+  await form.screenshot({ path: "test-results/storefront-form-ready-390.png" });
 });
 
 test("an empty search says so and offers to clear it", async ({ page }) => {

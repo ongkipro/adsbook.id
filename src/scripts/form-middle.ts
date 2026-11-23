@@ -4,7 +4,7 @@ import { META_EXTERNAL_ID_COOKIE } from "../lib/click-ids.ts";
 import { normalizePhone } from "../lib/validation";
 import { formatIdr } from "../lib/format-idr";
 import { pushGtmEcomEvent } from "../lib/gtm";
-import { isValidWa62 } from "../lib/validation";
+import { isValidWa62, missingCheckoutContact } from "../lib/validation";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
 import { isStoreClosed, storeClosedMessage } from "../lib/store-closed";
 import {
@@ -484,9 +484,15 @@ function initMiddleOrderFormInstance(
         disabled: true,
         label: submitButton.dataset.loadingLabel || "Memproses Pesanan...",
       };
-    // Always ready (owner, 2026-11-23): an incomplete form is told what is
-    // missing by the submit handler, field by field, never by a grey button.
-    return { disabled: false, label: "Pesan Sekarang" };
+    // Grey until name, WhatsApp and address would pass the order endpoint
+    // (owner, 2026-11-23), one label throughout. A tap while grey still
+    // reaches the submit handler, which marks the missing field.
+    const missing = missingCheckoutContact({
+      name: nameInput?.value || "",
+      phone: phoneInput?.value || "",
+      address: addressInput?.value || "",
+    });
+    return { disabled: missing !== null, label: "Pesan Sekarang" };
   };
 
   const syncSubmitState = () => {
@@ -498,6 +504,8 @@ function initMiddleOrderFormInstance(
     // complete-looking form had a dead button until the buyer tapped elsewhere.
     submitButton.disabled = submitting;
     submitButton.setAttribute("aria-disabled", String(next.disabled));
+    // The "masih ada data…" banner is stale once nothing is missing.
+    if (!next.disabled && !submitting) errorEl.hidden = true;
     submitButton.dataset.state = submitting
       ? "loading"
       : next.disabled
