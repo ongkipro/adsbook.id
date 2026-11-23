@@ -112,9 +112,10 @@ const homepageDescription = homeDescription(
 // pick rotates daily rather than per request so visitors reuse cached bytes.
 // Owner, 2026-11-23: three to five catalogue products, each with a line of
 // its own description, linking to its page.
-// Admin › Tema › Hero: "auto" is the seller's banner when they uploaded one,
-// otherwise a daily rotation; "products" is their own pick, in their order;
-// "banner" is the banner alone (a daily rotation stands in until one exists).
+// Admin › Tema › Hero: "auto" rotates 3–5 products daily (a banner published
+// earlier through Konten & media still leads, so no store loses its picture);
+// "products" is the seller's pick in their order; "banner" is the picture
+// they uploaded on Atur beranda, falling back to the rotation without one.
 const productSlide = (product: (typeof catalog)[number]) => ({
   image: product.image,
   alt: product.productName,
@@ -124,15 +125,20 @@ const productSlide = (product: (typeof catalog)[number]) => ({
   href: `/produk/${product.slug}`,
 });
 const autoSlides = () => pickHeroProducts(catalog, dailySeed(new Date())).map(productSlide);
-const bannerSlides = content && content.heroSlides.length > 0 ? content.heroSlides : null;
+const legacyBanner = content && content.heroSlides.length > 0 ? content.heroSlides : null;
+const ownBanner = home.hero.banner.image
+  ? [{ image: home.hero.banner.image, alt: home.hero.banner.alt, badge: '', text: home.hero.banner.text, summary: '', href: home.hero.banner.href || undefined }]
+  : null;
 const pickedSlides = home.hero.source === 'products' ? pickProductsById(catalog, home.hero.productIds).map(productSlide) : [];
 const heroSlides = !home.hero.enabled
   ? []
-  : home.hero.source === 'products' && pickedSlides.length > 0
-    ? pickedSlides
-    : home.hero.source !== 'products' && bannerSlides
-      ? bannerSlides
-      : autoSlides();
+  : home.hero.source === 'banner' && ownBanner
+    ? ownBanner
+    : home.hero.source === 'products' && pickedSlides.length > 0
+      ? pickedSlides
+      : home.hero.source === 'auto' && legacyBanner
+        ? legacyBanner
+        : autoSlides();
 const featuredProducts = home.featured.enabled ? pickProductsById(catalog, home.featured.productIds).map(toCard) : [];
 const layout = {
   order: themeSettings.order,

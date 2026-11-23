@@ -47,6 +47,19 @@ export const storeThemeSettingsSchema = z
             source: z.enum(["auto", "products", "banner"]),
             productIds: z.array(productId).max(5),
             summary: z.boolean(),
+            // The seller's own picture (owner, 2026-11-24: "banner image
+            // (uploads) atau auto dari produk"), saved with the rest of the
+            // homepage, no draft or publish step. Optional so a v2 row saved
+            // before it still parses.
+            banner: z
+              .object({
+                image: z.union([z.literal(""), z.string().trim().max(300).regex(/^\/(media|assets)\/(?!.*\.\.)(?!.*\/\/)[A-Za-z0-9/_.-]+$/)]),
+                alt: safeText(120),
+                text: safeText(80),
+                href: z.union([z.literal(""), z.string().trim().max(200).regex(/^(\/(?!\/)[^\s<>"]*|https:\/\/[^\s<>"]+)$/)]),
+              })
+              .strict()
+              .default({ image: "", alt: "", text: "", href: "" }),
           })
           .strict(),
         trust: z.object({ enabled: z.boolean() }).strict(),
@@ -79,7 +92,7 @@ export const DEFAULT_THEME_SETTINGS: StoreThemeSettings = {
   order: ["announcement", "hero", "trust", "featured", "catalog", "howToOrder"],
   sections: {
     announcement: { enabled: false, text: "", href: "", until: "" },
-    hero: { enabled: true, source: "auto", productIds: [], summary: true },
+    hero: { enabled: true, source: "auto", productIds: [], summary: true, banner: { image: "", alt: "", text: "", href: "" } },
     trust: { enabled: true },
     featured: { enabled: false, title: "Pilihan kami", productIds: [] },
     catalog: {
@@ -130,6 +143,10 @@ const FIELD_ERRORS: Array<[RegExp, string]> = [
   [/^sections\.announcement\.href/, "Link pengumuman harus diawali / (halaman toko) atau https://."],
   [/^sections\.announcement\.until/, "Tanggal berakhir pengumuman tidak valid."],
   [/^sections\.hero\.productIds/, "Hero memuat paling banyak 5 produk."],
+  [/^sections\.hero\.banner\.image/, "Gambar banner harus diunggah dari halaman ini."],
+  [/^sections\.hero\.banner\.alt/, "Deskripsi gambar maksimal 120 karakter, tanpa tanda < atau >."],
+  [/^sections\.hero\.banner\.text/, "Teks banner maksimal 80 karakter, tanpa tanda < atau >."],
+  [/^sections\.hero\.banner\.href/, "Link banner harus diawali / (halaman toko) atau https://."],
   [/^sections\.featured\.title/, "Judul Pilihan kami 2–40 karakter, tanpa tanda < atau >."],
   [/^sections\.featured\.productIds/, "Pilihan kami memuat paling banyak 6 produk."],
   [/^sections\.catalog\.title/, "Judul katalog 2–60 karakter, tanpa tanda < atau >."],
@@ -147,6 +164,8 @@ export function parseThemeSettingsInput(value: unknown): { ok: true; settings: S
   const { announcement, hero, featured } = parsed.data.sections;
   if (announcement.enabled && announcement.text.length < 3) return { ok: false, error: "Isi teks pengumuman, atau matikan pengumuman." };
   if (hero.enabled && hero.source === "products" && hero.productIds.length === 0) return { ok: false, error: "Pilih minimal 1 produk untuk hero, atau pakai pilihan otomatis." };
+  if (hero.enabled && hero.source === "banner" && !hero.banner.image) return { ok: false, error: "Unggah gambar banner, atau pakai pilihan otomatis." };
+  if (hero.enabled && hero.source === "banner" && hero.banner.alt.length < 3) return { ok: false, error: "Isi deskripsi gambar banner (untuk pembaca layar dan Google)." };
   if (featured.enabled && featured.productIds.length < 2) return { ok: false, error: "Pilihan kami butuh minimal 2 produk." };
   return { ok: true, settings: parsed.data };
 }

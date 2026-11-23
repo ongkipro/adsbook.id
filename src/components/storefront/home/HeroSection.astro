@@ -55,11 +55,11 @@ const { slides } = Astro.props;
               fetchpriority={index === 0 ? 'high' : undefined}
               draggable={false}
             />
-            <div class="hero-caption">
+            {(slide.badge || slide.text || slide.summary) && <div class="hero-caption">
               {slide.badge && <p class="text-xs font-medium text-white/80">{slide.badge}</p>}
               <p class="mt-0.5 line-clamp-2 text-[17px] font-semibold leading-snug text-white">{slide.text}</p>
               {slide.summary && <p class="mt-1 line-clamp-2 text-[13px] leading-[18px] text-white/85">{slide.summary}</p>}
-            </div>
+            </div>}
           </>
         );
         return (
