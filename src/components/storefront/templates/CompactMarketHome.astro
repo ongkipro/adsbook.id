@@ -25,7 +25,7 @@ interface Props {
   /** Resolved by the page, not here: index.astro preloads the first slide's
    *  image as the LCP element, so the page and the hero must read the same
    *  list. The daily-rotation fallback lives with that preload now. */
-  heroSlides: Array<{ image: string; alt: string; badge: string; text: string }>;
+  heroSlides: Array<{ image: string; alt: string; badge: string; text: string; summary?: string; href?: string }>;
   sections: {
     hero: boolean;
     catalog: true;
@@ -56,26 +56,40 @@ const { content, products, heroSlides, sections, trustSignals = [], catalogHeadi
 </main>
 
 <script>
-  // Native scroll-snap carries the swipe; this only keeps the dots in step and
-  // lets a dot jump to its slide. The hero never advances by itself: an
-  // autoplaying hero made every slide a fresh LCP candidate (two runs of one
-  // build measured 1.8 s and 6.3 s) and kept Speed Index from settling.
+  // Native scroll-snap carries the swipe; this keeps the dots in step, lets a
+  // dot jump to its slide, and advances the hero by itself (owner, 2026-11-23:
+  // a continuous auto slider). The first slide is the LCP image and is painted
+  // before the timer's first tick (5 s), so autoplay does not move the LCP.
+  // It pauses while a finger or pointer is on the hero, while the tab is
+  // hidden, and never runs under prefers-reduced-motion.
   const heroTrack = document.getElementById('hero-track');
   const heroDots = document.getElementById('hero-dots');
   if (heroTrack && heroDots) {
     const dots = [...heroDots.children];
+    const count = dots.length;
+    const current = () => Math.round(heroTrack.scrollLeft / Math.max(1, heroTrack.clientWidth));
     const mark = (index: number) =>
       dots.forEach((dot, itemIndex) => {
         if (itemIndex === index) dot.setAttribute('aria-current', 'true');
         else dot.removeAttribute('aria-current');
       });
-    dots.forEach((dot, index) =>
-      dot.addEventListener('click', () => heroTrack.scrollTo({ left: index * heroTrack.clientWidth, behavior: 'smooth' })),
-    );
-    heroTrack.addEventListener(
-      'scroll',
-      () => mark(Math.round(heroTrack.scrollLeft / Math.max(1, heroTrack.clientWidth))),
-      { passive: true },
-    );
+    const go = (index: number) => heroTrack.scrollTo({ left: index * heroTrack.clientWidth, behavior: 'smooth' });
+    dots.forEach((dot, index) => dot.addEventListener('click', () => go(index)));
+    heroTrack.addEventListener('scroll', () => mark(current()), { passive: true });
+
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let held = false;
+    const hold = (on: boolean) => () => { held = on; };
+    const hero = heroTrack.closest('[data-hero]') ?? heroTrack;
+    hero.addEventListener('pointerenter', hold(true));
+    hero.addEventListener('pointerleave', hold(false));
+    hero.addEventListener('touchstart', hold(true), { passive: true });
+    hero.addEventListener('touchend', () => window.setTimeout(() => { held = false; }, 4000), { passive: true });
+    hero.addEventListener('focusin', hold(true));
+    hero.addEventListener('focusout', hold(false));
+    window.setInterval(() => {
+      if (held || document.hidden || reduce.matches || count < 2) return;
+      go((current() + 1) % count);
+    }, 5000);
   }
 </script>

@@ -42,3 +42,28 @@ test("a zero seed still produces a valid pick", () => {
   assert.equal(picked.length, 3);
   assert.equal(new Set(picked).size, 3);
 });
+
+test("the hero rotates three to five catalogue products, the same set all day", async () => {
+  const { pickHeroProducts, HERO_PRODUCT_MAX } = await import("./daily-rotation.ts");
+  const ten = Array.from({ length: 10 }, (_, index) => index);
+  const today = pickHeroProducts(ten, 20261123);
+  assert.equal(today.length, HERO_PRODUCT_MAX);
+  assert.deepEqual(pickHeroProducts(ten, 20261123), today, "stable within a day");
+  assert.equal(new Set(today).size, today.length, "no product twice");
+  assert.deepEqual(pickHeroProducts([1, 2, 3], 20261123).sort(), [1, 2, 3]);
+  assert.deepEqual(pickHeroProducts([], 20261123), []);
+});
+
+test("a slide's summary is the product's own words, cut at a sentence or a word", async () => {
+  const { heroSummary } = await import("./daily-rotation.ts");
+  assert.equal(heroSummary("Madu hutan murni dari Sumbawa."), "Madu hutan murni dari Sumbawa.");
+  assert.equal(
+    heroSummary("Kaos katun combed 30s yang adem dan tidak mudah melar. Jahitan rantai di bahu, cocok untuk harian. - Bahan katun - Ukuran S, M, L"),
+    "Kaos katun combed 30s yang adem dan tidak mudah melar.",
+  );
+  const long = heroSummary("Lampu dinding tenaga surya dengan sensor gerak otomatis menyala saat gelap dan hemat listrik untuk teras rumah taman pagar garasi");
+  assert.ok(long.endsWith("…") && long.length <= 111, long);
+  assert.ok(!/\s…$/.test(long), "no space before the ellipsis");
+  assert.equal(heroSummary(""), "");
+  assert.equal(heroSummary(undefined), "");
+});

@@ -188,11 +188,6 @@ export function storefrontTrustSignals(facts: { couriers: readonly string[]; pay
   return signals;
 }
 
-/** A buyer's question to the store over WhatsApp, about one product. Empty when the store has no CS number. */
-export function productWhatsappHref(phone: string, productName: string): string {
-  if (!/^62\d{7,13}$/.test(phone)) return "";
-  return `https://wa.me/${phone}?text=${encodeURIComponent(`Halo, saya mau tanya tentang ${productName}.`)}`;
-}
 
 /**
  * A seller's plain-text description, as paragraphs and bullet lists: lines
