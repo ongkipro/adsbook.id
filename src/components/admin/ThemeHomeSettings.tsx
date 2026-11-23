@@ -157,7 +157,7 @@ export function ThemeHomeSettings() {
         <Card>
           <CardHeader>
             <CardTitle>Bagian beranda</CardTitle>
-            <CardDescription>Nyalakan, urutkan, lalu buka bagian untuk mengaturnya. Pratinjau di samping mengikuti setiap perubahan.</CardDescription>
+            <CardDescription>Nyalakan, urutkan, lalu buka bagian untuk mengaturnya. Di layar lebar, pratinjau di samping mengikuti setiap perubahan.</CardDescription>
           </CardHeader>
           <CardContent className="px-0">
             <ol className="flex flex-col divide-y" aria-label="Urutan bagian beranda">
@@ -244,10 +244,16 @@ export function ThemeHomeSettings() {
         </div>
       </aside>
 
-      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur xl:col-span-2 xl:mx-0 xl:rounded-xl xl:border">
-        <p className="text-sm text-muted-foreground" role="status">{dirty ? "Ada perubahan yang belum disimpan." : "Semua perubahan tersimpan."}</p>
-        <div className="flex items-center gap-2">
-          <a href="/" target="_blank" rel="noopener" className={buttonVariants({ variant: "ghost" })}>
+      {/* The save bar sits above the phone's bottom navigation (md:hidden, 4rem +
+          safe area) and on the page bottom from md up; on a phone it keeps one
+          short status line and the two actions that matter. */}
+      <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 -mx-4 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-2.5 backdrop-blur md:bottom-0 xl:col-span-2 xl:mx-0 xl:rounded-xl xl:border">
+        <p className="min-w-0 truncate text-sm text-muted-foreground" role="status">
+          <span className="sm:hidden">{dirty ? "Belum disimpan" : "Tersimpan"}</span>
+          <span className="hidden sm:inline">{dirty ? "Ada perubahan yang belum disimpan." : "Semua perubahan tersimpan."}</span>
+        </p>
+        <div className="flex shrink-0 items-center gap-2">
+          <a href="/" target="_blank" rel="noopener" className={cn(buttonVariants({ variant: "ghost" }), "hidden sm:inline-flex")}>
             <ExternalLink data-icon="inline-start" aria-hidden="true" />
             Lihat toko
           </a>

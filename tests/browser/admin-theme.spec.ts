@@ -133,6 +133,24 @@ test("Tema: menu above Plugin, two cards, configure the homepage, all visible on
   await buyer.close();
 });
 
+test("Atur beranda at 390: the save bar sits above the bottom navigation and nothing scrolls sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page);
+  await page.goto(`${STORE}/admin/settings/theme/beranda`);
+  await expect(page.locator("[data-home-section]")).toHaveCount(6);
+  await page.locator('[data-home-section="hero"] [data-section-toggle]').click();
+  await page.getByRole("radio", { name: "Pilih produk" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Belum disimpan" })).toBeVisible();
+  const box = await page.evaluate(() => {
+    const save = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Simpan")!.getBoundingClientRect();
+    const nav = document.querySelector(".admin-bottom-nav")!.getBoundingClientRect();
+    return { saveBottom: save.bottom, navTop: nav.top, scroll: document.documentElement.scrollWidth };
+  });
+  expect(box.saveBottom, "Simpan clears the bottom navigation").toBeLessThanOrEqual(box.navTop);
+  expect(box.scroll).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: "test-results/admin-theme-beranda-390.png" });
+});
+
 test("Tema at 390: the cards stack and fit the phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
