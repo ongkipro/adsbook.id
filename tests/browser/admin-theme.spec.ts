@@ -36,11 +36,11 @@ test("Tema: menu above Plugin, two cards, configure the homepage, all visible on
   await expect(soon.getByRole("button")).toHaveCount(0);
   await page.screenshot({ path: "test-results/admin-theme-cards-1366.png" });
 
-  // Atur beranda: the banner editor, then the section builder with its live preview.
+  // Atur beranda: one editor (no separate draft/publish banner), with its live preview.
   await compact.getByRole("link", { name: "Atur beranda" }).click();
   await page.waitForURL(/\/admin\/settings\/theme\/beranda$/);
   await expect(page.getByRole("heading", { level: 2, name: "Atur beranda" })).toBeVisible();
-  await expect(page.getByLabel("Pilih gambar banner")).toBeAttached();
+  await expect(page.getByText("Banner di draft")).toHaveCount(0);
   const sections = page.locator("[data-home-section]");
   await expect(sections).toHaveCount(6);
   const save = page.getByRole("button", { name: "Simpan", exact: true });
@@ -66,6 +66,21 @@ test("Tema: menu above Plugin, two cards, configure the homepage, all visible on
   await page.getByRole("button", { name: "Naikkan Pilihan kami" }).click();
   await page.getByRole("button", { name: "Naikkan Pilihan kami" }).click();
   await page.getByRole("switch", { name: "Cara pesan" }).click();
+  // Hero: the seller's own picture, uploaded right here.
+  await page.locator('[data-home-section="hero"] [data-section-toggle]').click();
+  await page.getByRole("radio", { name: "Gambar sendiri" }).click();
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 600;
+    canvas.height = 600;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#7c3aed";
+    context.fillRect(0, 0, 600, 600);
+    return canvas.toDataURL("image/png").split(",")[1];
+  });
+  await page.getByLabel("Berkas gambar banner").setInputFiles({ name: "promo.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") });
+  await expect(page.getByRole("button", { name: "Ganti gambar banner" }).locator("img")).toHaveAttribute("src", /^\/media\//, { timeout: 20_000 });
+  await page.getByPlaceholder("Paket hemat pupuk organik 5 kg").fill("Promo akhir bulan");
   await expect(page.getByText("Ada perubahan yang belum disimpan.")).toBeVisible();
 
   // The live preview shows the unsaved page; buyers do not see it yet.
@@ -102,6 +117,9 @@ test("Tema: menu above Plugin, two cards, configure the homepage, all visible on
     return { featured: top("#featured-title"), hero: top("[data-hero]"), catalog: top("#produk"), how: top("#how-to-order-title") };
   });
   expect(order.featured).toBeLessThan(order.hero);
+  await expect(buyer.locator("[data-hero-slide] img").first()).toHaveAttribute("src", /^\/media\//);
+  await expect(buyer.locator("[data-hero-slide] img").first()).toHaveAttribute("alt", /^Promo akhir bulan/);
+  await expect(buyer.locator("[data-hero-slide]")).toHaveCount(1);
   expect(order.hero).toBeLessThan(order.catalog);
   expect(order.catalog).toBeLessThan(order.how);
   const prices = await buyer.locator("#product-grid .product-card:not(.hidden) .sf-num span.font-bold").allTextContents();
@@ -126,6 +144,7 @@ test("Tema: menu above Plugin, two cards, configure the homepage, all visible on
     settings.sections.howToOrder.enabled = false;
     settings.sections.catalog.title = "Produk pilihan";
     settings.sections.catalog.sort = "newest";
+    settings.sections.hero.source = "auto";
     const response = await fetch("/api/admin/settings/theme", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", accent: "#2563EB", settings }) });
     return response.status;
   });

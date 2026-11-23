@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, ChevronDown, ExternalLink, Eye, Lock } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ExternalLink, Eye, ImagePlus, Lock } from "lucide-react";
+import { processImageUpload } from "../../lib/client-image";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -19,7 +20,7 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 
 const SECTION_META: Record<HomeSectionId, { title: string; hint: string }> = {
   announcement: { title: "Pengumuman", hint: "Satu baris di paling atas: promo, info ongkir, jam operasional." },
-  hero: { title: "Hero", hint: "Slide besar di atas: banner Anda atau 3–5 produk." },
+  hero: { title: "Hero", hint: "Gambar besar di atas: produk otomatis, pilihan Anda, atau gambar sendiri." },
   trust: { title: "Strip kepercayaan", hint: "COD, metode bayar, dan kurir, dari pengaturan checkout toko." },
   featured: { title: "Pilihan kami", hint: "2–6 produk yang ingin Anda tonjolkan, digeser ke samping." },
   catalog: { title: "Katalog", hint: "Semua produk aktif dengan pencarian. Selalu tampil." },
@@ -34,9 +35,9 @@ const SORT_LABELS: Record<CatalogSort, string> = {
 };
 
 const HERO_SOURCES = [
-  { value: "auto", label: "Otomatis", hint: "Banner Anda bila ada; kalau tidak, 3–5 produk yang berganti tiap hari." },
+  { value: "auto", label: "Otomatis", hint: "3–5 produk Anda, berganti tiap hari." },
   { value: "products", label: "Pilih produk", hint: "Produk yang Anda pilih, sesuai urutan." },
-  { value: "banner", label: "Banner", hint: "Hanya banner yang Anda unggah di atas." },
+  { value: "banner", label: "Gambar sendiri", hint: "Satu gambar promosi yang Anda unggah." },
 ] as const;
 
 const encode = (value: unknown) => {
@@ -315,8 +316,8 @@ function SectionFields({
           </div>
         </Field>
         {s.hero.source === "products" && <ProductPicker label="Produk hero" max={5} value={s.hero.productIds} products={products} onChange={(productIds) => set("hero", { productIds })} />}
-        {s.hero.source === "banner" && <p className="text-xs text-muted-foreground">Unggah banner di bagian Banner beranda di atas. Selama belum ada, hero memakai produk otomatis.</p>}
-        <ToggleRow label="Ringkasan produk" hint="Satu baris deskripsi di bawah nama produk pada slide." checked={s.hero.summary} onChange={(summary) => set("hero", { summary })} />
+        {s.hero.source === "banner" && <BannerFields banner={s.hero.banner} onChange={(patch) => set("hero", { banner: { ...s.hero.banner, ...patch } })} />}
+        {s.hero.source !== "banner" && <ToggleRow label="Ringkasan produk" hint="Satu baris deskripsi di bawah nama produk." checked={s.hero.summary} onChange={(summary) => set("hero", { summary })} />}
       </>
     );
   }
@@ -357,6 +358,71 @@ function SectionFields({
   }
   if (id === "trust") return <p className="text-xs text-muted-foreground">Isinya otomatis dari pengaturan checkout (COD, QRIS/VA, kurir aktif), jadi selalu benar untuk toko Anda.</p>;
   return <p className="text-xs text-muted-foreground">Langkahnya ditulis dari metode bayar toko: toko COD meminta alamat, toko bayar-online tidak.</p>;
+}
+
+/** The seller's own hero picture: one upload through the admin image pipeline (480 px WebP), a description, an optional line and link. */
+function BannerFields({ banner, onChange }: { banner: StoreThemeSettings["sections"]["hero"]["banner"]; onChange: (patch: Partial<StoreThemeSettings["sections"]["hero"]["banner"]>) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const upload = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.set("file", (await processImageUpload(file)).display);
+      const response = await fetch("/api/admin/media", { method: "POST", body: form });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) throw new Error(payload.error || "Gambar gagal diunggah.");
+      onChange({ image: String(payload.data?.url || "") });
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : "Gambar gagal diunggah.");
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => input.current?.click()}
+          disabled={uploading}
+          aria-label={banner.image ? "Ganti gambar banner" : "Pilih gambar banner"}
+          className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-lg border bg-background text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {banner.image ? <img src={banner.image} alt="" className="size-full object-cover" /> : <ImagePlus className="size-6" aria-hidden="true" />}
+        </button>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Button type="button" variant="outline" size="sm" className="self-start" disabled={uploading} onClick={() => input.current?.click()}>
+            {uploading ? "Mengunggah…" : banner.image ? "Ganti gambar" : "Unggah gambar"}
+          </Button>
+          <p className="text-xs text-muted-foreground">JPG, PNG, atau WebP maks 2 MB. Disarankan persegi; otomatis jadi 480 px.</p>
+        </div>
+        <input
+          ref={input}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          aria-label="Berkas gambar banner"
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void upload(file);
+            event.target.value = "";
+          }}
+        />
+      </div>
+      <Field label="Deskripsi gambar" hint="Untuk pembaca layar dan Google">
+        <Input value={banner.alt} maxLength={120} placeholder="Paket hemat pupuk organik 5 kg" onChange={(event) => onChange({ alt: event.target.value })} />
+      </Field>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Teks di atas gambar (opsional)" hint={`${banner.text.length}/80`}>
+          <Input value={banner.text} maxLength={80} onChange={(event) => onChange({ text: event.target.value })} />
+        </Field>
+        <Field label="Link (opsional)" hint="Halaman toko atau https://">
+          <Input value={banner.href} maxLength={200} placeholder="/produk" spellCheck={false} onChange={(event) => onChange({ href: event.target.value.trim() })} />
+        </Field>
+      </div>
+    </>
+  );
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {

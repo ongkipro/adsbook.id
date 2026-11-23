@@ -1,13 +1,13 @@
 ---
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../../../components/admin/AdminPageHeader.astro';
-import { HomeBannerEditor } from '../../../../components/admin/HomeBannerEditor';
 import { ThemeHomeSettings } from '../../../../components/admin/ThemeHomeSettings';
 import { BUILT_IN_STOREFRONT_TEMPLATES } from '../../../../lib/storefront-template';
 export const prerender = false;
 
-// Admin › Tema › Atur beranda: the banner (R1b editor) and the active theme's
-// homepage settings (sections, catalogue heading, accent).
+// Admin › Tema › Atur beranda (owner, 2026-11-24: simpler): one editor for
+// the homepage sections, the hero picture and the accent. The draft/publish
+// banner editor (R1b) stays only on the advanced /admin/content pages.
 const themeName = BUILT_IN_STOREFRONT_TEMPLATES.find((theme) => theme.id === Astro.locals.tenant.storefrontTemplate)?.name ?? 'Tema toko';
 ---
 
@@ -15,11 +15,10 @@ const themeName = BUILT_IN_STOREFRONT_TEMPLATES.find((theme) => theme.id === Ast
   <div class="space-y-6">
     <AdminPageHeader
       title="Atur beranda"
-      description={`Tema ${themeName}. Perubahan tampil di toko setelah disimpan.`}
+      description="Susun beranda toko Anda. Pembeli melihat perubahan setelah Anda menekan Simpan."
       backHref="/admin/settings/theme"
       backLabel="Tema"
     />
-    <HomeBannerEditor client:load storeName={Astro.locals.tenant.name} />
     <ThemeHomeSettings client:load />
   </div>
 </AdminLayout>

@@ -55,6 +55,26 @@ test("theme settings: a write is validated with an Indonesian reason; markup, un
   assert.equal(parseThemeSettingsInput({ ...featured, sections: { ...featured.sections, featured: { ...featured.sections.featured, productIds: ["1", "x"] } } }).ok, false, "ids are digits");
 });
 
+test("hero banner: an own picture is uploaded media, described, linked safely; a v2 row without it still reads", () => {
+  const withBanner = (patch: Record<string, unknown>, source = "banner") => {
+    const settings = structuredClone(DEFAULT_THEME_SETTINGS) as unknown as { sections: { hero: Record<string, unknown> } };
+    settings.sections.hero = { ...settings.sections.hero, source, banner: { image: "/media/content/2026-11/a-promo.webp", alt: "Promo akhir bulan", text: "", href: "", ...patch } };
+    return settings;
+  };
+  assert.equal(parseThemeSettingsInput(withBanner({})).ok, true);
+  assert.deepEqual(parseThemeSettingsInput(withBanner({ image: "" })), { ok: false, error: "Unggah gambar banner, atau pakai pilihan otomatis." });
+  assert.equal(parseThemeSettingsInput(withBanner({ image: "" }, "auto")).ok, true, "an empty picture is fine when the hero is automatic");
+  assert.deepEqual(parseThemeSettingsInput(withBanner({ alt: "" })), { ok: false, error: "Isi deskripsi gambar banner (untuk pembaca layar dan Google)." });
+  for (const image of ["https://evil.test/x.webp", "javascript:alert(1)", "/media/../x", "//cdn.test/x.webp"]) {
+    assert.deepEqual(parseThemeSettingsInput(withBanner({ image })), { ok: false, error: "Gambar banner harus diunggah dari halaman ini." }, image);
+  }
+  assert.equal(parseThemeSettingsInput(withBanner({ href: "javascript:x" })).ok, false);
+  // A v2 row saved before the picture existed reads with an empty one.
+  const old = structuredClone(DEFAULT_THEME_SETTINGS) as unknown as { sections: { hero: Record<string, unknown> } };
+  delete old.sections.hero.banner;
+  assert.deepEqual(readThemeSettings(JSON.stringify(old)).sections.hero.banner, { image: "", alt: "", text: "", href: "" });
+});
+
 test("homepage helpers: announcement window in WIB, products by id, catalogue order, how-to-order from real payments", async () => {
   const { liveAnnouncement, pickProductsById, sortCatalog, howToOrderSteps, wibDate } = await import("./storefront-theme.ts");
   const settings = structuredClone(DEFAULT_THEME_SETTINGS);

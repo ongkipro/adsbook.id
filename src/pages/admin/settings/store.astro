@@ -95,17 +95,15 @@ const isOwner = Astro.locals.admin?.role === 'owner';
           <span class="mt-1.5 block text-xs text-slate-500">Judul halaman admin dan halaman login. Tidak pernah tampil di storefront.</span>
         </label>
         <div class="block">
-          <span class="mb-1.5 block text-xs font-semibold text-slate-700">Konten beranda</span>
+          <span class="mb-1.5 block text-xs font-semibold text-slate-700">Beranda toko</span>
           <a
-            href="/admin/content"
+            href="/admin/settings/theme/beranda"
             class="btn-secondary w-full sm:w-auto"
           >
-            Buka pengaturan konten
+            Atur beranda
           </a>
           <span class="mt-1.5 block text-xs text-slate-500">
-            Hero, solusi, dan bagian beranda lainnya. Halaman itu sengaja tidak ada di menu;
-            sebelumnya satu-satunya jalan ke sana adalah tombol di storefront yang hilang begitu
-            konten diterbitkan.
+            Gambar hero, pengumuman, produk pilihan, urutan katalog, dan warna toko.
           </span>
         </div>
       </div>
