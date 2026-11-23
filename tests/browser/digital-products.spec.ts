@@ -138,6 +138,12 @@ test("digital store: signup → menu without shipping → digital product → op
   await form.getByLabel("Email (opsional)").fill("budi@example.test");
   await form.getByRole("radio", { name: /QRIS/ }).check();
   await expect(pay).toHaveAttribute("data-state", "ready");
+  // The same 8px between fields as the COD forms.
+  const fieldGaps = await form.evaluate((root) => {
+    const fields = [...root.querySelectorAll(".form-field")].filter((field) => (field as HTMLElement).offsetParent);
+    return [...new Set(fields.slice(1).map((field, index) => Math.round(field.getBoundingClientRect().top - fields[index].getBoundingClientRect().bottom)))];
+  });
+  expect(fieldGaps, "8px between fields, as the COD forms").toEqual([8]);
   await form.screenshot({ path: "test-results/digital-form-ready-390.png" });
   await form.scrollIntoViewIfNeeded();
   if (shots) await visitor.screenshot({ path: `${shots}/dig-checkout-390.png`, fullPage: true });
