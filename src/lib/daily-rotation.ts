@@ -53,7 +53,12 @@ export function pickHeroProducts<T>(items: readonly T[], seed: number): T[] {
  * Plain text only; Astro escapes it.
  */
 export function heroSummary(text: string | null | undefined, max = 110): string {
-  const flat = (text ?? "").replace(/\s+[-•*]\s+/g, ", ").replace(/\s+/g, " ").trim();
+  // A list dash becomes a comma, except after a sentence's own stop (". - X" → ". X").
+  const flat = (text ?? "")
+    .replace(/([.!?])\s+[-•*]\s+/g, "$1 ")
+    .replace(/\s+[-•*]\s+/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (flat.length <= max) return flat;
   const sentence = flat.slice(0, max + 1).match(/^(.{40,}?[.!?])\s/);
   if (sentence) return sentence[1];

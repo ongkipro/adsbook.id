@@ -64,6 +64,7 @@ test("a slide's summary is the product's own words, cut at a sentence or a word"
   const long = heroSummary("Lampu dinding tenaga surya dengan sensor gerak otomatis menyala saat gelap dan hemat listrik untuk teras rumah taman pagar garasi");
   assert.ok(long.endsWith("…") && long.length <= 111, long);
   assert.ok(!/\s…$/.test(long), "no space before the ellipsis");
+  assert.equal(heroSummary("Rasa manis khas madu hutan. - Tanpa campuran gula - Dipanen manual"), "Rasa manis khas madu hutan. Tanpa campuran gula, Dipanen manual", "no '., ' after a sentence stop");
   assert.equal(heroSummary(""), "");
   assert.equal(heroSummary(undefined), "");
 });
