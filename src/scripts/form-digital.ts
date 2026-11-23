@@ -10,7 +10,7 @@
 import { trackTikTokFunnel } from "../lib/tiktok-browser.ts";
 import { META_EXTERNAL_ID_COOKIE } from "../lib/click-ids.ts";
 import { formatIdr } from "../lib/format-idr";
-import { isValidWa62, missingCheckoutContact, normalizePhone } from "../lib/validation";
+import { checkoutFieldMessage, isValidWa62, normalizePhone, typedWhatsapp } from "../lib/validation";
 import { pushGtmEcomEvent } from "../lib/gtm";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
 import { digitalEventId, digitalOrderBody, digitalPaymentOptions, digitalSubmitToken, type DigitalPaymentOption } from "../lib/digital-checkout.ts";
@@ -23,7 +23,6 @@ import {
 
 type DigitalConfig = { instanceId: string; productSlug: string; productId: string; productName: string };
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const cookie = (name: string) =>
   document.cookie.split("; ").find((row) => row.startsWith(`${name}=`))?.split("=")[1] || "";
 
@@ -86,7 +85,7 @@ function initOne(root: HTMLElement) {
         user_data: {
           customer_name: nameInput.value.trim() || undefined,
           customer_phone: isValidWa62(phone) ? phone : undefined,
-          customer_email: EMAIL.test(email) ? email : undefined,
+          customer_email: email && !checkoutFieldMessage("email", email) ? email : undefined,
           country: "id",
           external_id: cookie(META_EXTERNAL_ID_COOKIE) || undefined,
           fbp: cookie("_fbp") || undefined,
@@ -139,21 +138,87 @@ function initOne(root: HTMLElement) {
         .catch(() => leads.finish(fingerprint, false));
     }, 600);
   };
-  nameInput.addEventListener("blur", identity);
-  phoneInput.addEventListener("blur", () => {
-    if (phoneInput.value) phoneInput.value = normalizePhone(phoneInput.value);
+  // Per-field rules and messages are the COD form's (`checkoutFieldMessage`):
+  // the WhatsApp field keeps digits only and rewrites 0/8 to 62 as it is typed,
+  // the name keeps letters, and the email must be an address when given.
+  const fields = [
+    [nameInput, "name"],
+    [phoneInput, "phone"],
+    [emailInput, "email"],
+  ] as const;
+  const messageFor = (input: HTMLInputElement) => checkoutFieldMessage(fields.find(([el]) => el === input)![1], input.value);
+  const showFieldError = (input: HTMLInputElement, message: string) => {
+    const wrapper = input.closest(".form-field");
+    let feedback = wrapper?.querySelector<HTMLElement>(".field-feedback") ?? null;
+    if (!feedback && wrapper) {
+      feedback = document.createElement("small");
+      feedback.className = "field-feedback";
+      feedback.id = `${input.id}-feedback`;
+      wrapper.append(feedback);
+      input.setAttribute("aria-describedby", feedback.id);
+    }
+    const filled = Boolean(input.value.trim());
+    input.classList.toggle("field-invalid", Boolean(message));
+    input.classList.toggle("field-valid", !message && filled);
+    wrapper?.classList.toggle("has-error", Boolean(message));
+    wrapper?.classList.toggle("has-success", !message && filled);
+    input.setAttribute("aria-invalid", String(Boolean(message)));
+    if (feedback) {
+      feedback.textContent = message;
+      feedback.hidden = !message;
+    }
+  };
+  const validate = (input: HTMLInputElement) => {
+    const message = messageFor(input);
+    showFieldError(input, message);
+    return !message;
+  };
+  // Once a field has shown an error, it re-checks on every keystroke so the
+  // message clears the moment the value is right.
+  const liveCheck = (input: HTMLInputElement) => {
+    if (input.classList.contains("field-invalid") || input.classList.contains("field-valid")) validate(input);
+  };
+  nameInput.addEventListener("input", () => {
+    const clean = nameInput.value.replace(/[^A-Za-zÀ-ÿ\s'.-]/g, "").replace(/\s{2,}/g, " ");
+    if (clean !== nameInput.value) nameInput.value = clean;
+    liveCheck(nameInput);
+  });
+  phoneInput.addEventListener("input", () => {
+    const clean = typedWhatsapp(phoneInput.value);
+    if (clean !== phoneInput.value) phoneInput.value = clean;
+    liveCheck(phoneInput);
+  });
+  emailInput.addEventListener("input", () => {
+    const clean = emailInput.value.replace(/\s/g, "");
+    if (clean !== emailInput.value) emailInput.value = clean;
+    liveCheck(emailInput);
+  });
+  nameInput.addEventListener("blur", () => {
+    nameInput.value = nameInput.value.trim();
+    if (nameInput.value) validate(nameInput);
     identity();
+  });
+  phoneInput.addEventListener("blur", () => {
+    if (phoneInput.value) {
+      phoneInput.value = normalizePhone(phoneInput.value);
+      validate(phoneInput);
+    }
+    identity();
+  });
+  emailInput.addEventListener("blur", () => {
+    emailInput.value = emailInput.value.trim().toLowerCase();
+    validate(emailInput);
   });
   form.addEventListener("change", (event) => {
     if ((event.target as HTMLElement).matches('input[name="variant"]')) sync();
   });
 
-  // Grey until name, WhatsApp and a payment method are set (owner,
-  // 2026-11-23), like the COD forms; never natively disabled for that, so a
+  // Grey until name, WhatsApp, the email when given and a payment method are
+  // valid (owner, 2026-11-23), like the COD forms; never natively disabled for that, so a
   // tap still reaches the handler below, which says what is missing.
   let submitting = false;
   const syncSubmit = () => {
-    const ready = !submitting && missingCheckoutContact({ name: nameInput.value, phone: phoneInput.value, address: null }) === null && Boolean(chosen);
+    const ready = !submitting && fields.every(([input]) => !messageFor(input)) && Boolean(chosen);
     submit.dataset.state = submitting ? "loading" : ready ? "ready" : "disabled";
     submit.setAttribute("aria-disabled", String(!ready));
     if (ready) errorEl.hidden = true;
@@ -220,9 +285,8 @@ function initOne(root: HTMLElement) {
     const name = nameInput.value.trim();
     const phone = normalizePhone(phoneInput.value || "");
     const email = emailInput.value.trim();
-    if (name.length < 2) return showError("Isi nama lengkap Anda."), nameInput.focus();
-    if (!isValidWa62(phone)) return showError("Nomor WhatsApp belum benar. Contoh: 081234567890"), phoneInput.focus();
-    if (email && !EMAIL.test(email)) return showError("Format email belum benar (contoh: nama@email.com)."), emailInput.focus();
+    const invalid = fields.map(([input]) => input).filter((input) => !validate(input));
+    if (invalid.length) return invalid[0].focus();
     if (!variant()) return showError("Pilih paket terlebih dahulu.");
     if (!chosen) return showError("Pilih metode pembayaran.");
     track("InitiateCheckout");

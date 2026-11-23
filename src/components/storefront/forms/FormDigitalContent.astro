@@ -67,15 +67,15 @@ const uid = crypto.randomUUID().slice(0, 8);
       </div>
       <div class="field-grid">
         <div class="form-field form-field-full">
-          <input id={`dig-name-${uid}`} name="customer_name" required autocomplete="name" placeholder=" " />
+          <input id={`dig-name-${uid}`} name="customer_name" data-field="customer-name" required inputmode="text" autocomplete="name" maxlength="120" placeholder=" " />
           <label for={`dig-name-${uid}`}>Nama lengkap</label>
         </div>
         <div class="form-field form-field-full">
-          <input id={`dig-phone-${uid}`} name="customer_phone" required type="tel" inputmode="numeric" autocomplete="tel" placeholder=" " />
+          <input id={`dig-phone-${uid}`} name="customer_phone" data-field="customer-phone" required type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" placeholder=" " />
           <label for={`dig-phone-${uid}`}>Nomor WhatsApp aktif</label>
         </div>
         <div class="form-field form-field-full">
-          <input id={`dig-email-${uid}`} name="customer_email" type="email" inputmode="email" autocomplete="email" maxlength="160" placeholder=" " />
+          <input id={`dig-email-${uid}`} name="customer_email" data-field="customer-email" type="email" inputmode="email" autocomplete="email" maxlength="160" placeholder=" " />
           <label for={`dig-email-${uid}`}>Email (opsional)</label>
         </div>
       </div>

@@ -105,3 +105,48 @@ export function normalizePhone(value: string) {
   if (digits.startsWith('62')) return digits;
   return digits;
 }
+
+/**
+ * The checkout's field rules and their Indonesian messages, in one place so the
+ * COD and digital forms say the same thing (owner, 2026-11-23: the digital
+ * form took letters in the WhatsApp field and any text as an email).
+ * Empty string = valid. `optional` fields (the digital email) accept "".
+ */
+export const CHECKOUT_EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+export function checkoutFieldMessage(field: "name" | "phone" | "address" | "email", raw: string): string {
+  const value = raw.trim();
+  if (field === "name") {
+    if (!value) return "Maaf, nama Anda belum terisi.";
+    if (!/^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'.-]{2,119}$/.test(value) || !/[A-Za-zÀ-ÿ]{2}/.test(value)) {
+      return "Maaf, nama lengkap hanya boleh berisi huruf dan minimal 3 karakter.";
+    }
+    return "";
+  }
+  if (field === "phone") {
+    if (!value) return "Maaf, nomor WhatsApp Anda belum terisi.";
+    if (/[^\d]/.test(value)) return "Maaf, nomor WhatsApp Anda harus berupa angka saja.";
+    if (!isValidWa62(normalizePhone(value))) return "Maaf, nomor WhatsApp harus nomor seluler Indonesia yang aktif. Contoh: 081234567890.";
+    return "";
+  }
+  if (field === "address") {
+    if (!value) return "Maaf, alamat lengkap Anda belum terisi.";
+    if (value.length < 15 || !/[A-Za-zÀ-ÿ]/.test(value) || !/\s/.test(value)) {
+      return "Maaf, alamat masih terlalu singkat. Isi jalan/dusun/desa dan patokan jika ada.";
+    }
+    return "";
+  }
+  if (!value) return "";
+  if (value.length > 160 || !CHECKOUT_EMAIL_PATTERN.test(value)) return "Format email belum benar. Contoh: nama@email.com";
+  return "";
+}
+
+/** What the WhatsApp field keeps while a buyer types: digits only, 0/8/620 rewritten to 62. */
+export function typedWhatsapp(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 15);
+  if (!digits) return "";
+  if (digits.startsWith("620")) return `62${digits.slice(3)}`;
+  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+  if (digits.startsWith("8")) return `62${digits}`;
+  return digits;
+}

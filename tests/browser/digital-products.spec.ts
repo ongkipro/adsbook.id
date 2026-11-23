@@ -133,10 +133,34 @@ test("digital store: signup → menu without shipping → digital product → op
   // Grey until name, WhatsApp and a payment method are set (owner, 2026-11-23).
   const pay = form.getByRole("button", { name: /Bayar/ });
   await expect(pay).toHaveAttribute("data-state", "disabled");
-  await form.getByLabel("Nama lengkap").fill("Budi Pembeli");
-  await form.getByLabel("Nomor WhatsApp aktif").fill("081234567801");
-  await form.getByLabel("Email (opsional)").fill("budi@example.test");
+  // Field rules match the COD form (owner, 2026-11-23): letters never stay in
+  // the WhatsApp field, 0812… becomes 62812…, an email needs its @ and domain.
+  const name = form.getByLabel("Nama lengkap");
+  const phone = form.getByLabel("Nomor WhatsApp aktif");
+  const email = form.getByLabel("Email (opsional)");
+  await name.pressSequentially("Budi123 Pembeli");
+  await expect(name).toHaveValue("Budi Pembeli");
+  await phone.pressSequentially("08abc12-3456-7801");
+  await expect(phone).toHaveValue("6281234567801");
+  await phone.fill("0212345678");
+  await phone.blur();
+  await expect(form.locator(".field-feedback").filter({ hasText: "nomor seluler Indonesia" })).toBeVisible();
+  await expect(phone).toHaveAttribute("aria-invalid", "true");
+  await phone.fill("081234567801");
+  await phone.blur();
+  await expect(phone).toHaveAttribute("aria-invalid", "false");
   await form.getByRole("radio", { name: /QRIS/ }).check();
+  await expect(pay).toHaveAttribute("data-state", "ready");
+  await email.fill("budi@gmail");
+  await email.blur();
+  await expect(form.locator(".field-feedback").filter({ hasText: "Format email belum benar" })).toBeVisible();
+  await expect(pay, "a malformed email keeps the button grey").toHaveAttribute("data-state", "disabled");
+  await pay.click({ force: true });
+  await expect(email).toBeFocused();
+  await email.fill("Budi@Example.test");
+  await email.blur();
+  await expect(email).toHaveValue("budi@example.test");
+  await expect(form.locator(".field-feedback:visible")).toHaveCount(0);
   await expect(pay).toHaveAttribute("data-state", "ready");
   // The same 8px between fields as the COD forms.
   const fieldGaps = await form.evaluate((root) => {
