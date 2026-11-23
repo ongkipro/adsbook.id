@@ -45,6 +45,11 @@ function DialogOverlay({
  )
 }
 
+// Centred with `inset-0 m-auto`, not `translate(-50%, -50%)`: a transform
+// makes the dialog the containing block of every fixed descendant, so a
+// Select portalled into it (select.tsx) was placed from the dialog's corner
+// instead of the viewport, landed past its right edge and scrolled the dialog
+// sideways (product Embed dialog, 2026-11-23).
 function DialogContent({
  className,
  children,
@@ -59,7 +64,7 @@ function DialogContent({
    <DialogPrimitive.Content
     data-slot="dialog-content"
     className={cn(
-     "fixed top-1/2 left-1/2 z-50 grid grid-cols-1 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 max-h-[calc(100dvh-2rem)] overflow-y-auto",
+     "fixed inset-0 z-50 m-auto grid h-fit grid-cols-1 w-full max-w-[calc(100%-2rem)] gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 max-h-[calc(100dvh-2rem)] overflow-y-auto",
      className
     )}
     {...props}

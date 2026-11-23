@@ -81,11 +81,16 @@ test("a Select inside a dialog opens and picks (product Embed mode) — it used 
     }
     await page.keyboard.press("Escape");
   }
-  const mode = page.getByRole("combobox", { name: "Mode form" });
-  await expect(mode).toBeVisible({ timeout: 10_000 });
-  await mode.click();
-  await expect(mode).toHaveAttribute("aria-expanded", "true");
-  await page.getByRole("option", { name: /^Full/ }).click();
-  await expect(mode).toContainText("Full");
+  // The form choice is a segmented control; the variant is the Select inside the dialog.
+  await page.getByRole("dialog").getByRole("radio", { name: "Full" }).click();
+  await expect(page.getByRole("dialog").getByRole("radio", { name: "Full" })).toHaveAttribute("aria-checked", "true");
+  const variant = page.getByRole("combobox", { name: "Varian awal" });
+  await expect(variant).toBeVisible({ timeout: 10_000 });
+  await variant.click();
+  await expect(variant).toHaveAttribute("aria-expanded", "true");
+  const last = page.getByRole("option").last();
+  const label = (await last.textContent())!.trim();
+  await last.click();
+  await expect(variant).toContainText(label);
   await expect(page.getByRole("dialog")).toBeVisible();
 });

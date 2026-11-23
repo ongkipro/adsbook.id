@@ -376,6 +376,10 @@
   .admin-shell [data-slot="sheet-content"] :where(a, button:not([data-slot="checkbox"]):not([data-slot="radio-group-item"]):not([data-slot="switch"])),
   .admin-shell [data-slot="dialog-content"] [data-slot="dialog-close"] { min-height: 2.75rem; }
   .admin-shell [data-slot="dialog-content"] [data-slot="dialog-close"] { min-width: 2.75rem; }
+  /* A segmented control or tab strip in a dialog: its buttons take the 2.75rem
+     tap floor above, so the track grows with them instead of the active one
+     standing out of it (Embed dialog, 2026-11-23). */
+  .admin-shell [data-slot="dialog-content"] :where([role="radiogroup"], [data-slot="tabs-list"]) { height: auto; min-height: calc(2.75rem + 6px); }
   .admin-shell [data-slot="dialog-content"] a:not([data-slot="dialog-close"]) { min-height: 2.75rem; display: inline-flex; align-items: center; }
   .admin-shell :where([data-slot="select-item"], [data-slot="dropdown-menu-item"], [data-slot="command-item"]) { min-height: 2.75rem; font-size: 1rem; }
   .admin-shell .admin-bottom-nav { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
