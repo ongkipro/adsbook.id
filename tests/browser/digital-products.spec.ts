@@ -43,13 +43,14 @@ async function adminFetch(page: Page, path: string, method: string, body?: unkno
 async function productImage(page: Page) {
   const dataUrl = await page.evaluate(() => {
     const canvas = document.createElement("canvas");
-    canvas.width = 600;
-    canvas.height = 600;
+    // A narrow portrait (300 x 900): the catalog copy must come out a padded square.
+    canvas.width = 300;
+    canvas.height = 900;
     const context = canvas.getContext("2d")!;
     context.fillStyle = "#2563eb";
-    context.fillRect(0, 0, 600, 600);
+    context.fillRect(0, 0, 300, 900);
     context.fillStyle = "#ffffff";
-    context.fillRect(150, 120, 300, 360);
+    context.fillRect(60, 200, 180, 400);
     return canvas.toDataURL("image/png");
   });
   return { name: "ebook.png", mimeType: "image/png", buffer: Buffer.from(dataUrl.split(",")[1], "base64") };
@@ -88,6 +89,26 @@ test("digital store: signup → menu without shipping → digital product → op
   await page.locator("#product-image").setInputFiles(await productImage(page));
   // Processed in the browser and stored: the preview shows the uploaded copy.
   await expect(page.locator('img[src*="/assets/uploads/"]').first()).toBeVisible({ timeout: 30_000 });
+  // The catalog copy beside it: a JPEG square at least 500 px a side, the photo
+  // centred on white (Meta and Google refuse a short side under 500 px).
+  const uploaded = await page.locator('img[src*="/assets/uploads/"]').first().getAttribute("src");
+  const feedCopy = await page.evaluate(async (src) => {
+    const response = await fetch(src!.replace(/\.webp$/, ".jpg"));
+    const bitmap = await createImageBitmap(await response.blob());
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(bitmap, 0, 0);
+    const corner = [...context.getImageData(2, 2, 1, 1).data.slice(0, 3)];
+    const centre = [...context.getImageData(bitmap.width / 2, 20, 1, 1).data.slice(0, 3)];
+    return { type: response.headers.get("content-type"), standIn: response.headers.get("x-asset-stand-in"), width: bitmap.width, height: bitmap.height, corner, centre };
+  }, uploaded);
+  expect(feedCopy.type).toBe("image/jpeg");
+  expect(feedCopy.standIn, "the stored copy, not the WebP standing in for it").toBeNull();
+  expect([feedCopy.width, feedCopy.height]).toEqual([900, 900]);
+  expect(feedCopy.corner.every((channel) => channel > 245), "white padding").toBe(true);
+  expect(feedCopy.centre[2] > 200 && feedCopy.centre[0] < 80, "the blue photo in the middle").toBe(true);
   await page.getByLabel(/^Nama varian/).fill("PDF");
   await page.getByLabel("SKU").fill("EBOOK-PDF");
   await page.getByRole("spinbutton", { name: "Harga jual Rp" }).fill("49000");

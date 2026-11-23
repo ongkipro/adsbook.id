@@ -69,3 +69,33 @@ test("every admin image path runs through the one pipeline", () => {
   const media = readFileSync("src/pages/api/admin/media.ts", "utf8");
   assert.match(media, /dimensions\.width > IMAGE_VARIANTS\.display\.maxWidth/);
 });
+
+test("a catalog copy too narrow for Meta and Google is centred on a white square, never refused or upscaled", async () => {
+  const { feedLayout, FEED_MIN_WIDTH } = await import("./image-rules.ts");
+  // demo's lem-serbaguna photo: a 332 x 1280 portrait.
+  assert.deepEqual(feedLayout(332, 1280), { canvas: { width: 1024, height: 1024 }, draw: { x: 379, y: 0, width: 266, height: 1024 } });
+  // Large enough already: drawn as fitWidth sizes it, no padding.
+  assert.deepEqual(feedLayout(2000, 1500), { canvas: { width: 1024, height: 768 }, draw: { x: 0, y: 0, width: 1024, height: 768 } });
+  assert.deepEqual(feedLayout(600, 600), { canvas: { width: 600, height: 600 }, draw: { x: 0, y: 0, width: 600, height: 600 } });
+  // Small source: a 500 px square around it, the photo kept at its own size.
+  assert.deepEqual(feedLayout(400, 300), { canvas: { width: 500, height: 500 }, draw: { x: 50, y: 100, width: 400, height: 300 } });
+  // Wide panorama: the short side would be 256, so it gets a square too.
+  const wide = feedLayout(4000, 1000);
+  assert.deepEqual(wide.canvas, { width: 1024, height: 1024 });
+  assert.equal(wide.draw.width, 1024);
+  for (const [w, h] of [[332, 1280], [400, 300], [4000, 1000], [120, 90], [3000, 3000]]) {
+    const { canvas, draw } = feedLayout(w, h);
+    assert.ok(Math.min(canvas.width, canvas.height) >= FEED_MIN_WIDTH, `${w}x${h} clears the catalog minimum`);
+    assert.ok(draw.width <= w && draw.height <= h, `${w}x${h} is never upscaled`);
+    assert.ok(draw.x + draw.width <= canvas.width && draw.y + draw.height <= canvas.height, `${w}x${h} fits its canvas`);
+  }
+});
+
+test("the seed and backfill encoder pads a narrow photo the same way", async () => {
+  const { encode } = await import("../../scripts/prepare-image.ts");
+  const tall = await sharp({ create: { width: 332, height: 1280, channels: 3, background: "#cc3333" } }).png().toBuffer();
+  const out = await sharp(await encode(tall, "feed")).metadata();
+  assert.deepEqual([out.format, out.width, out.height], ["jpeg", 1024, 1024]);
+  const display = await sharp(await encode(tall, "display")).metadata();
+  assert.deepEqual([display.format, display.width, display.height], ["webp", 332, 1280], "the store copy is never padded");
+});

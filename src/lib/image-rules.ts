@@ -58,6 +58,32 @@ export function fitWidth(width: number, height: number, maxWidth: number): { wid
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
+/**
+ * Where the catalog copy draws the photo. Meta and Google refuse a catalog
+ * image whose short side is under 500 px, so a photo that would end up that
+ * narrow (a tall portrait, a small source) is centred on a white square
+ * instead of being refused: 332 × 1280 becomes a 1024 × 1024 canvas with the
+ * photo drawn 266 × 1024 in the middle. Nothing is upscaled, and a photo that
+ * already clears 500 px on both sides is drawn as `fitWidth` sizes it.
+ */
+export function feedLayout(width: number, height: number): {
+  canvas: { width: number; height: number };
+  draw: { x: number; y: number; width: number; height: number };
+} {
+  const max = IMAGE_VARIANTS.feed.maxWidth;
+  const fitted = fitWidth(width, height, max);
+  if (Math.min(fitted.width, fitted.height) >= FEED_MIN_WIDTH || !(fitted.width > 0)) {
+    return { canvas: fitted, draw: { x: 0, y: 0, ...fitted } };
+  }
+  const side = Math.min(max, Math.max(FEED_MIN_WIDTH, fitted.width, fitted.height));
+  const scale = Math.min(1, side / Math.max(width, height));
+  const drawn = { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+  return {
+    canvas: { width: side, height: side },
+    draw: { x: Math.floor((side - drawn.width) / 2), y: Math.floor((side - drawn.height) / 2), ...drawn },
+  };
+}
+
 /** What the server accepts for one stored variant: its type, within its byte budget. */
 export function checkStoredVariant(variant: ImageVariant, file: { type: string; size: number }): UploadCheck {
   const rule = IMAGE_VARIANTS[variant];
