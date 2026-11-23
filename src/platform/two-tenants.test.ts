@@ -1105,13 +1105,22 @@ test("AUTH §1.3: adsbook.id/masuk signs an owner or a staff member into the rig
 
   // Review finding 3: a guesser on 1.1.1.1 meets its pair limit; the owner on 2.2.2.2 is untouched,
   // and a known and an unknown identifier hit the same limit after the same number of tries.
-  for (const identifier of ["alfa@contoh.example", "tidak-ada@contoh.example"]) {
-    const statuses: number[] = [];
-    for (let attempt = 0; attempt <= PLATFORM_LOGIN_LIMITS.perPair; attempt += 1) statuses.push((await login(identifier, "tebakan-salah", "1.1.1.1")).status);
-    assert.deepEqual(statuses, [...Array(PLATFORM_LOGIN_LIMITS.perPair).fill(401), 429], identifier);
+  // The limiter counts in fixed 10-minute windows by `Date.now()`; a run that crossed a boundary
+  // (main CI at 09:40:00Z, 2026-11-23) restarted the count mid-loop. The clock is held inside one window.
+  const realNow = Date.now;
+  const heldAt = Math.floor(realNow() / (10 * 60 * 1000)) * (10 * 60 * 1000) + 60_000;
+  Date.now = () => heldAt;
+  try {
+    for (const identifier of ["alfa@contoh.example", "tidak-ada@contoh.example"]) {
+      const statuses: number[] = [];
+      for (let attempt = 0; attempt <= PLATFORM_LOGIN_LIMITS.perPair; attempt += 1) statuses.push((await login(identifier, "tebakan-salah", "1.1.1.1")).status);
+      assert.deepEqual(statuses, [...Array(PLATFORM_LOGIN_LIMITS.perPair).fill(401), 429], identifier);
+    }
+    assert.deepEqual(await login("alfa@contoh.example", "x", "1.1.1.1"), { status: 429, error: LOGIN_RATE_LIMITED });
+    assert.equal((await login("alfa@contoh.example", "kata-sandi-panjang-1", "2.2.2.2")).status, 200, "the owner from another network");
+  } finally {
+    Date.now = realNow;
   }
-  assert.deepEqual(await login("alfa@contoh.example", "x", "1.1.1.1"), { status: 429, error: LOGIN_RATE_LIMITED });
-  assert.equal((await login("alfa@contoh.example", "kata-sandi-panjang-1", "2.2.2.2")).status, 200, "the owner from another network");
 });
 
 test("T-57/PR-35: adsbook.id/masuk issues no handoff to a seller with two-step on until the code, for exactly that credential and store", async () => {
