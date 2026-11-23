@@ -344,7 +344,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `courier-rules` | 3 | — | — | 1 | `/api/submit-order` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` |
 | `credential-crypto` | 12 | `stores` | — | 5 | `/api/admin/ads` `/api/admin/plugins/kelola` `/api/admin/settings` |
 | `crm-template` | 11 | `seller_bank_accounts` `stores` | — | 2 | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/settings` |
-| `daily-rotation` | 2 | — | — | 1 | `/` |
+| `daily-rotation` | 6 | — | — | 1 | `/` |
 | `dashboard-compare` | 6 | — | — | 1 | `/api/admin/analytics` |
 | `deploy-preflight` | 13 | — | — | 1 | — |
 | `developer-api-keys` | 22 | — | — | 8 | `/api/admin/settings/developer` |
@@ -425,7 +425,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `product-mutation` | 15 | `order_items` `product_variants` `products` `storefront_content` | — | 2 | `/api/admin/products` |
 | `provider-config` | 10 | `stores` | — | 2 | `/api/locations` `/api/payment-methods` `/api/submit-order` `/api/v1/checkout` `/api/admin/ongkir` `/api/admin/settings` `/api/admin/shipping` `/api/admin/warehouses` |
 | `province` | 13 | — | — | 4 | `/api/submit-middle-order` `/api/v1/checkout` `/api/admin/expeditions` |
-| `public-store` | 9 | `courier_rules` `stores` | — | 1 | `/` `/produk/[slug]` `/thanks` `/kebijakan-privasi` `/kontak` `/pengiriman` `/syarat-ketentuan` `/[slug]` |
+| `public-store` | 8 | `courier_rules` `stores` | — | 1 | `/` `/produk/[slug]` `/thanks` `/kebijakan-privasi` `/kontak` `/pengiriman` `/syarat-ketentuan` `/[slug]` |
 | `rate-cache` | 3 | — | — | 1 | — |
 | `rate-check` | 10 | — | — | 1 | — |
 | `rate-limit` | 12 | `rate_limits` | `rate_limits` | 2 | `/hello` `/api/locations` `/api/meta-event` `/api/order-status` `/api/record-abandoned-order` `/api/shipping-rates` `/api/submit-middle-order` `/api/submit-order` `/api/tiktok-event` `/api/v1/checkout` `/api/v1/tracking/events` `/api/webhooks/autolaris/[token]` `/api/platform/login` `/api/platform/masuk` `/api/platform/owner-reset` `/api/platform/signup` |

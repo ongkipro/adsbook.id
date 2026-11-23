@@ -199,3 +199,13 @@ test("CSP allows TikTok's one origin for script and beacon only, and the pixel r
   const thanks = readFileSync("src/components/storefront/tracking/MetaThanksTracker.astro", "utf8");
   assert.match(thanks, /tiktokEligible = statusData\.tiktok_complete_payment === true/, "/thanks follows the server's rule, the COD trigger included");
 });
+
+test("CSP allows Cloudflare Web Analytics' two exact origins, script and report, and no wildcard", async () => {
+  const { readFileSync } = await import("node:fs");
+  const middleware = readFileSync("src/middleware.ts", "utf8");
+  const csp = middleware.slice(middleware.indexOf("export const STOREFRONT_CSP"), middleware.indexOf('].join("; ");'));
+  const directive = (name: string) => csp.split("\n").find((line) => line.includes(`"${name} `)) ?? "";
+  assert.match(directive("script-src"), / https:\/\/static\.cloudflareinsights\.com[ "]/);
+  assert.match(directive("connect-src"), / https:\/\/cloudflareinsights\.com[ "]/);
+  assert.doesNotMatch(csp, /\*\.cloudflareinsights/);
+});

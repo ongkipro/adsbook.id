@@ -7,7 +7,7 @@ import { decideBannerPreview, getTenantHomeContent, seedHomeContent, type Banner
 import { resolveAdminSession } from '../lib/admin-session';
 import { resolveAuthSecret } from '../lib/auth-secret';
 import { resolveStorefrontTemplate } from '../lib/storefront-template';
-import { dailySeed, pickDaily } from '../lib/daily-rotation';
+import { dailySeed, heroSummary, pickHeroProducts } from '../lib/daily-rotation';
 import { homeDescription, homeTitle } from '../lib/home-seo';
 import { getStorePublicFacts, storefrontTrustSignals } from '../lib/public-store';
 import { loadThemeSettings } from '../lib/storefront-theme';
@@ -85,14 +85,18 @@ const homepageDescription = homeDescription(
 // the catalogue — a fallback the old `content.heroSlides[0]` preload could
 // not see, which left four of the six installs' LCP image unpreloaded. The
 // pick rotates daily rather than per request so visitors reuse cached bytes.
+// Owner, 2026-11-23: three to five catalogue products, each with a line of
+// its own description, linking to its page.
 const heroSlides =
   content && content.heroSlides.length > 0
     ? content.heroSlides
-    : pickDaily(products, 3, dailySeed(new Date())).map((product) => ({
+    : pickHeroProducts(catalog, dailySeed(new Date())).map((product) => ({
         image: product.image,
-        alt: product.name,
+        alt: product.productName,
         badge: product.category,
-        text: product.name,
+        text: product.productName,
+        summary: heroSummary(product.catalogDescription || product.description),
+        href: `/produk/${product.slug}`,
       }));
 const itemList = {
   name: `${Astro.locals.tenant.name} — Koleksi Produk pilihan`,

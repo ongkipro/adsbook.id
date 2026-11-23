@@ -33,3 +33,30 @@ export function pickDaily<T>(items: readonly T[], count: number, seed: number): 
   }
   return picked;
 }
+
+/** How many catalogue products the home hero rotates through (owner, 2026-11-23). */
+export const HERO_PRODUCT_MIN = 3;
+export const HERO_PRODUCT_MAX = 5;
+
+/**
+ * The hero's product picks: up to five, chosen per day so every visitor that
+ * day shares one warm set of images. Fewer than three products means the
+ * catalogue is too small for a rotating hero; the caller shows what there is.
+ */
+export function pickHeroProducts<T>(items: readonly T[], seed: number): T[] {
+  return pickDaily(items, Math.min(HERO_PRODUCT_MAX, items.length), seed);
+}
+
+/**
+ * One or two lines of a product's description for its slide: the first
+ * sentence(s) up to `max` characters, cut at a word, list dashes dropped.
+ * Plain text only; Astro escapes it.
+ */
+export function heroSummary(text: string | null | undefined, max = 110): string {
+  const flat = (text ?? "").replace(/\s+[-•*]\s+/g, ", ").replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const sentence = flat.slice(0, max + 1).match(/^(.{40,}?[.!?])\s/);
+  if (sentence) return sentence[1];
+  const cut = flat.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max - 20)).replace(/[,;:.\s]+$/, "")}…`;
+}

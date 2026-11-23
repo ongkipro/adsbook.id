@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { descriptionBlocks, getStoreSupportWhatsapp, productWhatsappHref, storefrontTrustSignals } from "./public-store.ts";
+import { descriptionBlocks, getStoreSupportWhatsapp, storefrontTrustSignals } from "./public-store.ts";
 
 function locals(database: unknown) {
   return { tenantDb: database, runtimeEnv: { OMS_DB: database} } as unknown as App.Locals;
@@ -90,11 +90,6 @@ test("the storefront trust strip claims only what the store's settings honour", 
   assert.deepEqual(noCod.map((signal) => signal.label), ["Bayar via transfer bank", "Dikirim JNE"]);
 });
 
-test("a product question link is built only from a wa.me-ready number", () => {
-  assert.equal(productWhatsappHref("", "Madu"), "");
-  assert.equal(productWhatsappHref("0812345678", "Madu"), "", "local form is not a wa.me number");
-  assert.equal(productWhatsappHref("62812345678", "Madu & Lebah"), "https://wa.me/62812345678?text=Halo%2C%20saya%20mau%20tanya%20tentang%20Madu%20%26%20Lebah.");
-});
 
 test("a description's dash runs become a list, the rest stays text, and nothing becomes markup", () => {
   assert.deepEqual(

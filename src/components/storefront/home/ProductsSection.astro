@@ -59,6 +59,20 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
   </div>
 
   <div class="mb-4 flex flex-col gap-3" hidden={products.length === 0}>
+    <form action="/produk" method="get" role="search" class="relative w-full" onsubmit="return false">
+      <label for="catalog-search" class="sr-only">Cari produk di {Astro.locals.tenant.name}</label>
+      <input
+        type="search"
+        id="catalog-search"
+        name="q"
+        maxlength="80"
+        autocomplete="off"
+        enterkeyhint="search"
+        placeholder="Cari produk"
+        class="h-10 w-full rounded-md border border-[#E2E2E5] bg-[#F6F6F7] pl-9 pr-3 text-base text-[#111111] placeholder:text-[#767676] focus:border-[#111111] focus:bg-white focus:outline-none"
+      />
+      <Icon name="lucide:search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#767676]" aria-hidden="true" />
+    </form>
     {showChips && (
       <div role="group" aria-label="Kategori" class="catalog-chips -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
         <button type="button" class={chipClass} data-category="" aria-pressed="true">Semua</button>
@@ -142,9 +156,8 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
   import { CATALOG_PAGE_SIZE } from '../../../lib/catalog-page-size';
 
   function initProductCatalog() {
-    // The header's search box (SiteHeader) is the one search: typing filters
-    // this grid live, and a submitted `?q=` arrives here already filtered.
-    const searchInput = document.getElementById('site-search') as HTMLInputElement | null;
+    // Typing filters this grid live; a `?q=` link arrives here already filtered.
+    const searchInput = document.getElementById('catalog-search') as HTMLInputElement | null;
     const cards = document.querySelectorAll('.product-card') as NodeListOf<HTMLElement>;
     const loadMoreBtn = document.getElementById('load-more-btn');
     const visibleCountEl = document.getElementById('product-visible-count');
