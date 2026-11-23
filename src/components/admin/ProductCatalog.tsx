@@ -52,13 +52,12 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { EMBED_SNIPPET_VERSION, buildEmbedMarkup } from "../../lib/embed-markup";
+import { DIGITAL_FORM, effectiveFormMode, PHYSICAL_FORM_MODES, physicalFormMode, productKind } from "../../lib/checkout-forms";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
-const EMBED_MODE_LABELS: Record<string, string> = {
-  hybrid: "Hybrid · Otomatis menyesuaikan wilayah",
-  full: "Full · Alamat & ongkir lengkap",
-  middle: "Middle · Form singkat (Nama & HP)",
-};
+// The modes on offer come from src/lib/checkout-forms.ts (owner, 2026-11-23):
+// a physical product picks hybrid, middle or full; a digital product has one form.
+const EMBED_MODE_LABELS: Record<string, string> = Object.fromEntries(PHYSICAL_FORM_MODES.map((mode) => [mode.value, mode.label]));
 
 export type ProductVariant = {
   id: number | string;
@@ -75,6 +74,7 @@ export type Product = {
   category: string | null;
   image_url: string | null;
   is_active: number | boolean;
+  product_type?: "physical" | "digital";
   variants: ProductVariant[];
 };
 
@@ -91,11 +91,7 @@ type EmbedConfig = {
   };
 };
 
-const FORM_PATHS: Record<FormMode, string> = {
-  middle: "/middle-form",
-  full: "/full-form",
-  hybrid: "/hybrid-form",
-};
+const FORM_PATHS = Object.fromEntries(PHYSICAL_FORM_MODES.map((mode) => [mode.value, mode.path])) as Record<FormMode, string>;
 
 function formatIDR(amount: number): string {
   return new Intl.NumberFormat("id-ID", {
@@ -450,17 +446,21 @@ export function ProductCatalog({
 
   const embedOrigin =
     typeof window === "undefined" ? "" : window.location.origin;
+  const embedKind = productKind(embedTarget?.product_type);
+  // A digital product's links carry `hybrid`, which every form route accepts
+  // and the store answers with the digital checkout (checkout-forms.ts).
+  const linkMode = effectiveFormMode(embedKind, embedMode);
   const selectedVariant = embedVariantId || undefined;
   const buildIntegrationUrl = (path: string, includeMode = false) => {
     if (!embedTarget || !embedOrigin) return "";
     const params = new URLSearchParams({
-      ...(includeMode ? { mode: embedMode } : {}),
+      ...(includeMode ? { mode: linkMode } : {}),
       product_id: String(embedTarget.id),
     });
     if (selectedVariant) params.set("variant_id", selectedVariant);
     return `${embedOrigin}${path}?${params.toString()}`;
   };
-  const standaloneUrl = buildIntegrationUrl(FORM_PATHS[embedMode]);
+  const standaloneUrl = buildIntegrationUrl(FORM_PATHS[linkMode]);
   const embedUrl = buildIntegrationUrl("/embed/form", true);
   const embedId = `adsbook-order-form-${String(embedTarget?.id || "").replace(/[^a-z0-9_-]/gi, "-")}`;
   const embedMarkup = embedUrl
@@ -471,7 +471,7 @@ export function ProductCatalog({
         title: `Form pemesanan ${embedTarget?.title || "produk"}`,
         productId: String(embedTarget?.id || ""),
         variantId: selectedVariant,
-        mode: embedMode,
+        mode: linkMode,
       })
     : null;
   const iframeHtml = embedMarkup?.plainIframe || "";
@@ -1053,7 +1053,9 @@ export function ProductCatalog({
               <span>Embed Checkout Form - {embedTarget?.title}</span>
             </DialogTitle>
             <DialogDescription>
-              Pilih alur dan varian awal. Snippet embed selalu menggunakan ID produk dan varian canonical dari adsbook.id.
+              {embedKind === "digital"
+                ? "Produk digital: satu form (nama, WhatsApp, email opsional, bayar online). Pilih varian awal, lalu salin snippet."
+                : "Produk fisik: pilih jenis form dan varian awal, lalu salin snippet."}
             </DialogDescription>
           </DialogHeader>
 
@@ -1074,25 +1076,33 @@ export function ProductCatalog({
           ) : embedConfig ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold text-slate-700">
-                    Mode Form Checkout
-                  </span>
-                  <Select
-                    items={EMBED_MODE_LABELS}
-                    value={embedMode}
-                    onValueChange={(value) => value && setEmbedMode(value as FormMode)}
-                  >
-                    <SelectTrigger aria-label="Mode form" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(EMBED_MODE_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
+                {embedKind === "digital" ? (
+                  <div data-form-lock="digital" className="rounded-lg border border-blue-200 bg-blue-50/70 p-3 text-blue-950">
+                    <p className="text-xs font-semibold">{DIGITAL_FORM.label}</p>
+                    <p className="mt-1 text-xs leading-5 text-blue-900/80">{DIGITAL_FORM.hint}</p>
+                  </div>
+                ) : (
+                  <div className="block">
+                    <span className="mb-1.5 block text-xs font-semibold text-slate-700">
+                      Jenis form (produk fisik)
+                    </span>
+                    <Select
+                      items={EMBED_MODE_LABELS}
+                      value={embedMode}
+                      onValueChange={(value) => value && setEmbedMode(value as FormMode)}
+                    >
+                      <SelectTrigger aria-label="Mode form" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PHYSICAL_FORM_MODES.map((mode) => (
+                          <SelectItem key={mode.value} value={mode.value}>{mode.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-1.5 text-xs leading-5 text-slate-500">{physicalFormMode(embedMode).hint}</p>
+                  </div>
+                )}
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold text-slate-700">
                     Varian Awal (Default)
@@ -1229,7 +1239,9 @@ export function ProductCatalog({
               </p>
 
               <p className="rounded-lg border border-blue-200 bg-blue-50/80 p-3 text-xs leading-5 text-blue-900">
-                <strong>Keamanan Domain Embed:</strong> Pastikan domain website tempat embed ditambahkan ke daftar domain di <strong>Pengaturan → Store & CS → Domain untuk Embed</strong> agar form diizinkan memuat.
+                <strong>Wajib sebelum menempel snippet:</strong> daftarkan domain website Anda (mis. <code className="font-mono">https://lp.tokoanda.com</code>) di{" "}
+                <a href="/admin/settings/store#embedOriginsForm" className="font-semibold underline underline-offset-2">Pengaturan › Toko › Domain untuk embed</a>.
+                Tanpa itu browser menolak memuat form di website lain. Link Form Direct tidak memerlukannya.
               </p>
             </div>
           ) : null}
