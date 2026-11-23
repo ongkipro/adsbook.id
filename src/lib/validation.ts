@@ -64,6 +64,27 @@ export function isValidWa62(value: string) {
 }
 
 /**
+ * Which contact field a checkout form still lacks, judged by the same limits
+ * the order endpoints enforce (`order-schema.ts`, `submit-middle-order.ts`).
+ * The submit button lights up only when this is null (owner, 2026-11-23:
+ * grey until the form is complete), so it never invites a buyer to submit a
+ * form the server is certain to refuse. `address: null` for a digital order,
+ * which has none.
+ */
+export const CHECKOUT_NAME_MIN = 2;
+export const CHECKOUT_ADDRESS_MIN = 10;
+export function missingCheckoutContact(input: {
+  name: string;
+  phone: string;
+  address: string | null;
+}): "name" | "phone" | "address" | null {
+  if (input.name.trim().length < CHECKOUT_NAME_MIN) return "name";
+  if (!isValidWa62(normalizePhone(input.phone))) return "phone";
+  if (input.address !== null && input.address.trim().length < CHECKOUT_ADDRESS_MIN) return "address";
+  return null;
+}
+
+/**
  * The one Indonesian phone normaliser for input, validation, and persistence.
  * `meta-identity.ts` keeps a separate `toE164Digits` on purpose: this one must
  * tolerate a half-typed number so a live input event does not erase what the

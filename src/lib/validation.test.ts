@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { orderSubmitSchema } from "./order-schema.ts";
 import {
+  CHECKOUT_ADDRESS_MIN,
+  CHECKOUT_NAME_MIN,
+  missingCheckoutContact,
   isValidWa62,
   normalizePhone,
 } from "./validation.ts";
@@ -112,4 +115,17 @@ test("the order endpoint refuses a one-letter name and a short address, and acce
   assert.equal(orderSubmitSchema.safeParse({ ...order, customer_name: "A", address: "Jl. Dago No. 12, Coblong" }).success, false);
   assert.equal(orderSubmitSchema.safeParse({ ...order, customer_name: "Al", address: "x".repeat(9) }).success, false);
   assert.equal(orderSubmitSchema.safeParse({ ...order, customer_name: "Al", address: "x".repeat(10) }).success, true);
+});
+
+test("the checkout button lights up exactly when the order endpoint will accept the contact", () => {
+  const ready = { name: "Siti", phone: "081234567890", address: "Jl. Dago No. 12, Coblong" };
+  assert.equal(missingCheckoutContact(ready), null);
+  assert.equal(missingCheckoutContact({ ...ready, phone: "0812345" }), "phone", "half-typed");
+  assert.equal(missingCheckoutContact({ ...ready, phone: "0812-3456-7890" }), null);
+  assert.equal(missingCheckoutContact({ ...ready, phone: "0212345678" }), "phone", "landline");
+  assert.equal(missingCheckoutContact({ ...ready, name: "A" }), "name");
+  assert.equal(missingCheckoutContact({ ...ready, address: "Jl. Dago" }), "address");
+  assert.equal(missingCheckoutContact({ ...ready, address: null }), null, "a digital order has no address");
+  assert.equal(CHECKOUT_NAME_MIN, 2);
+  assert.equal(CHECKOUT_ADDRESS_MIN, 10);
 });
