@@ -129,3 +129,40 @@ test("the checkout button lights up exactly when the order endpoint will accept 
   assert.equal(CHECKOUT_NAME_MIN, 2);
   assert.equal(CHECKOUT_ADDRESS_MIN, 10);
 });
+
+test("checkout field rules: one set of messages for the COD and digital forms", async () => {
+  const { checkoutFieldMessage, typedWhatsapp } = await import("./validation.ts");
+  // WhatsApp: digits only, an Indonesian mobile, any common way of typing it.
+  assert.equal(typedWhatsapp("0812-3456-7890"), "6281234567890");
+  assert.equal(typedWhatsapp("+62 812 3456 7890"), "6281234567890");
+  assert.equal(typedWhatsapp("812abc34"), "6281234", "letters never stay in the field");
+  assert.equal(typedWhatsapp("abc"), "");
+  assert.equal(typedWhatsapp("6208123456789"), "628123456789");
+  assert.equal(checkoutFieldMessage("phone", ""), "Maaf, nomor WhatsApp Anda belum terisi.");
+  assert.equal(checkoutFieldMessage("phone", "08123abc"), "Maaf, nomor WhatsApp Anda harus berupa angka saja.");
+  assert.match(checkoutFieldMessage("phone", "0212345678"), /nomor seluler Indonesia/, "a landline is refused");
+  assert.match(checkoutFieldMessage("phone", "6281234"), /nomor seluler Indonesia/, "too short");
+  assert.equal(checkoutFieldMessage("phone", "6281234567890"), "");
+  // Email: optional on a digital order, but when given it must be an address.
+  assert.equal(checkoutFieldMessage("email", ""), "");
+  for (const bad of ["budi", "budi@", "budi@gmail", "@gmail.com", "budi @gmail.com", "budi@gmail.c", `${"a".repeat(160)}@x.com`]) {
+    assert.match(checkoutFieldMessage("email", bad), /Format email belum benar/, bad);
+  }
+  assert.equal(checkoutFieldMessage("email", "budi.santoso+toko@gmail.co.id"), "");
+  // Name and address keep the COD form's limits.
+  assert.match(checkoutFieldMessage("name", "A"), /minimal 3 karakter/);
+  assert.match(checkoutFieldMessage("name", "Budi123"), /hanya boleh berisi huruf/);
+  assert.equal(checkoutFieldMessage("name", "Siti Aminah"), "");
+  assert.match(checkoutFieldMessage("address", "Jl. Dago"), /terlalu singkat/);
+  assert.equal(checkoutFieldMessage("address", "Jl. Dago No. 12, Coblong"), "");
+});
+
+test("a valid checkout email on the browser is a valid email on the server", async () => {
+  const { checkoutFieldMessage } = await import("./validation.ts");
+  const { orderSubmitSchema } = await import("./order-schema.ts");
+  const base = { customer_name: "Siti", customer_phone: "081234567890", address: "Jl. Dago No. 12, Coblong", district: "Coblong", province: "Jawa Barat", variant_id: "1", submit_token: "t".repeat(16) };
+  for (const email of ["budi@gmail.com", "budi.santoso+toko@gmail.co.id", "x@y.io"]) {
+    assert.equal(checkoutFieldMessage("email", email), "", email);
+    assert.equal(orderSubmitSchema.safeParse({ ...base, customer_email: email }).success, true, `server accepts ${email}`);
+  }
+});
