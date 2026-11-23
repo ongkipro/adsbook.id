@@ -99,12 +99,17 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
 
 test("order form: grey 'Pesan Sekarang' until the contact is complete, lit after; a grey tap marks the fields; 12px floor; one spacing system; no order sent", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  // A COD province, so the page renders the middle form (name, WhatsApp,
+  // address) wherever the suite runs. Without it a runner with no geo-IP got
+  // the full form, whose button also waits for a kecamatan (CI, PR #67).
+  await page.setExtraHTTPHeaders({ "x-user-province": "Jawa Barat" });
   const posted: string[] = [];
   page.on("request", (request) => { if (request.method() === "POST" && /submit-.*order/.test(request.url())) posted.push(request.url()); });
   await page.goto(`${STORE}/`);
   const href = await page.locator("#product-grid a[href^='/produk/']").first().getAttribute("href");
   await page.goto(`${STORE}${href}`);
   const form = page.locator("#form-pemesanan");
+  await expect(form.locator("[data-canonical-order-form]")).toHaveAttribute("data-resolved-mode", "middle");
   const submit = form.locator("#submit-button");
   await submit.scrollIntoViewIfNeeded();
   await expect(submit).toHaveText(/Pesan Sekarang/);
