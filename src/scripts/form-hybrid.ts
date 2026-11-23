@@ -8,7 +8,7 @@ import { paymentBrandAsset } from "../lib/payment-brand";
 
 import { createDistrictDiscoveryLocation, formatDeliveryLocation, groupLocationResults } from "../lib/location-search";
 import { pushGtmEcomEvent } from "../lib/gtm";
-import { isValidWa62, missingCheckoutContact } from "../lib/validation";
+import { isValidWa62 } from "../lib/validation";
 import { normalizeProvinceCode } from "../lib/province";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
 import { isStoreClosed, StoreClosedError, storeClosedMessage } from "../lib/store-closed";
@@ -734,35 +734,23 @@ function initHybridOrderFormInstance(formRoot: HTMLElement) {
     const hasPaymentChoices =
       Array.isArray(state.visiblePaymentOptions) &&
       state.visiblePaymentOptions.length > 0;
-    const missing = missingCheckoutContact({
-      name: customerNameInput?.value || "",
-      phone: phoneInput?.value || "",
-      address: addressInput?.value || "",
-    });
-
     if (state.submitting)
       return {
         disabled: true,
         label: submitButton.dataset.loadingLabel || "Memproses Pesanan...",
       };
-    if (missing === "name")
-      return { disabled: true, label: "Lengkapi Nama Terlebih Dahulu" };
-    if (missing === "phone")
-      return { disabled: true, label: "Lengkapi No. WA Terlebih Dahulu" };
-    if (missing === "address")
-      return { disabled: true, label: "Lengkapi Alamat Terlebih Dahulu" };
-    if (!state.locationId)
-      return { disabled: true, label: "Lengkapi kecamatan dulu" };
+    // Grey only while something for the chosen area is still loading, and it
+    // says what. Missing contact or area is named by the submit handler.
     if (state.districtLoading)
       return { disabled: true, label: "Mencari kecamatan..." };
     if (state.shippingLoading)
       return { disabled: true, label: "Menghitung ongkir..." };
-    if (!state.courierServiceId)
+    if (state.locationId && !state.courierServiceId)
       return { disabled: true, label: "Menyiapkan ongkir..." };
-    if (!hasPaymentChoices)
+    if (state.locationId && !hasPaymentChoices)
       return { disabled: true, label: "Menyiapkan pembayaran..." };
 
-    return { disabled: false, label: "Buat Order Sekarang" };
+    return { disabled: false, label: "Pesan Sekarang" };
   };
 
   const syncSubmitButton = () => {

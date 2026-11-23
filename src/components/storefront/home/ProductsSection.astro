@@ -42,7 +42,7 @@ const { products, heading, asPage = false, eager = false } = Astro.props;
 const categories = [...new Set(products.map((product) => product.category).filter(Boolean))];
 const showChips = categories.length > 1;
 const chipClass =
-  'catalog-chip inline-flex min-h-9 shrink-0 items-center rounded-md border border-[#E2E2E5] bg-white px-3 text-sm text-[#333333] transition-colors hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] aria-pressed:border-[var(--sf-accent,#2563EB)] aria-pressed:bg-[var(--sf-accent-soft,#EFF6FF)] aria-pressed:font-semibold aria-pressed:text-[var(--sf-accent-strong,#1D4ED8)]';
+  'catalog-chip inline-flex min-h-10 shrink-0 items-center rounded-md border border-[#E2E2E5] bg-white px-3 text-sm text-[#333333] transition-colors hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] aria-pressed:border-[var(--sf-accent,#2563EB)] aria-pressed:bg-[var(--sf-accent-soft,#EFF6FF)] aria-pressed:font-semibold aria-pressed:text-[var(--sf-accent-strong,#1D4ED8)]';
 
 const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
 ---
@@ -53,7 +53,7 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
       {asPage
         ? <h1 class="text-xl font-bold tracking-[-0.01em] text-[#111111]">{heading.title}</h1>
         : <h2 class="text-lg font-bold tracking-[-0.01em] text-[#111111]">{heading.title}</h2>}
-      {!asPage && <a href="/produk" class="shrink-0 text-sm font-semibold text-[var(--sf-accent,#2563EB)] underline-offset-4 hover:underline">Lihat semua</a>}
+      {!asPage && <a href="/produk" class="-my-2.5 inline-flex min-h-10 shrink-0 items-center text-sm font-semibold text-[var(--sf-accent,#2563EB)] underline-offset-4 hover:underline">Lihat semua</a>}
     </div>
     {heading.description && <p class="mt-0.5 text-sm leading-5 text-[#555555]">{heading.description}</p>}
   </div>
@@ -94,9 +94,11 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
     )
   }
 
-  <p id="catalog-empty" class="hidden rounded-md bg-[#F6F6F7] px-5 py-8 text-center text-sm text-[#555555]">
-    Produk tidak ditemukan. Coba kata lain atau pilih kategori Semua.
-  </p>
+  <div id="catalog-empty" class="hidden rounded-md bg-[#F6F6F7] px-5 py-8 text-center" role="status">
+    <p class="text-sm font-semibold text-[#111111]">Produk tidak ditemukan</p>
+    <p class="mt-1 text-sm text-[#555555]">Coba kata lain, atau lihat semua produk.</p>
+    <button type="button" id="catalog-reset" class="mt-4 inline-flex min-h-10 items-center rounded-md border border-[#E2E2E5] bg-white px-4 text-sm font-semibold text-[#111111] hover:border-[#111111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]">Hapus pencarian</button>
+  </div>
 
   <div id="product-grid" class="grid grid-cols-2 gap-2" hidden={products.length === 0}>
     {
@@ -221,6 +223,17 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
         filterAndRender();
       }),
     );
+
+    document.getElementById('catalog-reset')?.addEventListener('click', () => {
+      currentSearch = '';
+      currentCategory = '';
+      if (searchInput) searchInput.value = '';
+      chips.forEach((chip) => chip.setAttribute('aria-pressed', String(!chip.dataset.category)));
+      visibleLimit = CATALOG_PAGE_SIZE;
+      if (window.location.search) history.replaceState(null, '', window.location.pathname);
+      filterAndRender();
+      searchInput?.focus();
+    });
 
     loadMoreBtn?.addEventListener('click', () => {
       visibleLimit += CATALOG_PAGE_SIZE;

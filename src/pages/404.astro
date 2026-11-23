@@ -31,19 +31,12 @@ Astro.response.status = 404;
           <span class="text-[34px] font-semibold tracking-[-0.06em] text-[#111111]">404</span>
         </div>
 
-        <span
-          class="mt-5 inline-flex bg-[#F5F5F5] px-3 py-1 text-[11px] font-normal uppercase tracking-[0.12em] text-[#111111]"
-        >
-          Halaman hilang
-        </span>
-
-        <h1 class="mt-4 text-[30px] font-semibold leading-[1.15] tracking-[-0.03em] text-[#111111]">
-          Sepertinya jalurnya belum tepat
+        <h1 class="mt-5 text-2xl font-bold leading-tight tracking-[-0.02em] text-[#111111]">
+          Halaman tidak ditemukan
         </h1>
 
-        <p class="mx-auto mt-3 max-w-[350px] text-[14px] leading-6 text-[#555555]">
-          Link yang Anda buka mungkin sudah dipindahkan. Anda bisa kembali ke beranda atau melihat katalog produk yang
-          tersedia.
+        <p class="mx-auto mt-2 max-w-[340px] text-sm leading-6 text-[#555555]">
+          Link yang Anda buka mungkin sudah dipindahkan atau produknya tidak dijual lagi.
         </p>
       </div>
 
@@ -51,7 +44,7 @@ Astro.response.status = 404;
         <a
           href="/"
           title={`Kembali ke beranda ${Astro.locals.tenant.name}`}
-          class="inline-flex items-center justify-center gap-2 bg-[var(--sf-accent,#2563EB)] px-5 py-3 text-[14px] font-normal text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)]"
+          class="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[var(--sf-accent,#2563EB)] px-5 text-[15px] font-semibold text-white transition-colors hover:bg-[var(--sf-accent-strong,#1D4ED8)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]"
         >
           <Icon name="lucide:home" class="h-4 w-4" aria-hidden="true" />
           <span>Kembali ke beranda</span>
@@ -61,17 +54,16 @@ Astro.response.status = 404;
       <section class="mt-10 border-t border-[#E5E5E5] pt-6" aria-labelledby="produk-terkait-title">
         <div class="flex items-end justify-between gap-4">
           <div>
-            <p class="text-[11px] font-normal uppercase tracking-[0.12em] text-[#767676]">Produk terkait</p>
-            <h2 id="produk-terkait-title" class="mt-1 text-[20px] font-semibold tracking-[-0.02em] text-[#111111]">
+            <h2 id="produk-terkait-title" class="text-lg font-bold tracking-[-0.01em] text-[#111111]">
               Mungkin ini yang Anda cari
             </h2>
           </div>
           <a
             href="/produk"
             title={`Lihat semua produk ${Astro.locals.tenant.name}`}
-            class="shrink-0 text-[12px] font-normal text-[#111111]"
+            class="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-[var(--sf-accent,#2563EB)] underline-offset-4 hover:underline"
           >
-            Semua →
+            Lihat semua
           </a>
         </div>
 

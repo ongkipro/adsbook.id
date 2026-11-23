@@ -60,8 +60,8 @@ const fieldUid = crypto.randomUUID().slice(0, 8);
       <div class="px-4">
         <section class="form-block form-block-first">
           <div class="form-block-head gap-1.5">
-            <h2 class="section-title">Pilih Varian</h2>
-            <p class="section-lead">Pilih varian produk yang ingin dipesan.</p>
+            <h2 class="section-title">Pilih varian</h2>
+            
           </div>
           <div class="variant-group simple-variant-group">
             {
@@ -102,7 +102,7 @@ const fieldUid = crypto.randomUUID().slice(0, 8);
         <section class="form-block">
           <div class="form-block-head gap-1.5">
             <h2 class="section-title">Data penerima</h2>
-            <p class="section-lead">Isi data dengan benar agar admin dan kurir lebih mudah memproses pesanan.</p>
+            <p class="section-lead">Nomor WhatsApp dipakai admin untuk konfirmasi pesanan.</p>
           </div>
           <div class="field-grid address-field-grid">
             <div class="form-field form-field-full">
@@ -178,8 +178,8 @@ const fieldUid = crypto.randomUUID().slice(0, 8);
 
         <section class="form-block summary-block">
           <div class="form-block-head">
-            <h2 class="section-title">Ringkasan Pemesanan</h2>
-            <p class="section-lead">Periksa kembali detail pesanan sebelum melanjutkan ke proses order.</p>
+            <h2 class="section-title">Ringkasan pesanan</h2>
+            
           </div>
           <div class="summary-card">
             <div class="summary-row summary-row-product">
@@ -207,16 +207,11 @@ const fieldUid = crypto.randomUUID().slice(0, 8);
             </div>
           </div>
 
-          <div class="info-box">
-            <span
-              >Harga divalidasi ulang saat order diproses. Pastikan nomor WhatsApp aktif untuk konfirmasi.</span
-            >
-          </div>
 
           <div class="submit-panel">
             <div class="cta-row">
               <button type="submit" class="submit-main" id="submit-button"
-                ><span class="submit-main-label">Buat Order Sekarang</span><Icon
+                ><span class="submit-main-label">Pesan Sekarang</span><Icon
                   name="lucide:arrow-right"
                   class="submit-main-icon"
                   aria-hidden="true"

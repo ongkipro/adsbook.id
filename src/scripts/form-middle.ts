@@ -4,7 +4,7 @@ import { META_EXTERNAL_ID_COOKIE } from "../lib/click-ids.ts";
 import { normalizePhone } from "../lib/validation";
 import { formatIdr } from "../lib/format-idr";
 import { pushGtmEcomEvent } from "../lib/gtm";
-import { isValidWa62, missingCheckoutContact } from "../lib/validation";
+import { isValidWa62 } from "../lib/validation";
 import { navigateAfterCheckout } from "../lib/checkout-navigation";
 import { isStoreClosed, storeClosedMessage } from "../lib/store-closed";
 import {
@@ -484,20 +484,9 @@ function initMiddleOrderFormInstance(
         disabled: true,
         label: submitButton.dataset.loadingLabel || "Memproses Pesanan...",
       };
-    const missing = missingCheckoutContact({
-      name: nameInput?.value || "",
-      phone: phoneInput?.value || "",
-      address: addressInput?.value || "",
-    });
-
-    if (missing === "name")
-      return { disabled: true, label: "Lengkapi Nama Terlebih Dahulu" };
-    if (missing === "phone")
-      return { disabled: true, label: "Lengkapi No. WA Terlebih Dahulu" };
-    if (missing === "address")
-      return { disabled: true, label: "Lengkapi Alamat Terlebih Dahulu" };
-
-    return { disabled: false, label: "Buat Order Sekarang" };
+    // Always ready (owner, 2026-11-23): an incomplete form is told what is
+    // missing by the submit handler, field by field, never by a grey button.
+    return { disabled: false, label: "Pesan Sekarang" };
   };
 
   const syncSubmitState = () => {

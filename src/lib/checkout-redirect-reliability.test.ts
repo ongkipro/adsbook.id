@@ -95,8 +95,9 @@ test("a buyer arriving on the locator alone is shown the real figures", () => {
 test("an incomplete form never natively disables the submit button", () => {
   // A real `disabled` swallowed the tap whenever mobile autofill filled a field
   // without an `input` event: the form looked complete and the button was dead
-  // until the buyer tapped elsewhere. Only an order in flight disables it; an
-  // incomplete form is aria-disabled and the submit handler names the field.
+  // until the buyer tapped elsewhere. Only an order in flight disables it. An
+  // incomplete form looks and reads ready (owner, 2026-11-23); the submit
+  // handler names the field. aria-disabled marks only a form still loading.
   for (const [name, path] of FORMS) {
     const source = read(path);
     const assignments = [...source.matchAll(/submitButton\.disabled\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
@@ -104,7 +105,8 @@ test("an incomplete form never natively disables the submit button", () => {
     for (const value of assignments) {
       assert.match(value, /^(state\.)?submitting$/, `${name} disables the submit button on ${value}`);
     }
-    assert.match(source, /setAttribute\("aria-disabled"/, `${name} no longer marks an incomplete form aria-disabled`);
+    assert.match(source, /setAttribute\("aria-disabled"/, `${name} no longer reports a loading form as aria-disabled`);
+    assert.doesNotMatch(source, /Lengkapi (Nama|No\. WA|Alamat) Terlebih Dahulu/, `${name} greys the button for a missing field again`);
     assert.match(source, /form\.addEventListener\("change", syncSubmit(State|Button)\)/, `${name} ignores autofill that fires only change`);
 
     // An autofilled 08… number never passed through the input handler that
