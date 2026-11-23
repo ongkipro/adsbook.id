@@ -193,16 +193,16 @@ function initOne(root: HTMLElement) {
     if (clean !== emailInput.value) emailInput.value = clean;
     liveCheck(emailInput);
   });
+  // Leaving a required field empty marks it red at once, as the COD form
+  // does (owner, 2026-11-23: "notif merah jika belum terisi").
   nameInput.addEventListener("blur", () => {
     nameInput.value = nameInput.value.trim();
-    if (nameInput.value) validate(nameInput);
+    validate(nameInput);
     identity();
   });
   phoneInput.addEventListener("blur", () => {
-    if (phoneInput.value) {
-      phoneInput.value = normalizePhone(phoneInput.value);
-      validate(phoneInput);
-    }
+    if (phoneInput.value) phoneInput.value = normalizePhone(phoneInput.value);
+    validate(phoneInput);
     identity();
   });
   emailInput.addEventListener("blur", () => {
