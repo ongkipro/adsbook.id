@@ -233,22 +233,19 @@ export function NotificationBell() {
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <button
+      <DropdownMenuTrigger render={<button
           type="button"
-          className={`${TOPBAR_ICON_BUTTON} data-[state=open]:bg-slate-100 data-[state=open]:text-slate-900`}
+          className={`${TOPBAR_ICON_BUTTON} data-popup-open:bg-slate-100 data-popup-open:text-slate-900`}
           aria-label={
             unread > 0 ? `Notifikasi, ${unread} belum dibaca` : "Notifikasi"
-          }
-        >
+          } />}>
           <Bell className="size-[18px]" aria-hidden="true" />
           {unread > 0 && (
             <span className={`${TOPBAR_BADGE} bg-red-600`}>
               {badge}
             </span>
           )}
-        </button>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         className="w-[min(22rem,calc(100vw-1.5rem))] p-0"

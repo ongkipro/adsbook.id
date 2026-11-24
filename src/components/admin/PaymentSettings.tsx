@@ -389,17 +389,15 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           {loading ? "Memuat konfigurasi…" : `${providerCount} provider checkout aktif`}
         </Badge>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" disabled={loading} aria-label="Buka aksi pembayaran">
+          <DropdownMenuTrigger render={<Button type="button" variant="outline" disabled={loading} aria-label="Buka aksi pembayaran" />}>
               <EllipsisVertical /> Aksi
-            </Button>
-          </DropdownMenuTrigger>
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-56">
             <DropdownMenuLabel>Pembayaran</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => window.location.assign("/admin/balance")}>Buka rekonsiliasi</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => window.location.assign("/admin/profile")}>Kelola kredensial API</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => window.location.assign("/admin/balance")}>Buka rekonsiliasi</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => window.location.assign("/admin/profile")}>Kelola kredensial API</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => void load()}>Muat ulang konfigurasi</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void load()}>Muat ulang konfigurasi</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

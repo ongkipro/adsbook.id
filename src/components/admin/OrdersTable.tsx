@@ -317,14 +317,12 @@ function OrderActionMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
+      <DropdownMenuTrigger render={<Button
           type="button"
           variant="outline"
           size="sm"
           disabled={isUpdating}
-          className="px-3 border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:text-slate-950 transition-colors"
-        >
+          className="px-3 border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:text-slate-950 transition-colors" />}>
           {isUpdating ? (
             <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-800" aria-hidden="true" />
           ) : (
@@ -332,22 +330,18 @@ function OrderActionMenu({
           )}
           <span>Aksi</span>
           <ChevronDown className="size-3 text-slate-400" />
-        </Button>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl">
         <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
           Order {order.orderNumber}
         </DropdownMenuLabel>
         
-        <DropdownMenuItem asChild>
-          <a
+        <DropdownMenuItem render={<a
             href={`/admin/orders/${encodeURIComponent(order.orderNumber)}`}
-            className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
-          >
+            className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer" />}>
             <Eye className="size-4 text-slate-500" />
             <span>Lihat Detail Order</span>
-          </a>
-        </DropdownMenuItem>
+          </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={() => onRefreshScoring(order.id)}

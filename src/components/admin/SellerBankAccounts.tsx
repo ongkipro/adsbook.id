@@ -413,20 +413,18 @@ export default function SellerBankAccounts({
                     <Pencil />
                   </Button>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline" size="icon-lg" disabled={pending} aria-label={`Aksi rekening ${account.bank_code}`}>
+                    <DropdownMenuTrigger render={<Button type="button" variant="outline" size="icon-lg" disabled={pending} aria-label={`Aksi rekening ${account.bank_code}`} />}>
                         <EllipsisVertical />
-                      </Button>
-                    </DropdownMenuTrigger>
+                      </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-48">
-                      <DropdownMenuItem disabled={index === 0} onSelect={() => void reorderAccount(index, -1)}>
+                      <DropdownMenuItem disabled={index === 0} onClick={() => void reorderAccount(index, -1)}>
                         <ArrowUp /> Naikkan urutan
                       </DropdownMenuItem>
-                      <DropdownMenuItem disabled={index === accounts.length - 1} onSelect={() => void reorderAccount(index, 1)}>
+                      <DropdownMenuItem disabled={index === accounts.length - 1} onClick={() => void reorderAccount(index, 1)}>
                         <ArrowDown /> Turunkan urutan
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(account)}>
+                      <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(account)}>
                         <Trash2 /> Hapus rekening
                       </DropdownMenuItem>
                     </DropdownMenuContent>

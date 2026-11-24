@@ -248,18 +248,15 @@ export function AdminDateRangeFilter({
         setOpen(next);
       }}
     >
-      <DropdownMenuTrigger asChild disabled={disabled}>
-        <button
+      <DropdownMenuTrigger disabled={disabled} render={<button
           ref={triggerRef}
           type="button"
           disabled={disabled}
-          className={`${FILTER_TRIGGER_CLASS} ${className}`}
-        >
+          className={`${FILTER_TRIGGER_CLASS} ${className}`} />}>
           <CalendarDays className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">{adminDateSelectionLabel(value)}</span>
           <ChevronDown className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
       <DropdownMenuContent
         align={align}
         collisionPadding={16}

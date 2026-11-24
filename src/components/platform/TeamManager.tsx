@@ -158,20 +158,18 @@ export function TeamManager({ members, selfId }: { members: TeamMember[]; selfId
                       <span className="text-xs text-slate-400">Diatur owner lain</span>
                     ) : (
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button type="button" variant="outline" size="icon" aria-label={`Aksi untuk ${member.email}`}>
+                        <DropdownMenuTrigger render={<Button type="button" variant="outline" size="icon" aria-label={`Aksi untuk ${member.email}`} />}>
                             <MoreHorizontal aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
+                          </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56">
-                          <DropdownMenuItem onSelect={() => { setRole(member.role); setPanel({ kind: "role", member }); }}>
+                          <DropdownMenuItem onClick={() => { setRole(member.role); setPanel({ kind: "role", member }); }}>
                             <UserCog aria-hidden="true" /> Ubah peran
                           </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => setPanel({ kind: "reset", member })}>
+                          <DropdownMenuItem onClick={() => setPanel({ kind: "reset", member })}>
                             <KeyRound aria-hidden="true" /> Reset password & authenticator
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem variant={member.disabled_at ? "default" : "destructive"} onSelect={() => void toggle(member)}>
+                          <DropdownMenuItem variant={member.disabled_at ? "default" : "destructive"} onClick={() => void toggle(member)}>
                             <Power aria-hidden="true" /> {member.disabled_at ? "Aktifkan" : "Nonaktifkan"}
                           </DropdownMenuItem>
                         </DropdownMenuContent>

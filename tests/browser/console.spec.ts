@@ -122,6 +122,7 @@ test("platform console: every menu at 390 and 1366 px, team add, support refused
   await page.getByRole("menuitem", { name: "Ubah peran" }).click();
   await page.locator("#memberRoleEdit").click();
   await page.getByRole("menuitemradio", { name: /^Support/ }).click();
+  await expect(page.getByRole("menu"), "a pick closes the role list").toHaveCount(0);
   await page.getByRole("dialog").getByRole("button", { name: "Simpan peran" }).click();
   await expect(page.locator("#teamTable tbody tr", { hasText: ownerEmail })).toContainText("Support");
 

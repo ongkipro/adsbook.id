@@ -136,37 +136,30 @@ function ProductActions({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
+      <DropdownMenuTrigger render={<Button
           variant="outline"
           size={fullWidth ? "default" : "sm"}
           className={fullWidth ? "min-h-11 w-full justify-between" : "h-9 px-2.5"}
-          aria-label={`Aksi produk ${product.title}`}
-        >
+          aria-label={`Aksi produk ${product.title}`} />}>
           {fullWidth ? "Kelola produk" : null}
           <MoreHorizontal className="size-4" aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuItem asChild>
-          <a href={editUrl} className="flex items-center gap-2">
+        <DropdownMenuItem render={<a href={editUrl} className="flex items-center gap-2" />}>
             <Pencil className="size-4 text-slate-500" aria-hidden="true" />
             <span>Edit produk</span>
-          </a>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href={storefrontUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+          </DropdownMenuItem>
+        <DropdownMenuItem render={<a href={storefrontUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2" />}>
             <Eye className="size-4 text-slate-500" aria-hidden="true" />
             <span>Lihat di storefront</span>
-          </a>
-        </DropdownMenuItem>
+          </DropdownMenuItem>
         {/* A draft has no checkout form (/api/form-config answers 404 for it):
             the item says so instead of opening a dialog that only errors. */}
-        <DropdownMenuItem disabled={!product.is_active} onSelect={() => onEmbed(product)} className="flex items-center gap-2">
+        <DropdownMenuItem disabled={!product.is_active} onClick={() => onEmbed(product)} className="flex items-center gap-2">
           <Code2 className="size-4 text-emerald-600" aria-hidden="true" />
           <span>{product.is_active ? "Embed checkout form" : "Embed (aktifkan produk dulu)"}</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onCopyId(product.id)} className="flex items-center gap-2">
+        <DropdownMenuItem onClick={() => onCopyId(product.id)} className="flex items-center gap-2">
           <Copy className="size-4 text-slate-500" aria-hidden="true" />
           <span>Salin Content ID</span>
         </DropdownMenuItem>
@@ -174,7 +167,7 @@ function ProductActions({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
-          onSelect={() => onDelete(product)}
+          onClick={() => onDelete(product)}
           className="flex items-center gap-2"
         >
           <Trash2 className="size-4" aria-hidden="true" />

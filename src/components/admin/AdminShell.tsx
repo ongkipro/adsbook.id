@@ -302,7 +302,7 @@ export function AdminShell({
                   notes, and Keluar - which used to sit at the foot of the sidebar. */}
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  className={`ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:pr-2.5 data-[state=open]:bg-slate-100 ${
+                  className={`ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:pr-2.5 data-popup-open:bg-slate-100 ${
                     activeMenu === "profile" ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                   aria-label={`Menu akun (${roleLabel})`}
@@ -325,38 +325,30 @@ export function AdminShell({
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
-                      <a href={profileNavItem.href}>
+                    <DropdownMenuItem render={<a href={profileNavItem.href} />}>
                         <UserRound aria-hidden="true" />
                         {mustChangePassword ? "Keamanan akun" : "Profil & keamanan"}
-                      </a>
-                    </DropdownMenuItem>
+                      </DropdownMenuItem>
                     {!mustChangePassword && allItems.some((item) => item.id === "settings") && (
-                      <DropdownMenuItem asChild>
-                        <a href="/admin/settings/store">
+                      <DropdownMenuItem render={<a href="/admin/settings/store" />}>
                           <Settings aria-hidden="true" />
                           Pengaturan toko
-                        </a>
-                      </DropdownMenuItem>
+                        </DropdownMenuItem>
                     )}
                     {!mustChangePassword && (
-                      <DropdownMenuItem asChild>
-                        <a href="/" target="_blank" rel="noopener noreferrer">
+                      <DropdownMenuItem render={<a href="/" target="_blank" rel="noopener noreferrer" />}>
                           <Store aria-hidden="true" />
                           Lihat storefront
                           <ArrowUpRight className="ml-auto text-slate-400" aria-hidden="true" />
-                        </a>
-                      </DropdownMenuItem>
+                        </DropdownMenuItem>
                     )}
                     {docsHref && (
-                      <DropdownMenuItem asChild>
-                        <a href={docsHref}>
+                      <DropdownMenuItem render={<a href={docsHref} />}>
                           <BookOpen aria-hidden="true" />
                           Docs API & CLI
-                        </a>
-                      </DropdownMenuItem>
+                        </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onSelect={() => setChangelogOpen(true)}>
+                    <DropdownMenuItem onClick={() => setChangelogOpen(true)}>
                       <History aria-hidden="true" />
                       What's new
                       <span className="ml-auto font-mono text-xs text-slate-400">v{CMS_VERSION.version}</span>
@@ -366,12 +358,10 @@ export function AdminShell({
                   {/* The layout's data-logout-form handler does the request and
                       relabels the button; the item keeps the menu open meanwhile. */}
                   <form method="POST" action="/api/admin/logout" data-logout-form>
-                    <DropdownMenuItem asChild variant="destructive" onSelect={(event) => event.preventDefault()}>
-                      <button type="submit" className="w-full">
+                    <DropdownMenuItem variant="destructive" onClick={(event) => event.preventDefault()} render={<button type="submit" className="w-full" />}>
                         <LogOut aria-hidden="true" />
                         Keluar
-                      </button>
-                    </DropdownMenuItem>
+                      </DropdownMenuItem>
                   </form>
                 </DropdownMenuContent>
               </DropdownMenu>
