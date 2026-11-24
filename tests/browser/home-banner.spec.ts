@@ -39,8 +39,28 @@ const heroImages = (html: string) => [...html.matchAll(/aria-roledescription="sl
 test("a banner goes draft → exact private preview → publish, and is removed back to the catalogue", async ({ page, request }) => {
   test.setTimeout(90_000);
   await signIn(page, store.slug);
+  // Start with no draft banner. The steps below remove only the published
+  // banner, so the draft a previous run saved is left behind; the editor then
+  // prefills it, the upload label shows that old image, and the check against
+  // the preview compares the wrong file. Only the draft is cleared: a published
+  // banner (none in a seeded store) stays as it is.
   await page.goto(`${origin(store.slug)}/admin/content/tampilan`);
+  await page.evaluate(async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const record = (await (await fetch("/api/admin/content?key=home")).json()).data;
+      if (!record?.draft?.heroSlides?.length) return;
+      const response = await fetch("/api/admin/content", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "banner", key: "home", target: "draft", op: "remove-first", expectedVersion: record.version }),
+      });
+      if (!response.ok) throw new Error(`draft banner reset refused: ${response.status}`);
+    }
+    throw new Error("draft banner reset did not converge");
+  });
+  await page.reload();
   await expect(page.getByText(/Versi \d+\./)).toBeVisible();
+  await expect(page.getByText(/^Gambar: /), "no draft banner left from an earlier run").toHaveCount(0);
 
   // 1. Draft: upload through the media pipeline, alt text, save.
   await page.getByLabel("Pilih gambar banner").setInputFiles(await bannerFile(page, "#1d4ed8"));
