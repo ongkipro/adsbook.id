@@ -48,8 +48,18 @@ function DropdownMenuContent({
   )
 }
 
+// Base UI requires a GroupLabel inside a Menu.Group and throws otherwise
+// (error #31): the menu then never opens. Radix allowed a free label, and this
+// project uses it as a menu heading (account menu, order actions, payments),
+// so the label brings its own group when it is not already in one.
+const InMenuGroup = React.createContext(false)
+
 function DropdownMenuGroup({ ...props }: MenuPrimitive.Group.Props) {
-  return <MenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />
+  return (
+    <InMenuGroup.Provider value={true}>
+      <MenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />
+    </InMenuGroup.Provider>
+  )
 }
 
 function DropdownMenuLabel({
@@ -59,7 +69,7 @@ function DropdownMenuLabel({
 }: MenuPrimitive.GroupLabel.Props & {
   inset?: boolean
 }) {
-  return (
+  const label = (
     <MenuPrimitive.GroupLabel
       data-slot="dropdown-menu-label"
       data-inset={inset}
@@ -70,6 +80,7 @@ function DropdownMenuLabel({
       {...props}
     />
   )
+  return React.useContext(InMenuGroup) ? label : <MenuPrimitive.Group>{label}</MenuPrimitive.Group>
 }
 
 function DropdownMenuItem({

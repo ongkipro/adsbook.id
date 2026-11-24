@@ -72,15 +72,11 @@ test("a Select inside a dialog opens and picks (product Embed mode) — it used 
   await page.waitForLoadState("networkidle");
   await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
   // The first active product (a draft's Embed item is disabled).
-  for (let index = 0; index < 6; index += 1) {
-    await page.locator('button[aria-label^="Aksi produk"]:visible').nth(index).click();
-    const item = page.getByRole("menuitem", { name: "Embed checkout form" });
-    if (await item.count()) {
-      await item.click();
-      break;
-    }
-    await page.keyboard.press("Escape");
-  }
+  // Only active products have an Embed item; filter to them and open the first
+  // row's menu, rather than opening each row's menu in turn.
+  await page.getByRole("button", { name: /^Aktif/ }).click();
+  await page.locator('button[aria-label^="Aksi produk"]:visible').first().click();
+  await page.getByRole("menuitem", { name: "Embed checkout form" }).click();
   // The form choice is a segmented control; the variant is the Select inside the dialog.
   await page.getByRole("dialog").getByRole("radio", { name: "Full" }).click();
   await expect(page.getByRole("dialog").getByRole("radio", { name: "Full" })).toHaveAttribute("aria-checked", "true");

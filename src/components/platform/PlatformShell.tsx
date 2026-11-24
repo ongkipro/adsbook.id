@@ -220,7 +220,7 @@ export function PlatformShell({
                     </span>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" disabled={signingOut} onClick={(event) => { event.preventDefault(); void signOut(); }}>
+                  <DropdownMenuItem variant="destructive" disabled={signingOut} closeOnClick={false} onClick={() => void signOut()}>
                     <LogOut aria-hidden="true" />
                     {signingOut ? "Keluar…" : "Keluar"}
                   </DropdownMenuItem>
