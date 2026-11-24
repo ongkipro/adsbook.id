@@ -522,16 +522,18 @@ function EditCustomerDialog({
         setOpen(nextOpen);
       }
     }}>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!customerEditable}
-          title={!customerEditable ? "Data terkunci karena shipment Mengantar sudah dibuat." : undefined}
-        >
-          <Edit3 aria-hidden="true" />
-          Edit pembeli & alamat
-        </Button>
+      <DialogTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!customerEditable}
+            title={!customerEditable ? "Data terkunci karena shipment Mengantar sudah dibuat." : undefined}
+          />
+        }
+      >
+        <Edit3 aria-hidden="true" />
+        Edit pembeli & alamat
       </DialogTrigger>
       <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-y-auto p-0 sm:max-w-4xl rounded-xl">
         <DialogHeader className="border-b border-slate-100 px-6 py-4 text-left">

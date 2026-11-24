@@ -7,15 +7,8 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  Command,
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+// The search palette (cmdk) loads the first time it opens, not with every admin page.
+const AdminSearch = React.lazy(() => import("./AdminSearch").then((module) => ({ default: module.AdminSearch })));
 import {
   Sheet,
   SheetContent,
@@ -51,7 +44,6 @@ import { ChangelogModal } from "./ChangelogModal";
 import { NotificationBell } from "./NotificationBell";
 import { OperationalStatusIcon } from "./OperationalStatusIcon";
 import { CMS_VERSION } from "@/lib/version";
-import { withInsightsPeriod } from "@/lib/insights-view";
 import {
   ADMIN_ACCENT,
   getSearchableNavItems,
@@ -100,6 +92,20 @@ export function AdminShell({
   const [searchQuery, setSearchQuery] = React.useState("");
   const roleLabel = adminRole === "owner" ? "Owner" : adminRole === "admin" ? "Admin" : adminRole === "customer_service" ? "CS" : "Advertiser";
   const [menuOpen, setMenuOpen] = React.useState(false);
+  // Open the phone menu on the page the operator is on: its row in view, not
+  // the top of a long list. The list mounts before the sheet is laid out, so
+  // it scrolls the first time it has a height, then stops watching.
+  const scrollMenuToCurrent = React.useCallback((list: HTMLDivElement | null) => {
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const current = list.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!current || list.clientHeight === 0) return;
+      const top = current.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+      list.scrollTop = Math.max(0, top - list.clientHeight / 3);
+      observer.disconnect();
+    });
+    observer.observe(list);
+  }, []);
   const [expandedMobileMenus, setExpandedMobileMenus] = React.useState<Set<string>>(
     () => new Set([activeMenu]),
   );
@@ -157,58 +163,6 @@ export function AdminShell({
     if (!open) setSearchQuery("");
   };
 
-  const searchContent = (
-    <>
-      <div className="border-b border-slate-200 bg-slate-50/70 p-2">
-        <div className="rounded-lg border border-slate-300 bg-white shadow-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200">
-          <CommandInput
-            value={searchQuery}
-            onValueChange={setSearchQuery}
-            aria-label="Cari halaman admin"
-            placeholder="Ketik nama halaman atau tugas…"
-            className="h-11"
-            autoFocus
-          />
-        </div>
-      </div>
-      <CommandList className="max-h-none flex-1 overflow-y-auto px-2 py-2 sm:max-h-[min(55vh,28rem)]">
-        <CommandEmpty className="px-4 py-14 text-center">
-          <p className="font-semibold text-slate-900">Tidak ada halaman yang cocok</p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            Coba istilah seperti order, resi, gudang, CRM, Meta, atau payment.
-          </p>
-        </CommandEmpty>
-        {Array.from(new Set(searchItems.map((item) => item.group))).map((groupName) => (
-          <CommandGroup key={groupName} heading={groupName}>
-            {searchItems.filter((item) => item.group === groupName).map((item) => (
-              <CommandItem
-                key={`${item.href}-${item.label}`}
-                value={`${item.label} ${item.description} ${item.keywords} ${item.group}`}
-                onSelect={() => {
-                  handleSearchOpenChange(false);
-                  window.location.assign(withInsightsPeriod(item.href, window.location.pathname, window.location.search));
-                }}
-                className="min-h-14 px-3 py-2.5"
-              >
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600">
-                  <item.icon className="size-[18px]" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-slate-900">{item.label}</span>
-                  <span className="block truncate text-xs text-slate-500">{item.description}</span>
-                </span>
-                <ChevronRight className="size-4 shrink-0 text-slate-300" aria-hidden="true" />
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
-      </CommandList>
-      <div className="hidden items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-500 sm:flex">
-        <span>↑↓ Pilih hasil</span>
-        <span>Enter untuk buka · Esc untuk tutup</span>
-      </div>
-    </>
-  );
 
   return (
     <TooltipProvider>
@@ -288,7 +242,7 @@ export function AdminShell({
                   notes, and Keluar - which used to sit at the foot of the sidebar. */}
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  className={`ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:pr-2.5 data-[state=open]:bg-slate-100 ${
+                  className={`ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:pr-2.5 data-popup-open:bg-slate-100 ${
                     activeMenu === "profile" ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                   aria-label={`Menu akun (${roleLabel})`}
@@ -311,38 +265,30 @@ export function AdminShell({
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
-                      <a href={profileNavItem.href}>
+                    <DropdownMenuItem render={<a href={profileNavItem.href} />}>
                         <UserRound aria-hidden="true" />
                         {mustChangePassword ? "Keamanan akun" : "Profil & keamanan"}
-                      </a>
-                    </DropdownMenuItem>
+                      </DropdownMenuItem>
                     {!mustChangePassword && allItems.some((item) => item.id === "settings") && (
-                      <DropdownMenuItem asChild>
-                        <a href="/admin/settings/store">
+                      <DropdownMenuItem render={<a href="/admin/settings/store" />}>
                           <Settings aria-hidden="true" />
                           Pengaturan toko
-                        </a>
-                      </DropdownMenuItem>
+                        </DropdownMenuItem>
                     )}
                     {!mustChangePassword && (
-                      <DropdownMenuItem asChild>
-                        <a href="/" target="_blank" rel="noopener noreferrer">
+                      <DropdownMenuItem render={<a href="/" target="_blank" rel="noopener noreferrer" />}>
                           <Store aria-hidden="true" />
                           Lihat storefront
                           <ArrowUpRight className="ml-auto text-slate-400" aria-hidden="true" />
-                        </a>
-                      </DropdownMenuItem>
+                        </DropdownMenuItem>
                     )}
                     {docsHref && (
-                      <DropdownMenuItem asChild>
-                        <a href={docsHref}>
+                      <DropdownMenuItem render={<a href={docsHref} />}>
                           <BookOpen aria-hidden="true" />
                           Docs API & CLI
-                        </a>
-                      </DropdownMenuItem>
+                        </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onSelect={() => setChangelogOpen(true)}>
+                    <DropdownMenuItem onClick={() => setChangelogOpen(true)}>
                       <History aria-hidden="true" />
                       What's new
                       <span className="ml-auto font-mono text-xs text-slate-400">v{CMS_VERSION.version}</span>
@@ -352,12 +298,10 @@ export function AdminShell({
                   {/* The layout's data-logout-form handler does the request and
                       relabels the button; the item keeps the menu open meanwhile. */}
                   <form method="POST" action="/api/admin/logout" data-logout-form>
-                    <DropdownMenuItem asChild variant="destructive" onSelect={(event) => event.preventDefault()}>
-                      <button type="submit" className="w-full">
+                    <DropdownMenuItem variant="destructive" onClick={(event) => event.preventDefault()} render={<button type="submit" className="w-full" />}>
                         <LogOut aria-hidden="true" />
                         Keluar
-                      </button>
-                    </DropdownMenuItem>
+                      </DropdownMenuItem>
                   </form>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -409,26 +353,13 @@ export function AdminShell({
           <SheetContent
             side="bottom"
             className="max-h-[86dvh] gap-0 overflow-hidden rounded-t-[1.25rem] border-slate-200 bg-white p-0 md:hidden"
-            onOpenAutoFocus={(event) => {
-              // Open on the page the operator is on: its row in view, not the top of a long list.
-              const sheet = event.currentTarget as HTMLElement | null;
-              const current = sheet?.querySelector<HTMLElement>('[aria-current="page"]');
-              const list = current?.closest<HTMLElement>("[data-menu-scroll]");
-              if (current && list) {
-                const top = current.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
-                list.scrollTop = Math.max(0, top - list.clientHeight / 3);
-              }
-            }}
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              document.getElementById("admin-mobile-menu-trigger")?.focus();
-            }}
+            finalFocus={() => document.getElementById("admin-mobile-menu-trigger")}
           >
             <SheetHeader className="border-b border-slate-200 px-4 pb-3 pt-4 text-left">
               <SheetTitle className="text-base font-semibold tracking-tight text-slate-950">{mustChangePassword ? "Keamanan akun" : "Semua menu"}</SheetTitle>
               <SheetDescription className="text-xs">{mustChangePassword ? "Ganti password bawaan atau akhiri sesi ini." : "Pilih workspace yang ingin dikelola."}</SheetDescription>
             </SheetHeader>
-            <div data-menu-scroll className="overflow-y-auto overscroll-contain px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
+            <div ref={scrollMenuToCurrent} data-menu-scroll className="overflow-y-auto overscroll-contain px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
               {groups.map((group) => (
                 <section key={group.label} className="mb-3">
                   <h2 className="px-2 pb-1.5 text-xs font-medium uppercase tracking-wider text-slate-400">{group.label}</h2>
@@ -528,37 +459,18 @@ export function AdminShell({
           </SheetContent>
         </Sheet>
 
-        {!mustChangePassword && (isDesktop ? (
-          <CommandDialog
-            open={searchOpen}
-            onOpenChange={handleSearchOpenChange}
-            title="Pencarian admin"
-            description="Cari halaman dan pengaturan yang tersedia untuk akun ini."
-            showCloseButton
-          >
-            <div className="border-b border-slate-200 px-4 py-3 pr-12">
-              <h2 className="text-sm font-semibold tracking-tight text-slate-950">Pencarian admin</h2>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Cari order, pengiriman, produk, tracking, atau pengaturan.
-              </p>
-            </div>
-            {searchContent}
-          </CommandDialog>
-        ) : (
-          <Sheet open={searchOpen} onOpenChange={handleSearchOpenChange}>
-            <SheetContent side="bottom" style={{ height: "min(82dvh, 42rem)" }} className="max-h-[calc(100dvh-env(safe-area-inset-top))] gap-0 overflow-hidden rounded-t-[1.25rem] border-slate-200 bg-white p-0">
-              <SheetHeader className="border-b border-slate-200 px-4 pb-3 pt-4 pr-12 text-left">
-                <SheetTitle className="text-base font-semibold tracking-tight text-slate-950">Pencarian admin</SheetTitle>
-                <SheetDescription className="text-xs">
-                  Cari order, pengiriman, produk, tracking, atau pengaturan.
-                </SheetDescription>
-              </SheetHeader>
-              <Command className="h-auto! min-h-0 flex-1 rounded-none!">
-                {searchContent}
-              </Command>
-            </SheetContent>
-          </Sheet>
-        ))}
+        {!mustChangePassword && searchOpen && (
+          <React.Suspense fallback={null}>
+            <AdminSearch
+              open={searchOpen}
+              onOpenChange={handleSearchOpenChange}
+              isDesktop={isDesktop}
+              query={searchQuery}
+              onQueryChange={setSearchQuery}
+              items={searchItems}
+            />
+          </React.Suspense>
+        )}
         <ChangelogModal open={changelogOpen} onOpenChange={setChangelogOpen} />
         <Toaster position="top-center" />
       </SidebarProvider>

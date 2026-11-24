@@ -177,11 +177,7 @@ export function ChangelogModal({ open, onOpenChange }: ChangelogModalProps) {
           <div className="text-xs font-mono text-slate-500">
             {CMS_VERSION.coreEngine} · skema v{CMS_VERSION.schemaVersion}
           </div>
-          <DialogClose asChild>
-            <Button variant="outline" size="sm" type="button">
-              Tutup
-            </Button>
-          </DialogClose>
+          <DialogClose render={<Button variant="outline" size="sm" type="button" />}>Tutup</DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -610,29 +610,22 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                           </a>
                         )}
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
+                          <DropdownMenuTrigger render={<Button
                               variant="outline"
                               size="icon-lg" className="shrink-0 text-slate-500"
-                              aria-label={`Aksi lain untuk ${page.title}`}
-                            >
+                              aria-label={`Aksi lain untuk ${page.title}`} />}>
                               <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                            </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem asChild>
-                              <a href={`/${page.slug}?preview=1`} target="_blank" rel="noreferrer">
+                            <DropdownMenuItem render={<a href={`/${page.slug}?preview=1`} target="_blank" rel="noreferrer" />}>
                                 <ExternalLink className="w-3.5 h-3.5 mr-2 text-slate-500" />
                                 Preview Live
-                              </a>
-                            </DropdownMenuItem>
+                              </DropdownMenuItem>
                             {!isStatic && (
-                              <DropdownMenuItem asChild>
-                                <a href={`/admin/landing-pages/${page.id}/edit`}>
+                              <DropdownMenuItem render={<a href={`/admin/landing-pages/${page.id}/edit`} />}>
                                   <Pencil className="w-3.5 h-3.5 mr-2 text-slate-500" />
                                   Edit Layout
-                                </a>
-                              </DropdownMenuItem>
+                                </DropdownMenuItem>
                             )}
                             {!page.id.startsWith("static:") && (
                               <DropdownMenuItem
@@ -833,20 +826,17 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                                 )}
 
                                 <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
+                                  <DropdownMenuTrigger render={<Button
                                       variant="ghost"
                                       size="icon"
                                       className="text-slate-500 hover:text-slate-900"
-                                      aria-label={`Aksi lain untuk ${page.title}`}
-                                    >
+                                      aria-label={`Aksi lain untuk ${page.title}`} />}>
                                       {duplicatingPageId === page.id ? (
                                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                       ) : (
                                         <MoreHorizontal className="w-3.5 h-3.5" />
                                       )}
-                                    </Button>
-                                  </DropdownMenuTrigger>
+                                    </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end" className="w-52">
                                     {!isStatic && (
                                       <DropdownMenuItem

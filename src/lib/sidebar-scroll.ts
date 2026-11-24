@@ -89,7 +89,7 @@ export const SIDEBAR_SCROLL_RESTORE = `(() => {
   } catch {}
   const links = Array.from(content.querySelectorAll('a[href]'));
   const link = place ? links.find((a) => a.getAttribute('href') === place.href) : null;
-  const current = content.querySelector('[aria-current="page"]') || content.querySelector('[data-active="true"]');
+  const current = content.querySelector('[aria-current="page"]') || content.querySelector('[data-active]:not([data-active="false"])');
   let max = Math.max(0, content.scrollHeight - content.clientHeight);
   let target = place ? (link ? offset(link).top - place.y : place.scroll) : 0;
   if (link && content.hasAttribute('data-restore-pad')) {

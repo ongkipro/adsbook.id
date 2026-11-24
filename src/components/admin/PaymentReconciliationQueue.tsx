@@ -873,10 +873,7 @@ export default function PaymentReconciliationQueue() {
       </Card>
 
       <Dialog open={Boolean(selected)} onOpenChange={closeVerification}>
-        <DialogContent className="sm:max-w-2xl" onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          window.requestAnimationFrame(() => amountRef.current?.focus());
-        }}>
+        <DialogContent className="sm:max-w-2xl" initialFocus={amountRef}>
           {selected && (
             <form onSubmit={submitVerification} noValidate>
               <DialogHeader>

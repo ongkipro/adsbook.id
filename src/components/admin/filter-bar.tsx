@@ -93,7 +93,7 @@ export function SearchInput({
 
 /** One trigger look for every toolbar menu — the date filter and FilterSelect. */
 export const FILTER_TRIGGER_CLASS =
-  "flex h-10 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-white px-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 data-[state=open]:bg-slate-50";
+  "flex h-10 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-white px-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 data-popup-open:bg-slate-50";
 
 export type FilterOption<T extends string> = { value: T; label: string };
 
@@ -118,17 +118,16 @@ export function FilterSelect<T extends string>({
   const current = options.find((option) => option.value === value) ?? options[0];
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button id={id} type="button" disabled={disabled} aria-label={ariaLabel ? `${ariaLabel}: ${current?.label ?? ""}` : undefined} className={FILTER_TRIGGER_CLASS}>
+      <DropdownMenuTrigger render={<button id={id} type="button" disabled={disabled} aria-label={ariaLabel ? `${ariaLabel}: ${current?.label ?? ""}` : undefined} className={FILTER_TRIGGER_CLASS} />}>
           <Icon className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">{current?.label}</span>
           <ChevronDown className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-(--radix-dropdown-menu-trigger-width)">
+        </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-(--anchor-width)">
         <DropdownMenuRadioGroup value={value} onValueChange={(next) => onValueChange(next as T)}>
           {options.map((option) => (
-            <DropdownMenuRadioItem key={option.value} value={option.value}>
+            // A pick closes the list, as a select does. Base UI radio items stay open by default.
+            <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
               {option.label}
             </DropdownMenuRadioItem>
           ))}

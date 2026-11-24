@@ -70,15 +70,13 @@ export function AppSidebar({
       <SidebarHeader className="px-3 pb-2 pt-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg" tooltip={`${storeName} Dashboard`} className="h-14 rounded-xl px-2 hover:bg-sidebar-accent">
-              <a href={restricted ? profileNavItem.href : "/admin/dashboard"} aria-label={restricted ? "Buka keamanan akun" : `Buka dashboard ${storeName}`}>
+            <SidebarMenuButton size="lg" tooltip={`${storeName} Dashboard`} className="h-14 rounded-xl px-2 hover:bg-sidebar-accent" render={<a href={restricted ? profileNavItem.href : "/admin/dashboard"} aria-label={restricted ? "Buka keamanan akun" : `Buka dashboard ${storeName}`} />}>
                 <StoreMark logo={siteLogo} name={storeName} className="size-9" />
                 <span className="grid-cols-1 grid min-w-0 flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">{storeName}</span>
                   <span className="truncate text-xs text-slate-500">{displayDomain}</span>
                 </span>
-              </a>
-            </SidebarMenuButton>
+              </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -92,12 +90,10 @@ export function AppSidebar({
             </SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive tooltip={profileNavItem.label} className="h-9 rounded-lg px-2.5 font-medium group-data-[collapsible=icon]:size-10!" style={{ backgroundColor: `${ADMIN_ACCENT}12`, color: ADMIN_ACCENT }}>
-                  <a href={profileNavItem.href} aria-current="page">
+                <SidebarMenuButton isActive tooltip={profileNavItem.label} className="h-9 rounded-lg px-2.5 font-medium group-data-[collapsible=icon]:size-10!" style={{ backgroundColor: `${ADMIN_ACCENT}12`, color: ADMIN_ACCENT }} render={<a href={profileNavItem.href} aria-current="page" />}>
                     <profileNavItem.icon className="size-[17px]" aria-hidden="true" />
                     <span>{profileNavItem.label}</span>
-                  </a>
-                </SidebarMenuButton>
+                  </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
@@ -125,16 +121,12 @@ export function AppSidebar({
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
-                      asChild
                       isActive={active}
                       tooltip={children.length > 0 ? `${item.label} · memiliki submenu` : item.label}
-                      className="relative h-9 rounded-lg px-2.5 font-normal text-slate-600 hover:bg-slate-100 hover:text-slate-950 data-[active=true]:font-medium group-data-[collapsible=icon]:size-10!"
-                      style={itemStyle}
-                    >
-                      <a
+                      className="relative h-9 rounded-lg px-2.5 font-normal text-slate-600 hover:bg-slate-100 hover:text-slate-950 data-active:font-medium group-data-[collapsible=icon]:size-10!"
+                      style={itemStyle} render={<a
                         href={item.href}
-                        aria-current={overviewActive ? "page" : undefined}
-                      >
+                        aria-current={overviewActive ? "page" : undefined} />}>
                         {active && (
                           <span
                             className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full"
@@ -153,8 +145,7 @@ export function AppSidebar({
                             aria-hidden="true"
                           />
                         )}
-                      </a>
-                    </SidebarMenuButton>
+                      </SidebarMenuButton>
                     {active && children.length > 0 && (
                       <SidebarMenuSub className="mr-0 gap-0.5 border-slate-200/90 py-1">
                         {children.map((child) => {
@@ -163,21 +154,16 @@ export function AppSidebar({
                           return (
                             <SidebarMenuSubItem key={child.href}>
                               <SidebarMenuSubButton
-                                asChild
                                 isActive={childActive}
-                                className="h-8 rounded-md px-2 text-sm font-normal text-slate-500 hover:bg-slate-100 hover:text-slate-950 data-[active=true]:font-medium data-[active=true]:text-blue-700"
-                              >
-                                <a
+                                className="h-8 rounded-md px-2 text-sm font-normal text-slate-500 hover:bg-slate-100 hover:text-slate-950 data-active:font-medium data-active:text-blue-700" render={<a
                                   href={child.href}
-                                  aria-current={childActive ? "page" : undefined}
-                                >
+                                  aria-current={childActive ? "page" : undefined} />}>
                                   <span
                                     aria-hidden="true"
                                     className={`size-1.5 shrink-0 rounded-full ${childActive ? "bg-blue-600" : "bg-slate-300"}`}
                                   />
                                   <span>{child.label}</span>
-                                </a>
-                              </SidebarMenuSubButton>
+                                </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                           );
                         })}
@@ -203,16 +189,12 @@ export function AppSidebar({
           {docsHref && (
             <SidebarMenuItem>
               <SidebarMenuButton
-                asChild
                 isActive={docsActive}
                 tooltip="Docs · API & CLI"
-                className="h-10 bg-white/55 ring-1 ring-slate-900/5 backdrop-blur-md hover:bg-white/75"
-              >
-                <a href={docsHref} aria-current={docsActive ? "page" : undefined}>
+                className="h-10 bg-white/55 ring-1 ring-slate-900/5 backdrop-blur-md hover:bg-white/75" render={<a href={docsHref} aria-current={docsActive ? "page" : undefined} />}>
                   <BookOpen aria-hidden="true" />
                   <span>Docs</span>
-                </a>
-              </SidebarMenuButton>
+                </SidebarMenuButton>
             </SidebarMenuItem>
           )}
           {onOpenChangelog && (

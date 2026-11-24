@@ -64,8 +64,8 @@ test("owner: Plugin is its own workspace right before Pengaturan, lit on the lis
   await hydrated(page);
   const plugin = page.locator(`[data-sidebar="content"] a[href="${PLUGINS}"]`);
   await expect(plugin).toHaveAttribute("aria-current", "page");
-  await expect(plugin).toHaveAttribute("data-active", "true");
-  await expect(page.locator('[data-sidebar="content"] a[href="/admin/settings"]')).toHaveAttribute("data-active", "false");
+  await expect(plugin).toHaveAttribute("data-active", "");
+  await expect(page.locator('[data-sidebar="content"] a[href="/admin/settings"]')).not.toHaveAttribute("data-active");
   await expect(page.locator('[data-sidebar="content"] a[href="/admin/settings/domains"]')).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 2, name: "Plugin" })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/plugins-owner-list-1366.png` });
@@ -78,8 +78,8 @@ test("owner: Plugin is its own workspace right before Pengaturan, lit on the lis
   await Promise.all([page.waitForURL(`${store}${PLUGINS}/kelola`), page.locator(`main a[href="${PLUGINS}/kelola"]`).click()]);
   await hydrated(page);
   await expect(plugin).toHaveAttribute("aria-current", "page");
-  await expect(plugin).toHaveAttribute("data-active", "true");
-  await expect(page.locator('[data-sidebar="content"] a[href="/admin/settings"]')).toHaveAttribute("data-active", "false");
+  await expect(plugin).toHaveAttribute("data-active", "");
+  await expect(page.locator('[data-sidebar="content"] a[href="/admin/settings"]')).not.toHaveAttribute("data-active");
   await page.screenshot({ path: `${SHOTS}/plugins-owner-kelola-1366.png` });
 
   // Keyboard: from Tema (between Pembayaran and Plugin since 2026-11-23), Tab reaches Plugin, then Pengaturan; the focus is visible; Enter opens Plugin.
@@ -118,7 +118,7 @@ test("owner: Plugin is its own workspace right before Pengaturan, lit on the lis
   const railPlugin = page.locator(`[data-sidebar="content"] a[href="${PLUGINS}"]`);
   await expect(railPlugin).toBeVisible();
   await railPlugin.hover();
-  await expect(page.getByRole("tooltip").filter({ hasText: "Plugin" })).toBeVisible();
+  await expect(page.locator('[data-slot="tooltip-content"]').filter({ hasText: "Plugin" })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/plugins-owner-rail-900.png` });
 
   // Phone: the menu sheet lists Plugin as its own row, current, in view; closing returns focus to the trigger.

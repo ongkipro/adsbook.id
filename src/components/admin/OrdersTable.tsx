@@ -317,14 +317,12 @@ function OrderActionMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
+      <DropdownMenuTrigger render={<Button
           type="button"
           variant="outline"
           size="sm"
           disabled={isUpdating}
-          className="px-3 border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:text-slate-950 transition-colors"
-        >
+          className="px-3 border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:text-slate-950 transition-colors" />}>
           {isUpdating ? (
             <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-800" aria-hidden="true" />
           ) : (
@@ -332,22 +330,18 @@ function OrderActionMenu({
           )}
           <span>Aksi</span>
           <ChevronDown className="size-3 text-slate-400" />
-        </Button>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl">
         <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
           Order {order.orderNumber}
         </DropdownMenuLabel>
         
-        <DropdownMenuItem asChild>
-          <a
+        <DropdownMenuItem render={<a
             href={`/admin/orders/${encodeURIComponent(order.orderNumber)}`}
-            className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer"
-          >
+            className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer" />}>
             <Eye className="size-4 text-slate-500" />
             <span>Lihat Detail Order</span>
-          </a>
-        </DropdownMenuItem>
+          </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={() => onRefreshScoring(order.id)}
@@ -1477,7 +1471,7 @@ export function OrdersTable({
                       )
                     }
                     aria-label={`Pilih order ${order.orderNumber}`}
-                    className="mt-0.5 size-5 data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
+                    className="mt-0.5 size-5 data-checked:border-blue-600 data-checked:bg-blue-600"
                   />
                   <div className="min-w-0 flex-1">
                     <a
@@ -1547,14 +1541,10 @@ export function OrdersTable({
                 <TableRow className="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
                   <TableHead className="w-12 px-4 py-3">
                     <Checkbox
-                      checked={
-                        allVisibleSelected
-                          ? true
-                          : selectedOrderIds.some((orderId) =>
-                              visibleOrderIds.includes(orderId),
-                            )
-                            ? "indeterminate"
-                            : false
+                      checked={allVisibleSelected}
+                      indeterminate={
+                        !allVisibleSelected &&
+                        selectedOrderIds.some((orderId) => visibleOrderIds.includes(orderId))
                       }
                       onCheckedChange={(checked) =>
                         setSelectedOrderIds((current) =>
@@ -1572,7 +1562,7 @@ export function OrdersTable({
                         )
                       }
                       aria-label="Pilih semua order di halaman ini"
-                      className="data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
+                      className="data-checked:border-blue-600 data-checked:bg-blue-600"
                     />
                   </TableHead>
                   <TableHead className="w-48 px-5 py-3 border-r border-slate-200">
@@ -1610,7 +1600,7 @@ export function OrdersTable({
                           )
                         }
                         aria-label={`Pilih order ${order.orderNumber}`}
-                        className="data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
+                        className="data-checked:border-blue-600 data-checked:bg-blue-600"
                       />
                     </TableCell>
                     <TableCell className="px-5 py-4 border-r border-slate-200">

@@ -305,9 +305,7 @@ export default function WhatsappNumbers() {
               />
             </label>
             <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Batal</Button>
-              </DialogClose>
+              <DialogClose render={<Button type="button" variant="outline" />}>Batal</DialogClose>
               <Button type="submit" disabled={busy}>Simpan</Button>
             </DialogFooter>
           </form>

@@ -28,16 +28,14 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
       <SidebarHeader className="px-3 pb-2 pt-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg" tooltip="adsbook.id platform" className="h-14 rounded-xl px-2 hover:bg-sidebar-accent">
-              <a href="/platform" aria-label="Buka ringkasan platform">
+            <SidebarMenuButton size="lg" tooltip="adsbook.id platform" className="h-14 rounded-xl px-2 hover:bg-sidebar-accent" render={<a href="/platform" aria-label="Buka ringkasan platform" />}>
                 <img src={BRAND_MARK} alt="" width="36" height="36" className="size-9 shrink-0 rounded-xl" />
                 <span className="grid min-w-0 flex-1 grid-cols-1 gap-0.5 text-left leading-tight">
                   <img src={BRAND_WORDMARK} alt="" width="94" height="15" className="h-[15px] w-auto" />
                   <span className="sr-only">adsbook.id</span>
                   <span className="truncate text-xs text-slate-500">Console platform</span>
                 </span>
-              </a>
-            </SidebarMenuButton>
+              </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -52,18 +50,14 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
-                      asChild
                       isActive={isActive}
                       tooltip={item.label}
-                      className="relative h-9 rounded-lg px-2.5 font-normal text-slate-600 hover:bg-slate-100 hover:text-slate-950 data-[active=true]:font-medium group-data-[collapsible=icon]:size-10!"
-                      style={isActive ? { backgroundColor: `${ADMIN_ACCENT}12`, color: ADMIN_ACCENT } : undefined}
-                    >
-                      <a href={item.href} aria-current={isActive ? "page" : undefined}>
+                      className="relative h-9 rounded-lg px-2.5 font-normal text-slate-600 hover:bg-slate-100 hover:text-slate-950 data-active:font-medium group-data-[collapsible=icon]:size-10!"
+                      style={isActive ? { backgroundColor: `${ADMIN_ACCENT}12`, color: ADMIN_ACCENT } : undefined} render={<a href={item.href} aria-current={isActive ? "page" : undefined} />}>
                         {isActive && <span className="absolute bottom-1.5 left-0 top-1.5 w-1 rounded-r-full" style={{ backgroundColor: ADMIN_ACCENT }} aria-hidden="true" />}
                         <item.icon className="size-[17px]" aria-hidden="true" />
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                      </a>
-                    </SidebarMenuButton>
+                      </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
               })}

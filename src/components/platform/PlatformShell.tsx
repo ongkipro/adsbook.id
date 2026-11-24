@@ -200,7 +200,7 @@ export function PlatformShell({
               </button>
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  className="ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 data-[state=open]:bg-slate-100 lg:pr-2.5"
+                  className="ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 data-popup-open:bg-slate-100 lg:pr-2.5"
                   aria-label={`Menu akun (${roleLabel})`}
                 >
                   <span className="grid size-8 place-items-center rounded-full bg-slate-900 text-white" aria-hidden="true">
@@ -220,7 +220,7 @@ export function PlatformShell({
                     </span>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" disabled={signingOut} onSelect={(event) => { event.preventDefault(); void signOut(); }}>
+                  <DropdownMenuItem variant="destructive" disabled={signingOut} onClick={(event) => { event.preventDefault(); void signOut(); }}>
                     <LogOut aria-hidden="true" />
                     {signingOut ? "Keluar…" : "Keluar"}
                   </DropdownMenuItem>
@@ -262,10 +262,7 @@ export function PlatformShell({
           <SheetContent
             side="bottom"
             className="max-h-[86dvh] gap-0 overflow-hidden rounded-t-[1.25rem] border-slate-200 bg-white p-0 md:hidden"
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              document.getElementById("platform-mobile-menu-trigger")?.focus();
-            }}
+            finalFocus={() => document.getElementById("platform-mobile-menu-trigger")}
           >
             <SheetHeader className="border-b border-slate-200 px-4 pb-3 pt-4 text-left">
               <SheetTitle className="text-base font-semibold tracking-tight text-slate-950">Semua menu</SheetTitle>
