@@ -80,6 +80,7 @@ test("a Select inside a dialog opens and picks (product Embed mode) — it used 
       break;
     }
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
   }
   // The form choice is a segmented control; the variant is the Select inside the dialog.
   await page.getByRole("dialog").getByRole("radio", { name: "Full" }).click();

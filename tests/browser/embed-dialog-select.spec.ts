@@ -29,6 +29,7 @@ for (const width of [1366, 390]) {
         break;
       }
       await page.keyboard.press("Escape");
+      await expect(page.getByRole("menu")).toHaveCount(0);
     }
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByLabel("Snippet widget")).not.toHaveValue("", { timeout: 15_000 });
