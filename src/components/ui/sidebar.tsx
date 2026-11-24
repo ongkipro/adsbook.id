@@ -187,10 +187,7 @@ function Sidebar({
      data-slot="sidebar"
      data-mobile="true"
      className="w-64 bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-     onCloseAutoFocus={(event) => {
-      event.preventDefault()
-      document.querySelector<HTMLButtonElement>('[data-sidebar="trigger"]')?.focus()
-     }}
+     finalFocus={() => document.querySelector<HTMLButtonElement>('[data-sidebar="trigger"]')}
      style={
       {
        "--sidebar-width": SIDEBAR_WIDTH_MOBILE,

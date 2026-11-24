@@ -1180,11 +1180,7 @@ export function ProductCatalog({
             <strong>Catatan:</strong> Produk yang sudah dipakai order tidak bisa dihapus; sistem akan menolaknya. Ubah status ke <strong>Draft</strong> untuk menghentikan penjualan.
           </p>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={deleting}>
-                Batal
-              </Button>
-            </DialogClose>
+            <DialogClose render={<Button type="button" variant="outline" disabled={deleting} />}>Batal</DialogClose>
             <Button
               type="button"
               variant="destructive"

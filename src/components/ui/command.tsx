@@ -47,11 +47,12 @@ function CommandDialog({
  className,
  showCloseButton = false,
  ...props
-}: React.ComponentProps<typeof Dialog> & {
+}: Omit<React.ComponentProps<typeof Dialog>, "children"> & {
  title?: string
  description?: string
  className?: string
  showCloseButton?: boolean
+ children?: React.ReactNode
 }) {
  return (
   <Dialog {...props}>
@@ -61,7 +62,7 @@ function CommandDialog({
    </DialogHeader>
   <DialogContent
    className={cn(
-    "fixed bottom-0 left-1/2 top-auto z-50 grid grid-cols-1 w-full max-w-none -translate-x-1/2 translate-y-0 gap-0 overflow-hidden rounded-b-none! rounded-t-2xl! bg-popover p-0 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:bottom-auto sm:top-1/2 sm:max-h-[min(72vh,38rem)] sm:max-w-xl sm:-translate-y-1/2 sm:rounded-xl! data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+    "inset-x-0 bottom-0 top-auto mx-auto mb-0 max-h-[86dvh] w-full max-w-none gap-0 overflow-hidden rounded-b-none! rounded-t-2xl! p-0 sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[min(72vh,38rem)] sm:max-w-xl sm:rounded-xl!",
     className
    )}
    showCloseButton={showCloseButton}

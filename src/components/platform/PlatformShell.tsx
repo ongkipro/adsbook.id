@@ -262,10 +262,7 @@ export function PlatformShell({
           <SheetContent
             side="bottom"
             className="max-h-[86dvh] gap-0 overflow-hidden rounded-t-[1.25rem] border-slate-200 bg-white p-0 md:hidden"
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              document.getElementById("platform-mobile-menu-trigger")?.focus();
-            }}
+            finalFocus={() => document.getElementById("platform-mobile-menu-trigger")}
           >
             <SheetHeader className="border-b border-slate-200 px-4 pb-3 pt-4 text-left">
               <SheetTitle className="text-base font-semibold tracking-tight text-slate-950">Semua menu</SheetTitle>

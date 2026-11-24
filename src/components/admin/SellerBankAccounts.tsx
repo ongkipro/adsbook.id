@@ -449,9 +449,7 @@ export default function SellerBankAccounts({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={pending}>Batal</Button>
-            </DialogClose>
+            <DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Batal</DialogClose>
             <Button
               type="button"
               variant="destructive"

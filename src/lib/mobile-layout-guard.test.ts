@@ -136,7 +136,8 @@ test("the admin shell keeps phone, tablet, and desktop navigation distinct", () 
   assert.match(shell, /item\.children\.map/);
   assert.match(shell, /aria-current=\{childActive \? "page" : undefined\}/);
   assert.match(shell, /admin-mobile-menu-trigger/);
-  assert.match(shell, /onCloseAutoFocus/);
+  // Closing the phone menu returns focus to its trigger (Base UI finalFocus).
+  assert.match(shell, /finalFocus=\{\(\) => document\.getElementById\("admin-mobile-menu-trigger"\)\}/);
 });
 
 test("admin navigation changes state without decorative motion", () => {
