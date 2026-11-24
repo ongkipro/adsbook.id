@@ -29,7 +29,7 @@ import { billingState, isLive, subscriptionRefusal } from './platform/billing.ts
 import { notifyOperator, type Notice } from './platform/notify.ts';
 import { statePage } from './platform/state-pages';
 import { openTenantDb, TenantUnavailableError, type TenantDbEnv } from './platform/tenant-db';
-import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind } from './platform/request-log';
+import { buildRequestLog, requestId, routeLabel, writeRequestLog, type HostKind, type LogContext } from './platform/request-log';
 import { bumpsStorefrontCache, edgeCacheRequest, readEdgeCache, readUploadCache, uploadCacheRequest, writeEdgeCache, writeUploadCache } from './lib/edge-cache';
 import { scopeFromLocals } from './platform/keys.ts';
 import { PROBE_NONCE, PROBE_PATH, probeAnswer, tenantHostSuffix } from './platform/hostnames.ts';
@@ -396,6 +396,12 @@ export function createMiddleware(
     return statePage(reason === 'recovery' || reason === 'migration' ? 'recovery' : 'unavailable', url.pathname);
   }
   context.locals.tenantDb = identityDb;
+  // Correlation for errors read below the gate; the same id the request line carries.
+  const logContext: LogContext = {
+    request_id: requestId(context.request),
+    tenant_id: tenantContext.tenantId,
+    host: tenantContext.host,
+  };
 
   // Store identity is resolved once per request and handed to every consumer
   // through locals. Doing it here rather than per page keeps consumers
@@ -403,7 +409,7 @@ export function createMiddleware(
   // await for a value that cannot change mid-request. ADR-003.
   const identity =
     identityDb && typeof identityDb === 'object'
-      ? await readStoreIdentity(identityDb)
+      ? await readStoreIdentity(identityDb, logContext)
       : ({ state: 'unknown' } as const);
   context.locals.tenant = resolveTenantConfig(
     identity.state === 'installed' ? identity.row : null,
@@ -459,7 +465,7 @@ export function createMiddleware(
         ready === false &&
         (context.request.method === 'GET' || context.request.method === 'HEAD') &&
         !(url.pathname === '/api' || url.pathname.startsWith('/api/')) &&
-        Boolean(await resolveAdminSession(identityDb, context.request, await resolveAuthSecret(identityDb, tenantContext.tenantId)));
+        Boolean(await resolveAdminSession(identityDb, context.request, await resolveAuthSecret(identityDb, tenantContext.tenantId), logContext));
       if (!ownerPreview) return statePage(ready === false ? 'not-ready' : 'unavailable', url.pathname);
       context.locals.ownerPreview = true;
     }
@@ -555,6 +561,7 @@ export function createMiddleware(
       identityDb,
       context.request,
       await resolveAuthSecret(identityDb, tenantContext.tenantId),
+      logContext,
     );
     if (!session) {
       if (isAdminApi) {

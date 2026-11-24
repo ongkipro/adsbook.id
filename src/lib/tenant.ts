@@ -1,3 +1,4 @@
+import { buildErrorLog, type LogContext } from "../platform/request-log.ts";
 import {
   isStorefrontTemplateId,
   type StorefrontTemplateId,
@@ -229,6 +230,7 @@ export type StoreIdentityRead =
 
 export async function readStoreIdentity(
   database: D1Database,
+  log?: LogContext,
 ): Promise<StoreIdentityRead> {
   try {
     const row = await database
@@ -244,7 +246,7 @@ export async function readStoreIdentity(
       console.error("tenant-identity-unmigrated");
       return { state: "unmigrated" };
     }
-    console.error("tenant-identity-load", error);
+    console.error(JSON.stringify(buildErrorLog("tenant-identity-load", "store-identity-read", log, error)));
     return { state: "unknown" };
   }
 }

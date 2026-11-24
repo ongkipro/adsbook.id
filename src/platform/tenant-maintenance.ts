@@ -53,7 +53,8 @@ export async function runTenantMaintenance(
   /** ADR-041: a store in Preview Mode or past its grace sends no ad signal. */
   adSignalsPaused = false,
 ) {
-  const identity = await readStoreIdentity(database);
+  // No request behind an alarm: a fixed label stands in for the request id.
+  const identity = await readStoreIdentity(database, { request_id: "alarm", tenant_id: tenantId, host: primaryHost ?? null });
   if (identity.state !== "installed") {
     throw new Error(`TENANT_IDENTITY_UNAVAILABLE: ${identity.state}`);
   }

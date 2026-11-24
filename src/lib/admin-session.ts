@@ -12,6 +12,7 @@
  * operator on any install could log in. Sessions are a store of record and
  * belong beside the credentials they reference.
  */
+import { buildErrorLog, type LogContext } from '../platform/request-log.ts';
 import {
   getSessionCookie,
   verifyJwt,
@@ -105,6 +106,7 @@ export async function resolveAdminSession(
   database: D1Database | undefined,
   request: Request,
   secret: string,
+  log?: LogContext,
 ): Promise<ActiveAdminSession | null> {
   if (!database) return null;
   const token = getSessionCookie(request);
@@ -113,7 +115,7 @@ export async function resolveAdminSession(
   try {
     return await readActiveAdminSession(database, session);
   } catch (error) {
-    console.error('admin-session-read-failed', error);
+    console.error(JSON.stringify(buildErrorLog('admin-session-read-failed', 'admin-session-read', log, error)));
     return null;
   }
 }
