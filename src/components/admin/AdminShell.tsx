@@ -297,7 +297,7 @@ export function AdminShell({
                   {/* The layout's data-logout-form handler does the request and
                       relabels the button; the item keeps the menu open meanwhile. */}
                   <form method="POST" action="/api/admin/logout" data-logout-form>
-                    <DropdownMenuItem variant="destructive" onClick={(event) => event.preventDefault()} render={<button type="submit" className="w-full" />}>
+                    <DropdownMenuItem variant="destructive" closeOnClick={false} render={<button type="submit" className="w-full" />}>
                         <LogOut aria-hidden="true" />
                         Keluar
                       </DropdownMenuItem>
