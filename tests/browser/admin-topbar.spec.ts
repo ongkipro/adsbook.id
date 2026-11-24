@@ -70,3 +70,32 @@ test("menus with a heading open: order actions and payment actions", async ({ pa
   await expect(page.getByRole("menu").getByRole("menuitem", { name: "Buka rekonsiliasi" })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("Dashboard filters load their list on first click and still filter", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 860 });
+  const scripts: string[] = [];
+  page.on("request", (request) => { if (request.resourceType() === "script") scripts.push(request.url()); });
+  await signIn(page);
+  await page.goto(`${STORE}/admin/dashboard`);
+  await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  const loaded = (name: string) => scripts.some((url) => new RegExp(`/${name}\\.`).test(url));
+  expect(["dropdown-menu", "AdminDateRangePanel", "FilterSelectMenu", "AccountMenu", "NotificationPanel"].filter(loaded), "no menu code with the first paint").toEqual([]);
+
+  // Pembanding: the first click opens the list; a pick closes it and shows the choice.
+  const compare = page.locator("#dashboard-compare");
+  await compare.click();
+  await expect(page.getByRole("menuitemradio").first()).toBeVisible();
+  const option = page.getByRole("menuitemradio").last();
+  const choice = (await option.textContent())!.trim();
+  await option.click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(page.locator("#dashboard-compare")).toContainText(choice);
+
+  // The date range opens its presets on the first click and applies one.
+  await page.getByRole("button", { name: /hari|Hari ini|Kemarin|Rentang|minggu|bulan/i }).first().click();
+  const preset = page.getByRole("button", { name: "Kemarin", exact: true });
+  await expect(preset).toBeVisible();
+  await preset.click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(page.locator("section[aria-label='Date range dan pembanding'] button").first()).toContainText("Kemarin");
+});

@@ -18,29 +18,18 @@ import {
 } from "@/components/ui/sheet";
 import { Toaster } from "@/components/ui/sonner";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   ArrowUpRight,
-  ChevronDown,
   ChevronRight,
   BookOpen,
   History,
-  Settings,
-  Store,
-  LogOut,
   Menu,
   Search,
-  UserRound,
 } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
-import { ChangelogModal } from "./ChangelogModal";
+// Loaded when opened, not with every admin page.
+const ChangelogModal = React.lazy(() => import("./ChangelogModal").then((module) => ({ default: module.ChangelogModal })));
+const AccountMenu = React.lazy(() => import("./AccountMenu").then((module) => ({ default: module.AccountMenu })));
+import { AccountButton } from "./AccountButton";
 import { NotificationBell } from "./NotificationBell";
 import { OperationalStatusIcon } from "./OperationalStatusIcon";
 import { CMS_VERSION } from "@/lib/version";
@@ -112,9 +101,13 @@ export function AdminShell({
   const [isDesktop, setIsDesktop] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(sidebarDefaultOpen);
   const [changelogOpen, setChangelogOpen] = React.useState(false);
+  const [accountMenuLoaded, setAccountMenuLoaded] = React.useState(false);
   const groups = mustChangePassword ? [] : getVisibleNavGroups(adminRole, catalogMode);
   // The API & CLI docs speak to whoever manages API keys: owner and admin
   // (auth.ts ADMIN_PAGE_ROUTES holds /admin/docs for them alone).
+  const accountButtonClass = `ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:pr-2.5 data-popup-open:bg-slate-100 ${
+                    activeMenu === "profile" ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  }`;
   const docsHref = !mustChangePassword && (adminRole === "owner" || adminRole === "admin") ? "/admin/docs" : undefined;
   const searchItems = mustChangePassword ? [] : getSearchableNavItems(adminRole, catalogMode);
   const allItems = groups.flatMap((group) => group.items);
@@ -140,21 +133,20 @@ export function AdminShell({
       setSidebarOpen(open);
       document.cookie = `sidebar_state=${open}; path=/; max-age=604800; samesite=lax`;
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        setSearchOpen((open) => !open);
-      }
-    };
+    // Ctrl/Cmd+K is caught by AdminLayout's plain script from page load (React
+    // hydrates 40-55 ms after the island is marked ready, and a press in that
+    // gap was lost); it dispatches this event, which toggles the search.
+    const onShortcut = () => setSearchOpen((open) => !open);
     updateViewport();
     updateSidebar();
     media.addEventListener("change", updateViewport);
     wideMedia.addEventListener("change", updateSidebar);
-    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("admin:search-toggle", onShortcut);
+    window.dispatchEvent(new Event("admin:search-ready"));
     return () => {
       media.removeEventListener("change", updateViewport);
       wideMedia.removeEventListener("change", updateSidebar);
-      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("admin:search-toggle", onShortcut);
     };
   }, []);
 
@@ -240,71 +232,35 @@ export function AdminShell({
               {/* The account menu: who is signed in, their profile, the store's
                   settings (roles that have them), the storefront, the release
                   notes, and Keluar - which used to sit at the foot of the sidebar. */}
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className={`ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:pr-2.5 data-popup-open:bg-slate-100 ${
-                    activeMenu === "profile" ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
-                  aria-label={`Menu akun (${roleLabel})`}
-                >
-                  <span className="grid size-8 place-items-center rounded-full bg-slate-900 text-white" aria-hidden="true">
-                    <UserRound className="size-4" />
-                  </span>
-                  {!mustChangePassword && <span className="hidden text-sm font-medium lg:inline">{roleLabel}</span>}
-                  <ChevronDown className="hidden size-3.5 text-slate-400 lg:block" aria-hidden="true" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={8} className="w-60">
-                  <DropdownMenuLabel className="flex items-center gap-2.5 py-2">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-900 text-white" aria-hidden="true">
-                      <UserRound className="size-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-slate-900">{adminUsername || roleLabel}</span>
-                      <span className="block truncate text-xs font-normal text-slate-500">{roleLabel} · {siteName || adminName}</span>
-                    </span>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem render={<a href={profileNavItem.href} />}>
-                        <UserRound aria-hidden="true" />
-                        {mustChangePassword ? "Keamanan akun" : "Profil & keamanan"}
-                      </DropdownMenuItem>
-                    {!mustChangePassword && allItems.some((item) => item.id === "settings") && (
-                      <DropdownMenuItem render={<a href="/admin/settings/store" />}>
-                          <Settings aria-hidden="true" />
-                          Pengaturan toko
-                        </DropdownMenuItem>
-                    )}
-                    {!mustChangePassword && (
-                      <DropdownMenuItem render={<a href="/" target="_blank" rel="noopener noreferrer" />}>
-                          <Store aria-hidden="true" />
-                          Lihat storefront
-                          <ArrowUpRight className="ml-auto text-slate-400" aria-hidden="true" />
-                        </DropdownMenuItem>
-                    )}
-                    {docsHref && (
-                      <DropdownMenuItem render={<a href={docsHref} />}>
-                          <BookOpen aria-hidden="true" />
-                          Docs API & CLI
-                        </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={() => setChangelogOpen(true)}>
-                      <History aria-hidden="true" />
-                      What's new
-                      <span className="ml-auto font-mono text-xs text-slate-400">v{CMS_VERSION.version}</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  {/* The layout's data-logout-form handler does the request and
-                      relabels the button; the item keeps the menu open meanwhile. */}
-                  <form method="POST" action="/api/admin/logout" data-logout-form>
-                    <DropdownMenuItem variant="destructive" closeOnClick={false} render={<button type="submit" className="w-full" />}>
-                        <LogOut aria-hidden="true" />
-                        Keluar
-                      </DropdownMenuItem>
-                  </form>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* The account menu loads on first open (AccountMenu.tsx): until then a
+                  plain button stands in, so the menu and its popup code are not
+                  in every admin page's first download. */}
+              {accountMenuLoaded ? (
+                <React.Suspense fallback={<AccountButton className={accountButtonClass} label={roleLabel} showLabel={!mustChangePassword} />}>
+                  <AccountMenu
+                    defaultOpen
+                    triggerClassName={accountButtonClass}
+                    roleLabel={roleLabel}
+                    showRoleLabel={!mustChangePassword}
+                    adminUsername={adminUsername}
+                    storeLabel={siteName || adminName}
+                    profileHref={profileNavItem.href}
+                    profileLabel={mustChangePassword ? "Keamanan akun" : "Profil & keamanan"}
+                    showSettings={!mustChangePassword && allItems.some((item) => item.id === "settings")}
+                    showStorefront={!mustChangePassword}
+                    docsHref={docsHref}
+                    version={CMS_VERSION.version}
+                    onOpenChangelog={() => setChangelogOpen(true)}
+                  />
+                </React.Suspense>
+              ) : (
+                <AccountButton
+                  className={accountButtonClass}
+                  label={roleLabel}
+                  showLabel={!mustChangePassword}
+                  onClick={() => setAccountMenuLoaded(true)}
+                />
+              )}
             </div>
           </header>
 
@@ -471,7 +427,11 @@ export function AdminShell({
             />
           </React.Suspense>
         )}
-        <ChangelogModal open={changelogOpen} onOpenChange={setChangelogOpen} />
+        {changelogOpen && (
+          <React.Suspense fallback={null}>
+            <ChangelogModal open={changelogOpen} onOpenChange={setChangelogOpen} />
+          </React.Suspense>
+        )}
         <Toaster position="top-center" />
       </SidebarProvider>
     </TooltipProvider>

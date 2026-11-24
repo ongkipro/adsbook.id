@@ -23,18 +23,29 @@ test("admin search at 1366: Ctrl+K opens it, typing filters, Enter opens the pag
   await signIn(page);
   expect(scripts.some((url) => /AdminSearch\./.test(url)), "the palette is not downloaded with the page").toBe(false);
   const input = page.getByRole("dialog").getByPlaceholder("Ketik nama halaman atau tugas…");
-  // The shortcut is live once React has finished hydrating the shell; a press in
-  // the first frames after the island attribute drops can land before it.
-  await expect(async () => {
-    await page.keyboard.press("Control+k");
-    await expect(input).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 10_000 });
-  await expect(input).toBeFocused();
+  // The very first press, the moment the island is marked ready: React subscribes
+  // 40-55 ms later, so this press is caught by the layout script and replayed.
+  await page.keyboard.press("Control+k");
+  await expect(input).toBeFocused({ timeout: 10_000 });
   expect(scripts.some((url) => /AdminSearch\./.test(url)), "it loads on first open").toBe(true);
   await input.fill("produk");
   await expect(page.getByRole("option").first()).toBeVisible();
   await page.keyboard.press("Enter");
   await page.waitForURL(/\/admin\/products/);
+});
+
+test("Ctrl+K pressed before the admin shell is interactive still opens the search, once", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await signIn(page);
+  // A fresh load, the shortcut sent while the page is still loading.
+  await page.goto(`${STORE}/admin/orders`, { waitUntil: "commit" });
+  await page.waitForSelector("astro-island");
+  await page.keyboard.press("Control+k");
+  const input = page.getByRole("dialog").getByPlaceholder("Ketik nama halaman atau tugas…");
+  await expect(input).toBeVisible({ timeout: 10_000 });
+  // A second press closes it, like the shortcut always did.
+  await page.keyboard.press("Control+k");
+  await expect(input).toHaveCount(0);
 });
 
 test("admin search at 390: the button opens a sheet and a tap opens the page", async ({ page }) => {

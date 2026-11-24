@@ -2,13 +2,6 @@ import * as React from "react";
 import { ChevronDown, Search, X, type LucideIcon } from "lucide-react";
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 /**
@@ -97,6 +90,11 @@ export const FILTER_TRIGGER_CLASS =
 
 export type FilterOption<T extends string> = { value: T; label: string };
 
+// The list (Base UI Menu) loads on the first click: a filter row renders on
+// most admin pages, and the menu and its positioning code used to come with
+// every one of them. Until then a plain button with the same face stands in.
+const FilterSelectMenu = React.lazy(() => import("./FilterSelectMenu").then((module) => ({ default: module.FilterSelectMenu })));
+
 export function FilterSelect<T extends string>({
   id,
   icon: Icon,
@@ -115,24 +113,33 @@ export function FilterSelect<T extends string>({
   onValueChange: (value: T) => void;
   options: readonly FilterOption<T>[];
 }) {
+  const [loaded, setLoaded] = React.useState(false);
   const current = options.find((option) => option.value === value) ?? options[0];
+  const face = (
+    <>
+      <Icon className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate">{current?.label}</span>
+      <ChevronDown className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
+    </>
+  );
+  const label = ariaLabel ? `${ariaLabel}: ${current?.label ?? ""}` : undefined;
+  const button = (onClick?: () => void) => (
+    <button id={id} type="button" disabled={disabled} aria-label={label} aria-haspopup="menu" aria-expanded={false} className={FILTER_TRIGGER_CLASS} onClick={onClick}>
+      {face}
+    </button>
+  );
+  if (!loaded) return button(() => setLoaded(true));
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<button id={id} type="button" disabled={disabled} aria-label={ariaLabel ? `${ariaLabel}: ${current?.label ?? ""}` : undefined} className={FILTER_TRIGGER_CLASS} />}>
-          <Icon className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate">{current?.label}</span>
-          <ChevronDown className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
-        </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-(--anchor-width)">
-        <DropdownMenuRadioGroup value={value} onValueChange={(next) => onValueChange(next as T)}>
-          {options.map((option) => (
-            // A pick closes the list, as a select does. Base UI radio items stay open by default.
-            <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <React.Suspense fallback={button()}>
+      <FilterSelectMenu
+        id={id}
+        label={label}
+        disabled={disabled}
+        face={face}
+        value={value}
+        options={options}
+        onValueChange={(next) => onValueChange(next as T)}
+      />
+    </React.Suspense>
   );
 }

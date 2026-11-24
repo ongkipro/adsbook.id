@@ -102,6 +102,26 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
       )}
       <slot />
     </AdminShell>
+    <!-- Ctrl/Cmd+K from the first moment the page responds, not after React
+         hydrates: a press before AdminShell subscribes is queued and replayed. -->
+    <script is:inline>
+      (() => {
+        let pending = 0;
+        let ready = false;
+        const toggle = () => window.dispatchEvent(new Event("admin:search-toggle"));
+        document.addEventListener("keydown", (event) => {
+          if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
+          event.preventDefault();
+          if (ready) toggle();
+          else pending += 1;
+        });
+        window.addEventListener("admin:search-ready", () => {
+          ready = true;
+          if (pending % 2 === 1) toggle();
+          pending = 0;
+        }, { once: true });
+      })();
+    </script>
     <!-- Vanilla JS for the admin drawer, global search, and logout enhancement. -->
     <script>
       // Delegate submit for dynamically rendered logout forms
