@@ -335,12 +335,8 @@ export function ShippingOperations({ initialQueue }: { initialQueue?: string } =
   const selectedVisiblePickupCount = visiblePickupIds.filter((id) =>
     selectedOrderIds.includes(id),
   ).length;
-  const visiblePickupSelection =
-    selectedVisiblePickupCount === 0
-      ? false
-      : selectedVisiblePickupCount === visiblePickupIds.length
-        ? true
-        : "indeterminate";
+  const visiblePickupAll = selectedVisiblePickupCount > 0 && selectedVisiblePickupCount === visiblePickupIds.length;
+  const visiblePickupSome = selectedVisiblePickupCount > 0 && !visiblePickupAll;
 
 
   const updateVisibleSelection = (
@@ -826,14 +822,15 @@ export function ShippingOperations({ initialQueue }: { initialQueue?: string } =
                 <div className="mt-3 grid gap-2 grid-cols-1">
                   <label className="flex min-h-12 items-center gap-2.5 rounded-xl border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-900">
                     <Checkbox
-                      checked={visiblePickupSelection}
+                      checked={visiblePickupAll}
+                      indeterminate={visiblePickupSome}
                       onCheckedChange={(checked) =>
                         setSelectedOrderIds((current) =>
                           updateVisibleSelection(current, visiblePickupIds, Boolean(checked)),
                         )
                       }
                       aria-label={`Pilih semua ${visiblePickupIds.length} hasil siap pickup`}
-                      className="size-5 data-[state=checked]:border-sky-600 data-[state=checked]:bg-sky-600"
+                      className="size-5 data-checked:border-sky-600 data-checked:bg-sky-600"
                     />
                     <span>Semua pickup ({visiblePickupIds.length})</span>
                   </label>
@@ -932,7 +929,7 @@ export function ShippingOperations({ initialQueue }: { initialQueue?: string } =
                           )
                         }
                         aria-label={`Pilih ${shipment.orderNumber} untuk pickup`}
-                        className="size-5 data-[state=checked]:border-sky-600 data-[state=checked]:bg-sky-600"
+                        className="size-5 data-checked:border-sky-600 data-checked:bg-sky-600"
                       />{" "}
                       Sertakan dalam pickup berikutnya
                     </label>
@@ -982,7 +979,8 @@ export function ShippingOperations({ initialQueue }: { initialQueue?: string } =
                 <TableRow className="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
                   <TableHead className="w-12 px-4 py-3">
                     <Checkbox
-                      checked={visiblePickupSelection}
+                      checked={visiblePickupAll}
+                      indeterminate={visiblePickupSome}
                       disabled={visiblePickupIds.length === 0}
                       onCheckedChange={(checked) =>
                         setSelectedOrderIds((current) =>
@@ -990,7 +988,7 @@ export function ShippingOperations({ initialQueue }: { initialQueue?: string } =
                         )
                       }
                       aria-label={`Pilih semua ${visiblePickupIds.length} pengiriman siap pickup`}
-                      className="size-5 data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
+                      className="size-5 data-checked:border-blue-600 data-checked:bg-blue-600"
                     />
                   </TableHead>
                   <TableHead className="px-3 py-3 border-r border-slate-200">
@@ -1021,7 +1019,7 @@ export function ShippingOperations({ initialQueue }: { initialQueue?: string } =
                               )
                             }
                             aria-label={`Pilih ${shipment.orderNumber} untuk pickup`}
-                            className="data-[state=checked]:border-sky-600 data-[state=checked]:bg-sky-600"
+                            className="data-checked:border-sky-600 data-checked:bg-sky-600"
                           />
                         ) : (
                           <span className="block size-4" />
