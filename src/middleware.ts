@@ -105,9 +105,15 @@ function operatorNotice(context: APIContext, notice: Notice) {
 // Cloudflare Web Analytics is injected at the edge on every seller host; its
 // beacon (static.cloudflareinsights.com) and its reports (cloudflareinsights.com)
 // were blocked here, one console error on every storefront page (Entry 351).
+// Google Ads remarketing: gtag.js loads googleads.g.doubleclick.net/pagead/
+// viewthroughconversion/<id>/ as a <script>, which Google's CSP guide lists only
+// under img-src/connect-src. It was refused on every store with an Ads
+// conversion id (measured 2026-11-24, a fresh buyer, two of two loads); the
+// exact host is allowed for scripts, never *.doubleclick.net. connect-src keeps
+// its *.g.doubleclick.net and img-src already takes any https image.
 export const STOREFRONT_CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://connect.facebook.net https://analytics.tiktok.com https://static.cloudflareinsights.com",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.googleadservices.com https://www.google.com https://googleads.g.doubleclick.net https://connect.facebook.net https://analytics.tiktok.com https://static.cloudflareinsights.com",
   "connect-src 'self' https://cloudflareinsights.com https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com https://*.google.com https://www.google.co.id https://*.g.doubleclick.net https://ad.doubleclick.net https://www.googleadservices.com https://pagead2.googlesyndication.com https://www.facebook.com https://connect.facebook.net https://analytics.tiktok.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",

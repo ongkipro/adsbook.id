@@ -209,3 +209,21 @@ test("CSP allows Cloudflare Web Analytics' two exact origins, script and report,
   assert.match(directive("connect-src"), / https:\/\/cloudflareinsights\.com[ "]/);
   assert.doesNotMatch(csp, /\*\.cloudflareinsights/);
 });
+
+test("CSP lets gtag load Google Ads' remarketing script from its one exact host; the admin policy gains nothing", async () => {
+  const { readFileSync } = await import("node:fs");
+  const middleware = readFileSync("src/middleware.ts", "utf8");
+  const csp = middleware.slice(middleware.indexOf("export const STOREFRONT_CSP"), middleware.indexOf('].join("; ");'));
+  const directive = (name: string) => csp.split("\n").find((line) => line.includes(`"${name} `)) ?? "";
+  const scriptSrc = directive("script-src");
+  // gtag.js injects googleads.g.doubleclick.net/pagead/viewthroughconversion/<id>/ as a script (2026-11-24).
+  assert.match(scriptSrc, / https:\/\/googleads\.g\.doubleclick\.net[ "]/);
+  assert.doesNotMatch(scriptSrc, /\*\.(g\.)?doubleclick\.net/, "one exact host for scripts, never a wildcard");
+  assert.doesNotMatch(scriptSrc, /https:\/\/(?!googleads\.g\.)[a-z.]*doubleclick\.net/, "no other doubleclick host may run scripts");
+  // The admin and platform policies carry no script or connect allowance at all.
+  const admin = /export const ADMIN_CSP = "([^"]+)"/.exec(middleware)?.[1];
+  assert.equal(admin, "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
+  const platform = middleware.slice(middleware.indexOf("function platformCsp("), middleware.indexOf("async function loadStoredEmbedAllowedOrigins"));
+  assert.doesNotMatch(platform, /doubleclick|script-src|connect-src/);
+});
+
