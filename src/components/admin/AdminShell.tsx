@@ -140,21 +140,20 @@ export function AdminShell({
       setSidebarOpen(open);
       document.cookie = `sidebar_state=${open}; path=/; max-age=604800; samesite=lax`;
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        setSearchOpen((open) => !open);
-      }
-    };
+    // Ctrl/Cmd+K is caught by AdminLayout's plain script from page load (React
+    // hydrates 40-55 ms after the island is marked ready, and a press in that
+    // gap was lost); it dispatches this event, which toggles the search.
+    const onShortcut = () => setSearchOpen((open) => !open);
     updateViewport();
     updateSidebar();
     media.addEventListener("change", updateViewport);
     wideMedia.addEventListener("change", updateSidebar);
-    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("admin:search-toggle", onShortcut);
+    window.dispatchEvent(new Event("admin:search-ready"));
     return () => {
       media.removeEventListener("change", updateViewport);
       wideMedia.removeEventListener("change", updateSidebar);
-      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("admin:search-toggle", onShortcut);
     };
   }, []);
 
