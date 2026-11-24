@@ -20,17 +20,11 @@ for (const width of [1366, 390]) {
     await page.goto(`${STORE}/admin/products`);
     await page.waitForLoadState("networkidle");
     await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
-    const actions = page.locator('button[aria-label^="Aksi produk"]:visible');
-    for (let index = 0; index < (await actions.count()); index++) {
-      await actions.nth(index).click();
-      const item = page.getByRole("menuitem", { name: "Embed checkout form" });
-      if (await item.count()) {
-        await item.click();
-        break;
-      }
-      await page.keyboard.press("Escape");
-      await expect(page.getByRole("menu")).toHaveCount(0);
-    }
+    // Only active products have an Embed item; filter to them and open the first
+    // row's menu, rather than opening each row's menu in turn.
+    await page.getByRole("button", { name: /^Aktif/ }).click();
+    await page.locator('button[aria-label^="Aksi produk"]:visible').first().click();
+    await page.getByRole("menuitem", { name: "Embed checkout form" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByLabel("Snippet widget")).not.toHaveValue("", { timeout: 15_000 });
     await page.waitForTimeout(400);
