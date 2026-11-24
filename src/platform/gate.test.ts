@@ -17,7 +17,8 @@ import {
 } from "./control-plane.ts";
 import { gateRequest, type GateResult } from "./gate.ts";
 import { isValidationPath, normalizeHost, platformHosts } from "./host.ts";
-import { buildRequestLog, routeLabel, writeRequestLog } from "./request-log.ts";
+import { buildRequestLog, requestId, routeLabel, writeRequestLog } from "./request-log.ts";
+import { readStoreIdentity } from "../lib/tenant.ts";
 import { statePage } from "./state-pages.ts";
 import { createSqliteD1, type SqliteD1 } from "./testing/sqlite-d1.ts";
 
@@ -363,6 +364,34 @@ test("OBS-1: the request log carries the route pattern, never a path token or a 
   assert.deepEqual(parsed.map((line) => line.route), ["/api/webhooks/[provider]/[token]", "/produk/[slug]", "gate", "unmatched"]);
   assert.deepEqual(Object.keys(parsed[0]).sort(), ["duration_ms", "event", "host_kind", "method", "request_id", "route", "status", "tenant_id"]);
   assert.doesNotMatch(lines.join("\n"), /6281234567890|secret-token/);
+});
+
+test("OBS-1: a store read error carries the request id, tenant, host and a fixed code, never the thrown text, URL or cookie", async (t) => {
+  const request = new Request("https://toko.adsbook.my.id/admin?phone=6281234567890", {
+    headers: { cookie: "__Host-adsbook_session=secret-token" },
+  });
+  const lines: string[] = [];
+  t.mock.method(console, "error", (text: string) => lines.push(text));
+  const failingWith = (message: string) =>
+    ({ prepare: () => ({ first: async () => { throw new Error(message); } }) }) as unknown as D1Database;
+  const context = { request_id: requestId(request), tenant_id: "t-a", host: "toko.adsbook.my.id" };
+  for (const message of [
+    "Cannot perform I/O on behalf of a different request. (I/O type: RpcStub)",
+    "D1_ERROR: bound value sk_live_SYNTHETIC_SECRET_42 rejected",
+  ]) {
+    assert.equal((await readStoreIdentity(failingWith(message), context)).state, "unknown");
+  }
+  assert.equal(requestId(request), context.request_id, "the request line and the error line share one id");
+  const parsed = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+  assert.deepEqual(parsed, ["cross_request_io", "unexpected"].map((error_code) => ({
+    event: "tenant-identity-load",
+    operation: "store-identity-read",
+    request_id: context.request_id,
+    tenant_id: "t-a",
+    host: "toko.adsbook.my.id",
+    error_code,
+  })));
+  assert.doesNotMatch(lines.join("\n"), /SYNTHETIC_SECRET|secret-token|6281234567890|\/admin|D1_ERROR/);
 });
 
 test("OBS-1: invocation logs are off in wrangler.jsonc, and PLATFORM_DB has its own chain", () => {
