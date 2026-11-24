@@ -16,7 +16,7 @@ const PAGES = [
   "/admin/products", "/admin/products/new", "/admin/landing-pages", "/admin/landing-pages/new",
   "/admin/analytics", "/admin/analytics/products", "/admin/analytics/landing", "/admin/analytics/locations", "/admin/analytics/times", "/admin/analytics/utm",
   "/admin/ads", "/admin/ads/meta", "/admin/ads/google", "/admin/ads/tiktok", "/admin/ads/utm",
-  "/admin/payments", "/admin/balance", "/admin/billing", "/admin/expeditions", "/admin/couriers",
+  "/admin/payments", "/admin/balance", "/admin/billing", "/admin/expeditions",
   "/admin/settings", "/admin/settings/store", "/admin/settings/theme", "/admin/settings/theme/beranda", "/admin/settings/access",
   "/admin/settings/crm", "/admin/settings/developer", "/admin/settings/domains", "/admin/settings/plugins", "/admin/settings/warehouse",
   "/admin/settings/whatsapp", "/admin/settings/privacy", "/admin/profile", "/admin/status",
@@ -53,8 +53,20 @@ async function sweep(page: Page, pages: readonly string[]) {
   const failures: string[] = [];
   let opened = 0;
   for (const path of pages) {
+    // A listed page must open as itself: a 4xx/5xx or a redirect elsewhere is a
+    // failure, not a skip (a renamed or retired page would otherwise drop out of
+    // the sweep in silence). /admin/couriers is left out: it redirects to
+    // /admin/shipping by design, which is listed.
     const response = await page.goto(`${STORE}${path}`);
-    if (!response || response.status() >= 400 || !page.url().includes(path)) continue;
+    const landed = new URL(page.url()).pathname.replace(/\/$/, "") || "/";
+    if (!response || response.status() >= 400) {
+      failures.push(`${path}: answered ${response?.status() ?? "no response"}`);
+      continue;
+    }
+    if (landed !== path) {
+      failures.push(`${path}: redirected to ${landed}`);
+      continue;
+    }
     await page.waitForLoadState("networkidle").catch(() => undefined);
     await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")), null, { timeout: 15_000 }).catch(() => undefined);
     const count = await page.locator(TRIGGERS).count();
