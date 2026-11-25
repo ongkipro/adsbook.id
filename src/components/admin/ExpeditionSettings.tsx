@@ -254,7 +254,7 @@ export function ExpeditionSettings() {
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
         <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold tracking-tight text-slate-950">Kebijakan Wilayah Khusus Non-COD</h2>
+            <h2 className="text-base font-semibold tracking-tight text-slate-950">Kebijakan COD per provinsi</h2>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
               Pilih provinsi yang tidak boleh menggunakan COD. Kebijakan toko ini terpisah dari pembatasan provinsi milik masing-masing ekspedisi.
             </p>
@@ -272,9 +272,9 @@ export function ExpeditionSettings() {
         
         <div className="mt-5 space-y-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => handleCheckRegion(PROVINCE_REGIONS.find((r) => r.name === 'Jawa')?.codes || [])} disabled={policyPending}>Pilih Semua Jawa</Button>
-            <Button type="button" variant="outline" size="sm" onClick={handleCheckAllOutsideJava} disabled={policyPending}>Pilih Semua Luar Jawa</Button>
-            <Button type="button" variant="ghost" size="sm" onClick={handleResetProvinces} disabled={policyPending || policyCodes.length === 0}>Reset Pilihan</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => handleCheckRegion(PROVINCE_REGIONS.find((r) => r.name === 'Jawa')?.codes || [])} disabled={policyPending}>Pilih semua Jawa</Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleCheckAllOutsideJava} disabled={policyPending}>Pilih semua luar Jawa</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={handleResetProvinces} disabled={policyPending || policyCodes.length === 0}>Reset pilihan</Button>
             <span className="ml-auto text-xs font-medium text-slate-500" aria-live="polite">
               {policyCodes.length === 0 ? 'COD aktif di semua provinsi' : `${policyCodes.length} provinsi tanpa COD`}
             </span>
@@ -293,7 +293,7 @@ export function ExpeditionSettings() {
         <div className="border-b border-slate-100 p-5 md:p-6 space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold tracking-tight text-slate-950">Daftar Ekspedisi</h2>
+              <h2 className="text-base font-semibold tracking-tight text-slate-950">Daftar ekspedisi</h2>
               <p className="mt-1 text-xs leading-5 text-slate-500">Layanan nonaktif tidak muncul di checkout. COD hanya muncul jika layanan dan COD sama-sama aktif.</p>
             </div>
           </div>
@@ -311,7 +311,7 @@ export function ExpeditionSettings() {
         ) : (
           // One card per courier, one line per card: the mark and name, then
           // the two switches. Coverage shows only when it is restricted.
-          <ul className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-[repeat(auto-fill,minmax(21rem,1fr))]">
             {filteredCouriers.map((courier) => {
               const enabled = Boolean(courier.isEnabled);
               const codEnabled = Boolean(courier.isCodEnabled);
@@ -319,7 +319,7 @@ export function ExpeditionSettings() {
               const name = courierDisplayName(courier.courierCode);
               const logo = courierLogos[courier.courierCode];
               return (
-                <li key={courier.id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${enabled ? 'bg-white' : 'bg-slate-50'}`}>
+                <li key={courier.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3 py-2.5 ${enabled ? 'bg-white' : 'bg-slate-50'}`}>
                   <span className="grid h-8 w-11 shrink-0 place-items-center" aria-hidden="true">
                     {logo ? (
                       <img src={logo} alt="" className={`max-h-7 max-w-11 object-contain ${enabled ? '' : 'opacity-40 grayscale'}`} loading="lazy" />
@@ -332,7 +332,7 @@ export function ExpeditionSettings() {
                       </span>
                     )}
                   </span>
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="flex min-w-0 flex-1 basis-[calc(100%-3.75rem)] items-center gap-2 sm:basis-0">
                     <span className={`truncate font-medium ${enabled ? 'text-slate-900' : 'text-slate-400'}`}>{name}</span>
                     {restrictions > 0 && (
                       <span className="shrink-0 rounded-md bg-rose-50 px-1.5 py-0.5 text-xs font-medium text-rose-700" title={`${restrictions} provinsi tanpa COD`}>
@@ -340,7 +340,7 @@ export function ExpeditionSettings() {
                       </span>
                     )}
                   </span>
-                  <span className="flex shrink-0 items-center gap-3 text-xs text-slate-500">
+                  <span className="flex shrink-0 items-center gap-4 pl-14 text-xs text-slate-500 sm:gap-3 sm:pl-0">
                     <label className="flex items-center gap-1.5">
                       Aktif
                       <Toggle checked={enabled} disabled={Boolean(pending)} pending={pending === `${courier.id}-enabled`} label={`Layanan ${name}`} onChange={() => void toggle(courier, 'enabled')} />

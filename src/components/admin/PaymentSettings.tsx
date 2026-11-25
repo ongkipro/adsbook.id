@@ -471,8 +471,11 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
         <CardHeader className="border-b">
           <CardTitle as="h3" className="font-semibold">Channel AutoLaris</CardTitle>
           <CardDescription>Hanya channel aktif yang ditampilkan di checkout.</CardDescription>
-          <CardAction className="flex items-center gap-2">
+          <div className="col-start-1 sm:hidden">
             <Badge variant="outline">{activeChannelCount} aktif · {channels.length - activeChannelCount} tidak aktif</Badge>
+          </div>
+          <CardAction className="flex items-center gap-2">
+            <Badge variant="outline" className="hidden sm:inline-flex">{activeChannelCount} aktif · {channels.length - activeChannelCount} tidak aktif</Badge>
             <Button
               type="button"
               variant="outline"
@@ -585,8 +588,10 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           <CardHeader className="border-b">
             <CardTitle as="h3" className="font-semibold">Konfigurasi checkout AutoLaris</CardTitle>
             <CardDescription>Validasi lokal untuk API key dan pengajuan pembayaran QRIS atau Virtual Account.</CardDescription>
-            <CardAction className="flex items-center gap-2">
+            <div className="col-start-1">
               <StatusBadge ready={apiReady}>{apiReady ? "API key tersimpan" : "API key belum diatur"}</StatusBadge>
+            </div>
+            <CardAction className="flex items-center gap-2">
               <CollapsibleTrigger
                 className="inline-flex size-11 items-center justify-center rounded-lg outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Buka detail kesiapan AutoLaris"
@@ -633,8 +638,10 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           <CardHeader className="border-b">
             <CardTitle as="h3" className="font-semibold">Rekening transfer manual</CardTitle>
             <CardDescription>Rekening aktif langsung tersedia di checkout sesuai urutan, termasuk untuk provinsi non-COD dan produk digital.</CardDescription>
-            <CardAction className="flex items-center gap-2">
+            <div className="col-start-1">
               <Badge variant="outline">{manualActiveCount} aktif</Badge>
+            </div>
+            <CardAction className="flex items-center gap-2">
               <CollapsibleTrigger
                 className="inline-flex size-11 items-center justify-center rounded-lg outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Buka pengaturan rekening transfer"
