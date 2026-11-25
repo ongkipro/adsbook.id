@@ -374,3 +374,54 @@ test("X-5/X-6/X-7: shipping list & dashboard funnel include external orders, whi
   assert.equal(analytics.funnel.orders, 3);
   assert.equal(analytics.funnel.handed_over, 2);
 });
+
+test("Audit consistency: GET /api/admin/orders, /api/admin/orders/[id], and readOrderAttention agree external orders are never Mengantar dispatchable", async () => {
+  const { GET: ordersGet } = await import("../pages/api/admin/orders/index.ts");
+  const { GET: orderDetailGet } = await import("../pages/api/admin/orders/[id].ts");
+  const { readOrderAttention } = await import("./order-attention.ts");
+
+  const sqlite = migratedSqlite();
+  seedStoreAndOrders(sqlite, "mengantar-key");
+  sqlite.exec(`
+    INSERT INTO warehouses (id, store_id, name, origin_area_id, pickup_address_id, address, city, province)
+    VALUES (1, 1, 'Gudang Utama', 'ORIGIN-1', 'PICKUP-1', 'Jl. Gudang No. 1', 'Bandung', 'Jawa Barat');
+    INSERT INTO orders (id, order_number, store_id, warehouse_id, customer_name, customer_phone, address, province, city, district, destination_area_id, total_amount, payment_method, payment_status, shipping_status, courier_code, shipping_channel, provider_dispatch_error, receiver_performance_checked_at, created_at)
+    VALUES
+      (1, 'INV-10001', 1, 1, 'Budi', '6281234567890', 'Jl. Merdeka No. 10', 'Jawa Barat', 'Bandung', 'Coblong', 'AREA-1', 100000, 'cod', 'unpaid', 'pending', 'JNE', 'mengantar', NULL, '2026-11-20T03:00:00.000Z', '2026-11-20T03:00:00.000Z'),
+      (2, 'INV-10002', 1, 1, 'Siti', '6281234567891', 'Jl. Merdeka No. 11', 'Jawa Barat', 'Bandung', 'Coblong', 'AREA-1', 150000, 'cod', 'unpaid', 'pending', 'SiCepat', 'external', 'Previous Mengantar refusal', '2026-11-20T04:00:00.000Z', '2026-11-20T04:00:00.000Z');
+  `);
+  const db = d1(sqlite);
+
+  const listResp = await ordersGet({
+    url: new URL("https://toko.test/api/admin/orders"),
+    request: new Request("https://toko.test/api/admin/orders", { headers: { "X-Order-List-Prefetch": "1" } }),
+    locals: { tenantDb: db, runtimeEnv: {} },
+  } as unknown as Parameters<typeof ordersGet>[0]);
+  assert.equal(listResp.status, 200);
+  const listBody = (await listResp.json()) as {
+    data: Array<{ id: number; shipping_channel: string; dispatch_eligible: boolean; dispatch_reason: string }>;
+  };
+  const byId = new Map(listBody.data.map((row) => [row.id, row]));
+  assert.equal(byId.get(1)?.shipping_channel, "mengantar");
+  assert.equal(byId.get(1)?.dispatch_eligible, true);
+  assert.equal(byId.get(2)?.shipping_channel, "external");
+  assert.equal(byId.get(2)?.dispatch_eligible, false);
+  assert.match(byId.get(2)?.dispatch_reason ?? "", /luar Mengantar/);
+
+  const detailResp = await orderDetailGet({
+    params: { id: "2" },
+    url: new URL("https://toko.test/api/admin/orders/2"),
+    locals: { tenantDb: db, runtimeEnv: {} },
+  } as unknown as Parameters<typeof orderDetailGet>[0]);
+  assert.equal(detailResp.status, 200);
+  const detailBody = (await detailResp.json()) as { data: { dispatchEligible: boolean; dispatchReason: string } };
+  assert.equal(detailBody.data.dispatchEligible, false);
+  assert.match(detailBody.data.dispatchReason, /luar Mengantar/);
+
+  const attention = await readOrderAttention(db, { now: Date.parse("2026-11-20T05:00:00.000Z") });
+  const readyPush = attention.items.find((item) => item.key === "ready_push")?.count ?? -1;
+  const pushProblem = attention.items.find((item) => item.key === "push_problem")?.count ?? -1;
+  assert.equal(readyPush, listBody.data.filter((row) => row.dispatch_eligible).length);
+  assert.equal(readyPush, 1);
+  assert.equal(pushProblem, 0, "external order should not appear in Mengantar push_problem");
+});
