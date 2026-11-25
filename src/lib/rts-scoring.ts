@@ -187,6 +187,7 @@ export function scheduleReceiverPerformanceRefresh(
   customerPhone: string,
   locals?: App.Locals,
 ): void {
+  if (locals?.tenantContext?.isDemo) return;
   const task = refreshOrderReceiverPerformance(database, orderNumber, customerPhone, locals)
     .catch((error) => console.error('Background receiver performance error:', error));
 

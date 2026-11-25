@@ -37,6 +37,7 @@ export type DashboardRankings = { products: DashboardRankingRow[]; pages: Dashbo
 export type DashboardAnalyticsData = {
   total_revenue: number;
   collected_revenue: number;
+  delivered_cod_revenue?: number;
   cod_revenue: number;
   prepaid_revenue: number;
   total_orders: number;
@@ -97,6 +98,7 @@ type AnalyticsRow = {
   total_orders: number | string | null;
   total_revenue: number | string | null;
   collected_revenue: number | string | null;
+  delivered_cod_revenue: number | string | null;
   live_orders: number | string | null;
   online_orders: number | string | null;
   delivered_orders: number | string | null;
@@ -238,6 +240,13 @@ function summarySelectSql(whereClause: string) {
           - COALESCE(cod_service_fee, 0)
           - COALESCE(cod_service_fee_vat, 0)
         ELSE 0 END), 0) AS collected_revenue,
+      COALESCE(SUM(CASE
+        WHEN payment_method = 'cod' AND shipping_status = 'delivered'
+        THEN total_amount
+          - COALESCE(shipping_cost, 0)
+          - COALESCE(cod_service_fee, 0)
+          - COALESCE(cod_service_fee_vat, 0)
+        ELSE 0 END), 0) AS delivered_cod_revenue,
       COALESCE(SUM(CASE WHEN ${RELEASED_ORDER} THEN 0 ELSE 1 END), 0) AS live_orders,
       COALESCE(SUM(CASE WHEN payment_method <> 'cod' THEN 1 ELSE 0 END), 0) AS online_orders,
       COALESCE(SUM(CASE WHEN shipping_status = 'delivered' THEN 1 ELSE 0 END), 0) AS delivered_orders,
@@ -371,6 +380,7 @@ export async function readDashboardAnalytics(
   const totalOrders = Number(row?.total_orders ?? 0);
   const totalRevenue = Number(row?.total_revenue ?? 0);
   const collectedRevenue = Number(row?.collected_revenue ?? 0);
+  const deliveredCodRevenue = Number(row?.delivered_cod_revenue ?? 0);
   const liveOrders = Number(row?.live_orders ?? 0);
   const onlineOrders = Number(row?.online_orders ?? 0);
   const deliveredOrders = Number(row?.delivered_orders ?? 0);
@@ -417,6 +427,7 @@ export async function readDashboardAnalytics(
   const result: DashboardAnalyticsData = {
     total_revenue: totalRevenue,
     collected_revenue: collectedRevenue,
+    delivered_cod_revenue: deliveredCodRevenue,
     total_orders: totalOrders,
     live_orders: liveOrders,
     online_orders: onlineOrders,

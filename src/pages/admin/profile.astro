@@ -14,7 +14,6 @@ export const prerender = false;
 type InitialCredential = {
   configured: boolean;
   api_key_masked: string;
-  base_url: string;
   source: 'dashboard' | 'none';
 };
 
@@ -640,7 +639,7 @@ const pageDescription = mustChangePassword
   </div>
 
   <script>
-    type Credential = { configured: boolean; api_key_masked: string; base_url: string; source: 'dashboard' | 'none' };
+    type Credential = { configured: boolean; api_key_masked: string; source: 'dashboard' | 'none' };
     type Credentials = {
       mengantar: Credential & {
         webhook_issued_at: string | null;

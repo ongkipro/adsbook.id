@@ -15,7 +15,15 @@
 const DEMO_UNSAFE_ALLOWED = new Set(["/hello", "/api/admin/logout", "/api/handoff"]);
 
 /** Read-only routes that would reach a provider (PR-26's list, GET side). */
-const DEMO_PROVIDER_READS = ["/api/locations", "/api/shipping-rates", "/api/shipping-options", "/api/payment-methods", "/api/v1/geo"];
+const DEMO_PROVIDER_READS = [
+  "/api/locations",
+  "/api/shipping-rates",
+  "/api/shipping-options",
+  "/api/payment-methods",
+  "/api/v1/geo",
+  "/api/admin/check",
+  "/api/admin/ongkir",
+];
 
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 

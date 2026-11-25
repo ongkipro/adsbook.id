@@ -20,7 +20,7 @@ const parts = DOCS_PARTS.map((name, part) => ({ name, items: numbered.filter((it
 <AdminLayout title={`${chapter.title} · Docs`} activeMenu="docs">
   <div class="grid grid-cols-1 gap-6 xl:grid-cols-[15rem_minmax(0,1fr)] xl:gap-10">
     <!-- Table of contents: a sticky column on wide screens, a fold on narrow ones. -->
-    <aside class="xl:sticky xl:top-0 xl:self-start">
+    <aside class="xl:sticky xl:top-0 xl:self-start xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
       <details class="group rounded-xl border border-slate-200 bg-white xl:hidden">
         <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium text-slate-900 [&::-webkit-details-marker]:hidden">
           <BookOpen className="size-4 text-slate-500" aria-hidden="true" />

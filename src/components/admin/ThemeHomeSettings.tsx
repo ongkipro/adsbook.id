@@ -234,7 +234,7 @@ export function ThemeHomeSettings() {
       </div>
 
       <aside className="hidden xl:block" aria-label="Pratinjau beranda">
-        <div className="sticky top-20 flex flex-col gap-2">
+        <div className="sticky top-0 flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <p className="flex items-center gap-1.5 text-sm font-medium"><Eye className="size-4 text-muted-foreground" aria-hidden="true" />Pratinjau</p>
             <span className="text-xs text-muted-foreground">{dirty ? "Belum disimpan" : "Sama dengan toko"}</span>

@@ -135,7 +135,7 @@ export function UtmLinkBuilder({ pages }: { pages: UtmLinkPage[] }) {
       </div>
     </section>
 
-    <section className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-4 md:p-5 lg:sticky lg:top-20" aria-live="polite">
+    <section className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-4 md:p-5 lg:sticky lg:top-0 lg:self-start" aria-live="polite">
       <h2 className="text-base font-semibold">Link siap pakai</h2>
       {result.ok ? <>
         <p className="break-all rounded-md bg-muted px-3 py-2.5 font-mono text-sm leading-relaxed">{result.url}</p>

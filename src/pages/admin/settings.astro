@@ -20,9 +20,12 @@ const outline = buttonVariants({ variant: 'outline' });
     description="Status integrasi toko dan semua halaman pengaturan."
   >
     <Card>
-      <CardHeader className="border-b">
-        <CardTitle as="h3" className="font-semibold">Integrasi</CardTitle>
-        <CardDescription>Kunci API tersimpan di database toko dan tidak pernah ditampilkan utuh.</CardDescription>
+      <CardHeader className="flex flex-col gap-2 border-b sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle as="h3" className="font-semibold">Integrasi</CardTitle>
+          <CardDescription>Kunci API dan webhook tersimpan terenkripsi di database toko, tidak pernah ditampilkan utuh.</CardDescription>
+        </div>
+        <a href="/admin/profile#integrasi-mengantar" class:list={[outline, "w-fit shrink-0"]}>Atur di Profil</a>
       </CardHeader>
       <CardContent className="px-0">
         <p id="settingsLoading" class="sr-only" role="status" aria-busy="true">Memuat status integrasi…</p>
@@ -32,8 +35,8 @@ const outline = buttonVariants({ variant: 'outline' });
             <span class="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true"><Truck className="size-4" /></span>
             <div class="min-w-0 flex-1 basis-[calc(100%-3rem)] space-y-0.5 sm:basis-auto">
               <p class="flex items-center gap-2 font-medium text-foreground">Mengantar <span id="mengantarBadge" class="rounded-md border px-1.5 py-0.5 text-xs font-medium">Memuat</span></p>
-              <p class="text-sm text-muted-foreground">Ongkir, COD, resi, pickup, dan tracking.</p>
-              <p class="font-mono text-xs text-muted-foreground">Key <span id="mengantarKey">••••</span></p>
+              <p class="text-sm text-muted-foreground">Ongkir, COD, resi, pickup, dan tracking otomatis.</p>
+              <p class="font-mono text-xs text-muted-foreground">Key <span id="mengantarKey">••••</span> · <span id="mengantarWebhookNote" class="font-sans">Memuat…</span></p>
               <p id="mengantarStatus" class="text-xs empty:hidden" role="status" aria-live="polite"></p>
             </div>
             <button id="testMengantar" type="button" class:list={[outline, "w-full sm:w-auto"]}>Tes koneksi</button>
@@ -85,6 +88,15 @@ const outline = buttonVariants({ variant: 'outline' });
         const autolarisConfigured = Boolean(data.autolaris.api_key_configured);
         badge('autolarisBadge', autolarisConfigured, autolarisConfigured ? 'Tersimpan' : 'Belum diatur');
         text('mengantarKey', data.mengantar.api_key_masked || 'belum diatur');
+        const webhookActive = Boolean(data.mengantar.webhook_secret_configured && data.mengantar.webhook_issued_at);
+        text(
+          'mengantarWebhookNote',
+          webhookActive
+            ? (data.mengantar.webhook_stale_warning ? 'Webhook hening >48j (per jam aktif)' : 'Webhook + sinkron per jam aktif')
+            : data.mengantar.configured
+              ? 'Sinkron otomatis per jam aktif'
+              : 'Webhook belum dipasang',
+        );
         text('autolarisKey', data.autolaris.api_key_masked || 'belum diatur');
         loading?.setAttribute('aria-busy', 'false');
         loading?.classList.add('hidden');

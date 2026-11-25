@@ -751,7 +751,7 @@ function EditCustomerDialog({
           </div>
 
           </div>
-          <aside className="space-y-3 md:sticky md:top-0 md:self-start">
+          <aside className="space-y-3 md:sticky md:top-0 md:self-start md:max-h-[calc(100dvh-7rem)] md:overflow-y-auto">
           {/* Ringkasan Real-Time Total Order (Preview) */}
           {(() => {
             const itemTotal =

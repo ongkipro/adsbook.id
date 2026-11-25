@@ -941,7 +941,7 @@ export function ProductForm({
           </div>
         </section>
       </div>
-      <aside className="xl:sticky xl:top-6 xl:self-start">
+      <aside className="xl:sticky xl:top-0 xl:self-start xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {imageUrl && (
             <div className="flex aspect-[16/9] items-center justify-center border-b border-slate-100 bg-slate-50 p-4">

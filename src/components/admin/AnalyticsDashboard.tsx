@@ -243,6 +243,7 @@ export function AnalyticsDashboard({
         setData({
           total_revenue: num(source.total_revenue),
           collected_revenue: num(source.collected_revenue),
+          delivered_cod_revenue: num(source.delivered_cod_revenue),
           cod_revenue: num(source.cod_revenue),
           prepaid_revenue: num(source.prepaid_revenue),
           total_orders: num(source.total_orders),
@@ -373,17 +374,18 @@ export function AnalyticsDashboard({
 
   const prev = data.previous;
   const compareCaption = prev
-    ? `vs ${prev.start_date === prev.end_date ? dmy(prev.start_date) : `${dmy(prev.start_date)}–${dmy(prev.end_date)}`}${prev.partial ? " (sampai jam yang sama)" : ""} · WIB`
+    ? `vs ${prev.start_date === prev.end_date ? dmy(prev.start_date) : `${dmy(prev.start_date)}–${dmy(prev.end_date)}`}${prev.partial ? " (sampai jam yang sama)" : ""} · tanggal masuk pertama · WIB`
     : data.period.start_date
-      ? "Zona waktu WIB"
+      ? "Zona waktu WIB · tanggal masuk pertama"
       : "";
 
+  const deliveredCodRevenue = num(data.delivered_cod_revenue);
   const metrics = [
     {
       label: "Revenue",
       value: currency(data.total_revenue),
       note: `COD ${compactRupiah(data.cod_revenue)} · Non-COD ${compactRupiah(data.prepaid_revenue)}`,
-      title: `Nilai ${data.live_orders} order aktif. Sudah dibayar ${currency(data.collected_revenue)}; uang COD masuk setelah paket diterima.`,
+      title: `Nilai ${data.live_orders} order aktif. Pembayaran online lunas ${currency(data.collected_revenue)} · COD terkirim ${currency(deliveredCodRevenue)} (nilai produk di luar ongkir & biaya COD; pencairan aktual mengikuti rekening/wallet kurir).`,
       delta: <Delta current={data.total_revenue} previous={prev?.total_revenue} kind="percent" />,
       tone: "text-emerald-700",
     },
@@ -391,7 +393,7 @@ export function AnalyticsDashboard({
       label: "Orders",
       value: data.live_orders.toLocaleString("id-ID"),
       note: data.total_orders === data.live_orders ? "Order aktif" : `${data.total_orders - data.live_orders} batal/gagal/retur`,
-      title: `${data.total_orders} order masuk pada periode ini.`,
+      title: `${data.total_orders} order masuk pada periode ini (dikelompokkan menurut tanggal masuk pertama / dibuat, WIB).`,
       delta: <Delta current={data.live_orders} previous={prev?.live_orders} kind="percent" />,
       tone: "text-slate-950",
     },
@@ -407,7 +409,7 @@ export function AnalyticsDashboard({
       label: "Lead conversion",
       value: data.lead_base > 0 ? percentage(data.lead_conversion_rate) : "–",
       note: `Dari ${data.lead_base} lead + order · lead maks. 14 hari`,
-      title: "Order dibagi (lead belum checkout + order) pada periode ini. Lead tertinggal dihapus otomatis setelah 14 hari, sehingga periode lebih panjang dapat membuat rasio tampak lebih tinggi.",
+      title: "Order dibagi (lead belum checkout + order) menurut tanggal masuk pertama agar cocok dengan atribusi iklan. Lead tertinggal dihapus otomatis setelah 14 hari, sehingga periode lebih panjang dapat membuat rasio tampak lebih tinggi.",
       delta: <Delta current={data.lead_conversion_rate} previous={prev && prev.lead_base > 0 && data.lead_base > 0 ? prev.lead_conversion_rate : undefined} kind="points" />,
       tone: "text-slate-950",
     },

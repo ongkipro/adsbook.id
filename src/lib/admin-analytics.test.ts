@@ -129,9 +129,10 @@ test("omset excludes cancelled and failed orders, and collected revenue counts p
   `);
   [
     [1, 100_000, "cod", "unpaid", "pending", "2026-08-17T18:00:00.000Z"],          // live, unpaid COD
-    [2, 200_000, "qris", "paid", "pending", "2026-08-17T19:00:00.000Z"],           // live, paid
+    [2, 200_000, "qris", "paid", "pending", "2026-08-17T19:00:00.000Z"],           // live, paid online
     [3, 300_000, "bank_transfer", "failed", "pending", "2026-08-17T20:00:00.000Z"], // failed payment
     [4, 400_000, "cod", "unpaid", "cancelled", "2026-08-17T21:00:00.000Z"],        // cancelled
+    [5, 150_000, "cod", "unpaid", "delivered", "2026-08-17T22:00:00.000Z"],        // live, delivered COD
   ].forEach((row) => insert.run(...row));
 
   const response = await GET({
@@ -140,12 +141,14 @@ test("omset excludes cancelled and failed orders, and collected revenue counts p
   } as never);
   const data = ((await response.json()) as any).data;
 
-  // Before: 1.000.000 — every order, including the one that was cancelled and
-  // the one whose payment failed, reported as "Pendapatan".
-  assert.equal(data.total_revenue, 300_000);
+  // Before: every order, including cancelled and failed, reported as "Pendapatan".
+  // AN-1: collected_revenue stays paid online only, while delivered_cod_revenue
+  // surfaces delivered COD separately without conflating delivery with remittance.
+  assert.equal(data.total_revenue, 450_000);
   assert.equal(data.collected_revenue, 200_000);
-  assert.equal(data.total_orders, 4);
-  assert.equal(data.live_orders, 2);
+  assert.equal(data.delivered_cod_revenue, 150_000);
+  assert.equal(data.total_orders, 5);
+  assert.equal(data.live_orders, 3);
 });
 
 test("payment success is measured over online orders only — COD cannot prepay", async () => {

@@ -45,8 +45,8 @@ function normalizeHistory(history: readonly MengantarTrackingHistory[] | undefin
     .map((item) => ({
       date: String(item.date || item.created_at || '').trim(),
       time: String(item.time || '').trim(),
-      status: String(item.status || '').trim(),
-      desc: String(item.desc || item.description || item.status || '').trim(),
+      status: String(item.status || (item as { code?: string }).code || '').trim(),
+      desc: String(item.desc || item.description || item.status || (item as { code?: string }).code || '').trim(),
       location: String(item.location || '').trim(),
     }))
     .filter((item) => Boolean(item.desc || item.status));
@@ -104,7 +104,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
       trackingPayload = {
         cnoteNo: String(rawTracking.cnote_no || resolvedCnote),
         providerOrderId: rawTracking.ORDER_ID ? String(rawTracking.ORDER_ID) : null,
-        courier: localOrder?.courier_code || null,
+        courier: localOrder?.courier_code || (rawTracking.courier ? String(rawTracking.courier) : null),
         shippingStatus: status,
         statusLabel: STATUS_LABELS[status] || status,
         latestEvent: mapped.description || history[0]?.desc || null,
