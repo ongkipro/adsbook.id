@@ -56,8 +56,12 @@ const { slides } = Astro.props;
               draggable={false}
             />
             {(slide.badge || slide.text || slide.summary) && <div class="hero-caption">
-              {slide.badge && <p class="text-xs font-medium text-white/80">{slide.badge}</p>}
-              <p class="mt-0.5 line-clamp-2 text-[17px] font-semibold leading-snug text-white">{slide.text}</p>
+              {slide.badge && (
+                <p class="inline-block rounded-full bg-black/40 px-2.5 py-0.5 text-xs font-medium text-white/95 backdrop-blur-xs">
+                  {slide.badge}
+                </p>
+              )}
+              <p class="mt-1.5 line-clamp-2 text-xl font-bold leading-snug tracking-[-0.015em] text-white">{slide.text}</p>
               {slide.summary && <p class="mt-1 line-clamp-2 text-[13px] leading-[18px] text-white/85">{slide.summary}</p>}
             </div>}
           </>
@@ -100,17 +104,19 @@ const { slides } = Astro.props;
     display: none;
   }
   /* The caption sits on the photo's lower edge over a scrim dark enough for
-     white text on any image (4.5:1 against the scrim's darkest stop). */
+     white text on any image (4.5:1 against the scrim's darkest stop). Extra
+     bottom padding keeps the summary clear of the pager dots below. */
   .hero-caption {
     position: absolute;
     inset: auto 0 0 0;
-    padding: 3.5rem 1rem 1.75rem;
-    background: linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0.5) 55%, transparent);
+    padding: 4.5rem 1rem 2.75rem;
+    background: linear-gradient(to top, rgb(0 0 0 / 0.82), rgb(0 0 0 / 0.48) 58%, transparent);
   }
   .hero-dots {
     position: absolute;
-    right: 0.75rem;
+    left: 50%;
     bottom: 0.25rem;
+    transform: translateX(-50%);
     display: flex;
   }
 </style>

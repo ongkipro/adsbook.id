@@ -50,10 +50,10 @@ const INITIAL_COUNT = 10;
                       height="56"
                       loading={index < 6 ? 'eager' : 'lazy'}
                       decoding="async"
-                      class="size-14 shrink-0 border border-sf-line bg-sf-surface object-cover"
+                      class="size-14 shrink-0 rounded-sf border border-sf-line bg-sf-surface object-cover"
                     />
                   ) : (
-                    <span aria-hidden="true" class="size-14 shrink-0 border border-sf-line bg-sf-surface" />
+                    <span aria-hidden="true" class="size-14 shrink-0 rounded-sf border border-sf-line bg-sf-surface" />
                   )}
                   <span class="min-w-0 flex-1">
                     <span class="block truncate text-sm font-semibold text-sf-ink">
@@ -85,16 +85,16 @@ const INITIAL_COUNT = 10;
 
           {pages.length > INITIAL_COUNT && (
             <div class="mt-8 flex flex-col items-center gap-3" id="load-more-container">
-              <p class="text-[11px] font-normal text-sf-text">
+              <p class="text-xs font-normal text-sf-text">
                 Menampilkan <span id="visible-count" class="font-semibold text-sf-ink">{Math.min(INITIAL_COUNT, pages.length)}</span> dari{' '}
                 <span id="total-count" class="font-semibold text-sf-ink">{pages.length}</span> halaman
               </p>
               <button
                 id="load-more-btn"
                 type="button"
-                class="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-sf border border-sf-accent bg-sf-accent px-6 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-sf-accent-strong active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-accent"
+                class="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-sf border border-sf-line bg-white px-6 text-sm font-semibold text-sf-ink transition-colors hover:border-sf-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink"
               >
-                <span>Lihat Halaman Lainnya</span>
+                <span>Lihat halaman lainnya</span>
                 <Icon name="lucide:chevron-down" class="h-4 w-4" aria-hidden="true" />
               </button>
             </div>

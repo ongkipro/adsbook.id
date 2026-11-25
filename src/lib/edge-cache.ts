@@ -120,6 +120,9 @@ const STOREFRONT_WRITE_APIS = [
   "/api/admin/whatsapp-numbers",
   "/api/admin/content",
   "/api/admin/seller-bank-accounts",
+  // The trust strip lists the store's active couriers.
+  "/api/admin/rules",
+  "/api/admin/expeditions",
 ];
 
 /**

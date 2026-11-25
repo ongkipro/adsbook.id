@@ -37,7 +37,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/` | GET | public | — | `src/pages/index.astro` | `admin-session` `auth` `auth-secret` `catalog` `daily-rotation` `home-seo` `image-derivative` `public-store` `storefront-template` `storefront-theme` `tenant-content` `tenant-database` | `admin_credentials` `admin_sessions` `courier_rules` `install_secrets` `product_variants` `products` `storefront_content` `storefront_templates` `stores` | — | `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/admin-theme-api.test.ts` `lib/auth-secret.test.ts` `lib/auth.test.ts` `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/daily-rotation.test.ts` `lib/health-snapshot.test.ts` `lib/home-banner.test.ts` `lib/home-seo.test.ts` `lib/image-derivative.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/public-store.test.ts` `lib/storefront-template.test.ts` `lib/storefront-theme.test.ts` `lib/system-precision.test.ts` `lib/tenant-content.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
 | `/404` | GET | public | — | `src/pages/404.astro` | `catalog` `image-derivative` | `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/image-derivative.test.ts` `platform/two-tenants.test.ts` |
 | `/llms.txt` | GET | public | — | `src/pages/llms.txt.ts` | `catalog` `llms-txt` | `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/llms-txt.test.ts` `platform/two-tenants.test.ts` |
-| `/payment` | GET | public | — | `src/pages/payment.astro` | `format-idr` `payment-brand` `payment-display` | — | — | `lib/format-idr.test.ts` `lib/payment-brand.test.ts` `lib/payment-display.test.ts` |
+| `/payment` | GET | public | — | `src/pages/payment.astro` | `format-idr` `payment-brand` `payment-display` `public-store` | `courier_rules` `stores` | — | `lib/format-idr.test.ts` `lib/payment-brand.test.ts` `lib/payment-display.test.ts` `lib/public-store.test.ts` |
 | `/produk` | GET | public | — | `src/pages/produk/index.astro` | `catalog` | `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog.test.ts` `platform/two-tenants.test.ts` |
 | `/produk/[slug]` | GET | public | — | `src/pages/produk/[slug].astro` | `catalog` `catalog-feed` `form-mode` `geo` `image-derivative` `json-ld` `landing-pages` `public-store` `social-proof` `tenant-database` | `courier_rules` `landing_pages` `landing_sections` `orders` `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog-data.test.ts` `lib/catalog-feed.test.ts` `lib/catalog-identity.test.ts` `lib/catalog.test.ts` `lib/e2e-full-funnel.test.ts` `lib/form-mode.test.ts` `lib/geo.test.ts` `lib/image-derivative.test.ts` `lib/json-ld.test.ts` `lib/landing-pages.test.ts` `lib/public-store.test.ts` `lib/social-proof-toast.test.ts` `lib/system-precision.test.ts` `platform/two-tenants.test.ts` |
 | `/thanks` | GET | public | — | `src/pages/thanks.astro` | `brand-assets` `catalog` `payment-brand` `payment-display` `public-store` `thanks-whatsapp` | `courier_rules` `product_variants` `products` `stores` | — | `lib/catalog-core.test.ts` `lib/catalog.test.ts` `lib/payment-brand.test.ts` `lib/payment-display.test.ts` `lib/public-store.test.ts` `lib/thanks-whatsapp.test.ts` `lib/whatsapp-numbers.test.ts` `platform/two-tenants.test.ts` |
@@ -306,7 +306,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-210 modules under `src/lib` and `src/platform`; 10 that no test imports.
+208 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -326,7 +326,6 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `api` | 3 | — | — | 1 | `/api/form-config` `/api/record-abandoned-order` `/api/webhooks/autolaris/[token]` `/api/admin/abandoned-orders` `/api/admin/access` `/api/admin/analytics` `/api/admin/billing` `/api/admin/billing/[id]/check` `/api/admin/check` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/health` `/api/admin/health/check` `/api/admin/health/status` `/api/admin/insights/trend` `/api/admin/landing-pages` `/api/admin/landing-pages/[id]` `/api/admin/media` `/api/admin/notifications` `/api/admin/ongkir` `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/orders/[id]/follow-up` `/api/admin/orders/attention` `/api/admin/orders/export` `/api/admin/orders/retention` `/api/admin/payment-reconciliation` `/api/admin/plugins` `/api/admin/plugins/kelola` `/api/admin/products` `/api/admin/profile` `/api/admin/profile/two-step` `/api/admin/rules` `/api/admin/seller-bank-accounts` `/api/admin/settings` `/api/admin/settings/developer` `/api/admin/settings/privacy` `/api/admin/settings/theme` `/api/admin/shipping` `/api/admin/store-removal` `/api/admin/upload-r2` `/api/admin/warehouses` `/api/admin/whatsapp-numbers` |
 | `auth-secret` | 1 | `install_secrets` | — | 3 | `/` `/[slug]` `/api/handoff` `/hello` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/logout` |
 | `auth` | 17 | — | — | 12 | `/` `/api/handoff` `/hello` `/admin/dashboard` `/api/admin/access` `/api/admin/logout` `/api/admin/profile` `/api/admin/profile/two-step` |
-| `auto-load-more` | 2 | — | — | 1 | — |
 | `autolaris-client` | 20 | — | — | 4 | `/api/order-status` `/api/payment-methods` `/admin/payments` `/api/admin/settings` |
 | `autolaris-payment` | 23 | `autolaris_callbacks` `order_items` `orders` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `stores` `warehouses` | — | 2 | `/api/meta-event` `/api/order-status` `/api/submit-order` `/api/v1/checkout` `/api/v1/tracking/events` `/api/admin/orders/[id]` |
 | `brand-assets` | 7 | — | — | **none** | `/thanks` `/api/handoff` `/hello` `/pemulihan` `/admin/settings/store` `/platform/login` |
@@ -341,7 +340,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `click-ids` | 19 | — | — | 6 | `/api/meta-event` `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/tiktok-event` `/api/v1/checkout` `/api/v1/tracking/events` |
 | `client-image` | 3 | — | — | 1 | — |
 | `cn` | 1 | — | — | 1 | — |
-| `courier-names` | 2 | — | — | 1 | — |
+| `courier-names` | 3 | — | — | 1 | — |
 | `courier-rules` | 3 | — | — | 1 | `/api/submit-order` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` |
 | `credential-crypto` | 12 | `stores` | — | 5 | `/api/admin/ads` `/api/admin/plugins/kelola` `/api/admin/settings` |
 | `crm-template` | 11 | `seller_bank_accounts` `stores` | — | 2 | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/settings` |
@@ -426,7 +425,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `product-mutation` | 15 | `order_items` `product_variants` `products` `storefront_content` | — | 2 | `/api/admin/products` |
 | `provider-config` | 10 | `stores` | — | 2 | `/api/locations` `/api/payment-methods` `/api/submit-order` `/api/v1/checkout` `/api/admin/ongkir` `/api/admin/settings` `/api/admin/shipping` `/api/admin/warehouses` |
 | `province` | 13 | — | — | 4 | `/api/submit-middle-order` `/api/v1/checkout` `/api/admin/expeditions` |
-| `public-store` | 8 | `courier_rules` `stores` | — | 1 | `/` `/produk/[slug]` `/thanks` `/kebijakan-privasi` `/kontak` `/pengiriman` `/syarat-ketentuan` `/[slug]` |
+| `public-store` | 8 | `courier_rules` `stores` | — | 1 | `/` `/payment` `/produk/[slug]` `/thanks` `/kebijakan-privasi` `/kontak` `/pengiriman` `/syarat-ketentuan` `/[slug]` |
 | `rate-cache` | 3 | — | — | 1 | — |
 | `rate-check` | 10 | — | — | 1 | — |
 | `rate-limit` | 12 | `rate_limits` | `rate_limits` | 2 | `/hello` `/api/locations` `/api/meta-event` `/api/order-status` `/api/record-abandoned-order` `/api/shipping-rates` `/api/submit-middle-order` `/api/submit-order` `/api/tiktok-event` `/api/v1/checkout` `/api/v1/tracking/events` `/api/webhooks/autolaris/[token]` `/api/platform/login` `/api/platform/masuk` `/api/platform/owner-reset` `/api/platform/signup` |
@@ -464,7 +463,6 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `tiktok-events` | 25 | — | — | 2 | `/api/tiktok-event` `/api/admin/ads` |
 | `tiktok-outbox` | 24 | `order_items` `orders` `product_variants` `products` `stores` `tiktok_event_outbox` | — | 1 | `/api/order-status` `/api/tiktok-event` `/api/admin/ads` |
 | `traffic-source` | 3 | — | — | 1 | — |
-| `ui-variants` | 4 | — | — | 1 | — |
 | `utils` | 0 | — | — | **none** | — |
 | `utm-link` | 9 | — | — | 1 | — |
 | `validation` | 10 | — | — | 1 | `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/admin/orders/[id]` |

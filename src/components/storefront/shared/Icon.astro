@@ -43,16 +43,20 @@ const iconData = getIconData(lucide, iconName) || getIconData(lucide, 'package')
 let html = '';
 if (iconData) {
   const renderData = iconToSVG(iconData, { height: '1em', width: '1em' });
-  html = iconToHTML(replaceIDs(renderData.body), {
+  const attrs: Record<string, string> = {
     ...renderData.attributes,
     class: className,
-    style: style || undefined,
-    role: title ? 'img' : undefined,
-    'aria-hidden': title ? undefined : String(ariaHidden),
-    'aria-label': title || undefined,
     fill: 'none',
     stroke: 'currentColor',
-  } as unknown as Record<string, string>);
+  };
+  if (style) attrs.style = style;
+  if (title) {
+    attrs.role = 'img';
+    attrs['aria-label'] = title;
+  } else {
+    attrs['aria-hidden'] = String(ariaHidden);
+  }
+  html = iconToHTML(replaceIDs(renderData.body), attrs);
 }
 ---
 

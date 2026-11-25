@@ -363,7 +363,7 @@ test("Paket 1: a 2xx write to a storefront-visible admin API bumps the cache; re
   for (const path of [
     "/api/admin/products", "/api/admin/landing-pages", "/api/admin/landing-pages/12", "/api/admin/settings",
     "/api/admin/settings/privacy", "/api/admin/ads", "/api/admin/whatsapp-numbers", "/api/admin/content",
-    "/api/admin/seller-bank-accounts",
+    "/api/admin/seller-bank-accounts", "/api/admin/rules", "/api/admin/expeditions",
   ]) {
     for (const method of ["POST", "PUT", "PATCH", "DELETE"]) assert.equal(bumpsStorefrontCache(path, method, 200), true, `${method} ${path}`);
   }

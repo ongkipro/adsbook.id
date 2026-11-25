@@ -40,6 +40,10 @@ interface Props {
   };
   /** True claims from the store's checkout settings (`storefrontTrustSignals`). */
   trustSignals?: Array<{ icon: string; label: string; short: string }>;
+  /** Active payment marks enabled in admin › Pembayaran. */
+  paymentLogos?: Array<{ name: string; logo: string }>;
+  /** Active courier marks enabled in admin › Ekspedisi. */
+  courierLogos?: Array<{ name: string; logo: string }>;
   /** admin › Tema's catalogue heading; the published home content's otherwise. */
   catalogHeading?: { eyebrow: string; title: string; description: string };
   /** Admin › Tema › Atur beranda: the seller's section order and the parts each needs. Absent = the theme's own order. */
@@ -52,7 +56,7 @@ interface Props {
   };
 }
 
-const { content, products, heroSlides, sections, trustSignals = [], catalogHeading, layout } = Astro.props;
+const { content, products, heroSlides, sections, trustSignals = [], paymentLogos = [], courierLogos = [], catalogHeading, layout } = Astro.props;
 const order: readonly HomeSectionId[] = layout?.order ?? ['hero', 'trust', 'catalog'];
 ---
 
@@ -61,7 +65,7 @@ const order: readonly HomeSectionId[] = layout?.order ?? ['hero', 'trust', 'cata
     {order.map((id) => {
       if (id === 'announcement') return layout?.announcement && <AnnouncementBar text={layout.announcement.text} href={layout.announcement.href} />;
       if (id === 'hero') return sections.hero && heroSlides.length > 0 && <HeroSection slides={heroSlides} highlights={content.heroHighlights} content={content.hero} />;
-      if (id === 'trust') return trustSignals.length > 0 && <div class="px-4 pt-3"><TrustStrip signals={trustSignals} /></div>;
+      if (id === 'trust') return (trustSignals.length > 0 || paymentLogos.length > 0 || courierLogos.length > 0) && <div class="px-4 pt-4"><TrustStrip signals={trustSignals} payments={paymentLogos} couriers={courierLogos} /></div>;
       if (id === 'featured') return layout?.featured && <FeaturedProducts title={layout.featured.title} products={layout.featured.products} />;
       if (id === 'catalog') return sections.catalog && <ProductsSection products={products} heading={catalogHeading ?? content.catalog} categories={layout?.categories ?? true} />;
       if (id === 'howToOrder') return layout?.howToOrder && <HowToOrder steps={layout.howToOrder} />;
