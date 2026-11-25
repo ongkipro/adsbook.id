@@ -10,6 +10,8 @@ import { SETTINGS_GROUPS, SETTINGS_INDEX, visibleSettingsGroups } from "../compo
 import {
   ADS_RAIL_GROUPS,
   ANALYTICS_RAIL_GROUPS,
+  CHECK_RAIL_GROUPS,
+  EXPEDITIONS_RAIL_GROUPS,
   PAYMENTS_RAIL_GROUPS,
   visibleRailGroups,
 } from "../components/admin/section-rails.ts";
@@ -169,8 +171,10 @@ test("Pengaturan's rail lists only sections the role may open, and the sidebar's
   }
 });
 
-test("Analitik, Iklan & tracking, and Pembayaran rails stay aligned with navigation and role rules", () => {
+test("Section rails stay aligned with navigation and role rules, while Pesanan and Katalog keep sidebar tree submenus", () => {
   const specs = [
+    { id: "expeditions", groups: EXPEDITIONS_RAIL_GROUPS, indexHref: "/admin/expeditions" },
+    { id: "scoring", groups: CHECK_RAIL_GROUPS, indexHref: "/admin/check" },
     { id: "analytics", groups: ANALYTICS_RAIL_GROUPS, indexHref: null },
     { id: "ads", groups: ADS_RAIL_GROUPS, indexHref: "/admin/ads" },
     { id: "payments", groups: PAYMENTS_RAIL_GROUPS, indexHref: "/admin/payments" },
@@ -193,12 +197,8 @@ test("Analitik, Iklan & tracking, and Pembayaran rails stay aligned with navigat
     }
   }
 
-  // Every multi-page top-level item uses an in-page rail or header tabs, so the desktop sidebar never expands.
-  for (const role of ADMIN_ROLES) {
-    for (const item of getVisibleNavGroups(role).flatMap((group) => group.items)) {
-      if (item.children?.length) {
-        assert.equal(item.sectionRail, true, `${role}/${item.id}: multi-page workspace keeps desktop sidebar flat`);
-      }
-    }
-  }
+  // Pesanan and Katalog intentionally keep desktop tree sub-menus (Paduka, 2026-11-25).
+  const ownerItems = getVisibleNavGroups("owner").flatMap((group) => group.items);
+  assert.equal(ownerItems.find((item) => item.id === "orders")?.sectionRail, undefined);
+  assert.equal(ownerItems.find((item) => item.id === "products")?.sectionRail, undefined);
 });

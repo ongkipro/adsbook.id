@@ -1,0 +1,45 @@
+---
+import { ExpeditionSettings, type ExpeditionSettingsInitial } from '../../../components/admin/ExpeditionSettings';
+import { GET as getExpeditions } from '../../api/admin/expeditions';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import SectionRailLayout from '../../../components/admin/SectionRailLayout.astro';
+import { EXPEDITIONS_RAIL_GROUPS } from '../../../components/admin/section-rails';
+export const prerender = false;
+
+let initial: ExpeditionSettingsInitial | undefined;
+try {
+  const response = await getExpeditions({
+    locals: Astro.locals,
+    url: Astro.url,
+    request: Astro.request,
+  } as Parameters<typeof getExpeditions>[0]);
+  const payload = (await response.json().catch(() => ({}))) as {
+    success?: boolean;
+    data?: ExpeditionSettingsInitial;
+  };
+  if (response.ok && payload.success && payload.data && Array.isArray(payload.data.couriers)) {
+    initial = {
+      couriers: payload.data.couriers,
+      codDisabledProvinceCodes: Array.isArray(payload.data.codDisabledProvinceCodes)
+        ? payload.data.codDisabledProvinceCodes
+        : [],
+      originWarehouse: payload.data.originWarehouse ?? null,
+    };
+  }
+} catch (error) {
+  console.error('admin-expeditions-cod-initial-load', error instanceof Error ? error.message : 'unknown');
+}
+---
+
+<AdminLayout title="Kebijakan COD provinsi" activeMenu="expeditions">
+  <SectionRailLayout
+    title="Kebijakan COD provinsi"
+    description="Tentukan provinsi yang tidak diperbolehkan memakai COD agar pembeli diarahkan ke pembayaran online."
+    groups={EXPEDITIONS_RAIL_GROUPS}
+    railLabel="Menu ekspedisi"
+    railId="expeditions"
+    maxWidth="4xl"
+  >
+    <ExpeditionSettings client:load initial={initial} view="cod-policy" />
+  </SectionRailLayout>
+</AdminLayout>

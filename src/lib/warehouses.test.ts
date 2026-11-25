@@ -296,7 +296,7 @@ test("screens that show one warehouse show the primary, not the lowest id", () =
   // on these screens while quotes shipped from the primary.
   const screens = [
     "../pages/api/admin/expeditions.ts",
-    "../pages/admin/check.astro",
+    "../pages/admin/check/ongkir.astro",
     "../pages/api/admin/abandoned-orders.ts",
     "../pages/api/admin/settings.ts",
   ];

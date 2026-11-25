@@ -1,0 +1,44 @@
+---
+import { tenantDatabase } from '../../../lib/tenant-database.ts';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import SectionRailLayout from '../../../components/admin/SectionRailLayout.astro';
+import { CHECK_RAIL_GROUPS } from '../../../components/admin/section-rails';
+import RateCheckTools from '../../../components/admin/RateCheckTools';
+
+export const prerender = false;
+
+const database = tenantDatabase(Astro.locals);
+let warehouse: { name: string | null; origin_area_id: string | null; origin_label: string | null } | null = null;
+try {
+  warehouse = (await database
+    ?.prepare('SELECT name, origin_area_id, origin_label FROM warehouses ORDER BY is_primary DESC, id LIMIT 1')
+    .first()) ?? null;
+} catch (error) {
+  console.error('admin-check-warehouse', error);
+}
+const originParts = (warehouse?.origin_label || '').split(',').map((part) => part.trim()).filter(Boolean);
+const defaultOrigin = warehouse?.origin_area_id
+  ? {
+      id: warehouse.origin_area_id,
+      label: originParts.slice(0, 2).join(', ') || warehouse.origin_area_id,
+      detail: originParts.slice(2).join(', ') || undefined,
+    }
+  : null;
+---
+<AdminLayout title="Cek ongkir" activeMenu="scoring">
+  <SectionRailLayout
+    title="Cek ongkir"
+    description="Bandingkan tarif reguler, estimasi pengiriman, dan ketersediaan COD lintas kurir dari gudang utama."
+    groups={CHECK_RAIL_GROUPS}
+    railLabel="Menu pengecekan"
+    railId="check"
+    maxWidth="full"
+  >
+    <RateCheckTools
+      client:load
+      mode="ongkir"
+      defaultOrigin={defaultOrigin}
+      warehouseName={warehouse?.name || ''}
+    />
+  </SectionRailLayout>
+</AdminLayout>

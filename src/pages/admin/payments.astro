@@ -1,72 +1,25 @@
 ---
 import SectionRailLayout from '../../components/admin/SectionRailLayout.astro';
 import { PAYMENTS_RAIL_GROUPS } from '../../components/admin/section-rails';
-import PaymentSettings, { type PaymentSettingsInitial } from '../../components/admin/PaymentSettings';
-import { GET as getSettings } from '../api/admin/settings';
-import { GET as getPaymentMethods } from '../api/admin/payment-methods';
+import PaymentSettings from '../../components/admin/PaymentSettings';
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import {
-  AUTOLARIS_CHECKOUT_CHANNELS,
-  autoLarisChannelLockReason,
-} from '../../lib/autolaris-client';
-import { paymentFeeDescription } from '../../lib/payment-fee-policy';
+import { getPaymentChannelsList, loadPaymentSettingsInitial } from '../../lib/payment-settings-initial';
 
 export const prerender = false;
 
-const channelLabels: Record<(typeof AUTOLARIS_CHECKOUT_CHANNELS)[number], string> = {
-  QRIS: 'QRIS (BCA, Mandiri, GoPay, OVO, ShopeePay, Dana, LinkAja)',
-  VABCA: 'Virtual Account BCA',
-  VAMANDIRI: 'Virtual Account Mandiri',
-  VABNI: 'Virtual Account BNI',
-  VABRI: 'Virtual Account BRI',
-  VAPERMATA: 'Virtual Account Permata',
-  VABSI: 'Virtual Account BSI',
-  VACIMB: 'Virtual Account CIMB Niaga',
-  VADANAMON: 'Virtual Account Danamon',
-};
-
-const channels = AUTOLARIS_CHECKOUT_CHANNELS.map((code) => ({
-  code,
-  label: channelLabels[code],
-  feeDescription: paymentFeeDescription(code),
-  lockReason: autoLarisChannelLockReason(code) || undefined,
-}));
-// The two reads the island makes, run on the server so the switches and status
-// badges start at their real state instead of sliding on after paint.
-let initial: PaymentSettingsInitial | undefined;
-try {
-  const ctx = { url: Astro.url, request: Astro.request, locals: Astro.locals } as Parameters<typeof getSettings>[0];
-  const [settingsResponse, methodsResponse] = await Promise.all([getSettings(ctx), getPaymentMethods(ctx)]);
-  const settings = (await settingsResponse.json()) as { success?: boolean; data?: { store?: Record<string, unknown>; credentials?: { autolaris?: { api_key_configured?: boolean; api_key_masked?: string } } } };
-  const methods = (await methodsResponse.json()) as { success?: boolean; data?: Array<{ payment_method?: string; is_active?: number | boolean }> };
-  if (settingsResponse.ok && settings.success && settings.data?.store && methodsResponse.ok && methods.success) {
-    const store = settings.data.store;
-    const autolaris = settings.data.credentials?.autolaris;
-    initial = {
-      codEnabled: Boolean(store.is_cod_enabled),
-      autolarisEnabled: Boolean(store.is_autolaris_enabled),
-      apiReady: Boolean(autolaris?.api_key_configured),
-      apiMasked: autolaris?.api_key_masked || 'Belum dikonfigurasi',
-      disabledChannels: Array.isArray(store.disabled_autolaris_channels) ? (store.disabled_autolaris_channels as string[]) : [],
-      paymentFeeBearer: store.payment_fee_bearer === 'seller' ? 'seller' : 'buyer',
-      codFeeBearer: store.cod_fee_bearer === 'seller' ? 'seller' : 'buyer',
-      manualActiveCount: (Array.isArray(methods.data) ? methods.data : []).filter((m) => m.payment_method === 'manual_transfer' && Boolean(m.is_active)).length,
-    };
-  }
-} catch (error) {
-  console.error('admin-payments-initial-load', error);
-}
+const channels = getPaymentChannelsList();
+const initial = await loadPaymentSettingsInitial(Astro);
 ---
 
 <AdminLayout title="Metode pembayaran" activeMenu="payments">
   <SectionRailLayout
     title="Metode pembayaran"
-    description="Metode checkout, channel AutoLaris, biaya transaksi, dan rekening transfer."
+    description="Aktifkan metode pembayaran utama di checkout dan pantau kesiapan integrasi AutoLaris."
     groups={PAYMENTS_RAIL_GROUPS}
     railLabel="Menu pembayaran"
     railId="payments"
-    maxWidth="full"
+    maxWidth="4xl"
   >
-    <PaymentSettings client:load channels={channels} initial={initial} />
+    <PaymentSettings client:load channels={channels} initial={initial} view="methods" />
   </SectionRailLayout>
 </AdminLayout>

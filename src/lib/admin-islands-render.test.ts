@@ -416,7 +416,15 @@ test("ExpeditionSettings server-renders both loading skeleton and populated SSR 
   const clean = html.replace(/<!--.*?-->/g, "");
   assert.match(clean, /Gudang Bandung/);
   assert.match(clean, /JNE/);
-  assert.match(clean, /1 provinsi non-COD/);
+  assert.match(clean, /1 provinsi tanpa COD/);
   assert.match(clean, /id="kebijakan-cod"/);
   assert.match(clean, /id="daftar-ekspedisi"/);
+
+  const resiHtml = await renderIsland("RateCheckTools.tsx", "default", {
+    mode: "resi",
+    defaultOrigin: null,
+    warehouseName: "",
+    initialResi: "",
+  });
+  assert.match(resiHtml, /Lacak resi/);
 });

@@ -20,7 +20,13 @@ import {
   UserX,
 } from "lucide-react";
 import { SETTINGS_GROUPS, SETTINGS_INDEX } from "./settings-sections.ts";
-import { ADS_RAIL_GROUPS, ANALYTICS_RAIL_GROUPS, PAYMENTS_RAIL_GROUPS } from "./section-rails.ts";
+import {
+  ADS_RAIL_GROUPS,
+  ANALYTICS_RAIL_GROUPS,
+  CHECK_RAIL_GROUPS,
+  EXPEDITIONS_RAIL_GROUPS,
+  PAYMENTS_RAIL_GROUPS,
+} from "./section-rails.ts";
 
 /** Stable adsbook.id visual identity. Storefront tenant theming must not alter admin UI. */
 export const ADMIN_ACCENT = "#2563eb";
@@ -66,7 +72,6 @@ export const adminNavGroups: AdminNavGroup[] = [
         children: [
           { href: "/admin/orders/abandoned", label: "Pesanan tertinggal", icon: UserX },
         ],
-        sectionRail: true,
       },
       {
         id: "shipping",
@@ -86,7 +91,6 @@ export const adminNavGroups: AdminNavGroup[] = [
         children: [
           { href: "/admin/landing-pages", label: "Landing page", icon: FilePenLine },
         ],
-        sectionRail: true,
       },
     ],
   },
@@ -99,15 +103,24 @@ export const adminNavGroups: AdminNavGroup[] = [
         label: "Ekspedisi",
         description: "Kurir dan layanan aktif",
         icon: Boxes,
-        keywords: "expedition kurir service rule",
+        keywords: "expedition kurir service rule cod provinsi",
+        children: EXPEDITIONS_RAIL_GROUPS.flatMap((group) => group.items)
+          .filter((item) => item.href !== "/admin/expeditions")
+          .map(({ href, label, icon }) => ({ href, label, icon })),
+        sectionRail: true,
       },
       {
         id: "scoring",
         href: "/admin/check",
-        label: "Cek WA & Ongkir",
-        description: "Riwayat pembeli dan tarif",
+        label: "Cek WA, Ongkir & Resi",
+        shortLabel: "Cek",
+        description: "Riwayat pembeli, tarif, dan lacak resi",
         icon: ClipboardCheck,
-        keywords: "check scoring whatsapp ongkir tarif",
+        keywords: "check scoring whatsapp ongkir tarif resi tracking lacak paket awb",
+        children: CHECK_RAIL_GROUPS.flatMap((group) => group.items)
+          .filter((item) => item.href !== "/admin/check")
+          .map(({ href, label, icon }) => ({ href, label, icon })),
+        sectionRail: true,
       },
     ],
   },

@@ -1,7 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
-import AdminSubnavTabs from '../../../components/admin/AdminSubnavTabs.astro';
 import { AbandonedOrders } from '../../../components/admin/AbandonedOrders';
 
 export const prerender = false;
@@ -17,13 +16,6 @@ export const prerender = false;
         Lihat order
       </a>
     </AdminPageHeader>
-    <AdminSubnavTabs
-      label="Bagian pesanan"
-      items={[
-        { href: '/admin/orders', label: 'Semua pesanan' },
-        { href: '/admin/orders/abandoned', label: 'Pesanan tertinggal' },
-      ]}
-    />
     <AbandonedOrders initialQuery={Astro.url.search} client:load />
   </div>
 </AdminLayout>

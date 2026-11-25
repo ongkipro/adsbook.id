@@ -2,7 +2,6 @@
 import LandingPageCatalog from '../../../components/admin/LandingPageCatalog';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
-import AdminSubnavTabs from '../../../components/admin/AdminSubnavTabs.astro';
 import { listLandingPages } from '../../../lib/landing-pages';
 
 export const prerender = false;
@@ -23,13 +22,6 @@ try {
     <AdminPageHeader
       title="Landing page"
       description="Builder native landing page untuk marketing dan promosi."
-    />
-    <AdminSubnavTabs
-      label="Bagian katalog"
-      items={[
-        { href: '/admin/products', label: 'Produk & varian' },
-        { href: '/admin/landing-pages', label: 'Landing page' },
-      ]}
     />
     <LandingPageCatalog initialPages={initialPages as never} client:load />
   </div>

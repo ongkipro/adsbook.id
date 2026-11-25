@@ -121,7 +121,7 @@ test("dashboard SSR renders KPIs with low CLS, single-fetch rankings, and URL-pe
   await mobile.close();
 });
 
-test("section rails and header tabs render with SSR data, flat sidebar, and zero overflow across desktop and phone", async ({ browser }) => {
+test("section rails, split pages, resi tracking, and sidebar tree menus work across desktop and phone", async ({ browser }) => {
   const desktop = await browser.newContext({ viewport: { width: 1366, height: 860 } });
   const page = await desktop.newPage();
   const errors: string[] = [];
@@ -131,18 +131,23 @@ test("section rails and header tabs render with SSR data, flat sidebar, and zero
   });
   await signIn(page);
 
-  // Desktop sidebar is completely flat (zero expanding sub-menus).
-  const checks = [
-    { path: "/admin/analytics", rail: "analytics", ssrToken: "Periode terpilih", shot: "admin-analytics-1366.png" },
-    { path: "/admin/ads", rail: "ads", ssrToken: 'data-ssr-ready="1"', shot: "admin-ads-1366.png" },
-    { path: "/admin/payments", rail: "payments", ssrToken: "Konfigurasi checkout AutoLaris", shot: "admin-payments-1366.png" },
+  // Rail-backed workspaces keep the desktop sidebar flat (zero menu-sub).
+  const railChecks = [
+    { path: "/admin/expeditions", rail: "expeditions", ssrToken: "Daftar ekspedisi", shot: "v2-expeditions-1366.png" },
+    { path: "/admin/expeditions/cod-policy", rail: "expeditions", ssrToken: "Kebijakan COD per provinsi", shot: "v2-expeditions-cod-1366.png" },
+    { path: "/admin/check", rail: "check", ssrToken: "Riwayat penerima (RTS)", shot: "v2-check-wa-1366.png" },
+    { path: "/admin/check/ongkir", rail: "check", ssrToken: "Cek ongkir", shot: "v2-check-ongkir-1366.png" },
+    { path: "/admin/check/resi", rail: "check", ssrToken: "Lacak pengiriman", shot: "v2-check-resi-1366.png" },
+    { path: "/admin/payments", rail: "payments", ssrToken: "Konfigurasi checkout AutoLaris", shot: "v2-payments-methods-1366.png" },
+    { path: "/admin/payments/channels", rail: "payments", ssrToken: "Channel AutoLaris", shot: "v2-payments-channels-1366.png" },
+    { path: "/admin/payments/fees", rail: "payments", ssrToken: "Kebijakan biaya transaksi", shot: "v2-payments-fees-1366.png" },
+    { path: "/admin/payments/banks", rail: "payments", ssrToken: "Rekening transfer manual", shot: "v2-payments-banks-1366.png" },
     { path: "/admin/balance", rail: "payments", ssrToken: "Verifikasi pembayaran AutoLaris", shot: "" },
-    { path: "/admin/expeditions", rail: null, ssrToken: "Kebijakan COD per provinsi", shot: "admin-expeditions-1366.png" },
-    { path: "/admin/orders", rail: null, ssrToken: "Pesanan tertinggal", shot: "" },
-    { path: "/admin/products", rail: null, ssrToken: "Landing page", shot: "" },
+    { path: "/admin/analytics", rail: "analytics", ssrToken: "Periode terpilih", shot: "" },
+    { path: "/admin/ads", rail: "ads", ssrToken: 'data-ssr-ready="1"', shot: "" },
   ];
 
-  for (const item of checks) {
+  for (const item of railChecks) {
     const response = await page.goto(`${STORE}${item.path}`);
     expect(response?.status(), `${item.path} status`).toBe(200);
     const html = await response!.text();
@@ -151,14 +156,35 @@ test("section rails and header tabs render with SSR data, flat sidebar, and zero
     await page.waitForLoadState("networkidle");
 
     expect(await page.locator('[data-sidebar="menu-sub"]').count(), `${item.path}: desktop sidebar stays flat`).toBe(0);
-    if (item.rail) {
-      await expect(page.locator(`[data-section-rail="${item.rail}"]`)).toBeVisible();
-    }
+    await expect(page.locator(`[data-section-rail="${item.rail}"]`)).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, `${item.path} no overflow at 1366px`).toBeLessThanOrEqual(0);
     if (process.env.DASHBOARD_SHOT_DIR && item.shot) {
       await page.screenshot({ path: `${process.env.DASHBOARD_SHOT_DIR}/${item.shot}`, fullPage: true });
     }
+  }
+
+  // Cek resi: tracking the seeded dispatched order INV-10001 returns live Mengantar history + local order link.
+  await page.goto(`${STORE}/admin/check/resi`);
+  await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  await page.locator("#check-resi-input").fill("INV-10001");
+  await page.getByRole("button", { name: "Lacak resi" }).click();
+  await expect(page.getByText(/Pesanan INV-10001/)).toBeVisible();
+  await expect(page.getByRole("link", { name: /Buka detail order/ })).toHaveAttribute("href", "/admin/orders/INV-10001");
+  if (process.env.DASHBOARD_SHOT_DIR) {
+    await page.screenshot({ path: `${process.env.DASHBOARD_SHOT_DIR}/v2-check-resi-result-1366.png`, fullPage: true });
+  }
+
+  // Pesanan and Katalog use desktop sidebar tree sub-menus (not in-page tabs).
+  for (const tree of [
+    { path: "/admin/orders", childHref: "/admin/orders/abandoned" },
+    { path: "/admin/products", childHref: "/admin/landing-pages" },
+  ]) {
+    await page.goto(`${STORE}${tree.path}`);
+    await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+    await expect(page.locator(`[data-sidebar="menu-sub"] a[href="${tree.childHref}"]`)).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow, `${tree.path} no overflow at 1366px`).toBeLessThanOrEqual(0);
   }
 
   expect(errors, "no console or page errors on desktop panels").toEqual([]);
@@ -172,15 +198,15 @@ test("section rails and header tabs render with SSR data, flat sidebar, and zero
     if (message.type() === "error") mobileErrors.push(message.text());
   });
   await signIn(mPage);
-  for (const path of ["/admin/analytics", "/admin/ads", "/admin/payments", "/admin/expeditions", "/admin/orders", "/admin/products"]) {
+  for (const path of ["/admin/expeditions", "/admin/expeditions/cod-policy", "/admin/payments", "/admin/payments/banks", "/admin/check", "/admin/check/resi"]) {
     await mPage.goto(`${STORE}${path}`);
     await mPage.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
     await mPage.waitForLoadState("networkidle");
     const overflow = await mPage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, `${path} no overflow at 390px`).toBeLessThanOrEqual(0);
-    if (process.env.DASHBOARD_SHOT_DIR && (path === "/admin/payments" || path === "/admin/expeditions")) {
-      const slug = path.split("/").pop();
-      await mPage.screenshot({ path: `${process.env.DASHBOARD_SHOT_DIR}/admin-${slug}-390.png`, fullPage: true });
+    if (process.env.DASHBOARD_SHOT_DIR && (path === "/admin/expeditions/cod-policy" || path === "/admin/check/resi")) {
+      const slug = path.replace(/^\/admin\//, "").replace(/\//g, "-");
+      await mPage.screenshot({ path: `${process.env.DASHBOARD_SHOT_DIR}/v2-${slug}-390.png`, fullPage: true });
     }
   }
   expect(mobileErrors, "no console or page errors on mobile panels").toEqual([]);
