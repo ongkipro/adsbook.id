@@ -3,7 +3,6 @@ import { useConfirm } from "./useConfirm";
 import {
   AlertTriangle,
   Check,
-  CircleUserRound,
   Eye,
   EyeOff,
   KeyRound,
@@ -13,11 +12,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
-  Sparkles,
   Trash2,
-  UserCheck,
   UserPlus,
-  Users,
   UserCog,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -447,44 +443,21 @@ export function AccessManager() {
   return (
     <div className="space-y-6">
       {confirmDialog}
-      {/* Overview Stats Bar */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-          <div className="flex items-center gap-2 text-slate-500">
-            <Users className="size-4 text-emerald-600" />
-            <span className="text-xs font-semibold">Total Akun</span>
+      {/* Accounts per role: one quiet row, not five tinted tiles. */}
+      <dl className="grid grid-cols-2 divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs sm:grid-cols-5 sm:divide-x">
+        {([
+          ["Total akun", stats.total],
+          ["Owner", stats.owner],
+          ["Admin Ops", stats.admin],
+          ["Operator Ads", stats.advertiser],
+          ["Operator CS", stats.cs],
+        ] as const).map(([label, value], index) => (
+          <div key={label} className={`px-4 py-3 ${index === 0 ? "col-span-2 border-b border-slate-100 sm:col-span-1 sm:border-b-0" : ""}`}>
+            <dt className="text-xs font-medium text-slate-500">{label}</dt>
+            <dd className="mt-0.5 text-xl font-semibold tabular-nums text-slate-950">{value}</dd>
           </div>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{stats.total}</p>
-        </div>
-        <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-4 shadow-xs">
-          <div className="flex items-center gap-2 text-emerald-800">
-            <ShieldCheck className="size-4 text-emerald-600" />
-            <span className="text-xs font-semibold">Owner</span>
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-emerald-950">{stats.owner}</p>
-        </div>
-        <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-4 shadow-xs">
-          <div className="flex items-center gap-2 text-blue-800">
-            <CircleUserRound className="size-4 text-blue-600" />
-            <span className="text-xs font-semibold">Admin Ops</span>
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-blue-950">{stats.admin}</p>
-        </div>
-        <div className="rounded-xl border border-purple-200/80 bg-purple-50/50 p-4 shadow-xs">
-          <div className="flex items-center gap-2 text-purple-800">
-            <Sparkles className="size-4 text-purple-600" />
-            <span className="text-xs font-semibold">Operator Ads</span>
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-purple-950">{stats.advertiser}</p>
-        </div>
-        <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-4 col-span-2 sm:col-span-1 shadow-xs">
-          <div className="flex items-center gap-2 text-amber-800">
-            <UserCheck className="size-4 text-amber-600" />
-            <span className="text-xs font-semibold">Operator CS</span>
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-amber-950">{stats.cs}</p>
-        </div>
-      </section>
+        ))}
+      </dl>
 
       {/* Main Grid: User List & Add Form */}
       <div className="grid grid-cols-1 min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
@@ -494,7 +467,7 @@ export function AccessManager() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-base font-semibold text-slate-950">
-                  Daftar Pengguna Sistem
+                  Daftar pengguna
                 </CardTitle>
                 <p className="mt-0.5 text-xs text-slate-500">
                   Kelola izin staf. Pengguna hanya dapat mengakses halaman sesuai perannya.
@@ -676,8 +649,8 @@ export function AccessManager() {
         <Card className="min-w-0 rounded-xl border-slate-200 shadow-xs h-fit">
           <CardHeader className="border-b border-slate-100 pb-4">
             <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
-              <UserPlus className="size-4 text-emerald-600" />
-              Tambah Pengguna Baru
+              <UserPlus className="size-4 text-blue-600" aria-hidden="true" />
+              Tambah pengguna
             </CardTitle>
             <p className="text-xs text-slate-500">
               Buat kredensial staf baru. Pengguna wajib mengganti password sementara saat login pertama.
@@ -810,7 +783,7 @@ export function AccessManager() {
               <Button
                 type="submit"
                 disabled={saving}
-                className="w-full bg-slate-950 text-white hover:bg-slate-900"
+                className="w-full"
               >
                 {saving ? "Menyimpan…" : "Tambah Pengguna Baru"}
               </Button>
@@ -906,10 +879,10 @@ export function AccessManager() {
         <CardHeader className="border-b border-slate-100 pb-4">
           <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
             <ShieldCheck className="size-5 text-blue-600" aria-hidden="true" />
-            Matriks Hak Akses & Matrix Permission per Role
+            Hak akses per peran
           </CardTitle>
           <p className="text-xs text-slate-500">
-            Ringkasan batasan akses halaman & API operasional untuk Owner, Admin, dan Operator Spesialis.
+            Halaman dan API yang bisa dibuka tiap peran.
           </p>
         </CardHeader>
         <CardContent className="p-4">
@@ -949,7 +922,7 @@ export function AccessManager() {
                           ) : (
                             <Minus className="size-3.5" aria-hidden="true" />
                           )}
-                          {allowed ? "Akses" : "Restricted"}
+                          {allowed ? "Penuh" : "Dibatasi"}
                         </span>
                       </div>
                     );
@@ -974,7 +947,7 @@ export function AccessManager() {
                     <th
                       key={column.role}
                       scope="col"
-                      className="px-4 py-3.5 text-center"
+                      className="px-4 py-3.5 text-center whitespace-nowrap"
                     >
                       <span className="text-xs font-semibold text-slate-900">
                         {column.label}
@@ -998,7 +971,7 @@ export function AccessManager() {
                       return (
                         <td key={column.role} className="px-4 py-3.5 text-center">
                           <span
-                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                               allowed
                                 ? "bg-emerald-50 text-emerald-800 border border-emerald-200/80"
                                 : "bg-slate-100 text-slate-400"
@@ -1010,7 +983,7 @@ export function AccessManager() {
                                   className="size-3.5 text-emerald-600"
                                   aria-hidden="true"
                                 />
-                                Akses Penuh
+                                Penuh
                               </>
                             ) : (
                               <>

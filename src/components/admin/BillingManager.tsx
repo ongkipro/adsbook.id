@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, CreditCard } from "lucide-react";
-import QRCode from "qrcode";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,7 +99,12 @@ function useCountdown(until: string | null) {
 function QrImage({ payload }: { payload: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (canvas.current) void QRCode.toCanvas(canvas.current, payload, { width: 232, margin: 1 });
+    // Loaded with the first QRIS invoice, not with the page: most visits to Langganan never draw one.
+    let live = true;
+    void import("qrcode").then(({ default: QRCode }) => {
+      if (live && canvas.current) void QRCode.toCanvas(canvas.current, payload, { width: 232, margin: 1 });
+    });
+    return () => { live = false; };
   }, [payload]);
   return <canvas ref={canvas} aria-label="Kode QRIS untuk pembayaran langganan" role="img" className="mx-auto rounded-lg border border-slate-200" />;
 }
