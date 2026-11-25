@@ -554,9 +554,18 @@ export async function persistOrder(
   // never spent (ADR-023). Price, weight and identity still come from D1.
 
   const store = await database
-    .prepare("SELECT id, cod_fee_bearer, catalog_mode FROM stores ORDER BY id LIMIT 1")
-    .first<{ id: number; cod_fee_bearer: string | null; catalog_mode?: string | null }>();
+    .prepare("SELECT id, cod_fee_bearer, catalog_mode, mengantar_api_key FROM stores ORDER BY id LIMIT 1")
+    .first<{ id: number; cod_fee_bearer: string | null; catalog_mode?: string | null; mengantar_api_key?: string | null }>();
   if (!store) throw new Error("Store belum dikonfigurasi.");
+  // MENGANTAR-WEBHOOK-AUTOSYNC-SPEC §5A: stores with a Mengantar API key default
+  // to 'mengantar'; stores without one default to 'external'. Minimal unit-test
+  // mocks that omit `mengantar_api_key` keep 'mengantar'.
+  const defaultShippingChannel =
+    fulfillmentType === "digital" || store.mengantar_api_key === undefined
+      ? "mengantar"
+      : String(store.mengantar_api_key ?? "").trim()
+        ? "mengantar"
+        : "external";
   // Review findings 1-2 (§3): the catalog mode decides what is for sale, and a
   // physical order needs shipping. A digital store sells no physical product and
   // a physical store no digital one, whatever page or POST asks. A hybrid store
@@ -686,7 +695,8 @@ export async function persistOrder(
                  seller_account_number = ?,
                  checkout_fingerprint = ?,
                  checkout_dedupe_expires_at = ?,
-                 fulfillment_type = ?
+                 fulfillment_type = ?,
+                 shipping_channel = ?
              WHERE id = ?
                AND customer_phone = ?
                AND shipping_status = 'abandoned'
@@ -729,6 +739,7 @@ export async function persistOrder(
             checkoutFingerprint,
             dedupeExpiresAt,
             fulfillmentType,
+            defaultShippingChannel,
             abandonedOrder.id,
             input.customerPhone,
           )
@@ -743,10 +754,10 @@ export async function persistOrder(
               meta_request_context, source_page_path,
               seller_bank_account_id, seller_bank_code, seller_bank_name,
               seller_account_holder, seller_account_number, created_at,
-              checkout_fingerprint, checkout_dedupe_expires_at, fulfillment_type
+              checkout_fingerprint, checkout_dedupe_expires_at, fulfillment_type, shipping_channel
             ) VALUES (
               ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )`,
           )
           .bind(
@@ -787,6 +798,7 @@ export async function persistOrder(
             checkoutFingerprint,
             dedupeExpiresAt,
             fulfillmentType,
+            defaultShippingChannel,
           );
 
     const identityPredicate = abandonedOrder

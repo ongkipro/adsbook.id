@@ -1,11 +1,8 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
 import { matchesShippingQueue } from "../../../lib/shipping-queue";
-import {
-  mapMengantarStatusEvidence,
-  MengantarClient,
-  selectProviderShippingAdvance,
-} from "../../../lib/mengantar-client";
+import { MengantarClient } from "../../../lib/mengantar-client";
+import { syncSingleMengantarOrder } from "../../../lib/mengantar-shipping-sync";
 import { pickMengantarTimeId, resolveMengantarPickupSlot } from "../../../lib/mengantar-order";
 import { getMengantarDispatchEligibility } from "../../../lib/payment-dispatch-policy";
 import { getProviderConfig } from "../../../lib/provider-config";
@@ -47,6 +44,7 @@ type ShippingOrderRow = {
   courierCode: string | null;
   courierService: string | null;
   cnoteNo: string | null;
+  shippingChannel: "mengantar" | "external";
   providerOrderId: string | null;
   providerDispatchError: string | null;
   providerStatusText: string | null;
@@ -73,6 +71,7 @@ type OrderStatusCheckRow = {
   cnote_no: string | null;
   provider_order_id: string | null;
   stock_restored_at: string | null;
+  shipping_channel?: string | null;
 };
 
 type ProviderSyncOrderRow = OrderStatusCheckRow & {
@@ -130,6 +129,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
           o.courier_code AS courierCode,
           o.courier_service AS courierService,
           o.cnote_no AS cnoteNo,
+          COALESCE(o.shipping_channel, 'mengantar') AS shippingChannel,
           o.provider_order_id AS providerOrderId,
           o.provider_dispatch_error AS providerDispatchError,
           o.provider_status_text AS providerStatusText,
@@ -178,18 +178,22 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
     const shipments = ((shipmentResult.results ?? []) as ShippingOrderRow[]).map(
       (shipment) => {
-        const dispatch = getMengantarDispatchEligibility({
-          paymentMethod: shipment.paymentMethod,
-          paymentStatus: shipment.paymentStatus,
-          shippingStatus: shipment.shippingStatus,
-          providerOrderId: shipment.providerOrderId,
-          providerDispatchError: shipment.providerDispatchError,
-          destinationAreaId: shipment.destinationAreaId,
-          courierCode: shipment.courierCode,
-          pickupAddressId: shipment.pickupAddressId,
-        });
+        const channel = shipment.shippingChannel === "external" ? "external" : "mengantar";
+        const dispatch = channel === "external"
+          ? { eligible: false, reason: "Order dikirim di luar Mengantar." }
+          : getMengantarDispatchEligibility({
+              paymentMethod: shipment.paymentMethod,
+              paymentStatus: shipment.paymentStatus,
+              shippingStatus: shipment.shippingStatus,
+              providerOrderId: shipment.providerOrderId,
+              providerDispatchError: shipment.providerDispatchError,
+              destinationAreaId: shipment.destinationAreaId,
+              courierCode: shipment.courierCode,
+              pickupAddressId: shipment.pickupAddressId,
+            });
         return {
           ...shipment,
+          shippingChannel: channel,
           dispatchEligible: dispatch.eligible,
           dispatchReason: dispatch.reason,
         };
@@ -258,7 +262,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
             .prepare(
               `SELECT id, order_number, payment_method, payment_status,
                 shipping_status, courier_code, cnote_no, provider_order_id,
-                stock_restored_at
+                stock_restored_at, shipping_channel
               FROM orders
               WHERE id IN (${requestedIds.map(() => "?").join(", ")})
               ORDER BY id ASC`,
@@ -269,10 +273,11 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
             .prepare(
               `SELECT id, order_number, payment_method, payment_status,
                 shipping_status, courier_code, cnote_no, provider_order_id,
-                stock_restored_at
+                stock_restored_at, shipping_channel
               FROM orders
               WHERE provider_order_id IS NOT NULL
                 AND cnote_no IS NOT NULL
+                AND COALESCE(shipping_channel, 'mengantar') = 'mengantar'
                 AND shipping_status IN ('processing', 'shipped')
               ORDER BY id ASC
               LIMIT 50`,
@@ -307,7 +312,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
       }
 
       const needsProvider = queue.some(
-        ({ row }) => Boolean(row?.provider_order_id && row.cnote_no),
+        ({ row }) => Boolean(row?.provider_order_id && row.cnote_no && row.shipping_channel !== "external"),
       );
       let client: MengantarClient | null = null;
       if (needsProvider) {
@@ -331,108 +336,18 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
           });
           continue;
         }
-        if (!row.provider_order_id) {
-          failed += 1;
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus: row.shipping_status,
-            providerStatus: null,
-            error: "Shipment Mengantar belum dibuat.",
-          });
-          continue;
-        }
-        if (!row.cnote_no) {
-          failed += 1;
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus: row.shipping_status,
-            providerStatus: null,
-            error: "Nomor resi Mengantar belum tersedia.",
-          });
-          continue;
-        }
-
-        let providerStatus: string | null = null;
-        let localStatus = row.shipping_status;
-        try {
-          const tracking = await client!.getOrderByTrackingId(row.cnote_no);
-          const evidence = mapMengantarStatusEvidence(tracking);
-          providerStatus = evidence.description;
-          const observation = await db
-            .prepare(
-              `UPDATE orders
-              SET provider_status_text = ?, provider_status_at = ?,
-                provider_synced_at = ?
-              WHERE id = ?`,
-            )
-            .bind(
-              evidence.description,
-              evidence.occurredAt,
-              syncedAt,
-              row.id,
-            )
-            .run();
-          if (!observation.meta?.changes) {
-            throw new Error("Observasi status provider gagal disimpan.");
-          }
-          synced += 1;
-
-          const nextStatus = selectProviderShippingAdvance(
-            row.shipping_status,
-            evidence.shippingStatus,
-          );
-          if (!nextStatus) {
-            unchanged += 1;
-          } else {
-            const transition = await applyOrderLifecycleMutation(
-              db,
-              row,
-              { shippingStatus: nextStatus },
-              db
-                .prepare(
-                  `UPDATE orders
-                  SET shipping_status = ?
-                  WHERE id = ? AND shipping_status = ?`,
-                )
-                .bind(nextStatus, row.id, row.shipping_status),
-            );
-            if (transition.updated) {
-              updated += 1;
-              localStatus = nextStatus;
-            } else {
-              const current = await db
-                .prepare(
-                  "SELECT shipping_status FROM orders WHERE id = ? LIMIT 1",
-                )
-                .bind(row.id)
-                .first<{ shipping_status: string }>();
-              localStatus = current?.shipping_status || row.shipping_status;
-              unchanged += 1;
-            }
-          }
-
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus,
-            providerStatus,
-            error: null,
-          });
-        } catch (error) {
-          failed += 1;
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus,
-            providerStatus,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Gagal menyinkronkan status Mengantar.",
-          });
-        }
+        const outcome = await syncSingleMengantarOrder(db, client!, row, syncedAt);
+        if (outcome.synced) synced += 1;
+        if (outcome.updated) updated += 1;
+        if (outcome.unchanged) unchanged += 1;
+        if (outcome.error) failed += 1;
+        results.push({
+          orderId: outcome.orderId,
+          orderNumber: outcome.orderNumber,
+          localStatus: outcome.localStatus,
+          providerStatus: outcome.providerStatus,
+          error: outcome.error,
+        });
       }
 
       return jsonOk({
@@ -462,7 +377,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
         .prepare(
           `
         SELECT id, payment_method, payment_status, shipping_status, courier_code,
-          cnote_no, provider_order_id, stock_restored_at
+          cnote_no, provider_order_id, stock_restored_at, shipping_channel
         FROM orders
         WHERE id = ?
         LIMIT 1
@@ -473,7 +388,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
       if (!current) {
         return jsonError("Order tidak ditemukan.", 404);
       }
-      if (!current.provider_order_id) {
+      if (!current.provider_order_id && current.shipping_channel !== "external") {
         return jsonError(
           "Shipment Mengantar belum dibuat untuk order ini.",
           409,
@@ -578,6 +493,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       WHERE warehouse_id = ?
         AND id IN (${placeholders})
         AND shipping_status = 'processing'
+        AND provider_order_id IS NOT NULL
+        AND COALESCE(shipping_channel, 'mengantar') = 'mengantar'
         AND cnote_no IS NOT NULL
         AND pickup_schedule_id IS NULL
         AND mengantar_handover IS NOT 'drop_off'

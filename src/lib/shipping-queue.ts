@@ -15,6 +15,8 @@ type ShippingQueueRecord = {
   pickupScheduleId: number | null;
   /** 'drop_off' never needs a pickup; 'pickup' or a pre-0077 NULL may. */
   handover?: string | null;
+  /** 'external' orders never enter Mengantar waybill/pickup/drop-off queues. */
+  shippingChannel?: string | null;
 };
 
 export function matchesShippingQueue(
@@ -23,6 +25,7 @@ export function matchesShippingQueue(
 ): boolean {
   if (queue === "all") return true;
   if (queue === "delivered") return shipment.shippingStatus === "delivered";
+  if (shipment.shippingChannel === "external" && !shipment.providerOrderId) return false;
   if (queue === "needs_waybill") {
     return (
       shipment.shippingStatus === "processing" &&

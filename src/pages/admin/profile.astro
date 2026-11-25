@@ -1,4 +1,5 @@
 ---
+import { CreditCard, KeyRound, ShieldCheck, Truck } from 'lucide-react';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
 import TwoStepSettings from '../../components/admin/TwoStepSettings.astro';
@@ -6,151 +7,573 @@ import { getRuntimeEnv } from '../../lib/env.ts';
 import { getAdminCredential } from '../../lib/admin-credentials.ts';
 import { twoStepEnabled, twoStepEnrollmentOpen } from '../../lib/seller-two-step.ts';
 import { tenantDatabase } from '../../lib/tenant-database.ts';
+import { GET as getSettings } from '../api/admin/settings';
+
 export const prerender = false;
-const mustChangePassword = Astro.locals.admin?.mustChangePassword ?? false;
+
+type InitialCredential = {
+  configured: boolean;
+  api_key_masked: string;
+  base_url: string;
+  source: 'dashboard' | 'none';
+};
+
+type InitialIntegrations = {
+  mengantar: InitialCredential;
+  autolaris: InitialCredential & {
+    order_origin_id: string;
+    order_destination_id: string;
+    shipper_email: string;
+    webhook_issued_at: string | null;
+  };
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  owner: 'Owner',
+  admin: 'Admin',
+  customer_service: 'Operator CS',
+  advertiser: 'Advertiser',
+};
+
+const admin = Astro.locals.admin;
+const mustChangePassword = admin?.mustChangePassword ?? false;
 const mayManageIntegrations = !mustChangePassword && (
-  Astro.locals.admin?.role === 'owner' || Astro.locals.admin?.role === 'admin'
+  admin?.role === 'owner' || admin?.role === 'admin'
 );
-// T-57: the card shows while enrollment is open, or for a user who already has it on (so they can turn it off).
-let showTwoStep = false;
-if (!mustChangePassword) {
-  showTwoStep = twoStepEnrollmentOpen(getRuntimeEnv(Astro.locals) as Record<string, unknown>);
-  const database = tenantDatabase(Astro.locals);
-  if (!showTwoStep && database && Astro.locals.admin) {
-    const credential = await getAdminCredential(database, Astro.locals.admin.username).catch(() => null);
-    showTwoStep = credential ? await twoStepEnabled(database, credential.id).catch(() => false) : false;
-  }
+const enrollmentOpen = !mustChangePassword
+  ? twoStepEnrollmentOpen(getRuntimeEnv(Astro.locals) as Record<string, unknown>)
+  : false;
+
+const database = tenantDatabase(Astro.locals);
+
+const [credential, initialIntegrations] = await Promise.all([
+  database && admin?.username
+    ? getAdminCredential(database, admin.username).catch(() => null)
+    : Promise.resolve(null),
+  mayManageIntegrations
+    ? (async (): Promise<InitialIntegrations | null> => {
+        try {
+          const response = await getSettings({
+            url: Astro.url,
+            request: Astro.request,
+            locals: Astro.locals,
+          } as Parameters<typeof getSettings>[0]);
+          const payload = (await response.json().catch(() => ({}))) as {
+            success?: boolean;
+            data?: { credentials?: InitialIntegrations };
+          };
+          if (response.ok && payload.success && payload.data?.credentials) {
+            return payload.data.credentials;
+          }
+        } catch (error) {
+          console.error('admin-profile-ssr-settings', error instanceof Error ? error.message : 'unknown');
+        }
+        return null;
+      })()
+    : Promise.resolve(null),
+]);
+
+let twoStepIsEnabled = false;
+if (!mustChangePassword && database && credential) {
+  twoStepIsEnabled = await twoStepEnabled(database, credential.id).catch(() => false);
 }
+// T-57: the card shows while enrollment is open, or for a user who already has it on (so they can turn it off).
+const showTwoStep = !mustChangePassword && (enrollmentOpen || twoStepIsEnabled);
+
+const profileReady = Boolean(credential);
+const initialUsername = credential?.username ?? admin?.username ?? '';
+const displayName = credential?.displayName || initialUsername || 'Admin';
+const roleLabel = ROLE_LABELS[credential?.role ?? admin?.role ?? ''] ?? 'Operator';
+const avatarInitial = displayName.trim().slice(0, 1).toUpperCase() || 'A';
+
+const mengantar = initialIntegrations?.mengantar ?? null;
+const autolaris = initialIntegrations?.autolaris ?? null;
+const integrationsReady = Boolean(initialIntegrations);
+
+const webhookFormatted = autolaris?.webhook_issued_at
+  ? `Aktif sejak ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(autolaris.webhook_issued_at))} WIB.`
+  : 'Belum dibuat.';
+
 const pageTitle = mustChangePassword
   ? 'Amankan akun admin'
   : mayManageIntegrations ? 'Profil Admin & Integrasi API' : 'Profil Akun';
+const pageDescription = mustChangePassword
+  ? 'Ganti password bawaan untuk membuka workspace operasional. Semua sesi akan diakhiri setelah perubahan tersimpan.'
+  : mayManageIntegrations
+    ? 'Kelola kredensial masuk, keamanan dua langkah, serta API Mengantar dan AutoLaris untuk toko ini.'
+    : 'Kelola username, password, dan keamanan akun Anda.';
 ---
 
 <AdminLayout title={pageTitle} activeMenu="profile">
-  <div class="space-y-5">
-    <AdminPageHeader
-      title={pageTitle}
-      description={mustChangePassword
-        ? "Ganti password bawaan untuk membuka workspace operasional. Semua sesi akan diakhiri setelah perubahan tersimpan."
-        : mayManageIntegrations
-        ? "Kelola kredensial admin, domain provider, serta API Mengantar dan AutoLaris."
-        : "Kelola username dan password akun Anda."}
-    />
-
-    <div id="profileLoading" class="sr-only" role="status" aria-live="polite" aria-busy="true">
-      <span class="sr-only">Memuat profil admin.</span>
-    </div>
-    <div id="profileError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
-
-    <form id="profileForm" inert data-pending class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-7" novalidate aria-busy="false">
-      <div id="defaultCredentialNotice" class="hidden mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900" role="alert">
-        Akun ini wajib ganti password sebelum membuka menu admin lainnya.
-      </div>
-      <fieldset>
-        <legend class="font-semibold text-slate-950">Kredensial login</legend>
-        <p class="mt-1 text-xs leading-5 text-slate-500">Perubahan akan mengakhiri seluruh sesi admin. Login kembali memakai kredensial baru.</p>
-        <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label class="block text-xs font-semibold text-slate-700" for="profileUsername">
-            Email atau username untuk masuk
-            <input id="profileUsername" name="username" type="text" required minlength="3" maxlength="254" autocomplete="username" aria-describedby="profileUsernameHint" class="admin-input-flat mt-2 sm:text-sm" />
-            <span id="profileUsernameHint" class="mt-1 block text-xs font-medium text-slate-500">Anda masuk di /hello dengan ini. Email, atau huruf kecil, angka, titik, garis bawah, tanda hubung.</span>
-          </label>
-          <label class="block text-xs font-semibold text-slate-700" for="currentPassword">
-            Password saat ini
-            <input id="currentPassword" name="current_password" type="password" required maxlength="1024" autocomplete="current-password" class="admin-input-flat mt-2 sm:text-sm" />
-          </label>
-          <label class="block text-xs font-semibold text-slate-700" for="newPassword">
-            Password baru
-            <input id="newPassword" name="new_password" type="password" required minlength="10" maxlength="128" autocomplete="new-password" class="admin-input-flat mt-2 sm:text-sm" />
-          </label>
-          <label class="block text-xs font-semibold text-slate-700" for="confirmPassword">
-            Konfirmasi password baru
-            <input id="confirmPassword" name="confirm_password" type="password" required minlength="10" maxlength="128" autocomplete="new-password" class="admin-input-flat mt-2 sm:text-sm" />
-          </label>
+  <div class:list={[
+    mustChangePassword
+      ? 'mx-auto max-w-2xl space-y-5'
+      : 'grid grid-cols-1 items-start gap-6 xl:grid-cols-[240px_minmax(0,1fr)]',
+  ]}>
+    {!mustChangePassword && (
+      <aside class="hidden space-y-3 xl:sticky xl:top-0 xl:block">
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5">
+          <div class="flex items-center gap-3">
+            <span class="grid size-10 shrink-0 place-items-center rounded-lg bg-blue-600/10 text-sm font-semibold text-blue-700" aria-hidden="true">
+              {avatarInitial}
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-semibold text-slate-950">{displayName}</p>
+              {displayName !== initialUsername && (
+                <p class="truncate text-xs text-slate-500">{initialUsername}</p>
+              )}
+            </div>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5">
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{roleLabel}</span>
+            <span class="truncate rounded-full bg-blue-50 px-2 py-0.5 font-mono text-xs font-medium text-blue-700">{Astro.locals.tenant.slug}</span>
+          </div>
         </div>
-      </fieldset>
-      <div class="mt-5 flex flex-col-reverse items-stretch gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <p id="profileStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true">Password baru minimal 10 karakter dan tidak boleh sama dengan username.</p>
-        <button id="saveProfile" type="submit" class="btn-primary">Simpan Profil</button>
+
+        <nav aria-label="Menu profil" class="rounded-xl border border-slate-200 bg-white p-1.5">
+          <div>
+            <p class="px-2.5 pb-1 pt-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-400">Akun &amp; keamanan</p>
+            <ul class="flex flex-col gap-0.5">
+              <li>
+                <a href="#kredensial-login" class="flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600/40">
+                  <span class="grid size-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
+                    <KeyRound className="size-4" />
+                  </span>
+                  <span class="flex min-w-0 flex-1 flex-col">
+                    <span class="truncate text-sm font-medium">Kredensial login</span>
+                    <span class="truncate text-xs text-slate-500">Username &amp; password</span>
+                  </span>
+                </a>
+              </li>
+              {showTwoStep && (
+                <li>
+                  <a href="#twoStep" class="flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600/40">
+                    <span class="grid size-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
+                      <ShieldCheck className="size-4" />
+                    </span>
+                    <span class="flex min-w-0 flex-1 flex-col">
+                      <span class="truncate text-sm font-medium">Verifikasi 2 langkah</span>
+                      <span id="railTwoStepHint" class="truncate text-xs text-slate-500">{twoStepIsEnabled ? 'Aktif · 2FA menyala' : 'Disarankan'}</span>
+                    </span>
+                  </a>
+                </li>
+              )}
+            </ul>
+          </div>
+
+          {mayManageIntegrations && (
+            <div class="mt-1 border-t border-slate-100 pt-1">
+              <p class="px-2.5 pb-1 pt-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-400">Integrasi API</p>
+              <ul class="flex flex-col gap-0.5">
+                <li>
+                  <a href="#integrasi-mengantar" class="flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600/40">
+                    <span class="grid size-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
+                      <Truck className="size-4" />
+                    </span>
+                    <span class="flex min-w-0 flex-1 flex-col">
+                      <span class="truncate text-sm font-medium">Mengantar API</span>
+                      <span id="railMengantarHint" class="truncate text-xs text-slate-500">{mengantar?.source === 'dashboard' ? 'Aktif · Dashboard' : 'Belum aktif'}</span>
+                    </span>
+                  </a>
+                </li>
+                <li>
+                  <a href="#integrasi-autolaris" class="flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600/40">
+                    <span class="grid size-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
+                      <CreditCard className="size-4" />
+                    </span>
+                    <span class="flex min-w-0 flex-1 flex-col">
+                      <span class="truncate text-sm font-medium">AutoLaris API</span>
+                      <span id="railAutolarisHint" class="truncate text-xs text-slate-500">{autolaris?.source === 'dashboard' ? 'Aktif · Dashboard' : 'Belum aktif'}</span>
+                    </span>
+                  </a>
+                </li>
+              </ul>
+            </div>
+          )}
+        </nav>
+      </aside>
+    )}
+
+    <div class:list={['flex min-w-0 flex-col gap-5', !mustChangePassword && 'max-w-4xl']}>
+      <AdminPageHeader title={pageTitle} description={pageDescription} />
+
+      {!mustChangePassword && (
+        <nav aria-label="Lompat ke bagian profil" class="-mt-2 flex items-center gap-1.5 overflow-x-auto pb-1 xl:hidden">
+          <a href="#kredensial-login" class="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-50">Kredensial login</a>
+          {showTwoStep && (
+            <a href="#twoStep" class="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-50">Verifikasi 2 langkah</a>
+          )}
+          {mayManageIntegrations && (
+            <>
+              <a href="#integrasi-mengantar" class="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-50">Mengantar API</a>
+              <a href="#integrasi-autolaris" class="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-50">AutoLaris API</a>
+            </>
+          )}
+        </nav>
+      )}
+
+      <div id="profileLoading" class:list={['sr-only', profileReady && 'hidden']} role="status" aria-live="polite" aria-busy={profileReady ? 'false' : 'true'}>
+        <span class="sr-only">Memuat profil admin.</span>
       </div>
-    </form>
+      <div id="profileError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
 
-    {showTwoStep && <TwoStepSettings />}
-
-    {mayManageIntegrations && <>
-    <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
-      <h2 class="text-base font-semibold text-slate-950">Kredensial Mengantar & AutoLaris</h2>
-      <p class="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-        Ganti API key dan base URL aktif untuk toko <strong>{Astro.locals.tenant.slug}</strong>. Nilai tersimpan hanya di database toko ini. Provider yang belum diisi tidak dipakai sama sekali.
-      </p>
-    </section>
-
-    <div id="integrationsLoading" class="sr-only" role="status" aria-live="polite" aria-busy="true" aria-atomic="true">
-      <span class="sr-only">Memuat konfigurasi integrasi API.</span>
-    </div>
-    <div id="integrationsError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
-
-    <form id="integrationsForm" inert data-pending class="space-y-5" novalidate aria-busy="false">
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <fieldset class="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-          <div class="flex items-start justify-between gap-3">
-            <div><legend class="font-semibold text-slate-950">Mengantar API</legend><p class="mt-1 text-xs text-slate-500">Ongkir, shipment, pickup, tracking, dan receiver history.</p></div>
-            <span id="mengantarSource" class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Belum aktif</span>
+      <form
+        id="profileForm"
+        inert={!profileReady}
+        data-pending={!profileReady ? '' : undefined}
+        data-ssr-ready={profileReady ? '1' : undefined}
+        class="settings-card scroll-mt-4"
+        novalidate
+        aria-busy="false"
+      >
+        <div id="kredensial-login" class="settings-card-head flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <h2 class="settings-card-title">Kredensial login</h2>
+            <p class="settings-card-hint">Perubahan akan mengakhiri seluruh sesi admin. Login kembali memakai kredensial baru.</p>
           </div>
-          <label class="mt-6 block text-xs font-semibold text-slate-700" for="mengantarKey">API key baru</label>
-          <div class="relative mt-2"><input id="mengantarKey" name="mengantar_api_key" type="password" autocomplete="new-password" class="admin-input-flat pr-24 font-mono sm:text-sm" /><button id="toggleMengantarKey" type="button" class="absolute inset-y-1 right-1 min-w-20 rounded-lg bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300" aria-controls="mengantarKey" aria-label="Tampilkan API key Mengantar" aria-pressed="false">Lihat</button></div>
-          <p id="mengantarKeyHint" class="mt-1 text-xs text-slate-500">Kosongkan untuk mempertahankan key saat ini.</p>
-          <label class="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" name="mengantar_clear_key" class="size-4 rounded border-slate-300" />Hapus key tersimpan (Mengantar berhenti dipakai)</label>
-          <label class="mt-4 block text-xs font-semibold text-slate-700" for="mengantarUrl">Base URL</label>
-          <input id="mengantarUrl" name="mengantar_base_url" type="url" required class="admin-input-flat mt-2 font-mono sm:text-sm" />
-        </fieldset>
+          <span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{roleLabel}</span>
+        </div>
 
-        <fieldset class="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-          <div class="flex items-start justify-between gap-3">
-            <div><legend class="font-semibold text-slate-950">AutoLaris API</legend><p class="mt-1 text-xs text-slate-500">Invoice, virtual account, QRIS, DANA, dan status pembayaran.</p></div>
-            <span id="autolarisSource" class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Belum aktif</span>
+        <div class="settings-card-body space-y-5">
+          <div
+            id="defaultCredentialNotice"
+            class:list={[
+              'rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900',
+              !mustChangePassword && 'hidden',
+            ]}
+            role="alert"
+          >
+            Akun ini wajib ganti password sebelum membuka menu admin lainnya.
           </div>
-          <label class="mt-6 block text-xs font-semibold text-slate-700" for="autolarisKey">API key baru</label>
-          <div class="relative mt-2"><input id="autolarisKey" name="autolaris_api_key" type="password" autocomplete="new-password" class="admin-input-flat pr-24 font-mono sm:text-sm" /><button id="toggleAutolarisKey" type="button" class="absolute inset-y-1 right-1 min-w-20 rounded-lg bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300" aria-controls="autolarisKey" aria-label="Tampilkan API key AutoLaris" aria-pressed="false">Lihat</button></div>
-          <p id="autolarisKeyHint" class="mt-1 text-xs text-slate-500">Kosongkan untuk mempertahankan key saat ini.</p>
-          <label class="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" name="autolaris_clear_key" class="size-4 rounded border-slate-300" />Hapus key tersimpan (AutoLaris berhenti dipakai)</label>
-          <p class="mt-3 text-xs text-slate-600">Cukup API key. QRIS dan Virtual Account langsung aktif di checkout; pengiriman tetap lewat Mengantar.</p>
-          <details class="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3" id="autolarisAdvanced">
-            <summary class="cursor-pointer text-xs font-semibold text-slate-700">Lanjutan <span class="font-normal text-slate-500">(tidak perlu diisi)</span></summary>
-            <label class="mt-3 block text-xs font-semibold text-slate-700" for="autolarisUrl">Base URL</label>
-            <input id="autolarisUrl" name="autolaris_base_url" type="url" placeholder="https://api-h2h.autolaris.com" class="admin-input-flat mt-2 font-mono sm:text-sm" />
-            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div class="min-w-0">
-                <label class="block text-xs font-semibold text-slate-700" for="autolarisOrigin">Area origin</label>
-                <input id="autolarisOrigin" name="autolaris_order_origin_id" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="3517100" aria-describedby="autolarisAreaHint" class="admin-input-flat mt-2 font-mono sm:text-sm" />
+
+          <fieldset class="space-y-4">
+            <legend class="sr-only">Kredensial login</legend>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label class="block text-xs font-semibold text-slate-700" for="profileUsername">
+                Email atau username untuk masuk
+                <input
+                  id="profileUsername"
+                  name="username"
+                  type="text"
+                  value={initialUsername}
+                  required
+                  minlength="3"
+                  maxlength="254"
+                  autocomplete="username"
+                  aria-describedby="profileUsernameHint"
+                  class="admin-input-flat mt-2 sm:text-sm"
+                />
+                <span id="profileUsernameHint" class="mt-1.5 block text-xs font-normal leading-5 text-slate-500">
+                  Anda masuk di /hello dengan ini. Email, atau huruf kecil, angka, titik, garis bawah, tanda hubung.
+                </span>
+              </label>
+
+              <label class="block text-xs font-semibold text-slate-700" for="currentPassword">
+                Password saat ini
+                <input
+                  id="currentPassword"
+                  name="current_password"
+                  type="password"
+                  required
+                  maxlength="1024"
+                  autocomplete="current-password"
+                  class="admin-input-flat mt-2 sm:text-sm"
+                />
+                <span class="mt-1.5 block text-xs font-normal leading-5 text-slate-500">
+                  Diperlukan untuk mengonfirmasi perubahan kredensial.
+                </span>
+              </label>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 md:grid-cols-2">
+              <label class="block text-xs font-semibold text-slate-700" for="newPassword">
+                Password baru
+                <input
+                  id="newPassword"
+                  name="new_password"
+                  type="password"
+                  required
+                  minlength="10"
+                  maxlength="128"
+                  autocomplete="new-password"
+                  class="admin-input-flat mt-2 sm:text-sm"
+                />
+              </label>
+
+              <label class="block text-xs font-semibold text-slate-700" for="confirmPassword">
+                Konfirmasi password baru
+                <input
+                  id="confirmPassword"
+                  name="confirm_password"
+                  type="password"
+                  required
+                  minlength="10"
+                  maxlength="128"
+                  autocomplete="new-password"
+                  class="admin-input-flat mt-2 sm:text-sm"
+                />
+              </label>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="settings-card-foot">
+          <p id="profileStatus" class="min-h-5 text-xs font-medium text-slate-500" role="status" aria-live="polite" aria-atomic="true">
+            Password baru minimal 10 karakter dan tidak boleh sama dengan username.
+          </p>
+          <button id="saveProfile" type="submit" class="btn-primary shrink-0">Simpan Profil</button>
+        </div>
+      </form>
+
+      {showTwoStep && (
+        <TwoStepSettings
+          initialReady={profileReady}
+          initialEnabled={twoStepIsEnabled}
+          initialAvailable={enrollmentOpen}
+        />
+      )}
+
+      {mayManageIntegrations && (
+        <section id="integrasi-api" class="space-y-4 pt-1">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div class="min-w-0">
+              <h2 class="text-base font-semibold text-slate-950">Kredensial Mengantar &amp; AutoLaris</h2>
+              <p class="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
+                API key tersimpan terenkripsi khusus di database toko <span class="font-mono font-medium text-slate-700">{Astro.locals.tenant.slug}</span>. Provider yang belum diisi tidak dipakai.
+              </p>
+            </div>
+            <div class="flex shrink-0 flex-wrap gap-3 text-xs font-medium text-slate-500">
+              <a href="/admin/expeditions" class="whitespace-nowrap underline underline-offset-4 hover:text-slate-900">Atur ekspedisi</a>
+              <a href="/admin/payments" class="whitespace-nowrap underline underline-offset-4 hover:text-slate-900">Atur pembayaran</a>
+            </div>
+          </div>
+
+          <div id="integrationsLoading" class:list={['sr-only', integrationsReady && 'hidden']} role="status" aria-live="polite" aria-busy={integrationsReady ? 'false' : 'true'} aria-atomic="true">
+            <span class="sr-only">Memuat konfigurasi integrasi API.</span>
+          </div>
+          <div id="integrationsError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
+
+          <form
+            id="integrationsForm"
+            inert={!integrationsReady}
+            data-pending={!integrationsReady ? '' : undefined}
+            data-ssr-ready={integrationsReady ? '1' : undefined}
+            class="space-y-4"
+            novalidate
+            aria-busy="false"
+          >
+            <fieldset id="integrasi-mengantar" class="settings-card scroll-mt-4">
+              <legend class="sr-only">Mengantar API</legend>
+              <div class="settings-card-head flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 class="settings-card-title">Mengantar API</h3>
+                  <p class="settings-card-hint">Ongkir, pembuatan resi, penjadwalan pickup, pelacakan paket, dan riwayat RTS penerima.</p>
+                </div>
+                <span
+                  id="mengantarSource"
+                  class={mengantar?.source === 'dashboard'
+                    ? 'shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800'
+                    : 'shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600'}
+                >
+                  {mengantar?.source === 'dashboard' ? 'Dashboard' : 'Belum aktif'}
+                </span>
               </div>
-              <div class="min-w-0">
-                <label class="block text-xs font-semibold text-slate-700" for="autolarisDestination">Area destination</label>
-                <input id="autolarisDestination" name="autolaris_order_destination_id" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="3518010" aria-describedby="autolarisAreaHint" class="admin-input-flat mt-2 font-mono sm:text-sm" />
+
+              <div class="settings-card-body space-y-4">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700" for="mengantarKey">API key baru</label>
+                    <div class="relative mt-2">
+                      <input
+                        id="mengantarKey"
+                        name="mengantar_api_key"
+                        type="password"
+                        autocomplete="new-password"
+                        placeholder={mengantar?.api_key_masked || 'Masukkan API key Mengantar'}
+                        class="admin-input-flat pr-24 font-mono sm:text-sm"
+                      />
+                      <button
+                        id="toggleMengantarKey"
+                        type="button"
+                        class="absolute inset-y-1 right-1 min-w-20 rounded-lg bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
+                        aria-controls="mengantarKey"
+                        aria-label="Tampilkan API key Mengantar"
+                        aria-pressed="false"
+                      >
+                        Lihat
+                      </button>
+                    </div>
+                    <p id="mengantarKeyHint" class="mt-1.5 text-xs text-slate-500">Kosongkan untuk mempertahankan key saat ini.</p>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700" for="mengantarUrl">Base URL</label>
+                    <input
+                      id="mengantarUrl"
+                      name="mengantar_base_url"
+                      type="url"
+                      value={mengantar?.base_url ?? ''}
+                      required
+                      class="admin-input-flat mt-2 font-mono sm:text-sm"
+                    />
+                    <p class="mt-1.5 text-xs text-slate-500">Biarkan URL bawaan kecuali diminta mengganti endpoint.</p>
+                  </div>
+                </div>
+
+                <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input type="checkbox" name="mengantar_clear_key" class="size-4 rounded border-slate-300" />
+                  Hapus key tersimpan (Mengantar berhenti dipakai)
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset id="integrasi-autolaris" class="settings-card scroll-mt-4">
+              <legend class="sr-only">AutoLaris API</legend>
+              <div class="settings-card-head flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 class="settings-card-title">AutoLaris API</h3>
+                  <p class="settings-card-hint">Pembayaran otomatis QRIS dan Virtual Account 24 jam tanpa cek mutasi manual (opsional).</p>
+                </div>
+                <span
+                  id="autolarisSource"
+                  class={autolaris?.source === 'dashboard'
+                    ? 'shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800'
+                    : 'shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600'}
+                >
+                  {autolaris?.source === 'dashboard' ? 'Dashboard' : 'Belum aktif'}
+                </span>
+              </div>
+
+              <div class="settings-card-body space-y-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700" for="autolarisKey">API key baru</label>
+                  <div class="relative mt-2 max-w-xl">
+                    <input
+                      id="autolarisKey"
+                      name="autolaris_api_key"
+                      type="password"
+                      autocomplete="new-password"
+                      placeholder={autolaris?.api_key_masked || 'Masukkan API key AutoLaris'}
+                      class="admin-input-flat pr-24 font-mono sm:text-sm"
+                    />
+                    <button
+                      id="toggleAutolarisKey"
+                      type="button"
+                      class="absolute inset-y-1 right-1 min-w-20 rounded-lg bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
+                      aria-controls="autolarisKey"
+                      aria-label="Tampilkan API key AutoLaris"
+                      aria-pressed="false"
+                    >
+                      Lihat
+                    </button>
+                  </div>
+                  <p id="autolarisKeyHint" class="mt-1.5 text-xs text-slate-500">
+                    Cukup API key. QRIS dan Virtual Account langsung aktif di checkout; pengiriman tetap lewat Mengantar. Kosongkan untuk mempertahankan key saat ini.
+                  </p>
+                  <label class="mt-2.5 inline-flex items-center gap-2 text-xs font-medium text-slate-600">
+                    <input type="checkbox" name="autolaris_clear_key" class="size-4 rounded border-slate-300" />
+                    Hapus key tersimpan (AutoLaris berhenti dipakai)
+                  </label>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="min-w-0">
+                      <p class="text-xs font-semibold text-slate-900">URL webhook AutoLaris</p>
+                      <p id="autolarisWebhookState" class="mt-0.5 text-xs text-slate-500">{webhookFormatted}</p>
+                    </div>
+                    <button id="issueWebhook" type="button" class="btn-secondary shrink-0">Buat URL webhook baru</button>
+                  </div>
+                  <div id="autolarisWebhookWrap" class="mt-3 hidden flex-col gap-2 sm:flex-row sm:items-center">
+                    <output id="autolarisWebhookUrl" class="min-w-0 flex-1 break-all rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-900"></output>
+                    <button id="copyWebhookUrl" type="button" class="btn-secondary shrink-0">Salin URL</button>
+                  </div>
+                  <p class="mt-2 text-xs text-slate-500">
+                    URL hanya tampil sekali dan khusus subdomain toko ini. Membuat yang baru mematikan URL lama.
+                  </p>
+                </div>
+
+                <details class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5" id="autolarisAdvanced">
+                  <summary class="cursor-pointer text-xs font-semibold text-slate-700">
+                    Lanjutan <span class="font-normal text-slate-500">(tidak perlu diisi)</span>
+                  </summary>
+                  <div class="mt-4 space-y-4">
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-700" for="autolarisUrl">Base URL</label>
+                      <input
+                        id="autolarisUrl"
+                        name="autolaris_base_url"
+                        type="url"
+                        value={autolaris?.base_url ?? ''}
+                        placeholder="https://api-h2h.autolaris.com"
+                        class="admin-input-flat mt-2 font-mono sm:text-sm"
+                      />
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div class="min-w-0">
+                        <label class="block text-xs font-semibold text-slate-700" for="autolarisOrigin">Area origin</label>
+                        <input
+                          id="autolarisOrigin"
+                          name="autolaris_order_origin_id"
+                          type="text"
+                          value={autolaris?.order_origin_id ?? ''}
+                          inputmode="numeric"
+                          pattern="[0-9]*"
+                          autocomplete="off"
+                          placeholder="3517100"
+                          aria-describedby="autolarisAreaHint"
+                          class="admin-input-flat mt-2 font-mono sm:text-sm"
+                        />
+                      </div>
+                      <div class="min-w-0">
+                        <label class="block text-xs font-semibold text-slate-700" for="autolarisDestination">Area destination</label>
+                        <input
+                          id="autolarisDestination"
+                          name="autolaris_order_destination_id"
+                          type="text"
+                          value={autolaris?.order_destination_id ?? ''}
+                          inputmode="numeric"
+                          pattern="[0-9]*"
+                          autocomplete="off"
+                          placeholder="3518010"
+                          aria-describedby="autolarisAreaHint"
+                          class="admin-input-flat mt-2 font-mono sm:text-sm"
+                        />
+                      </div>
+                    </div>
+                    <p id="autolarisAreaHint" class="text-xs text-slate-500">
+                      Hanya bila AutoLaris meminta area tertentu untuk akun Anda. Kosongkan untuk memakai area bawaan (pembayaran saja, courir 1, tanpa pengiriman).
+                    </p>
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-700" for="autolarisShipperEmail">Email pengirim</label>
+                      <input
+                        id="autolarisShipperEmail"
+                        name="autolaris_shipper_email"
+                        type="email"
+                        value={autolaris?.shipper_email ?? ''}
+                        autocomplete="off"
+                        aria-describedby="autolarisShipperHint"
+                        class="admin-input-flat mt-2 sm:text-sm"
+                      />
+                      <p id="autolarisShipperHint" class="mt-1 text-xs text-slate-500">Kosongkan untuk memakai email CS toko.</p>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </fieldset>
+
+            <div class="settings-card">
+              <div class="settings-card-foot border-t-0">
+                <p id="saveStatus" class="min-h-5 text-xs font-medium text-slate-500" role="status" aria-live="polite" aria-atomic="true">
+                  API key kosong tidak akan menghapus credential yang sudah aktif.
+                </p>
+                <button id="saveIntegrations" type="submit" class="btn-primary shrink-0">Simpan Integrasi</button>
               </div>
             </div>
-            <p id="autolarisAreaHint" class="mt-1 text-xs text-slate-500">Hanya bila AutoLaris meminta area tertentu untuk akun Anda. Kosongkan untuk memakai area bawaan (pembayaran saja, courir 1, tanpa pengiriman).</p>
-            <label class="mt-4 block text-xs font-semibold text-slate-700" for="autolarisShipperEmail">Email pengirim</label>
-            <input id="autolarisShipperEmail" name="autolaris_shipper_email" type="email" autocomplete="off" aria-describedby="autolarisShipperHint" class="admin-input-flat mt-2 sm:text-sm" />
-            <p id="autolarisShipperHint" class="mt-1 text-xs text-slate-500">Kosongkan untuk memakai email CS toko.</p>
-          </details>
-          <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p class="text-xs font-semibold text-slate-700">URL webhook AutoLaris</p>
-            <p id="autolarisWebhookState" class="mt-1 text-xs text-slate-500">Belum dibuat.</p>
-            <output id="autolarisWebhookUrl" class="mt-2 hidden break-all rounded-lg bg-white px-2 py-1.5 font-mono text-xs text-slate-900"></output>
-            <button id="issueWebhook" type="button" class="btn-secondary mt-2">Buat URL webhook baru</button>
-            <p class="mt-1 text-xs text-slate-500">URL hanya tampil sekali dan khusus subdomain toko ini. Membuat yang baru mematikan URL lama.</p>
-          </div>
-        </fieldset>
-      </div>
-
-      <div class="flex flex-col-reverse items-stretch gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-        <p id="saveStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true">API key kosong tidak akan menghapus credential yang sudah aktif.</p>
-        <button id="saveIntegrations" type="submit" class="btn-primary">Simpan Integrasi</button>
-      </div>
-    </form>
-
-    </>}
+          </form>
+        </section>
+      )}
+    </div>
   </div>
 
   <script>
@@ -175,7 +598,7 @@ const pageTitle = mustChangePassword
       status.setAttribute('role', state === 'error' ? 'alert' : 'status');
       status.setAttribute('aria-live', state === 'error' ? 'assertive' : 'polite');
       status.textContent = message;
-      status.className = `min-h-5 text-xs font-semibold ${state === 'success' ? 'text-blue-700' : state === 'error' ? 'text-rose-700' : 'text-slate-500'}`;
+      status.className = `min-h-5 text-xs font-medium ${state === 'success' ? 'text-blue-700' : state === 'error' ? 'text-rose-700' : 'text-slate-500'}`;
     };
 
     const setProfilePending = (next: boolean) => {
@@ -189,13 +612,16 @@ const pageTitle = mustChangePassword
     };
 
     const sourceLabel = (source: Credential['source']) => source === 'dashboard' ? 'Dashboard' : 'Belum aktif';
-    const paintSource = (id: string, source: Credential['source']) => {
+    const paintSource = (id: string, railId: string, source: Credential['source']) => {
       const node = byId<HTMLSpanElement>(id);
-      if (!node) return;
-      node.textContent = sourceLabel(source);
-      node.className = source === 'dashboard'
-        ? 'rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800'
-        : 'rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600';
+      if (node) {
+        node.textContent = sourceLabel(source);
+        node.className = source === 'dashboard'
+          ? 'shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800'
+          : 'shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600';
+      }
+      const rail = byId(railId);
+      if (rail) rail.textContent = source === 'dashboard' ? 'Aktif · Dashboard' : 'Belum aktif';
     };
 
     const showStatus = (message: string, state: 'idle' | 'success' | 'error') => {
@@ -204,7 +630,7 @@ const pageTitle = mustChangePassword
       status.setAttribute('role', state === 'error' ? 'alert' : 'status');
       status.setAttribute('aria-live', state === 'error' ? 'assertive' : 'polite');
       status.textContent = message;
-      status.className = `min-h-5 text-xs font-semibold ${state === 'success' ? 'text-blue-700' : state === 'error' ? 'text-rose-700' : 'text-slate-500'}`;
+      status.className = `min-h-5 text-xs font-medium ${state === 'success' ? 'text-blue-700' : state === 'error' ? 'text-rose-700' : 'text-slate-500'}`;
     };
 
     const setPending = (next: boolean) => {
@@ -255,10 +681,9 @@ const pageTitle = mustChangePassword
       if (autolarisKey) { autolarisKey.value = ''; autolarisKey.placeholder = credentials.autolaris.api_key_masked || 'Masukkan API key AutoLaris'; }
       setSecretVisibility(mengantarKey, mengantarToggle, 'API key Mengantar', false);
       setSecretVisibility(autolarisKey, autolarisToggle, 'API key AutoLaris', false);
-      paintSource('mengantarSource', credentials.mengantar.source);
-      paintSource('autolarisSource', credentials.autolaris.source);
+      paintSource('mengantarSource', 'railMengantarHint', credentials.mengantar.source);
+      paintSource('autolarisSource', 'railAutolarisHint', credentials.autolaris.source);
     };
-
 
     wireSecretToggle('mengantarKey', 'toggleMengantarKey', 'API key Mengantar');
     wireSecretToggle('autolarisKey', 'toggleAutolarisKey', 'API key AutoLaris');
@@ -299,22 +724,31 @@ const pageTitle = mustChangePassword
       return Boolean(payload.data.must_change_password);
     };
 
-    loadProfile().then((mustChangePassword) => {
-      if (mustChangePassword) return;
-      if (byId('integrationsForm')) loadIntegrations().catch(showIntegrationsError);
-    }).catch((error) => {
-      byId('profileLoading')?.setAttribute('aria-busy', 'false');
-      byId('profileLoading')?.classList.add('hidden');
-      byId('profileForm')?.classList.add('hidden');
-      const node = byId('profileError');
-      if (node) {
-        node.textContent = error instanceof Error ? error.message : 'Gagal memuat profil admin.';
-        node.classList.remove('hidden');
-      }
-      if (byId('integrationsForm')) showIntegrationsError(error);
-    });
+    // Hydrate from SSR without redundant network round-trips; only fetch if SSR fell back.
+    const profileForm = byId<HTMLFormElement>('profileForm');
+    const integrationsForm = byId<HTMLFormElement>('integrationsForm');
+    if (profileForm && profileForm.dataset.ssrReady !== '1') {
+      loadProfile().then((mustChangePassword) => {
+        if (mustChangePassword) return;
+        if (integrationsForm && integrationsForm.dataset.ssrReady !== '1') {
+          loadIntegrations().catch(showIntegrationsError);
+        }
+      }).catch((error) => {
+        byId('profileLoading')?.setAttribute('aria-busy', 'false');
+        byId('profileLoading')?.classList.add('hidden');
+        profileForm.classList.add('hidden');
+        const node = byId('profileError');
+        if (node) {
+          node.textContent = error instanceof Error ? error.message : 'Gagal memuat profil admin.';
+          node.classList.remove('hidden');
+        }
+        if (integrationsForm && integrationsForm.dataset.ssrReady !== '1') showIntegrationsError(error);
+      });
+    } else if (integrationsForm && integrationsForm.dataset.ssrReady !== '1') {
+      loadIntegrations().catch(showIntegrationsError);
+    }
 
-    byId<HTMLFormElement>('profileForm')?.addEventListener('submit', async (event) => {
+    profileForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const form = event.currentTarget as HTMLFormElement;
       if (profilePending || !form.reportValidity()) return;
@@ -362,7 +796,9 @@ const pageTitle = mustChangePassword
         if (!response.ok || !payload.success) throw new Error(payload.error || 'URL webhook gagal dibuat.');
         render(payload.data.credentials);
         const output = byId('autolarisWebhookUrl');
-        if (output) { output.textContent = payload.data.webhook_url; output.classList.remove('hidden'); }
+        const wrap = byId('autolarisWebhookWrap');
+        if (output) output.textContent = payload.data.webhook_url;
+        if (wrap) { wrap.classList.remove('hidden'); wrap.classList.add('flex'); }
         showStatus(payload.message || 'URL webhook dibuat.', 'success');
       } catch (error) {
         showStatus(error instanceof Error ? error.message : 'URL webhook gagal dibuat.', 'error');
@@ -371,7 +807,18 @@ const pageTitle = mustChangePassword
       }
     });
 
-    byId<HTMLFormElement>('integrationsForm')?.addEventListener('submit', async (event) => {
+    byId<HTMLButtonElement>('copyWebhookUrl')?.addEventListener('click', async () => {
+      const url = byId('autolarisWebhookUrl')?.textContent?.trim();
+      if (!url) return;
+      try {
+        await navigator.clipboard.writeText(url);
+        showStatus('URL webhook disalin.', 'success');
+      } catch {
+        showStatus('Browser menolak akses clipboard. Salin URL secara manual.', 'error');
+      }
+    });
+
+    integrationsForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const form = event.currentTarget as HTMLFormElement;
       if (integrationsPending || !form.reportValidity()) return;

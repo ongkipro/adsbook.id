@@ -437,7 +437,8 @@ class SqliteD1Database {
         provider_dispatch_error TEXT,
         provider_dispatch_claimed_at TEXT,
         stock_restored_at TEXT,
-        fulfillment_type TEXT NOT NULL DEFAULT 'physical'
+        fulfillment_type TEXT NOT NULL DEFAULT 'physical',
+        shipping_channel TEXT NOT NULL DEFAULT 'mengantar'
       );
       CREATE TABLE order_items (
         id INTEGER PRIMARY KEY,

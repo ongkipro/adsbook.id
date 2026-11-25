@@ -138,6 +138,8 @@ type Order = {
   cnote_no: string | null;
   /** DIGITAL-PRODUCTS-SPEC §4.3. */
   fulfillment_type?: string | null;
+  /** MENGANTAR-WEBHOOK-AUTOSYNC-SPEC §5A. */
+  shipping_channel?: "mengantar" | "external";
   digital_accessed_at?: string | null;
   public_status_token?: string | null;
   provider_order_id: string | null;
@@ -842,6 +844,10 @@ export function OrderDetail({
   const [notice, setNotice] = useState("");
   const [copiedTarget, setCopiedTarget] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [channelChoice, setChannelChoice] = useState<"mengantar" | "external">("mengantar");
+  const [externalCourier, setExternalCourier] = useState("");
+  const [externalService, setExternalService] = useState("");
+  const [externalCnote, setExternalCnote] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -859,6 +865,10 @@ export function OrderDetail({
       })
       .then((data) => {
         setOrder(data);
+        setChannelChoice(data.shipping_channel === "external" ? "external" : "mengantar");
+        setExternalCourier(data.courier_code || "");
+        setExternalService(data.courier_service || "");
+        setExternalCnote(data.cnote_no || "");
       })
       .catch((reason) => {
         if (!(reason instanceof Error && reason.name === "AbortError")) {
@@ -1030,6 +1040,77 @@ export function OrderDetail({
       toast.error(message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveExternalShipping = async (nextStatus?: "processing" | "shipped") => {
+    if (!order) return;
+    const courier = externalCourier.trim();
+    const service = externalService.trim();
+    const cnote = externalCnote.trim();
+    if (nextStatus === "shipped" && (!courier || !cnote)) {
+      toast.error("Isi kurir dan nomor resi sebelum menandai order terkirim.");
+      return;
+    }
+    setSaving(true);
+    setNotice("Menyimpan pengiriman luar Mengantar…");
+    try {
+      const response = await fetch(`/api/admin/orders/${encodeURIComponent(String(order.id))}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shipping_channel: "external",
+          courier_code: courier,
+          courier_service: service,
+          cnote_no: cnote,
+          ...(nextStatus ? { shipping_status: nextStatus } : {}),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Pengiriman luar Mengantar gagal disimpan.");
+      }
+      setOrder((current) => (current ? { ...current, ...payload.data } : current));
+      setChannelChoice("external");
+      const msg =
+        nextStatus === "shipped"
+          ? "Resi disimpan dan status ditandai dikirim (luar Mengantar)."
+          : "Pengiriman luar Mengantar disimpan.";
+      setNotice(msg);
+      toast.success(msg);
+    } catch (reason) {
+      const msg = reason instanceof Error ? reason.message : "Pengiriman luar Mengantar gagal disimpan.";
+      setNotice(msg);
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectChannelChoice = async (next: "mengantar" | "external") => {
+    setChannelChoice(next);
+    if (!order || order.provider_order_id || order.shipping_status !== "pending") return;
+    if (next === "mengantar" && order.shipping_channel === "external") {
+      setSaving(true);
+      try {
+        const response = await fetch(`/api/admin/orders/${encodeURIComponent(String(order.id))}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shipping_channel: "mengantar" }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || "Gagal mengganti jalur pengiriman.");
+        }
+        setOrder((current) => (current ? { ...current, ...payload.data } : current));
+        setExternalCnote(payload.data?.cnote_no || "");
+        toast.success("Jalur pengiriman dikembalikan ke Mengantar.");
+      } catch (reason) {
+        setChannelChoice("external");
+        toast.error(reason instanceof Error ? reason.message : "Gagal mengganti jalur pengiriman.");
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -1288,15 +1369,21 @@ export function OrderDetail({
       order.warehouse_id
   );
 
+  const isExternalShipping =
+    !digital && order.shipping_channel === "external" && !order.provider_order_id;
+
   const canConfirm =
     order.shipping_status === "pending" &&
     paymentReady &&
     shippingDataComplete &&
-    !order.provider_order_id;
+    !order.provider_order_id &&
+    !isExternalShipping;
 
   const statusOptions =
     order.shipping_status === "pending"
-      ? ["pending", "cancelled"]
+      ? isExternalShipping
+        ? ["pending", "processing", "shipped", "cancelled"]
+        : ["pending", "cancelled"]
       : order.shipping_status === "cancelled"
       ? ["cancelled"]
       : ["processing", "shipped", "delivered", "returned", "cancelled"];
@@ -1616,14 +1703,24 @@ export function OrderDetail({
             </Card>
           )}
 
-          {/* Mengantar Expedition & Tracking Card */}
+          {/* Mengantar / External Expedition & Tracking Card */}
           {!digital && (
           <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Truck className="size-4 text-slate-600" />
                 <span>Pengiriman</span>
               </CardTitle>
+              <Badge
+                variant="outline"
+                className={
+                  isExternalShipping
+                    ? "border-amber-200 bg-amber-50 text-xs font-medium text-amber-800"
+                    : "border-blue-200 bg-blue-50 text-xs font-medium text-blue-700"
+                }
+              >
+                {isExternalShipping ? "Luar Mengantar" : "Mengantar"}
+              </Badge>
             </CardHeader>
             <CardContent className="p-5 sm:p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -1707,31 +1804,182 @@ export function OrderDetail({
                 </div>
               ) : null}
 
-              {order.shipping_status === "pending" ? (
-                <div className="pt-2">
-                  <Button
-                    type="button"
-                    onClick={pushToMengantar}
-                    disabled={saving || !canConfirm}
-                    className="w-full"
-                  >
-                    {!paymentReady
-                      ? order.payment_method === "manual_transfer"
-                        ? "Menunggu Konfirmasi Transfer"
-                        : "Menunggu Pembayaran Online"
-                      : !shippingDataComplete
-                      ? "Lengkapi Alamat & Ekspedisi"
-                      : "Push Order ke Mengantar"}
-                  </Button>
+              {order.shipping_status === "pending" && !order.provider_order_id ? (
+                <div className="space-y-4 border-t border-slate-100 pt-4">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Jalur pengiriman">
+                    <Button
+                      type="button"
+                      role="radio"
+                      aria-checked={channelChoice === "mengantar"}
+                      variant={channelChoice === "mengantar" ? "default" : "outline"}
+                      disabled={saving}
+                      onClick={() => void selectChannelChoice("mengantar")}
+                      className="w-full"
+                    >
+                      Push ke Mengantar
+                    </Button>
+                    <Button
+                      type="button"
+                      role="radio"
+                      aria-checked={channelChoice === "external"}
+                      variant={channelChoice === "external" ? "default" : "outline"}
+                      disabled={saving}
+                      onClick={() => void selectChannelChoice("external")}
+                      className="w-full"
+                    >
+                      Kirim di luar Mengantar
+                    </Button>
+                  </div>
+
+                  {channelChoice === "mengantar" ? (
+                    <Button
+                      type="button"
+                      onClick={pushToMengantar}
+                      disabled={saving || !canConfirm}
+                      className="w-full"
+                    >
+                      {!paymentReady
+                        ? order.payment_method === "manual_transfer"
+                          ? "Menunggu Konfirmasi Transfer"
+                          : "Menunggu Pembayaran Online"
+                        : !shippingDataComplete
+                        ? "Lengkapi Alamat & Ekspedisi"
+                        : "Push Order ke Mengantar"}
+                    </Button>
+                  ) : (
+                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                      <p className="text-xs leading-5 text-slate-600">
+                        Untuk paket yang dikirim lewat agregator lain atau langsung ke kurir. Status pengiriman diperbarui manual (tidak tersinkron otomatis dari Mengantar).
+                      </p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <label htmlFor="external-courier-code" className="block text-xs font-semibold text-slate-700">
+                            Kurir
+                          </label>
+                          <Input
+                            id="external-courier-code"
+                            value={externalCourier}
+                            onChange={(event) => setExternalCourier(event.target.value)}
+                            maxLength={50}
+                            placeholder="Contoh: JNE, J&T, SiCepat"
+                            disabled={saving}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="external-courier-service" className="block text-xs font-semibold text-slate-700">
+                            Layanan (opsional)
+                          </label>
+                          <Input
+                            id="external-courier-service"
+                            value={externalService}
+                            onChange={(event) => setExternalService(event.target.value)}
+                            maxLength={120}
+                            placeholder="Contoh: REG, EZ"
+                            disabled={saving}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label htmlFor="external-cnote-no" className="block text-xs font-semibold text-slate-700">
+                          Nomor resi
+                        </label>
+                        <Input
+                          id="external-cnote-no"
+                          value={externalCnote}
+                          onChange={(event) => setExternalCnote(event.target.value)}
+                          maxLength={120}
+                          placeholder="Masukkan nomor resi dari kurir/agregator"
+                          className="font-mono"
+                          disabled={saving}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Button
+                          type="button"
+                          onClick={() => void saveExternalShipping("shipped")}
+                          disabled={saving || !externalCourier.trim() || !externalCnote.trim()}
+                          className="flex-1"
+                        >
+                          Simpan &amp; Tandai Dikirim
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void saveExternalShipping("processing")}
+                          disabled={saving}
+                          className="sm:w-auto"
+                        >
+                          Simpan sebagai Diproses
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <a
-                  href={`/admin/shipping?order=${encodeURIComponent(order.order_number)}`}
-                  className={buttonVariants({ variant: "outline", className: "mt-2 w-full" })}
-                >
-                  <ExternalLink className="mr-1.5 size-3.5" />
-                  Lihat Manajemen Resi & Tracking
-                </a>
+                <div className="space-y-3">
+                  {isExternalShipping && (order.shipping_status === "processing" || order.shipping_status === "shipped") && (
+                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                      <p className="text-xs leading-5 text-slate-600">
+                        Order dikirim di luar Mengantar. Perbarui kurir/resi di sini atau majukan status (Terkirim / Sampai / Retur) di menu Status di atas.
+                      </p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <label htmlFor="external-courier-code-edit" className="block text-xs font-semibold text-slate-700">
+                            Kurir
+                          </label>
+                          <Input
+                            id="external-courier-code-edit"
+                            value={externalCourier}
+                            onChange={(event) => setExternalCourier(event.target.value)}
+                            maxLength={50}
+                            placeholder="Contoh: JNE, J&T, SiCepat"
+                            disabled={saving}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="external-cnote-no-edit" className="block text-xs font-semibold text-slate-700">
+                            Nomor resi
+                          </label>
+                          <Input
+                            id="external-cnote-no-edit"
+                            value={externalCnote}
+                            onChange={(event) => setExternalCnote(event.target.value)}
+                            maxLength={120}
+                            placeholder="Masukkan nomor resi"
+                            className="font-mono"
+                            disabled={saving}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => void saveExternalShipping()}
+                          disabled={saving}
+                        >
+                          Simpan Kurir &amp; Resi
+                        </Button>
+                        {order.shipping_status === "processing" && (
+                          <Button
+                            type="button"
+                            onClick={() => void saveExternalShipping("shipped")}
+                            disabled={saving || !externalCourier.trim() || !externalCnote.trim()}
+                          >
+                            Simpan &amp; Tandai Dikirim
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <a
+                    href={`/admin/shipping?order=${encodeURIComponent(order.order_number)}`}
+                    className={buttonVariants({ variant: "outline", className: "mt-2 w-full" })}
+                  >
+                    <ExternalLink className="mr-1.5 size-3.5" />
+                    Lihat Manajemen Resi &amp; Tracking
+                  </a>
+                </div>
               )}
             </CardContent>
           </Card>

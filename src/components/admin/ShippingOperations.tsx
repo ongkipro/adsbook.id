@@ -58,6 +58,7 @@ type Shipment = {
   courierCode: string | null;
   courierService: string | null;
   cnoteNo: string | null;
+  shippingChannel?: "mengantar" | "external";
   providerOrderId: string | null;
   providerStatusText: string | null;
   providerStatusAt: string | null;
@@ -522,7 +523,7 @@ export function ShippingOperations({
               Pengiriman & pickup
             </h2>
             <p className="mt-1 text-sm leading-5 text-slate-500 md:leading-6">
-              Order yang sudah diterima Mengantar masuk ke sini untuk pemantauan resi, status pengiriman, dan penjadwalan pickup.
+              Order jalur Mengantar dan pengiriman luar Mengantar masuk ke sini. Sinkron status dan jadwal pickup berlaku khusus order Mengantar.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -860,7 +861,8 @@ export function ShippingOperations({
               aria-label="Daftar pengiriman mobile"
             >
             {filteredShipments.map((shipment) => {
-              const ready = data.readyPickupIds.includes(shipment.id);
+              const external = shipment.shippingChannel === "external" && !shipment.providerOrderId;
+              const ready = !external && data.readyPickupIds.includes(shipment.id);
               const selected = selectedOrderIds.includes(shipment.id);
               return (
                 <article
@@ -869,12 +871,23 @@ export function ShippingOperations({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <a
-                        href={`/admin/orders/${encodeURIComponent(shipment.orderNumber)}`}
-                        className="break-all font-semibold text-slate-950 hover:underline hover:text-blue-600"
-                      >
-                        {shipment.orderNumber}
-                      </a>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <a
+                          href={`/admin/orders/${encodeURIComponent(shipment.orderNumber)}`}
+                          className="break-all font-semibold text-slate-950 hover:underline hover:text-blue-600"
+                        >
+                          {shipment.orderNumber}
+                        </a>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            external
+                              ? "bg-amber-50 text-amber-800"
+                              : "bg-blue-50 text-blue-700"
+                          }`}
+                        >
+                          {external ? "Luar Mengantar" : "Mengantar"}
+                        </span>
+                      </div>
                       <p className="mt-1 break-words text-xs text-slate-500">
                         {shipment.customerName} · {shipment.city}
                       </p>
@@ -937,7 +950,11 @@ export function ShippingOperations({
                     </label>
                   )}
                   <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                    {shipment.providerOrderId ? (
+                    {external ? (
+                      <div className="flex min-h-11 items-center rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-medium leading-4 text-amber-800">
+                        Status manual (luar Mengantar)
+                      </div>
+                    ) : shipment.providerOrderId ? (
                       <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-tight text-slate-600 min-h-11 flex flex-col justify-center">
                         <p className="font-semibold text-slate-900 line-clamp-1">
                           {shipment.providerStatusText ||
@@ -1005,7 +1022,8 @@ export function ShippingOperations({
               </TableHeader>
               <TableBody>
                 {filteredShipments.map((shipment) => {
-                  const ready = data.readyPickupIds.includes(shipment.id);
+                  const external = shipment.shippingChannel === "external" && !shipment.providerOrderId;
+                  const ready = !external && data.readyPickupIds.includes(shipment.id);
                   const selected = selectedOrderIds.includes(shipment.id);
                   return (
                     <TableRow key={shipment.id}>
@@ -1028,12 +1046,23 @@ export function ShippingOperations({
                         )}
                       </TableCell>
                       <TableCell className="px-3 py-4 border-r border-slate-200">
-                        <a
-                          href={`/admin/orders/${encodeURIComponent(shipment.orderNumber)}`}
-                          className="font-semibold text-slate-950 hover:text-blue-700 hover:underline"
-                        >
-                          {shipment.orderNumber}
-                        </a>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <a
+                            href={`/admin/orders/${encodeURIComponent(shipment.orderNumber)}`}
+                            className="font-semibold text-slate-950 hover:text-blue-700 hover:underline"
+                          >
+                            {shipment.orderNumber}
+                          </a>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              external
+                                ? "bg-amber-50 text-amber-800"
+                                : "bg-blue-50 text-blue-700"
+                            }`}
+                          >
+                            {external ? "Luar Mengantar" : "Mengantar"}
+                          </span>
+                        </div>
                         <p className="mt-1 font-semibold text-slate-700">
                           {shipment.customerName}
                         </p>
@@ -1077,7 +1106,9 @@ export function ShippingOperations({
                       </TableCell>
                       <TableCell className="px-3 py-4 min-w-[200px]">
                         <StatusBadge status={shipment.shippingStatus} />
-                        {shipment.providerOrderId && (
+                        {external ? (
+                          <p className="mt-2 text-xs text-slate-500">Status manual</p>
+                        ) : shipment.providerOrderId && (
                           <div className="mt-2 text-xs leading-tight text-slate-500">
                             <p className="font-semibold text-slate-700 line-clamp-1">
                               {shipment.providerStatusText ||
@@ -1099,7 +1130,9 @@ export function ShippingOperations({
                         )}
                       </TableCell>
                       <TableCell className="px-3 py-4">
-                        {shipment.pickupScheduledAt ? (
+                        {external ? (
+                          <p className="text-xs font-medium text-slate-500">Manual (luar Mengantar)</p>
+                        ) : shipment.pickupScheduledAt ? (
                           <>
                             <p className="font-semibold text-slate-900">
                               {dateTime(shipment.pickupScheduledAt)}
@@ -1120,7 +1153,7 @@ export function ShippingOperations({
                       </TableCell>
                       <TableCell className="px-5 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          {!shipment.providerOrderId && (
+                          {!external && !shipment.providerOrderId && (
                             <span className="inline-flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-500">
                               Menunggu Resi
                             </span>

@@ -42,6 +42,16 @@ const DISPATCH_IN_DOUBT_SQL = `(o.provider_dispatch_claimed_at IS NOT NULL
   OR COALESCE(o.provider_dispatch_error, '') = 'DISPATCHING'
   OR COALESCE(o.provider_dispatch_error, '') LIKE '${DISPATCH_UNKNOWN_PREFIX}%')`;
 
+export const SHIPPING_CHANNELS = ["mengantar", "external"] as const;
+export type ShippingChannel = (typeof SHIPPING_CHANNELS)[number];
+
+export function normalizeShippingChannel(
+  value: unknown,
+  fallback: ShippingChannel = "mengantar",
+): ShippingChannel {
+  return value === "external" ? "external" : value === "mengantar" ? "mengantar" : fallback;
+}
+
 export type OrderLifecycleState = {
   id: number;
   payment_method: string;
@@ -53,6 +63,8 @@ export type OrderLifecycleState = {
   stock_restored_at: string | null;
   /** DIGITAL-PRODUCTS-SPEC §2.3: a digital order is delivered on payment, with no shipment. */
   fulfillment_type?: string | null;
+  /** MENGANTAR-WEBHOOK-AUTOSYNC-SPEC §5A: 'external' ships outside Mengantar with manual courier + waybill. */
+  shipping_channel?: string | null;
 };
 
 export type OrderLifecycleUpdate = {
@@ -186,7 +198,12 @@ export function resolveAdminOrderTransition(
     );
   }
 
+  const isExternalShipping =
+    current.shipping_channel === "external" && !current.provider_order_id;
+
   if (
+    current.fulfillment_type !== "digital" &&
+    !isExternalShipping &&
     current.shipping_status === "pending" &&
     !["pending", "cancelled"].includes(shippingStatus) &&
     !current.provider_order_id
@@ -198,13 +215,21 @@ export function resolveAdminOrderTransition(
 
   if (
     current.fulfillment_type !== "digital" &&
-    SHIPPED_LIKE_STATUSES.has(shippingStatus) &&
-    (!current.provider_order_id || !current.courier_code || !current.cnote_no)
+    SHIPPED_LIKE_STATUSES.has(shippingStatus)
   ) {
-    throw new OrderLifecycleError(
-      "Order yang sudah dikirim harus memiliki shipment, kurir, dan nomor resi dari Mengantar.",
-      400,
-    );
+    if (isExternalShipping) {
+      if (!current.courier_code?.trim() || !current.cnote_no?.trim()) {
+        throw new OrderLifecycleError(
+          "Order kirim luar Mengantar harus memiliki kurir dan nomor resi sebelum ditandai terkirim.",
+          400,
+        );
+      }
+    } else if (!current.provider_order_id || !current.courier_code || !current.cnote_no) {
+      throw new OrderLifecycleError(
+        "Order yang sudah dikirim harus memiliki shipment, kurir, dan nomor resi dari Mengantar.",
+        400,
+      );
+    }
   }
 
   if (
@@ -333,7 +358,8 @@ export async function updateAdminOrderShippingStatuses(
   const loaded = await database
     .prepare(
       `SELECT id, payment_method, payment_status, shipping_status,
-        courier_code, cnote_no, provider_order_id, stock_restored_at, fulfillment_type
+        courier_code, cnote_no, provider_order_id, stock_restored_at, fulfillment_type,
+        shipping_channel
       FROM orders
       WHERE id IN (${placeholders})`,
     )
