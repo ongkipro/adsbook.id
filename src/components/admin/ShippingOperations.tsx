@@ -513,10 +513,7 @@ export function ShippingOperations({ initialQueue }: { initialQueue?: string } =
       <section className="space-y-3 md:space-y-4">
         <header className="flex flex-col gap-3 border-b border-slate-200/80 pb-4 sm:flex-row sm:items-end sm:justify-between sm:pb-5">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Operasional pengiriman
-            </p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950 md:mt-1.5 md:text-2xl">
+            <h2 className="text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">
               Pengiriman & pickup
             </h2>
             <p className="mt-1 text-sm leading-5 text-slate-500 md:leading-6">

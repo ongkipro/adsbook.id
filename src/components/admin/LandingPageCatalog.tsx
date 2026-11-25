@@ -325,7 +325,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
               className={buttonVariants({ variant: "default", className: "shrink-0" })}
             >
               <Plus className="w-3.5 h-3.5 mr-1.5" />
-              Buat Landing Page
+              Buat landing page
             </a>
           </div>
         </div>
@@ -447,7 +447,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                     <Globe className="w-6 h-6 stroke-[1.5]" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-900">Belum ada Landing Page</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">Belum ada landing page</h3>
                     <p className="text-xs text-slate-500 mt-1 max-w-xs">
                       Buat landing page native pertama Anda untuk mempromosikan produk katalog secara efektif.
                     </p>
@@ -457,7 +457,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                     className={cn(buttonVariants({ variant: "default" }), "mt-1")}
                   >
                     <Plus className="w-3.5 h-3.5 mr-1.5" />
-                    Buat Landing Page Baru
+                    Buat landing page
                   </a>
                 </div>
               )}
@@ -641,8 +641,8 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                                   )}
                                 />
                                 {Number(page.is_product_page)
-                                  ? "Lepas status Produk Utama"
-                                  : "Jadikan Landing Page Produk Utama"}
+                                  ? "Lepas status produk utama"
+                                  : "Jadikan landing page produk utama"}
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem onClick={() => handleCopyLink(page)}>
@@ -861,8 +861,8 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                                           )}
                                         />
                                         {Number(page.is_product_page)
-                                          ? "Lepas status Produk Utama"
-                                          : "Jadikan Landing Page Produk Utama"}
+                                          ? "Lepas status produk utama"
+                                          : "Jadikan landing page produk utama"}
                                       </DropdownMenuItem>
                                     )}
                                     <DropdownMenuItem onClick={() => handleCopyLink(page)}>
