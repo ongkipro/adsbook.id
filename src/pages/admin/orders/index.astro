@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { OrdersTable, mapOrder, type OrderItem } from '../../../components/admin/OrdersTable';
 import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import AdminSubnavTabs from '../../../components/admin/AdminSubnavTabs.astro';
 import { initialOrderListFilters, orderListQuery } from '../../../lib/admin-orders-initial';
 import { GET as listOrders, ORDER_LIST_PREFETCH_HEADER } from '../../api/admin/orders/index';
 
@@ -47,6 +48,13 @@ try {
         <a href="/admin/shipping" class="btn-primary">Pengiriman</a>
       </div>
     </AdminPageHeader>
+    <AdminSubnavTabs
+      label="Bagian pesanan"
+      items={[
+        { href: '/admin/orders', label: 'Semua pesanan' },
+        { href: '/admin/orders/abandoned', label: 'Pesanan tertinggal' },
+      ]}
+    />
     <OrdersTable initialOrders={initialOrders} initialStatusCounts={initialStatusCounts} initialQuery={Astro.url.search} client:load />
   </div>
 </AdminLayout>

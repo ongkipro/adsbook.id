@@ -295,3 +295,128 @@ test("BillingManager server-renders its loading state without throwing", async (
   const html = await renderIsland("BillingManager.tsx", "BillingManager", {});
   assert.match(html, /aria-label="Memuat langganan"/);
 });
+
+test("AnalyticsDashboard server-renders both loading skeleton and populated SSR data without throwing", async () => {
+  const loading = await renderIsland("AnalyticsDashboard.tsx", "AnalyticsDashboard", {});
+  assert.match(loading, /aria-label="Memuat dashboard"/);
+
+  const html = await renderIsland("AnalyticsDashboard.tsx", "AnalyticsDashboard", {
+    showPaymentsLink: true,
+    showAttention: true,
+    showInsights: true,
+    initialNowIso: "2026-08-18T05:00:00.000Z",
+    initialAttention: {
+      capped: false,
+      at: Date.parse("2026-08-18T05:00:00.000Z"),
+      items: [{ key: "confirm", label: "Menunggu konfirmasi", hint: "Order baru", count: 3, stale: 1, href: "/admin/orders?status=pending", tone: "warn" }],
+    },
+    initialData: {
+      total_revenue: 1_250_000,
+      collected_revenue: 750_000,
+      cod_revenue: 500_000,
+      prepaid_revenue: 750_000,
+      total_orders: 5,
+      live_orders: 5,
+      online_orders: 3,
+      average_order_value: 250_000,
+      lead_conversion_rate: 71.4,
+      lead_base: 7,
+      conversion_rate: 100,
+      rts_rate: 0,
+      rts_base: 2,
+      cod_percentage: 40,
+      transfer_percentage: 40,
+      qris_percentage: 20,
+      payment_methods: {
+        total: 5,
+        cod: { count: 2, percentage: 40 },
+        manual_transfer: { count: 0, percentage: 0 },
+        virtual_account: { count: 2, percentage: 40 },
+        qris: { count: 1, percentage: 20 },
+        unknown_count: 0,
+      },
+      period: { start_date: "2026-08-01", end_date: "2026-08-18", timezone: "Asia/Jakarta", basis: "order_created_at", interval: "day" },
+      trends: [{ date: "2026-08-18", revenue: 1_250_000, orders: 5 }],
+      funnel: { leads: 2, orders: 5, handed_over: 3, delivered: 2, returned: 0 },
+      previous: null,
+      rankings: { products: [{ label: "Kaos Katun", revenue: 750_000, units: 5 }], pages: [] },
+    },
+  });
+  const clean = html.replace(/<!--.*?-->/g, "");
+  assert.match(clean, /1\.250\.000/);
+  assert.match(clean, /Kaos Katun/);
+  assert.match(clean, /1 antrean &gt;24 jam/);
+  assert.match(clean, /Zona waktu WIB/);
+  assert.match(clean, /href="\/admin\/shipping"/);
+
+  // DIGITAL-PRODUCTS-SPEC §4.1: a digital store never links to /admin/shipping.
+  const digitalHtml = await renderIsland("AnalyticsDashboard.tsx", "AnalyticsDashboard", {
+    showPaymentsLink: true,
+    showAttention: true,
+    showInsights: true,
+    isDigital: true,
+    initialNowIso: "2026-08-18T05:00:00.000Z",
+    initialData: {
+      total_revenue: 100_000,
+      collected_revenue: 100_000,
+      total_orders: 1,
+      live_orders: 1,
+      online_orders: 1,
+      average_order_value: 100_000,
+      lead_conversion_rate: 100,
+      lead_base: 1,
+      cod_revenue: 0,
+      prepaid_revenue: 100_000,
+      conversion_rate: 100,
+      rts_rate: 0,
+      rts_base: 0,
+      cod_percentage: 0,
+      transfer_percentage: 0,
+      qris_percentage: 100,
+      payment_methods: {
+        total: 1,
+        cod: { count: 0, percentage: 0 },
+        manual_transfer: { count: 0, percentage: 0 },
+        virtual_account: { count: 0, percentage: 0 },
+        qris: { count: 1, percentage: 100 },
+        unknown_count: 0,
+      },
+      period: { start_date: "2026-08-01", end_date: "2026-08-18", timezone: "Asia/Jakarta", basis: "order_created_at", interval: "day" },
+      trends: [{ date: "2026-08-18", revenue: 100_000, orders: 1 }],
+      funnel: { leads: 0, orders: 1, handed_over: 0, delivered: 0, returned: 0 },
+      previous: null,
+      rankings: { products: [], pages: [] },
+    },
+  });
+  assert.equal(digitalHtml.includes('href="/admin/shipping"'), false);
+});
+
+test("ExpeditionSettings server-renders both loading skeleton and populated SSR data without throwing", async () => {
+  const loading = await renderIsland("ExpeditionSettings.tsx", "ExpeditionSettings", {});
+  assert.match(loading, /aria-label="Memuat pengaturan ekspedisi"/);
+
+  const html = await renderIsland("ExpeditionSettings.tsx", "ExpeditionSettings", {
+    initial: {
+      couriers: [
+        { id: 1, courierCode: "JNE", isEnabled: 1, isCodEnabled: 1, excludedProvinces: null },
+        { id: 2, courierCode: "J&T", isEnabled: 0, isCodEnabled: 0, excludedProvinces: "PA,PB" },
+      ],
+      codDisabledProvinceCodes: ["PA"],
+      originWarehouse: {
+        id: 1,
+        name: "Gudang Bandung",
+        originAreaId: "123",
+        originLabel: "Coblong, Bandung",
+        address: "Jl. Contoh 1",
+        city: "Bandung",
+        province: "Jawa Barat",
+      },
+    },
+  });
+  const clean = html.replace(/<!--.*?-->/g, "");
+  assert.match(clean, /Gudang Bandung/);
+  assert.match(clean, /JNE/);
+  assert.match(clean, /1 provinsi non-COD/);
+  assert.match(clean, /id="kebijakan-cod"/);
+  assert.match(clean, /id="daftar-ekspedisi"/);
+});

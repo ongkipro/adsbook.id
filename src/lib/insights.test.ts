@@ -516,7 +516,7 @@ test("times: weekday × hour in Asia/Jakarta", async () => {
 test("one released-order rule: the dashboard and the insights import it, the lifecycle agrees", () => {
   const lifecycle = readFileSync(new URL("./order-lifecycle.ts", import.meta.url), "utf8");
   assert.ok(lifecycle.includes(`"(${releasedOrderSql("o.")})"`), "order-lifecycle.ts still releases the same set");
-  const dashboard = readFileSync(new URL("../pages/api/admin/analytics.ts", import.meta.url), "utf8");
+  const dashboard = readFileSync(new URL("./dashboard-analytics.ts", import.meta.url), "utf8");
   assert.ok(dashboard.includes("RELEASED_ORDER") && !dashboard.includes("'refunded'"), "the dashboard imports the rule");
   assert.equal(RELEASED_ORDER, releasedOrderSql());
 });

@@ -170,7 +170,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/content` | GET | admin session | owner, admin, advertiser | `src/pages/admin/content.astro` | — | — | — | — |
 | `/admin/content/tampilan` | GET | admin session | owner, admin, advertiser | `src/pages/admin/content/tampilan.astro` | `storefront-template` `tenant-database` | `storefront_templates` `stores` | — | `lib/storefront-template.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/couriers` | GET | admin session | owner, admin | `src/pages/admin/couriers.astro` | — | — | — | — |
-| `/admin/dashboard` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/admin/dashboard.astro` | `auth` `setup-checklist` `tenant-database` | `stores` | `tenant_hosts` | `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/setup-checklist.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
+| `/admin/dashboard` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/admin/dashboard.astro` | `admin-date-filter` `auth` `dashboard-analytics` `order-attention` `setup-checklist` `tenant-database` | `orders` `stores` `warehouses` | `tenant_hosts` | `lib/admin-analytics.test.ts` `lib/admin-credentials.test.ts` `lib/admin-date-filter.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/auth.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/setup-checklist.test.ts` `lib/source-slug.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/admin/docs` | GET | admin session | owner, admin | `src/pages/admin/docs/index.astro` | — | — | — | — |
 | `/admin/docs/[chapter]` | GET | admin session | owner, admin | `src/pages/admin/docs/[chapter].astro` | — | — | — | — |
 | `/admin/expeditions` | GET | admin session | owner, admin | `src/pages/admin/expeditions.astro` | — | — | — | — |
@@ -209,7 +209,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/api/admin/abandoned-orders` | GET, PATCH, POST | admin session | owner, admin, customer_service | `src/pages/api/admin/abandoned-orders.ts` | `abandoned-lead` `api` `courier-rules` `form-mode` `order-list-filter` `paid-order-purchase` `shipping-quote` `source-slug` `tenant-database` | `capi_event_outbox` `courier_rules` `landing_pages` `order_items` `orders` `payment_transactions` `product_variants` `products` `stores` `warehouses` | — | `lib/abandoned-lead.test.ts` `lib/admin-orders-initial.test.ts` `lib/api.test.ts` `lib/courier-rules.test.ts` `lib/form-mode.test.ts` `lib/insights.test.ts` `lib/order-item-weight.test.ts` `lib/paid-order-purchase.test.ts` `lib/shipping-quote.test.ts` `lib/source-slug.test.ts` `lib/tiktok-outbox.test.ts` `lib/warehouse-quote.test.ts` `platform/two-tenants.test.ts` |
 | `/api/admin/access` | DELETE, GET, PATCH, POST | admin session | owner | `src/pages/api/admin/access.ts` | `admin-credentials` `admin-session` `api` `auth` `env` `platform/identities` `seller-two-step` `tenant-database` | `admin_credentials` `admin_login_challenges` `admin_sessions` `notifications` | `platform_identities` `tenant_hosts` `tenants` | `lib/admin-bootstrap.test.ts` `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/api.test.ts` `lib/auth.test.ts` `lib/env.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/seller-two-step.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/owner-identity.test.ts` `platform/two-tenants.test.ts` |
 | `/api/admin/ads` | GET, PUT | admin session | owner, admin, advertiser | `src/pages/api/admin/ads.ts` | `capi-outbox` `credential-crypto` `env` `google-ads-offline` `meta-capi` `store-ads` `tenant-database` `tiktok-events` `tiktok-outbox` | `capi_event_outbox` `google_ads_conversion_outbox` `order_items` `orders` `product_variants` `products` `stores` `tiktok_event_outbox` | — | `lib/capi-outbox.test.ts` `lib/credential-crypto.test.ts` `lib/e2e-full-funnel.test.ts` `lib/env.test.ts` `lib/google-ads-offline.test.ts` `lib/google-data-manager.test.ts` `lib/meta-capi.test.ts` `lib/meta-purchase-dedup.test.ts` `lib/meta-purchase-order.test.ts` `lib/seller-two-step.test.ts` `lib/store-ads.test.ts` `lib/tiktok-events.test.ts` `lib/tiktok-outbox.test.ts` `platform/two-tenants.test.ts` `plugins/kelola/sync.test.ts` |
-| `/api/admin/analytics` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/api/admin/analytics.ts` | `api` `dashboard-compare` `order-metrics` `tenant-database` | `orders` | — | `lib/api.test.ts` `lib/dashboard-compare.test.ts` `lib/insights.test.ts` `platform/two-tenants.test.ts` |
+| `/api/admin/analytics` | GET | admin session | owner, admin, advertiser, customer_service | `src/pages/api/admin/analytics.ts` | `api` `auth` `dashboard-analytics` `tenant-database` | `orders` | — | `lib/admin-analytics.test.ts` `lib/admin-credentials.test.ts` `lib/admin-navigation.test.ts` `lib/admin-session.test.ts` `lib/api.test.ts` `lib/auth.test.ts` `lib/health-snapshot.test.ts` `lib/install.test.ts` `lib/order-follow-up.test.ts` `lib/system-precision.test.ts` `lib/warehouses.test.ts` `platform/console.test.ts` `platform/isolation.test.ts` `platform/two-tenants.test.ts` |
 | `/api/admin/billing` | GET, POST | admin session | owner, admin | `src/pages/api/admin/billing/index.ts` | `api` `env` `platform/billing` `tenant-database` | `stores` `warehouses` | `subscription_invoices` `tenant_events` `tenants` | `lib/api.test.ts` `lib/env.test.ts` `lib/store-closed.test.ts` `platform/billing.test.ts` `platform/platform-site.test.ts` `platform/two-tenants.test.ts` |
 | `/api/admin/billing/[id]/check` | POST | admin session | owner, admin | `src/pages/api/admin/billing/[id]/check.ts` | `api` `platform/billing` | — | `subscription_invoices` `tenant_events` `tenants` | `lib/api.test.ts` `lib/store-closed.test.ts` `platform/billing.test.ts` `platform/platform-site.test.ts` |
 | `/api/admin/check` | GET | admin session | owner, admin, customer_service | `src/pages/api/admin/check.ts` | `api` `rts-scoring` `tenant-database` | `orders` | — | `lib/api.test.ts` `lib/rts-scoring.test.ts` `platform/two-tenants.test.ts` |
@@ -306,7 +306,7 @@ under both headings wherever they are named; which database a statement meant is
 
 ## Modules
 
-208 modules under `src/lib` and `src/platform`; 10 that no test imports.
+209 modules under `src/lib` and `src/platform`; 10 that no test imports.
 `tests` counts a module's sibling test and every test file importing it directly.
 `used by` lists routes importing the module directly — a module used by nothing
 is either transitive (imported by another lib) or dead, and only reading tells which.
@@ -318,14 +318,14 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `ad-channel` | 5 | — | — | 3 | — |
 | `ad-taxonomy` | 4 | — | — | 1 | `/admin/ads/google` |
 | `admin-credentials` | 13 | `admin_credentials` | — | 5 | `/api/handoff` `/hello` `/admin/profile` `/api/admin/access` `/api/admin/profile` `/api/admin/profile/two-step` |
-| `admin-date-filter` | 26 | — | — | 1 | — |
+| `admin-date-filter` | 26 | — | — | 1 | `/admin/dashboard` |
 | `admin-orders-initial` | 3 | — | — | 1 | `/admin/orders` |
 | `admin-session` | 6 | `admin_credentials` `admin_sessions` | — | 3 | `/` `/[slug]` `/api/handoff` `/hello` `/api/admin/access` `/api/admin/logout` `/api/admin/profile` |
 | `adsbook-cli` | 5 | — | — | 1 | — |
 | `ai-content-instructions` | 2 | — | — | 1 | `/api/admin/content` |
 | `api` | 3 | — | — | 1 | `/api/form-config` `/api/record-abandoned-order` `/api/webhooks/autolaris/[token]` `/api/admin/abandoned-orders` `/api/admin/access` `/api/admin/analytics` `/api/admin/billing` `/api/admin/billing/[id]/check` `/api/admin/check` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/expeditions` `/api/admin/health` `/api/admin/health/check` `/api/admin/health/status` `/api/admin/insights/trend` `/api/admin/landing-pages` `/api/admin/landing-pages/[id]` `/api/admin/media` `/api/admin/notifications` `/api/admin/ongkir` `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/orders/[id]/follow-up` `/api/admin/orders/attention` `/api/admin/orders/export` `/api/admin/orders/retention` `/api/admin/payment-reconciliation` `/api/admin/plugins` `/api/admin/plugins/kelola` `/api/admin/products` `/api/admin/profile` `/api/admin/profile/two-step` `/api/admin/rules` `/api/admin/seller-bank-accounts` `/api/admin/settings` `/api/admin/settings/developer` `/api/admin/settings/privacy` `/api/admin/settings/theme` `/api/admin/shipping` `/api/admin/store-removal` `/api/admin/upload-r2` `/api/admin/warehouses` `/api/admin/whatsapp-numbers` |
 | `auth-secret` | 1 | `install_secrets` | — | 3 | `/` `/[slug]` `/api/handoff` `/hello` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/api/admin/logout` |
-| `auth` | 17 | — | — | 12 | `/` `/api/handoff` `/hello` `/admin/dashboard` `/api/admin/access` `/api/admin/logout` `/api/admin/profile` `/api/admin/profile/two-step` |
+| `auth` | 17 | — | — | 12 | `/` `/api/handoff` `/hello` `/admin/dashboard` `/api/admin/access` `/api/admin/analytics` `/api/admin/logout` `/api/admin/profile` `/api/admin/profile/two-step` |
 | `autolaris-client` | 20 | — | — | 4 | `/api/order-status` `/api/payment-methods` `/admin/payments` `/api/admin/settings` |
 | `autolaris-payment` | 23 | `autolaris_callbacks` `order_items` `orders` `payment_transaction_attempts` `payment_transactions` `product_variants` `products` `stores` `warehouses` | — | 2 | `/api/meta-event` `/api/order-status` `/api/submit-order` `/api/v1/checkout` `/api/v1/tracking/events` `/api/admin/orders/[id]` |
 | `brand-assets` | 7 | — | — | **none** | `/thanks` `/api/handoff` `/hello` `/pemulihan` `/admin/settings/store` `/platform/login` |
@@ -345,7 +345,8 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `credential-crypto` | 12 | `stores` | — | 5 | `/api/admin/ads` `/api/admin/plugins/kelola` `/api/admin/settings` |
 | `crm-template` | 11 | `seller_bank_accounts` `stores` | — | 2 | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/settings` |
 | `daily-rotation` | 6 | — | — | 1 | `/` |
-| `dashboard-compare` | 6 | — | — | 1 | `/api/admin/analytics` |
+| `dashboard-analytics` | 12 | `orders` | — | 1 | `/admin/dashboard` `/api/admin/analytics` |
+| `dashboard-compare` | 6 | — | — | 1 | — |
 | `deploy-preflight` | 13 | — | — | 1 | — |
 | `developer-api-keys` | 22 | — | — | 8 | `/api/admin/settings/developer` |
 | `digital-access` | 4 | `order_items` `orders` `product_variants` `products` | — | 1 | `/api/order-status` |
@@ -406,13 +407,13 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `ops-api` | 6 | — | — | 2 | `/api/ops/v1/openapi.json` `/api/ops/v1/orders` `/api/ops/v1/orders/[number]` |
 | `ops-openapi` | 1 | — | — | 1 | `/api/ops/v1/openapi.json` |
 | `ops-order` | 8 | `order_items` `orders` `payment_transactions` `product_variants` `products` | — | 1 | `/api/ops/v1/orders` `/api/ops/v1/orders/[number]` |
-| `order-attention` | 5 | `orders` `warehouses` | — | 1 | `/api/admin/orders/attention` |
+| `order-attention` | 5 | `orders` `warehouses` | — | 1 | `/admin/dashboard` `/api/admin/orders/attention` |
 | `order-export` | 12 | `order_items` `orders` `pickup_schedules` `product_variants` `products` `warehouses` | — | 2 | `/api/admin/orders/export` |
 | `order-follow-up` | 7 | `order_follow_ups` `orders` | — | 1 | `/api/admin/orders` `/api/admin/orders/[id]/follow-up` |
 | `order-instruction-hint` | 2 | — | — | 1 | — |
 | `order-lifecycle` | 15 | `order_items` `orders` `payment_reconciliation_audits` `payment_transactions` | — | 5 | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/shipping` |
 | `order-list-filter` | 10 | `payment_transactions` | — | **none** | `/api/admin/abandoned-orders` `/api/admin/orders` `/api/admin/shipping` |
-| `order-metrics` | 6 | — | — | 1 | `/api/admin/analytics` `/api/admin/orders/[id]/follow-up` |
+| `order-metrics` | 6 | — | — | 1 | `/api/admin/orders/[id]/follow-up` |
 | `order-persistence` | 18 | `order_items` `order_number_counters` `orders` `payment_transactions` `product_variants` `products` `seller_bank_accounts` `stores` | — | 10 | `/api/record-abandoned-order` `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/retention` |
 | `order-schema` | 4 | — | — | 3 | `/api/submit-middle-order` `/api/submit-order` `/api/v1/checkout` `/api/admin/orders/[id]` |
 | `order-status` | 4 | `order_items` `orders` `payment_transactions` | — | 3 | `/api/order-status` `/api/v1/orders/status` |

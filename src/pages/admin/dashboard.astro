@@ -3,6 +3,14 @@ import { tenantDatabase } from '../../lib/tenant-database.ts';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { AnalyticsDashboard } from '../../components/admin/AnalyticsDashboard';
 import { canAccessAdminRoute } from '../../lib/auth';
+import { resolveAdminDateSelection } from '../../lib/admin-date-filter';
+import {
+  DASHBOARD_MAX_RANGE_DAYS,
+  parseDashboardSearchParams,
+  readDashboardAnalytics,
+  type DashboardAnalyticsData,
+} from '../../lib/dashboard-analytics';
+import { readOrderAttention } from '../../lib/order-attention';
 import { buildSetupChecklist, readSetupFacts } from '../../lib/setup-checklist';
 import SetupChecklist from '../../components/admin/SetupChecklist.astro';
 
@@ -12,13 +20,45 @@ const adminRole = Astro.locals.admin?.role ?? 'customer_service';
 const mayManageOrders = canAccessAdminRoute(adminRole, '/admin/orders');
 const mayManagePayments = canAccessAdminRoute(adminRole, '/admin/payments');
 const mayReadInsights = canAccessAdminRoute(adminRole, '/api/admin/insights');
-// UX-2 (T-38): the setup card, owner/admin only — they are the roles that can
-// complete the steps. It shows the open required steps, shrinks to one line
-// once the store is ready, and hides when every step is done (/admin/setup).
 const maySetUp = adminRole === 'owner' || adminRole === 'admin';
-const setupFacts = maySetUp
-  ? await readSetupFacts(tenantDatabase(Astro.locals), Astro.locals)
-  : null;
+
+const database = tenantDatabase(Astro.locals);
+const db = database && typeof database === 'object' ? (database as D1Database) : null;
+
+const { selection: initialSelection, compare: initialCompare } = parseDashboardSearchParams(Astro.url.searchParams);
+const now = new Date();
+const resolvedPeriod = resolveAdminDateSelection(initialSelection.filter, {
+  customRange: { start: initialSelection.start, end: initialSelection.end },
+  maxCustomRangeDays: DASHBOARD_MAX_RANGE_DAYS,
+  now,
+});
+
+// Load setup checklist, KPI analytics (+ rankings) and Action needed together
+// on the server so the first HTML paint carries real numbers instead of a blank
+// island waiting for four sequential client requests.
+const [setupFacts, initialAnalytics, initialAttentionRaw] = await Promise.all([
+  maySetUp ? readSetupFacts(database, Astro.locals) : Promise.resolve(null),
+  db && resolvedPeriod.ok
+    ? readDashboardAnalytics(db, {
+        startDate: resolvedPeriod.start || null,
+        endDate: resolvedPeriod.end || null,
+        interval: resolvedPeriod.interval,
+        preset: initialSelection.filter,
+        compare: initialCompare === 'auto' ? null : initialCompare,
+        includeRankings: mayReadInsights,
+      }).catch((error): DashboardAnalyticsData | null => {
+        console.error('admin-dashboard-ssr-analytics', error instanceof Error ? error.message : 'unknown');
+        return null;
+      })
+    : Promise.resolve(null),
+  db && mayManageOrders
+    ? readOrderAttention(db).catch((error): Awaited<ReturnType<typeof readOrderAttention>> | null => {
+        console.error('admin-dashboard-ssr-attention', error instanceof Error ? error.message : 'unknown');
+        return null;
+      })
+    : Promise.resolve(null),
+]);
+
 const setupSteps = setupFacts ? buildSetupChecklist(setupFacts) : [];
 const setupHost = Astro.locals.tenantContext?.primaryHost ?? Astro.locals.tenantContext?.host ?? null;
 const setupStoreUrl = setupHost ? `${Astro.url.protocol}//${setupHost}${Astro.url.port && !setupHost.includes(':') ? `:${Astro.url.port}` : ''}` : null;
@@ -34,6 +74,10 @@ const primaryActions = mayManageOrders
       { href: '/admin/products', label: 'Kelola produk', primary: false },
       { href: '/admin/ads', label: 'Buka Ads', primary: true },
     ];
+
+const initialAttention = initialAttentionRaw
+  ? { items: initialAttentionRaw.items, capped: initialAttentionRaw.capped, at: now.getTime() }
+  : null;
 ---
 
 <AdminLayout title="Dashboard" activeMenu="dashboard">
@@ -49,6 +93,17 @@ const primaryActions = mayManageOrders
       </div>
     </header>
     {setupSteps.length > 0 && <SetupChecklist steps={setupSteps} storeUrl={setupStoreUrl} compact />}
-    <AnalyticsDashboard client:only="react" showPaymentsLink={mayManagePayments} showAttention={mayManageOrders} showInsights={mayReadInsights} />
+    <AnalyticsDashboard
+      client:load
+      showPaymentsLink={mayManagePayments}
+      showAttention={mayManageOrders}
+      showInsights={mayReadInsights}
+      isDigital={Astro.locals.tenant.catalogMode === 'digital'}
+      initialData={initialAnalytics}
+      initialAttention={initialAttention}
+      initialSelection={initialSelection}
+      initialCompare={initialCompare}
+      initialNowIso={now.toISOString()}
+    />
   </div>
 </AdminLayout>

@@ -407,7 +407,7 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
       {/* Two columns on a wide screen: what is live at checkout on the left,
           how it is configured on the right. One column made the page a long
           scroll with half the desktop empty. */}
-      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+      <div className="grid grid-cols-1 items-start gap-5 2xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       <div className="min-w-0 space-y-5">
       <Card>
         <CardHeader className="border-b">

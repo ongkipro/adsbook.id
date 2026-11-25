@@ -1,20 +1,21 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import AdminPageHeader from "../../components/admin/AdminPageHeader.astro";
+import SectionRailLayout from "../../components/admin/SectionRailLayout.astro";
+import { PAYMENTS_RAIL_GROUPS } from "../../components/admin/section-rails";
 import PaymentReconciliationQueue from "../../components/admin/PaymentReconciliationQueue";
 
 export const prerender = false;
 ---
 
 <AdminLayout title="Verifikasi pembayaran AutoLaris" activeMenu="payments">
-  <div class="space-y-5">
-    <AdminPageHeader
-      title="Verifikasi pembayaran AutoLaris"
-      description="Periksa pembayaran QRIS dan virtual account yang masih menunggu, lalu konfirmasi hanya setelah transaksi terlihat berhasil di dashboard AutoLaris."
-      backHref="/admin/payments"
-      backLabel="Pembayaran"
-    />
-
+  <SectionRailLayout
+    title="Verifikasi pembayaran AutoLaris"
+    description="Periksa pembayaran QRIS dan virtual account yang masih menunggu, lalu konfirmasi hanya setelah transaksi terlihat berhasil di dashboard AutoLaris."
+    groups={PAYMENTS_RAIL_GROUPS}
+    railLabel="Menu pembayaran"
+    railId="payments"
+    maxWidth="full"
+  >
     <PaymentReconciliationQueue client:load />
-  </div>
+  </SectionRailLayout>
 </AdminLayout>

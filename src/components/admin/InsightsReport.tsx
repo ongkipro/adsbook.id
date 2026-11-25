@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDownUp, ChartNoAxesCombined, Filter, Package } from 'lucide-react';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
@@ -59,9 +59,20 @@ export function InsightsReport({ report, initialQuery = '', sources = [], produc
   const [retry, setRetry] = useState(0);
   const [metric, setMetric] = useState<TrendMetric>('revenue');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const hydratedFromInitial = useRef(Boolean(initialData));
   const activeFilters = [channel, source, product].filter(Boolean).length;
 
   useEffect(() => {
+    setMounted(true);
+    if (report === 'trend') void import('./InsightsChart').catch(() => undefined);
+  }, [report]);
+
+  useEffect(() => {
+    if (hydratedFromInitial.current) {
+      hydratedFromInitial.current = false;
+      return;
+    }
     const controller = new AbortController();
     setBusy(true); setError(''); setStatus(0);
     fetch(`/api/admin/insights/${report}?${query}`, { signal: controller.signal, headers: { Accept: 'application/json' } })
@@ -156,7 +167,7 @@ export function InsightsReport({ report, initialQuery = '', sources = [], produc
     </div> : data && <>
       {report === 'landing' && ((data as Landing).rows.length ? <LandingView data={data as Landing} query={query} mayReadOrders={mayReadOrders} /> : <Empty reset={reset} />)}
       {report === 'products' && ((data as Products).rows.length ? <ProductsView data={data as Products} /> : <Empty reset={reset} />)}
-      {report === 'trend' && <TrendView data={data as Trend} metric={metric} setMetric={setMetric} />}
+      {report === 'trend' && <TrendView data={data as Trend} metric={metric} setMetric={setMetric} mounted={mounted} />}
       {report === 'locations' && ((data as Locations).provinces.length || (data as Locations).incomplete_address.orders ? <LocationsView data={data as Locations} onPlace={place} /> : <Empty reset={reset} />)}
       {report === 'times' && ((data as Times).total ? <TimesView data={data as Times} /> : <Empty reset={reset} />)}
       {report === 'utm' && ((data as Utm).rows.length ? <UtmView data={data as Utm} /> : <Empty reset={reset} />)}
@@ -278,13 +289,13 @@ function ProductsView({ data }: { data: Products }) {
       stats={[['Unit', number(row.units)], ['Terkirim', number(row.delivered_units ?? 0)], ['Retur', number(row.returned_units ?? 0)], ['RTS', <ReturnShare value={row.return_share} />]]} />)}</div>
   </section>;
 }
-function TrendView({ data, metric, setMetric }: { data: Trend; metric: TrendMetric; setMetric: (value: TrendMetric) => void }) {
+function TrendView({ data, metric, setMetric, mounted }: { data: Trend; metric: TrendMetric; setMetric: (value: TrendMetric) => void; mounted: boolean }) {
   const format = metric === 'revenue' ? money : number;
   return <section className={sectionClass}>
     <FilterBar><FilterField label="Metrik" htmlFor="trend-metric" size="lg"><FilterSelect id="trend-metric" icon={ChartNoAxesCombined} value={metric} options={Object.entries(metricLabels).map(([value, label]) => ({ value: value as typeof metric, label }))} onValueChange={setMetric} /></FilterField></FilterBar>
     <div className="my-4 grid grid-cols-2 gap-4"><div><p className="text-xs text-muted-foreground">Periode terpilih</p><p className="whitespace-nowrap text-xl font-semibold tabular-nums sm:text-2xl">{format(data.total[metric])}</p></div><div><p className="text-xs text-muted-foreground">Sebelumnya · {data.previous.start} – {data.previous.end}</p><p className="whitespace-nowrap text-xl font-semibold tabular-nums sm:text-2xl">{format(data.previous[metric])}</p></div></div>
     {data.total.orders + data.total.leads === 0 && <p className="mb-3 text-sm">Tidak ada pesanan atau lead pada periode ini.</p>}
-    <figure><Suspense fallback={<Skeleton className="h-64 w-full" />}><Chart series={data.series} metric={metric} /></Suspense><figcaption className="mt-2 text-xs text-muted-foreground">{metricLabels[metric]} per hari · WIB. Hari tanpa data ditampilkan nol. {metric === 'meta_purchases' ? 'Order yang Purchase-nya diterima Meta: COD saat order masuk, transfer/QRIS/VA setelah lunas. Cocokkan dengan Events Manager, bukan Ads Manager. Riwayat pengiriman disimpan 30 hari.' : 'Revenue bukan konfirmasi pembayaran.'}</figcaption></figure>
+    <figure>{mounted ? <Suspense fallback={<Skeleton className="h-64 w-full" />}><Chart series={data.series} metric={metric} /></Suspense> : <Skeleton className="h-64 w-full" />}<figcaption className="mt-2 text-xs text-muted-foreground">{metricLabels[metric]} per hari · WIB. Hari tanpa data ditampilkan nol. {metric === 'meta_purchases' ? 'Order yang Purchase-nya diterima Meta: COD saat order masuk, transfer/QRIS/VA setelah lunas. Cocokkan dengan Events Manager, bukan Ads Manager. Riwayat pengiriman disimpan 30 hari.' : 'Revenue bukan konfirmasi pembayaran.'}</figcaption></figure>
     <details className="mt-4"><summary className="cursor-pointer py-2 text-sm">Lihat data harian</summary><Table><TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead>Orders</TableHead><TableHead>Leads</TableHead><TableHead>Revenue</TableHead><TableHead>Purchase ke Meta</TableHead></TableRow></TableHeader><TableBody>{data.series.map((day) => <TableRow key={day.date}><TableCell>{day.date}</TableCell><TableCell>{number(day.orders)}</TableCell><TableCell>{number(day.leads)}</TableCell><TableCell>{money(day.revenue)}</TableCell><TableCell>{number(day.meta_purchases)}</TableCell></TableRow>)}</TableBody></Table></details>
   </section>;
 }

@@ -1,37 +1,108 @@
 ---
 import { tenantDatabase } from '../../lib/tenant-database.ts';
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminPageHeader from './AdminPageHeader.astro';
+import SectionRailLayout from './SectionRailLayout.astro';
+import { ANALYTICS_RAIL_GROUPS } from './section-rails';
 import { InsightsReport } from './InsightsReport';
-import { INSIGHTS_REPORTS, type InsightsReport as Report } from '../../lib/insights-view';
+import { INSIGHTS_REPORTS, insightsInitialQuery, type InsightsReport as Report } from '../../lib/insights-view';
 import { canAccessAdminRoute } from '../../lib/auth';
 import { sourceLabelsStatement, sourceLabelsFromRows } from '../../lib/source-slug';
+import { GET as getTrend } from '../../pages/api/admin/insights/trend';
+import { GET as getLanding } from '../../pages/api/admin/insights/landing';
+import { GET as getProducts } from '../../pages/api/admin/insights/products';
+import { GET as getLocations } from '../../pages/api/admin/insights/locations';
+import { GET as getTimes } from '../../pages/api/admin/insights/times';
+import { GET as getUtm } from '../../pages/api/admin/insights/utm';
+
 interface Props { report: Report }
 const { report } = Astro.props;
 const definition = INSIGHTS_REPORTS[report];
+
+const REPORT_HANDLERS = {
+  trend: getTrend,
+  landing: getLanding,
+  products: getProducts,
+  locations: getLocations,
+  times: getTimes,
+  utm: getUtm,
+} as const;
+
 let sources: Array<{ value: string; label: string }> = [];
 let products: Array<{ value: string; label: string }> = [];
 let catalogueUnavailable = false;
-if (report === 'trend') {
-  try {
-    const db = tenantDatabase(Astro.locals);
-    if (!db) throw new Error('database-unavailable');
-    const results = await db.batch([
-      sourceLabelsStatement(db),
-      db.prepare('SELECT id, title FROM products ORDER BY title'),
-    ]);
-    const rows = results[0].results as Parameters<typeof sourceLabelsFromRows>[1];
-    sources = [...sourceLabelsFromRows(rows.map((row) => row.slug), rows).values()]
-      .map((row) => ({ value: row.slug, label: row.label }));
-    products = (results[1].results as Array<{ id: number; title: string }>).map((row) => ({ value: String(row.id), label: row.title }));
-  } catch { catalogueUnavailable = true; }
-}
+let initialData: unknown;
+
+const initialQuery = insightsInitialQuery(Astro.url.search);
+const reportUrl = new URL(`/api/admin/insights/${report}?${initialQuery}`, Astro.url);
+
+const [catalogueResult, reportResult] = await Promise.all([
+  report === 'trend'
+    ? (async () => {
+        try {
+          const db = tenantDatabase(Astro.locals);
+          if (!db) throw new Error('database-unavailable');
+          const results = await db.batch([
+            sourceLabelsStatement(db),
+            db.prepare('SELECT id, title FROM products ORDER BY title'),
+          ]);
+          const rows = results[0].results as Parameters<typeof sourceLabelsFromRows>[1];
+          return {
+            sources: [...sourceLabelsFromRows(rows.map((row) => row.slug), rows).values()]
+              .map((row) => ({ value: row.slug, label: row.label })),
+            products: (results[1].results as Array<{ id: number; title: string }>)
+              .map((row) => ({ value: String(row.id), label: row.title })),
+            unavailable: false,
+          };
+        } catch {
+          return { sources: [], products: [], unavailable: true };
+        }
+      })()
+    : Promise.resolve({ sources: [], products: [], unavailable: false }),
+  (async () => {
+    try {
+      const response = await REPORT_HANDLERS[report]({
+        locals: Astro.locals,
+        url: reportUrl,
+        request: new Request(reportUrl),
+      } as Parameters<typeof getTrend>[0]);
+      const payload = (await response.json().catch(() => ({}))) as { success?: boolean; data?: unknown };
+      if (response.ok && payload.success && payload.data) return payload.data;
+    } catch (error) {
+      console.error('admin-insights-initial-load', report, error instanceof Error ? error.message : 'unknown');
+    }
+    return undefined;
+  })(),
+]);
+
+sources = catalogueResult.sources;
+products = catalogueResult.products;
+catalogueUnavailable = catalogueResult.unavailable;
+initialData = reportResult;
+
 const mayReadOrders = Boolean(Astro.locals.admin && canAccessAdminRoute(Astro.locals.admin.role, '/admin/orders'));
 ---
 <AdminLayout title={`Analitik · ${definition.label}`} activeMenu="analytics">
-  <div class="flex min-w-0 flex-col gap-5">
-    <AdminPageHeader title={`Analitik · ${definition.label}`} description={definition.description} />
-    {catalogueUnavailable && <p role="status" class="text-sm text-muted-foreground">Pilihan katalog belum tersedia. Muat ulang halaman untuk mencoba lagi; laporan tetap dapat dibuka.</p>}
-    <InsightsReport client:only="react" report={report} initialQuery={Astro.url.search} sources={sources} products={products} mayReadOrders={mayReadOrders} />
-  </div>
+  <SectionRailLayout
+    title={`Analitik · ${definition.label}`}
+    description={definition.description}
+    groups={ANALYTICS_RAIL_GROUPS}
+    railLabel="Menu analitik"
+    railId="analytics"
+    maxWidth="full"
+  >
+    {catalogueUnavailable && (
+      <p role="status" class="text-sm text-muted-foreground">
+        Pilihan katalog belum tersedia. Muat ulang halaman untuk mencoba lagi; laporan tetap dapat dibuka.
+      </p>
+    )}
+    <InsightsReport
+      client:load
+      report={report}
+      initialQuery={Astro.url.search}
+      sources={sources}
+      products={products}
+      mayReadOrders={mayReadOrders}
+      initialData={initialData as never}
+    />
+  </SectionRailLayout>
 </AdminLayout>
