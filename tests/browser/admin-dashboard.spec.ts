@@ -187,6 +187,22 @@ test("section rails, split pages, resi tracking, and sidebar tree menus work acr
     expect(overflow, `${tree.path} no overflow at 1366px`).toBeLessThanOrEqual(0);
   }
 
+  // Profile: SSR pre-fills username & integration status without client flicker, zero overflow.
+  const profileResponse = await page.goto(`${STORE}/admin/profile`);
+  expect(profileResponse?.status()).toBe(200);
+  const profileHtml = await profileResponse!.text();
+  expect(profileHtml).toContain('data-ssr-ready="1"');
+  expect(profileHtml).toContain(owner("toko-alfa").username);
+  await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  await page.waitForLoadState("networkidle");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  if (process.env.DASHBOARD_SHOT_DIR) {
+    await page.screenshot({ path: `${process.env.DASHBOARD_SHOT_DIR}/profile-1366.png`, fullPage: true });
+    await page.locator("#integrasi-mengantar").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: `${process.env.DASHBOARD_SHOT_DIR}/profile-1366-lower.png`, fullPage: true });
+  }
+
   expect(errors, "no console or page errors on desktop panels").toEqual([]);
   await desktop.close();
 
@@ -198,15 +214,14 @@ test("section rails, split pages, resi tracking, and sidebar tree menus work acr
     if (message.type() === "error") mobileErrors.push(message.text());
   });
   await signIn(mPage);
-  for (const path of ["/admin/expeditions", "/admin/expeditions/cod-policy", "/admin/payments", "/admin/payments/banks", "/admin/check", "/admin/check/resi"]) {
+  for (const path of ["/admin/expeditions", "/admin/expeditions/cod-policy", "/admin/payments", "/admin/payments/banks", "/admin/check", "/admin/check/resi", "/admin/profile"]) {
     await mPage.goto(`${STORE}${path}`);
     await mPage.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
     await mPage.waitForLoadState("networkidle");
     const overflow = await mPage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, `${path} no overflow at 390px`).toBeLessThanOrEqual(0);
-    if (process.env.DASHBOARD_SHOT_DIR && (path === "/admin/expeditions/cod-policy" || path === "/admin/check/resi")) {
-      const slug = path.replace(/^\/admin\//, "").replace(/\//g, "-");
-      await mPage.screenshot({ path: `${process.env.DASHBOARD_SHOT_DIR}/v2-${slug}-390.png`, fullPage: true });
+    if (process.env.DASHBOARD_SHOT_DIR && (path === "/admin/profile")) {
+      await mPage.screenshot({ path: `${process.env.DASHBOARD_SHOT_DIR}/profile-390.png`, fullPage: true });
     }
   }
   expect(mobileErrors, "no console or page errors on mobile panels").toEqual([]);
