@@ -4,11 +4,12 @@
 //
 // Proves in Chromium, at desktop (1366x720, where the sidebar scrolls) and
 // mobile (390x844):
-//   1. Clicking Pengaturan → Akses Pengguna (and the neighbouring bottom
-//      submenu items) leaves the clicked item at the same y-coordinate on the
-//      next page — within 2 px — and visible inside the sidebar. The same holds
-//      for the standalone Plugin link, clicked from a Pengaturan page: it sits
-//      right above Pengaturan, so Pengaturan's sub-list closing does not move it.
+//   1. Pengaturan's sections live in a rail beside the page (2026-11-25), not
+//      in a sub-list under the sidebar item. Clicking a section (Akses
+//      pengguna, Gudang, Domain) leaves it at the same y-coordinate on the next
+//      page — within 2 px — with the sidebar's Pengaturan item still lit and
+//      unmoved. The same holds for the sidebar's standalone Plugin link,
+//      clicked from a Pengaturan page.
 //   2. On mobile, opening "Semua menu" on /admin/settings/access scrolls the
 //      sheet so "Akses Pengguna" is in view.
 //   3. Cold-loading the pages that used to shift (domains, developer, profile,
@@ -44,31 +45,43 @@ test("the sidebar stays where the operator clicked, and admin pages load without
   await page.goto(`${origin(store.slug)}/admin/settings`);
   await page.waitForLoadState("networkidle");
 
-  // Pengaturan's own sub-list (Plugin is its own workspace now, checked right after).
+  // Pengaturan's sections are the rail beside the page: the clicked section and the sidebar's Pengaturan item both stay put.
+  const rail = page.locator("[data-settings-rail]");
+  await expect(rail).toBeVisible();
   for (const href of ["/admin/settings/access", "/admin/settings/warehouse", "/admin/settings/domains"]) {
-    const link = page.locator(`[data-sidebar="content"] a[href="${href}"]`);
+    const link = rail.locator(`a[href="${href}"]`);
+    const sidebarItem = page.locator('[data-sidebar="content"] a[href="/admin/settings"]');
+    // On this 720px window the rail is taller than its box and scrolls: measure where the click will land.
     await link.scrollIntoViewIfNeeded();
     const beforeY = await link.evaluate((el) => Math.round(el.getBoundingClientRect().top));
+    const sidebarY = await sidebarItem.evaluate((el) => Math.round(el.getBoundingClientRect().top));
     await Promise.all([page.waitForURL(`**${href}`), link.click()]);
     await page.waitForLoadState("networkidle");
 
     const after = await page.evaluate((target) => {
-      const content = document.querySelector('[data-sidebar="content"]')!;
-      const active = content.querySelector(`a[href="${target}"]`)!;
+      const railBox = document.querySelector("[data-settings-rail]")!;
+      const active = railBox.querySelector(`a[href="${target}"]`)!;
       const item = active.getBoundingClientRect();
-      const box = content.getBoundingClientRect();
+      const box = railBox.getBoundingClientRect();
+      const sidebar = document.querySelector('[data-sidebar="content"]')!;
       return {
         y: Math.round(item.top),
         ariaCurrent: active.getAttribute("aria-current"),
+        currentCount: railBox.querySelectorAll('[aria-current="page"]').length,
         visible: item.top >= box.top && item.bottom <= box.bottom,
+        sidebarY: Math.round(sidebar.querySelector('a[href="/admin/settings"]')!.getBoundingClientRect().top),
+        sidebarChildren: sidebar.querySelectorAll(`a[href="${target}"]`).length,
       };
     }, href);
-    expect(after.ariaCurrent, `${href} is marked current`).toBe("page");
-    expect(after.visible, `${href} stays in view in the sidebar`).toBe(true);
+    expect(after.ariaCurrent, `${href} is marked current in the rail`).toBe("page");
+    expect(after.currentCount, "one current section").toBe(1);
+    expect(after.visible, `${href} stays in view in the rail`).toBe(true);
     expect(Math.abs(after.y - beforeY), `${href} stays under the pointer`).toBeLessThanOrEqual(2);
+    expect(Math.abs(after.sidebarY - sidebarY), "the sidebar's Pengaturan item does not move").toBeLessThanOrEqual(2);
+    expect(after.sidebarChildren, "the sidebar lists no settings sub-page").toBe(0);
   }
 
-  // From a Pengaturan page (its sub-list open below it), the standalone Plugin link: same geometry rules.
+  // From a Pengaturan page, the sidebar's standalone Plugin link: same geometry rules.
   {
     const href = "/admin/settings/plugins";
     const link = page.locator(`[data-sidebar="content"] a[href="${href}"]`);
@@ -91,10 +104,8 @@ test("the sidebar stays where the operator clicked, and admin pages load without
     expect(after.ariaCurrent, "Plugin is marked current").toBe("page");
     expect(after.visible, "Plugin stays in view in the sidebar").toBe(true);
     expect(Math.abs(after.y - beforeY), "Plugin stays under the pointer").toBeLessThanOrEqual(2);
-    expect(after.settingsChildren, "Pengaturan's sub-list closes on the Plugin workspace").toBe(0);
-    // That restore padded the menu's foot (the real script's seller path), before first paint: no layout shift.
-    const restorePad = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--sidebar-restore-pad").trim());
-    expect(restorePad, "the restore needed the seller pad here").toMatch(/^[1-9]\d*px$/);
+    expect(after.settingsChildren, "no settings sub-page in the sidebar on the Plugin workspace").toBe(0);
+    // No sub-list closes below Plugin any more, so the restore needs no foot padding here.
     const cls = await page.evaluate(() => (window as unknown as { __cls: number }).__cls);
     expect(cls, "Plugin navigation cumulative layout shift").toBeLessThanOrEqual(0.005);
     if (process.env.PLUGINS_SHOT_DIR) await page.screenshot({ path: `${process.env.PLUGINS_SHOT_DIR}/sidebar-plugin-from-settings-1366x720.png` });
@@ -130,15 +141,15 @@ test("the sidebar stays where the operator clicked, and admin pages load without
     await page.setViewportSize({ width: 1366, height: 720 });
   }
 
-  // Direct navigation (bookmark / address bar) to a bottom submenu item: not hidden behind the floating footer card.
+  // Direct navigation (bookmark / address bar) to a settings page: the sidebar's lit Pengaturan item is not hidden behind the floating footer card.
   await page.goto(`${origin(store.slug)}/admin/settings/access`);
   await page.waitForLoadState("networkidle");
   const clearOfFooter = await page.evaluate(() => {
-    const active = document.querySelector('[data-sidebar="content"] [aria-current="page"]')!;
+    const active = document.querySelector('[data-sidebar="content"] a[href="/admin/settings"]')!;
     const footer = document.querySelector('[data-sidebar="footer"]')!;
     return active.getBoundingClientRect().bottom <= footer.getBoundingClientRect().top;
   });
-  expect(clearOfFooter, "direct load keeps Akses Pengguna above the footer card").toBe(true);
+  expect(clearOfFooter, "direct load keeps Pengaturan above the footer card").toBe(true);
 
   for (const path of [
     "/admin/settings/domains",

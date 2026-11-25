@@ -1,18 +1,15 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import SettingsLayout from '../../../components/admin/SettingsLayout.astro';
 import { HeadlessApiManagement } from '../../../components/admin/HeadlessApiManagement';
 export const prerender = false;
 ---
 
 <AdminLayout title="Headless API & domain" activeMenu="settings">
-  <div class="flex flex-col gap-6">
-    <AdminPageHeader
-      title="Headless API & domain"
-      description="Kelola domain yang diizinkan mengakses REST API v1 dan dokumentasi integrasi frontend kustom."
-      backHref="/admin/settings"
-      backLabel="Pengaturan"
-    />
+  <SettingsLayout
+    title="Headless API & domain"
+    description="Kelola domain yang diizinkan mengakses REST API v1 dan dokumentasi integrasi frontend kustom."
+  >
 
     <!-- Allowlist Form -->
     <div id="devLoading" class="sr-only" role="status" aria-live="polite" aria-busy="true" aria-atomic="true">
@@ -77,7 +74,7 @@ export const prerender = false;
       </span>
       <span class="text-sm font-medium text-slate-700" aria-hidden="true">Buka →</span>
     </a>
-  </div>
+  </SettingsLayout>
 
   <script>
     const loading = document.getElementById('devLoading');

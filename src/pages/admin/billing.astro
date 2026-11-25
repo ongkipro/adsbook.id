@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
+import SettingsLayout from '../../components/admin/SettingsLayout.astro';
 import { BillingManager } from '../../components/admin/BillingManager';
 export const prerender = false;
 
@@ -10,11 +10,10 @@ export const prerender = false;
 ---
 
 <AdminLayout title="Langganan" activeMenu="settings">
-  <div class="space-y-6">
-    <AdminPageHeader
-      title="Langganan"
-      description="Paket toko, pembayaran QRIS atau Virtual Account, dan riwayat tagihan."
-    />
+  <SettingsLayout
+    title="Langganan"
+    description="Paket toko, pembayaran QRIS atau Virtual Account, dan riwayat tagihan."
+  >
     <BillingManager client:load />
-  </div>
+  </SettingsLayout>
 </AdminLayout>

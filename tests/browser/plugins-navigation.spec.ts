@@ -99,15 +99,18 @@ test("owner: Plugin is its own workspace right before Pengaturan, lit on the lis
   await page.keyboard.press("Shift+Tab");
   await Promise.all([page.waitForURL(`${store}${PLUGINS}`), page.keyboard.press("Enter")]);
 
-  // The seller restore's padded path (Pengaturan page → Plugin on a 720px window), then the icon rail keeps its own padding.
+  // Pengaturan → Plugin on a 720px window: Pengaturan's sections are a rail beside the page now, so no sub-list
+  // closes below Plugin and the link stays under the pointer without the restore's foot padding. Then the icon
+  // rail keeps its own padding.
   await page.setViewportSize({ width: 1366, height: 720 });
   await page.goto(`${store}/admin/settings/domains`);
   await hydrated(page);
   const fromSettings = page.locator(`[data-sidebar="content"] a[href="${PLUGINS}"]`);
   await fromSettings.scrollIntoViewIfNeeded();
+  const pluginY = await fromSettings.evaluate((el) => Math.round(el.getBoundingClientRect().top));
   await Promise.all([page.waitForURL(`${store}${PLUGINS}`), fromSettings.click()]);
   await hydrated(page);
-  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--sidebar-restore-pad").trim()), "the padded path ran").toMatch(/^[1-9]\d*px$/);
+  expect(Math.abs((await fromSettings.evaluate((el) => Math.round(el.getBoundingClientRect().top))) - pluginY), "Plugin stays under the pointer").toBeLessThanOrEqual(2);
   await page.setViewportSize({ width: 900, height: 900 });
   await expect(page.locator('[data-sidebar="content"]')).toHaveCSS("padding-bottom", "112px");
 

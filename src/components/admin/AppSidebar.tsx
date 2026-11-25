@@ -106,7 +106,8 @@ export function AppSidebar({
             <SidebarMenu>
               {group.items.map((item) => {
                 const active = activeMenu === item.id;
-                const children = item.children ?? [];
+                // A section-rail item (Pengaturan) lists its pages beside the page, not here.
+                const children = item.sectionRail ? [] : item.children ?? [];
                 const activeChild = children.find((child) =>
                   isAdminNavHrefActive(currentPath, child.href),
                 );

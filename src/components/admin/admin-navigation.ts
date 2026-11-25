@@ -8,23 +8,19 @@ import {
   Boxes,
   CircleUserRound,
   ClipboardCheck,
-  CodeXml,
   CreditCard,
   FilePenLine,
   LayoutDashboard,
-  MessageCircle,
   Megaphone,
   Package,
   Puzzle,
-  Globe,
   Palette,
   Settings,
   ShoppingBag,
   Truck,
   UserX,
-  Warehouse,
 } from "lucide-react";
-
+import { SETTINGS_GROUPS, SETTINGS_INDEX } from "./settings-sections.ts";
 
 /** Stable adsbook.id visual identity. Storefront tenant theming must not alter admin UI. */
 export const ADMIN_ACCENT = "#2563eb";
@@ -38,6 +34,8 @@ export type AdminNavItem = {
   icon: LucideIcon;
   keywords: string;
   children?: Array<{ href: string; label: string; icon?: LucideIcon }>;
+  /** The item's pages carry their own section rail (SettingsLayout), so the desktop sidebar lists no children under it. */
+  sectionRail?: boolean;
 };
 
 export type AdminNavGroup = {
@@ -190,16 +188,11 @@ export const adminNavGroups: AdminNavGroup[] = [
         description: "Toko, gudang, dan akses",
         icon: Settings,
         keywords: "settings system store domain warehouse crm access headless developer api whatsapp wa cs rotator nomor langganan billing bayar paket perpanjang",
-        children: [
-          { href: "/admin/settings/store", label: "Toko & CS", icon: ShoppingBag },
-          { href: "/admin/settings/domains", label: "Domain", icon: Globe },
-          { href: "/admin/billing", label: "Langganan", icon: CreditCard },
-          { href: "/admin/settings/whatsapp", label: "Nomor WhatsApp", icon: MessageCircle },
-          { href: "/admin/settings/developer", label: "Headless API", icon: CodeXml },
-          { href: "/admin/settings/warehouse", label: "Gudang", icon: Warehouse },
-          { href: "/admin/settings/crm", label: "Template CRM", icon: FilePenLine },
-          { href: "/admin/settings/access", label: "Akses Pengguna", icon: CircleUserRound },
-        ],
+        // One list for the settings rail, the phone menu sheet and the search.
+        children: SETTINGS_GROUPS.flatMap((group) => group.items)
+          .filter((section) => section.href !== SETTINGS_INDEX)
+          .map(({ href, label, icon }) => ({ href, label, icon })),
+        sectionRail: true,
       },
     ],
   },

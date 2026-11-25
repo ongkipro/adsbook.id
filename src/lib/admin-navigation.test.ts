@@ -6,6 +6,7 @@ import {
   isAdminNavHrefActive,
 } from "../components/admin/admin-navigation.ts";
 import { ADMIN_ROLES, canAccessAdminRoute } from "./auth.ts";
+import { SETTINGS_GROUPS, SETTINGS_INDEX, visibleSettingsGroups } from "../components/admin/settings-sections.ts";
 
 test("visible admin navigation never exposes a route denied to its role", () => {
   for (const role of ADMIN_ROLES) {
@@ -135,4 +136,29 @@ test("Tema sits right above Plugin for owner and admin, opens its beranda page, 
   // "Tampilan toko" left Katalog: the banner lives under Tema now.
   const katalog = getVisibleNavGroups("owner").flatMap((group) => group.items).find((item) => item.id === "products");
   assert.equal(katalog?.children?.some((child) => child.href === "/admin/content/tampilan"), false);
+});
+
+test("Pengaturan's rail lists only sections the role may open, and the sidebar's Pengaturan children are that same list", () => {
+  const hrefs = (role: (typeof ADMIN_ROLES)[number], mode?: "physical" | "digital" | "hybrid") =>
+    visibleSettingsGroups(role, mode).flatMap((group) => group.items.map((item) => item.href));
+  for (const role of ADMIN_ROLES) {
+    for (const href of hrefs(role)) assert.equal(canAccessAdminRoute(role, href), true, `${role}: ${href}`);
+  }
+  assert.equal(hrefs("owner").includes("/admin/settings/access"), true);
+  assert.equal(hrefs("admin").includes("/admin/settings/access"), false, "an admin never sees Akses pengguna");
+  assert.deepEqual(hrefs("customer_service"), [], "a scoped role has no settings rail");
+  assert.equal(hrefs("owner", "digital").includes("/admin/settings/warehouse"), false, "a digital store has no warehouse");
+  assert.equal(hrefs("owner", "physical").includes("/admin/settings/warehouse"), true);
+
+  // No section twice, and the overview first.
+  const all = SETTINGS_GROUPS.flatMap((group) => group.items.map((item) => item.href));
+  assert.equal(new Set(all).size, all.length);
+  assert.equal(all[0], SETTINGS_INDEX);
+
+  // One list: the phone menu sheet and the search read the sidebar item's children.
+  for (const role of ["owner", "admin"] as const) {
+    const settings = getVisibleNavGroups(role).flatMap((group) => group.items).find((item) => item.id === "settings");
+    assert.equal(settings?.sectionRail, true);
+    assert.deepEqual(settings?.children?.map((child) => child.href), hrefs(role).filter((href) => href !== SETTINGS_INDEX), role);
+  }
 });
