@@ -179,7 +179,8 @@ test("dashboard overview leads with truthful role-safe analytics", () => {
   // `shiftAdminDate(customStart, 30)` and into the shared period control, but
   // the guarantee is the same one: this surface states a maximum and hides the
   // presets that would exceed it.
-  assert.match(analytics, /DASHBOARD_MAX_RANGE_DAYS = \d+/);
+  const dashboardAnalytics = readFileSync(new URL("./dashboard-analytics.ts", import.meta.url), "utf8");
+  assert.match(dashboardAnalytics, /DASHBOARD_MAX_RANGE_DAYS = \d+/);
   assert.match(analytics, /maxCustomRangeDays=\{DASHBOARD_MAX_RANGE_DAYS\}/);
   assert.match(analytics, /hiddenPresets=\{DASHBOARD_HIDDEN_PRESETS\}/);
   assert.match(analytics, /showPaymentsLink &&/);

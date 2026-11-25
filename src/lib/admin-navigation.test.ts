@@ -7,6 +7,12 @@ import {
 } from "../components/admin/admin-navigation.ts";
 import { ADMIN_ROLES, canAccessAdminRoute } from "./auth.ts";
 import { SETTINGS_GROUPS, SETTINGS_INDEX, visibleSettingsGroups } from "../components/admin/settings-sections.ts";
+import {
+  ADS_RAIL_GROUPS,
+  ANALYTICS_RAIL_GROUPS,
+  PAYMENTS_RAIL_GROUPS,
+  visibleRailGroups,
+} from "../components/admin/section-rails.ts";
 
 test("visible admin navigation never exposes a route denied to its role", () => {
   for (const role of ADMIN_ROLES) {
@@ -160,5 +166,39 @@ test("Pengaturan's rail lists only sections the role may open, and the sidebar's
     const settings = getVisibleNavGroups(role).flatMap((group) => group.items).find((item) => item.id === "settings");
     assert.equal(settings?.sectionRail, true);
     assert.deepEqual(settings?.children?.map((child) => child.href), hrefs(role).filter((href) => href !== SETTINGS_INDEX), role);
+  }
+});
+
+test("Analitik, Iklan & tracking, and Pembayaran rails stay aligned with navigation and role rules", () => {
+  const specs = [
+    { id: "analytics", groups: ANALYTICS_RAIL_GROUPS, indexHref: null },
+    { id: "ads", groups: ADS_RAIL_GROUPS, indexHref: "/admin/ads" },
+    { id: "payments", groups: PAYMENTS_RAIL_GROUPS, indexHref: "/admin/payments" },
+  ] as const;
+
+  for (const spec of specs) {
+    const all = spec.groups.flatMap((group) => group.items.map((item) => item.href));
+    assert.equal(new Set(all).size, all.length, `${spec.id}: no duplicate hrefs`);
+    for (const role of ADMIN_ROLES) {
+      const visible = visibleRailGroups(spec.groups, role).flatMap((group) => group.items.map((item) => item.href));
+      for (const href of visible) {
+        assert.equal(canAccessAdminRoute(role, href), true, `${spec.id}/${role}: ${href}`);
+      }
+      const navItem = getVisibleNavGroups(role).flatMap((group) => group.items).find((item) => item.id === spec.id);
+      if (navItem) {
+        assert.equal(navItem.sectionRail, true, `${spec.id}: desktop sidebar stays flat`);
+        const expectedChildren = spec.indexHref ? visible.filter((href) => href !== spec.indexHref) : visible;
+        assert.deepEqual(navItem.children?.map((child) => child.href), expectedChildren, `${spec.id}/${role} children match rail`);
+      }
+    }
+  }
+
+  // Every multi-page top-level item uses an in-page rail or header tabs, so the desktop sidebar never expands.
+  for (const role of ADMIN_ROLES) {
+    for (const item of getVisibleNavGroups(role).flatMap((group) => group.items)) {
+      if (item.children?.length) {
+        assert.equal(item.sectionRail, true, `${role}/${item.id}: multi-page workspace keeps desktop sidebar flat`);
+      }
+    }
   }
 });

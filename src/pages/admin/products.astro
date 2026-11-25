@@ -7,6 +7,7 @@ import {
 } from '../../components/admin/ProductCatalog';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
+import AdminSubnavTabs from '../../components/admin/AdminSubnavTabs.astro';
 
 export const prerender = false;
 
@@ -87,6 +88,13 @@ if (database?.prepare) {
         <a href="/admin/products/new" class="btn-primary">Tambah produk</a>
       </div>
     </AdminPageHeader>
+    <AdminSubnavTabs
+      label="Bagian katalog"
+      items={[
+        { href: '/admin/products', label: 'Produk & varian' },
+        { href: '/admin/landing-pages', label: 'Landing page' },
+      ]}
+    />
     <ProductCatalog initialProducts={initialProducts} client:load />
   </div>
 </AdminLayout>

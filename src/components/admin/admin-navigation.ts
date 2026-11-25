@@ -4,7 +4,6 @@ export type { AdminRole } from "../../lib/auth";
 import {
   Activity,
   ChartNoAxesCombined,
-  BadgeDollarSign,
   Boxes,
   CircleUserRound,
   ClipboardCheck,
@@ -21,6 +20,7 @@ import {
   UserX,
 } from "lucide-react";
 import { SETTINGS_GROUPS, SETTINGS_INDEX } from "./settings-sections.ts";
+import { ADS_RAIL_GROUPS, ANALYTICS_RAIL_GROUPS, PAYMENTS_RAIL_GROUPS } from "./section-rails.ts";
 
 /** Stable adsbook.id visual identity. Storefront tenant theming must not alter admin UI. */
 export const ADMIN_ACCENT = "#2563eb";
@@ -66,6 +66,7 @@ export const adminNavGroups: AdminNavGroup[] = [
         children: [
           { href: "/admin/orders/abandoned", label: "Pesanan tertinggal", icon: UserX },
         ],
+        sectionRail: true,
       },
       {
         id: "shipping",
@@ -85,6 +86,7 @@ export const adminNavGroups: AdminNavGroup[] = [
         children: [
           { href: "/admin/landing-pages", label: "Landing page", icon: FilePenLine },
         ],
+        sectionRail: true,
       },
     ],
   },
@@ -119,14 +121,8 @@ export const adminNavGroups: AdminNavGroup[] = [
         description: "Sumber pesanan, produk, wilayah, dan kampanye",
         icon: ChartNoAxesCombined,
         keywords: "analitik analytics laporan trend produk lokasi waktu utm kampanye campaign",
-        children: [
-          { href: "/admin/analytics", label: "Ringkasan" },
-          { href: "/admin/analytics/landing", label: "Landing page" },
-          { href: "/admin/analytics/products", label: "Produk" },
-          { href: "/admin/analytics/locations", label: "Lokasi" },
-          { href: "/admin/analytics/times", label: "Waktu beli" },
-          { href: "/admin/analytics/utm", label: "UTM" },
-        ],
+        children: ANALYTICS_RAIL_GROUPS.flatMap((group) => group.items).map(({ href, label, icon }) => ({ href, label, icon })),
+        sectionRail: true,
       },
       {
         id: "ads",
@@ -135,12 +131,10 @@ export const adminNavGroups: AdminNavGroup[] = [
         description: "Sinyal konversi iklan",
         icon: Megaphone,
         keywords: "ads pixel capi google tiktok events api tracking conversion utm link kampanye campaign",
-        children: [
-          { href: "/admin/ads/meta", label: "Meta Pixel & CAPI" },
-          { href: "/admin/ads/google", label: "Google Ads" },
-          { href: "/admin/ads/tiktok", label: "TikTok Ads" },
-          { href: "/admin/ads/utm", label: "Link UTM" },
-        ],
+        children: ADS_RAIL_GROUPS.flatMap((group) => group.items)
+          .filter((item) => item.href !== "/admin/ads")
+          .map(({ href, label, icon }) => ({ href, label, icon })),
+        sectionRail: true,
       },
     ],
   },
@@ -155,9 +149,10 @@ export const adminNavGroups: AdminNavGroup[] = [
         description: "Metode dan rekonsiliasi",
         icon: CreditCard,
         keywords: "payments autolaris bank virtual account qris saldo",
-        children: [
-          { href: "/admin/balance", label: "Rekonsiliasi", icon: BadgeDollarSign },
-        ],
+        children: PAYMENTS_RAIL_GROUPS.flatMap((group) => group.items)
+          .filter((item) => item.href !== "/admin/payments")
+          .map(({ href, label, icon }) => ({ href, label, icon })),
+        sectionRail: true,
       },
       // Its own workspace, right before Pengaturan: Pengaturan's sub-list opens
       // below Pengaturan, so this link never moves when that list opens or closes.

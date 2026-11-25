@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { buildDashboardUrlSearch, parseDashboardSearchParams } from "./dashboard-analytics.ts";
 import { GET } from "../pages/api/admin/analytics.ts";
 
 type SqlValue = null | number | string | Uint8Array;
@@ -265,4 +266,47 @@ test("the dashboard's six reads are in flight together, not one after another (A
   } as never);
   assert.equal(response.status, 200);
   assert.equal(peak, 6);
+});
+
+test("dated dashboard analytics uses idx_orders_created_at instead of full table scans", async () => {
+  const { sqlite, d1 } = createAnalyticsDatabase();
+  sqlite.exec("CREATE INDEX idx_orders_created_at ON orders(created_at);");
+  const plans: string[] = [];
+  const traced = {
+    prepare(sql: string) {
+      const inner = d1.prepare(sql);
+      return {
+        bind(...values: SqlValue[]) {
+          const rows = sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...values) as Array<{ detail?: string }>;
+          plans.push(rows.map((r) => r.detail || "").join(" | "));
+          return inner.bind(...values);
+        },
+        first: () => inner.first(),
+        all: () => inner.all(),
+      };
+    },
+  } as unknown as D1Database;
+
+  const response = await GET({
+    locals: { tenantDb: traced, runtimeEnv: { OMS_DB: traced } },
+    url: new URL("https://cms.test/api/admin/analytics?preset=7d&startDate=2026-08-12&endDate=2026-08-18&interval=day"),
+  } as never);
+  assert.equal(response.status, 200);
+  assert.equal(plans.length, 6);
+  for (const plan of plans) {
+    assert.match(plan, /idx_orders_created_at/, `expected index scan on idx_orders_created_at, got: ${plan}`);
+  }
+});
+
+test("parseDashboardSearchParams & buildDashboardUrlSearch round-trip presets, custom ranges and compare modes", () => {
+  const custom = parseDashboardSearchParams(new URLSearchParams("preset=custom&start=2026-08-01&end=2026-08-10&compare=week"));
+  assert.deepEqual(custom.selection, { filter: "custom", start: "2026-08-01", end: "2026-08-10" });
+  assert.equal(custom.compare, "week");
+  assert.equal(buildDashboardUrlSearch(custom.selection, custom.compare), "?preset=custom&start=2026-08-01&end=2026-08-10&compare=week");
+
+  // Hidden/unsupported presets and over-31-day custom ranges fall back safely to default.
+  const invalid = parseDashboardSearchParams(new URLSearchParams("preset=180d&compare=bogus"));
+  assert.equal(invalid.selection.filter, "this_month");
+  assert.equal(invalid.compare, "auto");
+  assert.equal(buildDashboardUrlSearch(invalid.selection, invalid.compare), "");
 });

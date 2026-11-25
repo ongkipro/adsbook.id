@@ -3,88 +3,43 @@ import { buttonVariants } from "../ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
-import { ChevronRight, CircleCheck, CreditCard, GitCompareArrows, PackageCheck, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronRight, CircleCheck, CreditCard, GitCompareArrows, PackageCheck, RefreshCw } from "lucide-react";
 import { FilterSelect } from "./filter-bar";
 import { ADMIN_DEFAULT_DATE_FILTER, resolveAdminDateSelection } from "../../lib/admin-date-filter";
+import {
+  buildDashboardUrlSearch,
+  DASHBOARD_HIDDEN_PRESETS,
+  DASHBOARD_MAX_RANGE_DAYS,
+  type DashboardAnalyticsData,
+  type DashboardCompareChoice,
+  type DashboardPaymentBucket,
+  type DashboardRankingRow,
+  type DashboardRankings,
+  type DashboardTrendPoint,
+} from "../../lib/dashboard-analytics";
 import { AdminDateRangeFilter, type AdminDateSelection } from "./AdminDateRangeFilter";
 
 /**
  * The dashboard (layout by Paduka, 2026-11-01): the period and its comparison
  * sit in one toolbar; six KPI cards; the revenue chart with the comparison
- * drawn inside it beside a compact "Action needed" list, so the chart is on
- * the first screen; then the funnel, the payment mix and the top lists.
- * Metric names are English (Revenue, AOV, Conversion rate, Funnel); the
- * sentences around them stay Indonesian.
- *
- * The dashboard charts every day in the period and aggregates across it, so
- * it reports on a shorter window than the order lists and hides the presets
- * that would exceed it.
+ * drawn inside it beside the payment mix; then Action needed, the funnel, and
+ * top products & landing pages.
  */
-// Recharts is the admin's largest chunk; the cards and "Action needed" paint
-// without it and the chart fills its reserved box when it arrives.
-const DashboardRevenueChart = lazy(() => import("./DashboardRevenueChart"));
-const DASHBOARD_MAX_RANGE_DAYS = 31;
-const DASHBOARD_HIDDEN_PRESETS = ["90d", "180d"] as const;
+const loadChartModule = () => import("./DashboardRevenueChart");
+const DashboardRevenueChart = lazy(loadChartModule);
 const ATTENTION_REFRESH_MS = 60_000;
 
-type CompareMode = "previous" | "week" | "month";
-type CompareChoice = "auto" | CompareMode;
-const COMPARE_LABELS: Record<CompareChoice, string> = {
-  auto: "Compare: otomatis",
-  week: "vs same day last week",
-  month: "vs same dates last month",
-  previous: "vs previous period",
-};
-
-type Trend = { date: string; revenue: number; orders: number };
-type AnalyticsData = {
-  total_revenue: number;
-  collected_revenue: number;
-  cod_revenue: number;
-  prepaid_revenue: number;
-  total_orders: number;
-  live_orders: number;
-  online_orders: number;
-  average_order_value: number;
-  lead_conversion_rate: number;
-  lead_base: number;
-  conversion_rate: number;
-  rts_rate: number;
-  rts_base: number;
-  payment_methods: {
-    total: number;
-    cod: PaymentMethodBucket;
-    manual_transfer: PaymentMethodBucket;
-    virtual_account: PaymentMethodBucket;
-    qris: PaymentMethodBucket;
-    unknown_count: number;
-  };
-  period: { start_date: string | null; end_date: string | null; interval: "hour" | "day" };
-  trends: Trend[];
-  funnel: { leads: number; orders: number; handed_over: number; delivered: number; returned: number };
-  previous: {
-    mode: CompareMode;
-    start_date: string;
-    end_date: string;
-    partial: boolean;
-    total_revenue: number;
-    live_orders: number;
-    average_order_value: number;
-    lead_conversion_rate: number;
-    lead_base: number;
-    conversion_rate: number;
-    online_orders: number;
-    rts_rate: number;
-    rts_base: number;
-    trends: Trend[];
-  } | null;
+const COMPARE_LABELS: Record<DashboardCompareChoice, string> = {
+  auto: "Bandingkan: otomatis",
+  week: "vs hari sama minggu lalu",
+  month: "vs tanggal sama bulan lalu",
+  previous: "vs periode sebelumnya",
 };
 
 /** The counts read from a bounded row set; the other two are whole-table sums. */
 const CAPPED_KEYS = new Set(["confirm", "ready_push", "push_problem", "needs_waybill", "needs_pickup", "needs_drop_off"]);
 type AttentionItem = { key: string; label: string; hint: string; count: number; stale?: number; href: string; tone: "info" | "warn" | "bad" };
-type RankingRow = { label: string; revenue: number; orders?: number; units?: number };
-type PaymentMethodBucket = { count: number; percentage: number };
+export type DashboardAttentionState = { items: AttentionItem[]; capped: boolean; at: number };
 
 const currency = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format;
 /** Axis ticks: "Rp1,2jt", "Rp450rb", "Rp0" — never five identical labels. */
@@ -102,15 +57,27 @@ const percentage = (value: number) => `${value.toLocaleString("id-ID", { maximum
 const dmy = (value: string) => value.split("-").reverse().join("/");
 const num = (value: unknown) => Number(value) || 0;
 
+/** Isolated 1-minute ticker so updating "1 mnt lalu" never re-renders the whole dashboard or chart. */
+function RelativeTime({ at }: { at: number }) {
+  const [minutesAgo, setMinutesAgo] = useState(0);
+  useEffect(() => {
+    const update = () => setMinutesAgo(Math.max(0, Math.floor((Date.now() - at) / 60_000)));
+    update();
+    const timer = window.setInterval(update, ATTENTION_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [at]);
+  return (
+    <span className="text-xs text-slate-400" title="Diperbarui otomatis tiap menit">
+      {minutesAgo < 1 ? "baru saja" : `${minutesAgo} mnt lalu`}
+    </span>
+  );
+}
+
 /**
  * The change against the comparison. Money and counts move in percent; a
- * rate already is one, so it moves in points. Nothing when there is no
- * comparison or it was empty (a percentage of zero is not actionable).
+ * rate already is one, so it moves in points.
  */
 function Delta({ current, previous, kind, invert = false }: { current: number; previous: number | undefined; kind: "percent" | "points"; invert?: boolean }) {
-  // Every card carries a chip, so the row reads the same whatever the data:
-  // a change, "baru" when the comparison was empty and this period is not, or
-  // a muted dash when neither has anything to compare.
   if (previous === undefined || (kind === "percent" && previous <= 0)) {
     if (kind === "percent" && previous !== undefined && current > 0) {
       return (
@@ -157,33 +124,65 @@ export function AnalyticsDashboard({
   showPaymentsLink = false,
   showAttention = false,
   showInsights = false,
+  initialData = null,
+  initialAttention = null,
+  initialSelection,
+  initialCompare = "auto",
+  initialNowIso,
 }: {
   showPaymentsLink?: boolean;
   /** Roles that work the order list see "Action needed" (its endpoint is theirs). */
   showAttention?: boolean;
   /** Roles that may read the Analitik menu see its top products and pages. */
   showInsights?: boolean;
+  initialData?: DashboardAnalyticsData | null;
+  initialAttention?: DashboardAttentionState | null;
+  initialSelection?: AdminDateSelection;
+  initialCompare?: DashboardCompareChoice;
+  initialNowIso?: string;
 }) {
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const defaultSelection: AdminDateSelection = initialSelection ?? {
+    filter: ADMIN_DEFAULT_DATE_FILTER,
+    start: "",
+    end: "",
+  };
+  const [data, setData] = useState<DashboardAnalyticsData | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [dateSelection, setDateSelection] = useState<AdminDateSelection>({ filter: ADMIN_DEFAULT_DATE_FILTER, start: "", end: "" });
-  const [compare, setCompare] = useState<CompareChoice>("auto");
-  const [attention, setAttention] = useState<{ items: AttentionItem[]; capped: boolean; at: number } | null>(null);
+  const [dateSelection, setDateSelection] = useState<AdminDateSelection>(defaultSelection);
+  const [compare, setCompare] = useState<DashboardCompareChoice>(initialCompare);
+  const [attention, setAttention] = useState<DashboardAttentionState | null>(initialAttention);
   const [attentionError, setAttentionError] = useState("");
-  const [rankings, setRankings] = useState<{ products: RankingRow[]; pages: RankingRow[] } | null>(null);
-  const [, setTick] = useState(0);
+  const [rankings, setRankings] = useState<DashboardRankings | null>(initialData?.rankings ?? null);
+  const [rankingsLoading, setRankingsLoading] = useState(Boolean(showInsights && !initialData));
+  const [rankingsError, setRankingsError] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const requestSequence = useRef(0);
+  const analyticsAbort = useRef<AbortController | null>(null);
+  const hydratedFromInitial = useRef(Boolean(initialData));
+
+  // Prefetch the lazy Recharts chunk on client mount so it downloads in
+  // parallel with any refresh rather than waiting behind data paint.
+  useEffect(() => {
+    setMounted(true);
+    void loadChartModule();
+    return () => {
+      analyticsAbort.current?.abort();
+    };
+  }, []);
 
   const loadAnalytics = useCallback(
-    async (selection: AdminDateSelection, compareChoice: CompareChoice, showLoading = false) => {
+    async (selection: AdminDateSelection, compareChoice: DashboardCompareChoice, showLoading = false) => {
       const sequence = ++requestSequence.current;
+      analyticsAbort.current?.abort();
+      const controller = new AbortController();
+      analyticsAbort.current = controller;
+
       if (showLoading) setLoading(true);
       else setRefreshing(true);
       setError("");
-      // One resolver for every period, named or explicit. A period this
-      // surface cannot answer for is reported, not quietly swapped (REQ-157).
+
       const resolved = resolveAdminDateSelection(selection.filter, {
         customRange: { start: selection.start, end: selection.end },
         maxCustomRangeDays: DASHBOARD_MAX_RANGE_DAYS,
@@ -202,48 +201,41 @@ export function AnalyticsDashboard({
         query.set("interval", interval);
       }
       if (compareChoice !== "auto") query.set("compare", compareChoice);
-
-      // The Analitik menu's own rankings over the same days, requested beside
-      // the cards rather than after them (it was a second round trip), not
-      // awaited: the cards paint first, and a failure hides this card only.
-      if (showInsights && start && end) {
-        const rangeQuery = `date_filter=custom&date_start=${start}&date_end=${end}`;
-        const read = async (path: string) => {
-          const res = await fetch(`/api/admin/insights/${path}?${rangeQuery}`, { headers: { Accept: "application/json" } });
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok || !Array.isArray(body?.data?.rows)) throw new Error(body?.error || "Ranking gagal dimuat.");
-          return body.data.rows as Array<Record<string, unknown>>;
-        };
-        void Promise.all([read("products"), read("landing")])
-          .then(([products, pages]) => {
-            if (sequence !== requestSequence.current) return;
-            setRankings({
-              products: products.slice(0, 5).map((row) => ({ label: String(row.label ?? ""), revenue: num(row.revenue), units: num(row.units) })),
-              pages: pages.filter((row) => row.kind !== "none").slice(0, 5).map((row) => ({ label: String(row.label ?? ""), revenue: num(row.revenue), orders: num(row.orders) })),
-            });
-          })
-          .catch((reason) => {
-            if (sequence !== requestSequence.current) return;
-            console.error("dashboard-rankings", reason);
-            setRankings(null);
-          });
+      const wantsRankings = Boolean(showInsights && start && end);
+      if (wantsRankings) {
+        query.set("include", "rankings");
+        setRankingsLoading(true);
+        setRankingsError(false);
       } else {
         setRankings(null);
+        setRankingsLoading(false);
+        setRankingsError(false);
       }
+
       try {
-        const response = await fetch(`/api/admin/analytics?${query}`, { headers: { Accept: "application/json" } });
+        const response = await fetch(`/api/admin/analytics?${query}`, {
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.success) throw new Error(payload.error || "Dashboard gagal dimuat.");
         if (sequence !== requestSequence.current) return;
         const source = payload.data ?? {};
         const payments = source.payment_methods ?? {};
-        const bucket = (value: unknown): PaymentMethodBucket => {
+        const bucket = (value: unknown): DashboardPaymentBucket => {
           const item = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
           return { count: num(item.count), percentage: num(item.percentage) };
         };
-        const trends = (value: unknown): Trend[] =>
+        const trends = (value: unknown): DashboardTrendPoint[] =>
           Array.isArray(value) ? value.map((row: Record<string, unknown>) => ({ date: String(row.date), revenue: num(row.revenue), orders: num(row.orders) })) : [];
         const before = source.previous && typeof source.previous === "object" ? source.previous : null;
+        const nextRankings: DashboardRankings | null =
+          wantsRankings && source.rankings && typeof source.rankings === "object"
+            ? {
+                products: Array.isArray(source.rankings.products) ? source.rankings.products : [],
+                pages: Array.isArray(source.rankings.pages) ? source.rankings.pages : [],
+              }
+            : null;
         setData({
           total_revenue: num(source.total_revenue),
           collected_revenue: num(source.collected_revenue),
@@ -258,6 +250,9 @@ export function AnalyticsDashboard({
           conversion_rate: num(source.conversion_rate),
           rts_rate: num(source.rts_rate),
           rts_base: num(source.rts_base),
+          cod_percentage: num(source.cod_percentage),
+          transfer_percentage: num(source.transfer_percentage),
+          qris_percentage: num(source.qris_percentage),
           payment_methods: {
             total: num(payments.total),
             cod: bucket(payments.cod),
@@ -269,6 +264,8 @@ export function AnalyticsDashboard({
           period: {
             start_date: typeof source.period?.start_date === "string" ? source.period.start_date : null,
             end_date: typeof source.period?.end_date === "string" ? source.period.end_date : null,
+            timezone: "Asia/Jakarta",
+            basis: "order_created_at",
             interval: source.period?.interval === "hour" ? "hour" : "day",
           },
           trends: trends(source.trends),
@@ -298,11 +295,20 @@ export function AnalyticsDashboard({
               }
             : null,
         });
+        if (wantsRankings) {
+          setRankings(nextRankings);
+          setRankingsError(nextRankings === null);
+          setRankingsLoading(false);
+        }
       } catch (reason) {
-        if (sequence !== requestSequence.current) return;
+        if (controller.signal.aborted || sequence !== requestSequence.current) return;
         setError(reason instanceof Error ? reason.message : "Dashboard gagal dimuat.");
+        if (wantsRankings) {
+          setRankingsLoading(false);
+          setRankingsError(true);
+        }
       } finally {
-        if (sequence === requestSequence.current) {
+        if (sequence === requestSequence.current && !controller.signal.aborted) {
           if (showLoading) setLoading(false);
           else setRefreshing(false);
         }
@@ -326,19 +332,28 @@ export function AnalyticsDashboard({
     }
   }, [showAttention]);
 
+  // Skip the first client fetch when SSR already supplied data for the initial
+  // filter; subsequent filter changes sync to URL and fetch cleanly.
   useEffect(() => {
-    void loadAnalytics(dateSelection, compare, true);
+    if (hydratedFromInitial.current) {
+      hydratedFromInitial.current = false;
+      return;
+    }
+    const nextSearch = buildDashboardUrlSearch(dateSelection, compare);
+    if (typeof window !== "undefined" && window.location.search !== nextSearch) {
+      window.history.replaceState(null, "", `${window.location.pathname}${nextSearch}${window.location.hash}`);
+    }
+    void loadAnalytics(dateSelection, compare, !data);
   }, [loadAnalytics, dateSelection, compare]);
 
   useEffect(() => {
-    void loadAttention();
     if (!showAttention) return;
+    if (!initialAttention) void loadAttention();
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void loadAttention();
-      setTick((value) => value + 1);
     }, ATTENTION_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [loadAttention, showAttention]);
+  }, [loadAttention, showAttention, initialAttention]);
 
   if (loading && !data) return <LoadingState />;
   if (error && !data) {
@@ -354,8 +369,10 @@ export function AnalyticsDashboard({
 
   const prev = data.previous;
   const compareCaption = prev
-    ? `vs ${prev.start_date === prev.end_date ? dmy(prev.start_date) : `${dmy(prev.start_date)}–${dmy(prev.end_date)}`}${prev.partial ? " (sampai jam yang sama)" : ""}`
-    : "";
+    ? `vs ${prev.start_date === prev.end_date ? dmy(prev.start_date) : `${dmy(prev.start_date)}–${dmy(prev.end_date)}`}${prev.partial ? " (sampai jam yang sama)" : ""} · WIB`
+    : data.period.start_date
+      ? "Zona waktu WIB"
+      : "";
 
   const metrics = [
     {
@@ -408,13 +425,10 @@ export function AnalyticsDashboard({
     },
   ];
 
-  // The chart: bars for the period, a dashed line for the comparison, bucket
-  // against bucket. A single day reads hour by hour and cumulatively, so the
-  // question "ahead of last Friday so far?" has a one-glance answer; the
-  // current line stops at the present hour.
   const hourly = data.period.interval === "hour";
-  const currentHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", hour12: false }).format(new Date()));
-  const isToday = data.period.end_date === new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
+  const nowDate = initialNowIso ? new Date(initialNowIso) : new Date();
+  const currentHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", hour12: false }).format(nowDate));
+  const isToday = data.period.end_date === new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(nowDate);
   let runCurrent = 0;
   let runPrevious = 0;
   const chartData = data.trends.map((point, index) => {
@@ -434,29 +448,49 @@ export function AnalyticsDashboard({
   ];
 
   const funnel = data.funnel;
+  const funnelMax = Math.max(1, funnel.leads + funnel.orders, funnel.orders);
   const share = (value: number, base: number) => (base > 0 ? percentage((value / base) * 100) : "–");
   const periodQuery = data.period.start_date && data.period.end_date ? `date_filter=custom&date_start=${data.period.start_date}&date_end=${data.period.end_date}` : "";
-  const funnelSteps: Array<{ label: string; value: number; note: string; href?: string }> = [
-    { label: "Leads", value: funnel.leads, note: "Belum checkout" },
-    { label: "Orders", value: funnel.orders, note: `${share(funnel.orders, funnel.leads + funnel.orders)} conversion`, href: `/admin/orders${periodQuery ? `?${periodQuery}` : ""}` },
-    { label: "Shipped", value: funnel.handed_over, note: `${share(funnel.handed_over, funnel.orders)} dari orders` },
-    { label: "Delivered", value: funnel.delivered, note: funnel.delivered + funnel.returned > 0 ? `${share(funnel.returned, funnel.delivered + funnel.returned)} RTS` : "Belum ada" },
+  const funnelSteps: Array<{ label: string; value: number; note: string; ratio: number; href?: string }> = [
+    {
+      label: "Leads",
+      value: funnel.leads,
+      note: "Belum checkout",
+      ratio: funnel.leads / funnelMax,
+      href: showAttention ? "/admin/orders/abandoned" : undefined,
+    },
+    {
+      label: "Orders",
+      value: funnel.orders,
+      note: `${share(funnel.orders, funnel.leads + funnel.orders)} conversion`,
+      ratio: funnel.orders / funnelMax,
+      href: showAttention ? `/admin/orders${periodQuery ? `?${periodQuery}` : ""}` : undefined,
+    },
+    {
+      label: "Shipped",
+      value: funnel.handed_over,
+      note: `${share(funnel.handed_over, funnel.orders)} dari orders`,
+      ratio: funnel.orders > 0 ? funnel.handed_over / funnel.orders : 0,
+      href: showAttention ? "/admin/shipping" : undefined,
+    },
+    {
+      label: "Delivered",
+      value: funnel.delivered,
+      note: funnel.delivered + funnel.returned > 0 ? `${share(funnel.returned, funnel.delivered + funnel.returned)} RTS` : "Belum ada",
+      ratio: funnel.orders > 0 ? funnel.delivered / funnel.orders : 0,
+    },
   ];
 
   const toneClass: Record<AttentionItem["tone"], string> = { info: "text-blue-700", warn: "text-amber-700", bad: "text-rose-700" };
   const openItems = attention?.items.filter((item) => item.count > 0) ?? [];
+  const staleTotal = openItems.reduce((sum, item) => sum + (item.stale ?? 0), 0);
   const doneCount = (attention?.items.length ?? 0) - openItems.length;
-  const minutesAgo = attention ? Math.floor((Date.now() - attention.at) / 60_000) : 0;
 
   const attentionCard = showAttention && (
-    <Card aria-labelledby="attention-heading" className="min-w-0 border-slate-200 shadow-none">
+    <Card id="action-needed" aria-labelledby="attention-heading" className="min-w-0 scroll-mt-20 border-slate-200 shadow-none">
       <CardHeader className="flex-row items-center justify-between border-b border-slate-100 pb-3">
         <CardTitle as="h3" id="attention-heading" className="text-sm font-semibold text-slate-950 md:text-base">Action needed</CardTitle>
-        {attention && (
-          <span className="text-xs text-slate-400" title="Diperbarui otomatis tiap menit">
-            {minutesAgo < 1 ? "baru saja" : `${minutesAgo} mnt lalu`}
-          </span>
-        )}
+        {attention && <RelativeTime at={attention.at} />}
       </CardHeader>
       <CardContent className="p-2">
         {attentionError ? (
@@ -506,9 +540,11 @@ export function AnalyticsDashboard({
     </Card>
   );
 
+  const showRankingsCard = showInsights && Boolean(data.period.start_date && data.period.end_date);
+
   return (
     <div className="space-y-4">
-      {/* One toolbar: the period, what it is compared with, refresh. */}
+      {/* One toolbar: the period, what it is compared with, refresh, and stale shortcut. */}
       <section className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" aria-label="Date range dan pembanding">
         <AdminDateRangeFilter
           value={dateSelection}
@@ -519,8 +555,7 @@ export function AnalyticsDashboard({
           className="w-full sm:w-56"
         />
         <div className="flex gap-2">
-          {/* The same filter control as every other admin list (DESIGN-SYSTEM §7.1). */}
-          <div className="min-w-0 flex-1 sm:w-60 sm:flex-none">
+          <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
             <FilterSelect
               id="dashboard-compare"
               icon={GitCompareArrows}
@@ -528,7 +563,7 @@ export function AnalyticsDashboard({
               value={compare}
               onValueChange={setCompare}
               disabled={loading || refreshing}
-              options={(Object.keys(COMPARE_LABELS) as CompareChoice[]).map((value) => ({ value, label: COMPARE_LABELS[value] }))}
+              options={(Object.keys(COMPARE_LABELS) as DashboardCompareChoice[]).map((value) => ({ value, label: COMPARE_LABELS[value] }))}
             />
           </div>
           <Button
@@ -546,6 +581,15 @@ export function AnalyticsDashboard({
           </Button>
         </div>
         {compareCaption && <p className="text-xs text-slate-500 sm:ml-1">{compareCaption}</p>}
+        {showAttention && staleTotal > 0 && (
+          <a
+            href="#action-needed"
+            className="inline-flex min-h-8 items-center gap-1.5 self-start rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100 sm:ml-auto"
+          >
+            <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="tabular-nums">{staleTotal} antrean &gt;24 jam</span>
+          </a>
+        )}
       </section>
 
       {error && (
@@ -559,9 +603,6 @@ export function AnalyticsDashboard({
           <Card key={metric.label} className="overflow-hidden border-slate-200 shadow-none" title={metric.title}>
             <CardContent className="p-3.5 sm:p-4">
               <p className="text-xs font-medium text-slate-500">{metric.label}</p>
-              {/* Never truncated: a cut money figure hides digits. On a phone the
-                  size steps down with the figure's length so even
-                  "Rp 1.234.567.890" fits a 360px half-width card. */}
               <p className={`mt-1.5 whitespace-nowrap font-semibold tabular-nums tracking-tight sm:text-xl ${kpiValueSize(metric.value)} ${metric.tone}`}>{metric.value}</p>
               <div className="mt-1 flex min-h-5 flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 {metric.delta}
@@ -572,13 +613,11 @@ export function AnalyticsDashboard({
         ))}
       </section>
 
-      {/* Row 2: the chart and the payment mix; open work sits below them
-          (Paduka, 2026-11-01), so the top of the page stays the numbers. */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
         <Card aria-labelledby="trend-heading" className="min-w-0 border-slate-200 shadow-none">
           <CardHeader className="flex-row flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 pb-3">
             <CardTitle as="h3" id="trend-heading" className="text-sm font-semibold text-slate-950 md:text-base">
-              Revenue {hourly ? "(kumulatif per jam)" : "per hari"}
+              Revenue {hourly ? "(kumulatif per jam · WIB)" : "per hari"}
             </CardTitle>
             {prev && (
               <CardDescription className="flex items-center gap-3 text-xs">
@@ -597,18 +636,23 @@ export function AnalyticsDashboard({
               </div>
             ) : (
               <div className="h-[240px] w-full sm:h-[260px]">
-                <Suspense fallback={<Skeleton className="h-full w-full rounded-xl" />}>
-                  <DashboardRevenueChart
-                    data={chartData}
-                    hourly={hourly}
-                    compareLabel={prev ? COMPARE_LABELS[prev.mode].replace(/^vs /, "") : undefined}
-                    formatValue={compactRupiah}
-                  />
-                </Suspense>
+                {mounted ? (
+                  <Suspense fallback={<Skeleton className="h-full w-full rounded-xl" />}>
+                    <DashboardRevenueChart
+                      data={chartData}
+                      hourly={hourly}
+                      compareLabel={prev ? COMPARE_LABELS[prev.mode].replace(/^vs /, "") : undefined}
+                      formatValue={compactRupiah}
+                    />
+                  </Suspense>
+                ) : (
+                  <Skeleton className="h-full w-full rounded-xl" />
+                )}
               </div>
             )}
           </CardContent>
         </Card>
+
         <Card aria-labelledby="payment-mix-heading" className="min-w-0 border-slate-200 shadow-none">
           <CardHeader className="border-b border-slate-100 pb-3">
             <CardTitle as="h3" id="payment-mix-heading" className="text-sm font-semibold text-slate-950 md:text-base">Payment mix</CardTitle>
@@ -651,17 +695,23 @@ export function AnalyticsDashboard({
             <CardTitle as="h3" id="funnel-heading" className="text-sm font-semibold text-slate-950 md:text-base">Sales funnel</CardTitle>
           </CardHeader>
           <CardContent className="p-3">
-            {/* Only "Orders" links: the order list is the one list that takes this period. */}
             <ol className="grid grid-cols-2 gap-2">
               {funnelSteps.map((step) => {
+                const widthPct = Math.max(0, Math.min(100, Math.round(step.ratio * 100)));
                 const body = (
                   <>
-                    <span className="text-xs font-medium text-slate-500">{step.label}</span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-medium text-slate-500">{step.label}</span>
+                      {step.href && <ChevronRight className="size-3.5 shrink-0 text-slate-300 group-hover:text-slate-500" aria-hidden="true" />}
+                    </div>
                     <span className="mt-0.5 text-lg font-semibold tabular-nums text-slate-950">{step.value.toLocaleString("id-ID")}</span>
+                    <div className="my-1.5 h-1 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                      <div className="h-full rounded-full bg-[var(--admin-accent)]" style={{ width: `${step.value > 0 ? Math.max(6, widthPct) : 0}%` }} />
+                    </div>
                     <span className="text-xs text-slate-500">{step.note}</span>
                   </>
                 );
-                const frame = "flex h-full flex-col rounded-lg border border-slate-200 px-3 py-2";
+                const frame = "group flex h-full flex-col rounded-lg border border-slate-200 px-3 py-2";
                 return (
                   <li key={step.label}>
                     {step.href ? (
@@ -676,38 +726,48 @@ export function AnalyticsDashboard({
           </CardContent>
         </Card>
 
-
-        {showInsights && rankings && (
+        {showRankingsCard && (
           <Card aria-labelledby="top-heading" className="min-w-0 border-slate-200 shadow-none">
             <CardHeader className="border-b border-slate-100 pb-3">
               <CardTitle as="h3" id="top-heading" className="text-sm font-semibold text-slate-950 md:text-base">Top products & landing pages</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2 xl:grid-cols-1">
-              {[
-                { title: "Products", rows: rankings.products, href: "/admin/analytics/products", unit: (row: RankingRow) => `${row.units ?? 0} unit` },
-                { title: "Landing pages", rows: rankings.pages, href: "/admin/analytics/landing", unit: (row: RankingRow) => `${row.orders ?? 0} order` },
-              ].map((list) => (
-                <div key={list.title} className="min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-slate-500">{list.title}</p>
-                    <a href={list.href} className="text-xs font-medium text-slate-600 underline-offset-4 hover:text-slate-900 hover:underline">Semua</a>
-                  </div>
-                  {list.rows.length === 0 ? (
-                    <p className="mt-1.5 text-xs text-slate-400">Belum ada data.</p>
-                  ) : (
-                    <ol className="mt-1.5 space-y-1">
-                      {list.rows.map((row, index) => (
-                        <li key={`${row.label}-${index}`} className="flex items-baseline justify-between gap-3 text-sm" title={`${row.label} · ${list.unit(row)}`}>
-                          <span className="min-w-0 truncate text-slate-800">
-                            <span className="mr-1.5 tabular-nums text-slate-400">{index + 1}</span>{row.label}
-                          </span>
-                          <span className="shrink-0 font-semibold tabular-nums text-slate-950">{compactRupiah(row.revenue)}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
+              {rankingsLoading ? (
+                <div className="space-y-2" aria-busy="true" aria-label="Memuat ranking">
+                  {Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-6 rounded-md" />)}
                 </div>
-              ))}
+              ) : rankingsError || !rankings ? (
+                <div className="flex flex-col items-start gap-2 text-xs text-slate-500">
+                  <p>Ranking belum dapat dimuat.</p>
+                  <Button variant="outline" size="sm" onClick={() => void loadAnalytics(dateSelection, compare)}>Coba lagi</Button>
+                </div>
+              ) : (
+                [
+                  { title: "Products", rows: rankings.products, href: "/admin/analytics/products", unit: (row: DashboardRankingRow) => `${row.units ?? 0} unit` },
+                  { title: "Landing pages", rows: rankings.pages, href: "/admin/analytics/landing", unit: (row: DashboardRankingRow) => `${row.orders ?? 0} order` },
+                ].map((list) => (
+                  <div key={list.title} className="min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-500">{list.title}</p>
+                      <a href={list.href} className="text-xs font-medium text-slate-600 underline-offset-4 hover:text-slate-900 hover:underline">Semua</a>
+                    </div>
+                    {list.rows.length === 0 ? (
+                      <p className="mt-1.5 text-xs text-slate-400">Belum ada data.</p>
+                    ) : (
+                      <ol className="mt-1.5 space-y-1">
+                        {list.rows.map((row, index) => (
+                          <li key={`${row.label}-${index}`} className="flex items-baseline justify-between gap-3 text-sm" title={`${row.label} · ${list.unit(row)}`}>
+                            <span className="min-w-0 truncate text-slate-800">
+                              <span className="mr-1.5 tabular-nums text-slate-400">{index + 1}</span>{row.label}
+                            </span>
+                            <span className="shrink-0 font-semibold tabular-nums text-slate-950">{compactRupiah(row.revenue)}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         )}
