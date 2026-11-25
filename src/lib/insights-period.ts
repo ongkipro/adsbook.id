@@ -70,8 +70,22 @@ export function previousInsightsPeriod(period: InsightsPeriod): InsightsPeriod {
   return { start: shiftAdminDate(end, -(period.days - 1)), end, days: period.days };
 }
 
+/** One Asia/Jakarta SQLite offset shared across dashboard, Analitik, and list filters (AN-6). */
+export const JAKARTA_SQL_OFFSET = "+7 hours";
+
+/** The Jakarta calendar day of a timestamp column (`created_at` by default). */
+export const jakartaDateSql = (column = "created_at") => `date(${column}, '${JAKARTA_SQL_OFFSET}')`;
+
 /** The Jakarta day of a row, exactly as the dashboard groups it. */
-export const jakartaDaySql = (alias = "") => `date(${alias}created_at, '+7 hours')`;
+export const jakartaDaySql = (alias = "") => jakartaDateSql(`${alias}created_at`);
+
+/** The Jakarta hour bucket (`YYYY-MM-DD HH:00:00`) used for single-day dashboard trends. */
+export const jakartaHourBucketSql = (column = "created_at") =>
+  `STRFTIME('%Y-%m-%d %H:00:00', ${column}, '${JAKARTA_SQL_OFFSET}')`;
+
+/** A SQLite `strftime` format evaluated in Asia/Jakarta time. */
+export const jakartaStrftimeSql = (format: string, column = "created_at") =>
+  `strftime('${format}', ${column}, '${JAKARTA_SQL_OFFSET}')`;
 
 /**
  * The period predicate and its four bound values. `alias` is a table prefix
