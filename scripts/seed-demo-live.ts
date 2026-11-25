@@ -265,25 +265,24 @@ type DemoProductRow = {
 };
 
 async function seedFullShowcase() {
-  // 1. Configure Mengantar API key from operator-supplied demo env (sealed via ADR-040, never echoed).
+  // 1. Read current settings & warehouses FIRST.
+  // CRITICAL: create the primary warehouse BEFORE saving mengantar_api_key so
+  // pickupRegistrar is null and addWarehouse persists pickup_address_id directly
+  // in D1 with ZERO POST /address mutation against the provider account.
   const mengantarKey = (process.env.DEMO_COURIER_API_KEY || "").trim();
   const originAreaId = (process.env.DEMO_ORIGIN_AREA_ID || "").trim();
   const pickupAddressId = (process.env.DEMO_PICKUP_ADDRESS_ID || "").trim();
-  if (mengantarKey) {
-    ok(
-      "save-integrations (mengantar)",
-      await call("/api/admin/settings", {
-        method: "PUT",
-        json: { action: "save-integrations", integrations: { mengantar_api_key: mengantarKey } },
-      }),
-    );
-    console.log("[seed:demo-live] Mengantar API key configured (sealed)");
-  }
+  const settingsRes = ok("read settings", await call("/api/admin/settings"));
+  const mengantarAlreadyConfigured = Boolean(settingsRes?.data?.credentials?.mengantar?.configured);
 
-  // 2. Ensure primary warehouse exists (reusing existing pickup_address_id so zero provider mutation happens).
   const whRes = ok("list warehouses", await call("/api/admin/warehouses"));
   const warehouses: any[] = whRes?.data ?? [];
   if (warehouses.length === 0 && originAreaId) {
+    if (mengantarAlreadyConfigured) {
+      throw new Error(
+        "Refusing to POST /api/admin/warehouses while mengantar_api_key is already configured (would call Mengantar POST /address). Clear the key or add the warehouse first.",
+      );
+    }
     ok(
       "create primary warehouse",
       await call("/api/admin/warehouses", {
@@ -301,8 +300,26 @@ async function seedFullShowcase() {
         },
       }),
     );
-    console.log("[seed:demo-live] primary warehouse created");
+    console.log("[seed:demo-live] primary warehouse created (local D1 only, zero provider write)");
   }
+
+  // 2. Configure Mengantar API key from operator-supplied demo env (sealed via ADR-040, never echoed).
+  if (mengantarKey && !mengantarAlreadyConfigured) {
+    ok(
+      "save-integrations (mengantar)",
+      await call("/api/admin/settings", {
+        method: "PUT",
+        json: { action: "save-integrations", integrations: { mengantar_api_key: mengantarKey } },
+      }),
+    );
+    console.log("[seed:demo-live] Mengantar API key configured (sealed)");
+  }
+
+  const bankRes = ok("list seller bank accounts", await call("/api/admin/seller-bank-accounts"));
+  const activeBankAccount = ((bankRes?.data ?? []) as Array<{ id: number; is_active?: number }>).find(
+    (row) => Number(row.is_active ?? 1) === 1,
+  );
+  const sellerBankAccountId = activeBankAccount ? Number(activeBankAccount.id) : undefined;
 
   // 3. Seed 3 flagship Landing Pages linked to active physical demo products.
   const prodRes = ok("reload products", await call("/api/admin/products"));
@@ -399,8 +416,8 @@ async function seedFullShowcase() {
     const resolveArea = async (keyword: string) => {
       if (locationsCache.has(keyword)) return locationsCache.get(keyword)!;
       const res = ok(`locations ${keyword}`, await call(`/api/locations?search=${encodeURIComponent(keyword)}`));
-      const rows: any[] = res?.data ?? res?.locations ?? [];
-      const first = rows[0];
+      const rows: any[] = res?.locations ?? res?.items ?? res?.data ?? [];
+      const first = rows.find((row) => String(row?.id ?? row?._id ?? row?.location_id ?? "").trim());
       if (!first) throw new Error(`no location match for ${keyword}`);
       const area = {
         id: String(first.id ?? first._id ?? first.location_id),
@@ -583,6 +600,9 @@ async function seedFullShowcase() {
             city: area.city,
             province: area.province,
             payment_method: s.payment,
+            ...(s.payment === "manual_transfer" && sellerBankAccountId
+              ? { seller_bank_account_id: sellerBankAccountId }
+              : {}),
             variant_id: String(variant.id),
             quantity: 1,
             location_id: area.id,
