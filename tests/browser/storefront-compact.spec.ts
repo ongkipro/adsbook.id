@@ -181,3 +181,39 @@ test("404 is the storefront's own page: one heading, a 48px way home, related pr
   await expect(page.getByRole("heading", { name: "Mungkin ini yang Anda cari" })).toBeVisible();
   await page.screenshot({ path: "test-results/storefront-404-390.png", fullPage: true });
 });
+
+test("PDP category breadcrumb filters /produk via ?kategori= and secondary + payment pages keep 12px floor without overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${STORE}/`);
+  const href = await page.locator("#product-grid a[href^='/produk/']").first().getAttribute("href");
+  await page.goto(`${STORE}${href}`);
+  const categoryLink = page.locator('nav[aria-label="Breadcrumb"] a[href^="/produk?kategori="]').first();
+  if ((await categoryLink.count()) > 0) {
+    const categoryName = (await categoryLink.textContent())!.trim();
+    await categoryLink.click();
+    await expect(page).toHaveURL(/\/produk\?kategori=/);
+    const activeChip = page.locator('.catalog-chip[aria-pressed="true"]');
+    if ((await activeChip.count()) > 0) {
+      await expect(activeChip).toHaveText(categoryName);
+    }
+  }
+
+  for (const route of ["/payment?preview=1", "/landing-page", "/sitemap", "/tentang", "/testimoni"]) {
+    await page.goto(`${STORE}${route}`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), `${route} has no horizontal overflow`).toBeLessThanOrEqual(390);
+    const tiny = await page.evaluate(() =>
+      [...document.querySelectorAll("main *")]
+        .filter((el) => (el as HTMLElement).offsetParent && [...el.childNodes].some((node) => node.nodeType === 3 && node.textContent!.trim()))
+        .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 12)
+        .map((el) => `${el.tagName} ${getComputedStyle(el).fontSize} "${el.textContent!.trim().slice(0, 20)}"`),
+    );
+    expect(tiny, `${route} keeps 12px floor`).toEqual([]);
+  }
+  await page.goto(`${STORE}/payment?preview=1`);
+  await expect(page.locator("#copy-payment-link")).toHaveCount(0);
+  // The WhatsApp help button is rendered only from the store's own support
+  // number; the test store has none, so there must be no dead wa.me link.
+  await expect(page.locator("#payment-wa-btn")).toHaveCount(0);
+  await expect(page.locator("#check-status-btn")).toBeHidden();
+  await page.screenshot({ path: "test-results/storefront-payment-390.png", fullPage: true });
+});

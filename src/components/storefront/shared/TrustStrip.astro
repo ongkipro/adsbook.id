@@ -1,30 +1,84 @@
 ---
 import Icon from './Icon.astro';
 
-// Compact trust strip: up to three claims from the store's live checkout
-// settings (`storefrontTrustSignals`), in one row of equal cells sized for
-// the 480px column. Each cell shows the short label; the full claim is its
-// accessible name. A store with nothing configured shows nothing. No
-// per-visitor value: edge-cacheable.
+// Frameless trust strip: active payment methods and active courier marks
+// enabled in the store's admin dashboard. No box frame — clean inline rows
+// directly on the column. Edge-cacheable (no per-visitor data).
 interface Props {
-  signals: Array<{ icon: string; label: string; short: string }>;
+  signals?: Array<{ icon: string; label: string; short: string }>;
+  payments?: Array<{ name: string; logo: string }>;
+  couriers?: Array<{ name: string; logo: string }>;
   class?: string;
 }
-const { signals, class: className = '' } = Astro.props;
+const { signals = [], payments = [], couriers = [], class: className = '' } = Astro.props;
+const showFallbackSignals = payments.length === 0 && couriers.length === 0 && signals.length > 0;
+const visible = payments.length > 0 || couriers.length > 0 || showFallbackSignals;
 ---
 
-{signals.length > 0 && (
-  <ul
-    class={`sf-trust grid gap-px overflow-hidden rounded-sf border border-sf-line bg-sf-line ${className}`}
-    style={`grid-template-columns: repeat(${signals.length}, minmax(0, 1fr))`}
-    aria-label="Belanja di toko ini"
-  >
-    {signals.map((signal) => (
-      <li class="flex min-h-12 items-center gap-2 bg-white px-2.5 py-2" title={signal.label}>
-        <Icon name={`lucide:${signal.icon}`} class="h-4 w-4 shrink-0 text-sf-accent" aria-hidden="true" />
-        <span class="sr-only">{signal.label}</span>
-        <span class="line-clamp-2 min-w-0 text-xs font-medium leading-4 text-sf-text" aria-hidden="true">{signal.short}</span>
-      </li>
-    ))}
-  </ul>
+{visible && (
+  <div class={`sf-trust flex flex-col gap-3 py-1 ${className}`}>
+    {payments.length > 0 && (
+      <div class="flex flex-col items-center gap-2">
+        <p class="text-xs font-medium text-sf-muted">Metode pembayaran</p>
+        <ul class="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-2" aria-label="Metode pembayaran yang tersedia">
+          {payments.map((payment) => (
+            <li class="flex items-center">
+              <img
+                src={payment.logo}
+                alt={payment.name}
+                title={payment.name}
+                width="60"
+                height="20"
+                loading="lazy"
+                decoding="async"
+                class="h-5 w-auto max-w-[60px] object-contain"
+              />
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {couriers.length > 0 && (
+      <div
+        class:list={[
+          'flex flex-col items-center gap-2',
+          payments.length > 0 && 'border-t border-sf-line/70 pt-3',
+        ]}
+      >
+        <p class="text-xs font-medium text-sf-muted">Didukung pengiriman</p>
+        <ul class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2" aria-label="Ekspedisi pengiriman yang tersedia">
+          {couriers.map((courier) => (
+            <li class="flex items-center">
+              <img
+                src={courier.logo}
+                alt={courier.name}
+                title={courier.name}
+                width="64"
+                height="20"
+                loading="lazy"
+                decoding="async"
+                class="h-5 w-auto max-w-[68px] object-contain opacity-90"
+              />
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {showFallbackSignals && (
+      <ul
+        class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
+        aria-label="Belanja di toko ini"
+      >
+        {signals.map((signal) => (
+          <li class="inline-flex items-center gap-1.5 text-xs font-medium text-sf-text" title={signal.label}>
+            <Icon name={`lucide:${signal.icon}`} class="h-3.5 w-3.5 shrink-0 text-sf-accent" aria-hidden="true" />
+            <span class="sr-only">{signal.label}</span>
+            <span aria-hidden="true">{signal.short}</span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
 )}

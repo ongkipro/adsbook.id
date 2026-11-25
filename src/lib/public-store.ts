@@ -86,7 +86,7 @@ export async function getThanksWhatsappSettings(
   }
 }
 
-type PublicPaymentRow = { payment_method: string; name: string; is_active: boolean };
+type PublicPaymentRow = { payment_method: string; name: string; is_active: boolean; logo_url?: string | null };
 
 /** "A", "A dan B", "A, B, dan C". */
 export function joinIndonesian(items: readonly string[]) {
@@ -128,12 +128,20 @@ export function summarizePaymentMethods(rows: readonly PublicPaymentRow[]) {
  */
 export async function getStorePublicFacts(locals: App.Locals): Promise<{
   couriers: string[];
+  courierLogos: Array<{ name: string; logo: string }>;
   payments: string[];
+  paymentLogos: Array<{ name: string; logo: string }>;
   codExcludedProvinces: string[];
 }> {
-  const facts = { couriers: [] as string[], payments: [] as string[], codExcludedProvinces: [] as string[] };
+  const facts = {
+    couriers: [] as string[],
+    courierLogos: [] as Array<{ name: string; logo: string }>,
+    payments: [] as string[],
+    paymentLogos: [] as Array<{ name: string; logo: string }>,
+    codExcludedProvinces: [] as string[],
+  };
   const database = tenantDatabase(locals);
-  const [{ courierDisplayName }, { loadStoreCodDisabledProvinceCodes }, { getProvinceName }, { GET }] = await Promise.all([
+  const [{ courierDisplayName, courierLogoUrl }, { loadStoreCodDisabledProvinceCodes }, { getProvinceName }, { GET }] = await Promise.all([
     import("./courier-names.ts"),
     import("./form-mode.ts"),
     import("./province.ts"),
@@ -143,11 +151,26 @@ export async function getStorePublicFacts(locals: App.Locals): Promise<{
     const rules = database?.prepare
       ? await database.prepare("SELECT courier_code FROM courier_rules WHERE is_enabled = 1 ORDER BY id").all<{ courier_code: string }>()
       : null;
-    facts.couriers = [...new Set((rules?.results ?? []).map((row) => courierDisplayName(row.courier_code)))];
+    const rows = rules?.results ?? [];
+    facts.couriers = [...new Set(rows.map((row) => courierDisplayName(row.courier_code)))];
+    const seenLogos = new Set<string>();
+    for (const row of rows) {
+      const logo = courierLogoUrl(row.courier_code);
+      if (!logo || seenLogos.has(logo)) continue;
+      seenLogos.add(logo);
+      facts.courierLogos.push({ name: courierDisplayName(row.courier_code), logo });
+    }
     facts.codExcludedProvinces = (await loadStoreCodDisabledProvinceCodes(database)).map((code) => getProvinceName(code)).filter(Boolean);
     const response = await GET({ locals } as Parameters<typeof GET>[0]);
     const payload = (await response.json()) as { data?: PublicPaymentRow[] };
-    facts.payments = summarizePaymentMethods(payload.data ?? []);
+    const paymentRows = payload.data ?? [];
+    facts.payments = summarizePaymentMethods(paymentRows);
+    const seenPayments = new Set<string>();
+    for (const row of paymentRows) {
+      if (!row.is_active || !row.logo_url || seenPayments.has(row.logo_url)) continue;
+      seenPayments.add(row.logo_url);
+      facts.paymentLogos.push({ name: row.name, logo: row.logo_url });
+    }
   } catch (error) {
     console.error("storefront-public-facts-load", error instanceof Error ? error.message : "unknown");
   }

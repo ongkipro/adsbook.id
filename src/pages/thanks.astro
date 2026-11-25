@@ -97,21 +97,21 @@ const productCatalog = products.map((item) => ({
     // never the PageView.
     window.__PS_META_AWAIT_MATCHING__ = true;
   </script>
-  <main id="thanks-shell" hidden class="min-h-screen bg-white py-4 font-sans text-[14px] text-sf-ink antialiased sm:py-8">
+  <main id="thanks-shell" hidden class="min-h-screen bg-white font-sans text-sm text-sf-ink antialiased">
     <MetaThanksTracker tenantName={Astro.locals.tenant.name} />
-    <div class="mx-auto w-full max-w-[480px] overflow-hidden rounded-sf border border-sf-line bg-white">
+    <div class="mx-auto w-full max-w-[480px] bg-white">
       <header
-        class="relative z-30 flex items-center justify-center border-b border-sf-line bg-white px-5 py-4"
+        class="relative z-30 flex items-center justify-center border-b border-sf-line bg-white px-4 py-4"
       >
         <!-- The store's own name. The script used to overwrite this with the
              product name, so the page the customer trusts most was branded by
              whatever they happened to buy rather than by the shop. -->
         <span
           id="brand-logo"
-          class="text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-muted">{Astro.locals.tenant.name}</span
+          class="text-xs font-semibold uppercase tracking-[0.08em] text-sf-muted">{Astro.locals.tenant.name}</span
         >
       </header>
-    <section class="px-5 pb-5 pt-7 text-center" data-motion="hero">
+    <section class="px-4 pb-5 pt-7 text-center" data-motion="hero">
       <div
         class="mx-auto mb-4 grid size-16 place-items-center rounded-full bg-sf-ink text-white"
         data-motion="success-icon"
@@ -123,7 +123,7 @@ const productCatalog = products.map((item) => ({
       </div>
       <h1
         id="thanks-title"
-        class="mx-auto mt-2 max-w-[320px] text-[22px] font-semibold leading-tight tracking-[-0.03em] text-sf-ink"
+        class="mx-auto mt-2 max-w-[320px] text-[22px] font-bold leading-tight tracking-[-0.02em] text-sf-ink"
       >
         Pesanan berhasil dibuat
       </h1>
@@ -134,55 +134,55 @@ const productCatalog = products.map((item) => ({
 
     <!-- DIGITAL-PRODUCTS-SPEC §5.2: filled from /api/order-status only when the order
          is digital, paid and live; the link never appears in this page's HTML. -->
-    <section id="digital-access" hidden class="px-5 pb-5">
+    <section id="digital-access" hidden class="px-4 pb-5">
       <div class="rounded-sf-lg border border-sf-accent/30 bg-sf-accent-soft p-5 text-left">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-accent-strong">Pembayaran berhasil</p>
-        <h2 class="mt-1 text-[18px] font-semibold leading-snug text-sf-ink">Produk Digital Siap Diakses</h2>
+        <p class="text-xs font-semibold text-sf-accent-strong">Pembayaran berhasil</p>
+        <h2 class="mt-1 text-lg font-bold leading-snug text-sf-ink">Produk digital siap diakses</h2>
         <p id="digital-access-product" class="mt-1 text-[13px] leading-6 text-sf-text"></p>
         <a
           id="digital-access-link"
           href="#"
           target="_blank"
           rel="noopener noreferrer"
-          class="mt-4 flex min-h-12 items-center justify-center rounded-sf-lg bg-sf-accent px-4 text-center text-[14px] font-semibold text-white hover:bg-sf-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-accent"
+          class="mt-4 flex min-h-12 items-center justify-center rounded-sf bg-sf-accent px-4 text-center text-sm font-semibold text-white hover:bg-sf-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-accent"
         >Buka / Akses Produk Sekarang ↗</a>
-        <div id="digital-access-note-box" hidden class="mt-4 rounded-sf-lg bg-white p-4">
-          <p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-sf-muted">Instruksi akses</p>
+        <div id="digital-access-note-box" hidden class="mt-4 rounded-sf bg-white p-4">
+          <p class="text-xs font-semibold text-sf-muted">Instruksi akses</p>
           <p id="digital-access-note" class="mt-1 whitespace-pre-line text-[13px] leading-6 text-sf-ink"></p>
         </div>
-        <p class="mt-3 text-[12px] leading-5 text-sf-text">Simpan halaman ini: link akses bisa dibuka lagi kapan saja dari alamat halaman ini.</p>
+        <p class="mt-3 text-xs leading-5 text-sf-text">Simpan halaman ini: link akses bisa dibuka lagi kapan saja dari alamat halaman ini.</p>
       </div>
     </section>
 
-    <section class="border-y border-sf-line bg-sf-surface px-5 py-5 text-center" data-motion="summary">
+    <section class="border-y border-sf-line bg-sf-surface px-4 py-5 text-center" data-motion="summary">
       <!-- #555555, not the #767676 used on white: on the #F5F5F5 panel that
            lighter grey measures 4.16:1, under the 4.5 AA floor. -->
-      <p id="payment-title" class="text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-text">
+      <p id="payment-title" class="text-xs font-semibold text-sf-text">
         Bayar saat paket tiba
       </p>
-      <p id="total-payment-hero" class="mt-1.5 text-[32px] font-bold leading-none tracking-[-0.04em] text-sf-ink">
+      <p id="total-payment-hero" class="sf-num mt-1.5 text-[32px] font-bold leading-none tracking-[-0.04em] text-sf-ink">
         —
       </p>
       <span
         id="payment-badge"
-        class="mt-3 inline-flex items-center rounded-sf border border-sf-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-text"
+        class="mt-3 inline-flex items-center rounded-sf border border-sf-line bg-white px-3 py-1 text-xs font-semibold text-sf-text"
       >
         COD · Bayar di Tempat
       </span>
     </section>
 
-    <section class="px-5 py-5" data-motion="section">
+    <section class="px-4 py-5" data-motion="section">
       <div class="mb-3 flex items-center justify-between">
         <h2 class="text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">Produk dipesan</h2>
         <span
           id="quantity-badge"
-          class="rounded-sf border border-sf-line bg-sf-surface px-2.5 py-1 text-[11px] font-normal text-sf-text"
+          class="rounded-sf border border-sf-line bg-sf-surface px-2.5 py-1 text-xs font-medium text-sf-text"
           >Qty 1</span
         >
       </div>
 
       <div class="flex items-center gap-4">
-        <div class="relative grid size-[84px] shrink-0 place-items-center overflow-hidden border border-sf-line bg-sf-surface">
+        <div class="relative grid size-[84px] shrink-0 place-items-center overflow-hidden rounded-sf border border-sf-line bg-sf-surface">
           <img
             id="product-image"
             src={storeLogo}
@@ -207,7 +207,7 @@ const productCatalog = products.map((item) => ({
       </div>
     </section>
 
-    <section class="border-t border-sf-line px-5 py-5" data-motion="section">
+    <section class="border-t border-sf-line px-4 py-5" data-motion="section">
       <h2 class="mb-3 text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">Ringkasan pembayaran</h2>
       <div class="divide-y divide-sf-line overflow-hidden rounded-sf border border-sf-line">
         <div class="flex justify-between gap-3 px-4 py-3 text-[13px]">
@@ -238,19 +238,19 @@ const productCatalog = products.map((item) => ({
         </div>
         <div class="flex items-center justify-between gap-3 bg-sf-surface px-4 py-4">
           <div>
-            <p id="total-label" class="text-[13px] font-normal text-sf-ink">Total COD</p>
-            <p id="total-note" class="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-sf-text">
+            <p id="total-label" class="text-[13px] font-semibold text-sf-ink">Total COD</p>
+            <p id="total-note" class="mt-0.5 text-xs text-sf-text">
               Siapkan uang pas saat kurir tiba
             </p>
           </div>
-          <strong id="total-payment" class="text-[21px] font-bold tracking-[-0.03em] text-sf-ink"
+          <strong id="total-payment" class="sf-num text-[21px] font-bold tracking-[-0.03em] text-sf-ink"
             >—</strong
           >
         </div>
       </div>
     </section>
 
-    <section class="border-t border-sf-line px-5 py-5" data-motion="section">
+    <section class="border-t border-sf-line px-4 py-5" data-motion="section">
       <div class="mb-3 flex items-center justify-between gap-3">
         <h2 id="contact-title" class="text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">Data pengiriman</h2>
       </div>
@@ -286,7 +286,7 @@ const productCatalog = products.map((item) => ({
       </div>
     </section>
 
-    <section class="border-t border-sf-line bg-sf-surface px-5 py-5" data-motion="section">
+    <section class="border-t border-sf-line bg-sf-surface px-4 py-5" data-motion="section">
       <h2 id="status-title" class="mb-4 text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">Status pesanan</h2>
       <div class="space-y-4">
         <div class="grid grid-cols-[18px_1fr] gap-3">
@@ -301,7 +301,7 @@ const productCatalog = products.map((item) => ({
           </div>
         </div>
         <div class="grid grid-cols-[18px_1fr] gap-3">
-          <span class="mt-1 size-3 rounded-full bg-white ring-2 ring-sf-ink ring-offset-2 ring-offset-[#F5F5F5]"
+          <span class="mt-1 size-3 rounded-full bg-white ring-2 ring-sf-ink ring-offset-2 ring-offset-sf-surface"
           ></span>
           <div>
             <p id="step-two-title" class="text-[13px] font-normal text-sf-ink">Verifikasi admin</p><p
@@ -330,13 +330,13 @@ const productCatalog = products.map((item) => ({
       </div>
     </section>
 
-    <section id="payment-note" class="border-t border-sf-line bg-sf-surface px-5 py-5" data-motion="section">
+    <section id="payment-note" class="border-t border-sf-line bg-sf-surface px-4 py-5" data-motion="section">
       <div class="rounded-sf border border-sf-line bg-white p-4">
         <div class="mb-3 flex items-center justify-between gap-3">
           <h2 id="note-title" class="text-[15px] font-semibold tracking-[-0.02em] text-sf-ink">
             Catatan pembayaran COD
           </h2>
-          <span id="note-badge" class="shrink-0 rounded-sf border border-sf-line bg-sf-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sf-text">Wajib dibaca</span>
+          <span id="note-badge" class="shrink-0 rounded-sf border border-sf-line bg-sf-surface px-2 py-0.5 text-xs font-semibold text-sf-text">Wajib dibaca</span>
         </div>
         <div id="payment-details" class="mb-4 divide-y divide-sf-line rounded-sf border border-sf-line bg-white" hidden>
           <div class="flex justify-between gap-3 px-3 py-2.5 text-[13px]">
@@ -361,12 +361,12 @@ const productCatalog = products.map((item) => ({
                cannot pay a 150-character string; it needs to be the code their
                banking app scans, which is what this canvas renders. -->
           <div id="payment-qr-row" class="px-3 py-3.5 text-center" hidden>
-            <span class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-muted">Scan QRIS untuk membayar</span>
+            <span class="block text-xs font-semibold text-sf-muted">Scan QRIS untuk membayar</span>
             <div class="mx-auto mt-2.5 grid size-[220px] max-w-full place-items-center rounded-sf border border-sf-line bg-white p-2.5">
               <canvas id="payment-qr-canvas" class="h-auto max-h-[200px] w-auto max-w-full" aria-label="QR code pembayaran"></canvas>
               <img id="payment-qr-image" class="h-auto max-h-[200px] w-auto max-w-full" alt="QR code pembayaran" hidden />
             </div>
-            <p class="mx-auto mt-2 max-w-[300px] text-[11px] leading-5 text-sf-text">
+            <p class="mx-auto mt-2 max-w-[300px] text-xs leading-5 text-sf-text">
               Buka m-Banking atau e-Wallet, pilih menu Scan / QRIS, lalu arahkan ke kode di atas.
             </p>
           </div>
@@ -398,9 +398,9 @@ const productCatalog = products.map((item) => ({
       </div>
     </section>
 
-    <section id="whatsapp-section" class="px-5 py-6 text-center" data-motion="cta">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-sf-muted">Langkah berikutnya</p>
-      <h2 id="cta-title" class="mt-1.5 text-[20px] font-semibold tracking-[-0.03em] text-sf-ink">
+    <section id="whatsapp-section" class="px-4 py-6 text-center" data-motion="cta">
+      <p class="text-xs font-semibold text-sf-muted">Langkah berikutnya</p>
+      <h2 id="cta-title" class="mt-1.5 text-xl font-bold tracking-[-0.02em] text-sf-ink">
         Konfirmasi ke admin
       </h2>
       <p id="cta-copy" class="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-sf-text">
@@ -419,7 +419,7 @@ const productCatalog = products.map((item) => ({
         rel="nofollow noopener noreferrer"
         title={`Lanjutkan pembayaran pesanan ${Astro.locals.tenant.name}`}
         hidden
-        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf bg-sf-accent px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-sf-accent-strong"
+        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf bg-sf-accent px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-sf-accent-strong"
         >Lanjutkan Pembayaran</a
       >
       <a
@@ -427,7 +427,7 @@ const productCatalog = products.map((item) => ({
         href="/payment"
         title={`Lihat instruksi pembayaran pesanan ${Astro.locals.tenant.name}`}
         hidden
-        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf bg-sf-accent px-4 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-sf-accent-strong"
+        class="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf bg-sf-accent px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-sf-accent-strong"
       >
         <Icon name="lucide:wallet" class="size-4" aria-hidden="true" />
         <span id="payment-page-label">Lihat Instruksi Pembayaran</span>
@@ -440,7 +440,7 @@ const productCatalog = products.map((item) => ({
         title={`Konfirmasi pesanan ${Astro.locals.tenant.name} melalui WhatsApp`}
         data-auto-redirect={thanksWhatsappRedirect ? '1' : '0'}
         data-store-name={Astro.locals.tenant.name}
-        class="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf border border-sf-accent bg-sf-accent px-4 py-3 text-[12px] font-semibold text-white transition-colors hover:bg-sf-accent-strong data-[tone=secondary]:bg-white data-[tone=secondary]:text-sf-ink data-[tone=secondary]:hover:bg-sf-surface"
+        class="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-sf border border-sf-accent bg-sf-accent px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-sf-accent-strong data-[tone=secondary]:bg-white data-[tone=secondary]:text-sf-ink data-[tone=secondary]:hover:bg-sf-surface"
       >
         <Icon name="lucide:message-circle" class="size-5" aria-hidden="true" />
         <span id="wa-label">Konfirmasi via WhatsApp</span>

@@ -8,7 +8,7 @@ import { defineConfig } from "@playwright/test";
  * developer's own `dev:local` store is never touched. Nothing here reaches
  * Cloudflare or a provider.
  */
-export const PORT = 8807;
+export const PORT = Number(process.env.PLAYWRIGHT_PORT) || 8807;
 
 export default defineConfig({
   testDir: "tests/browser",

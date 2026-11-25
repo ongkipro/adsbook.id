@@ -44,20 +44,20 @@ const { products, heading, asPage = false, eager = false, categories: chipsOn = 
 const categories = [...new Set(products.map((product) => product.category).filter(Boolean))];
 const showChips = chipsOn && categories.length > 1;
 const chipClass =
-  'catalog-chip inline-flex min-h-10 shrink-0 items-center rounded-sf border border-sf-line bg-white px-3 text-sm text-sf-text transition-colors hover:border-sf-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink aria-pressed:border-sf-accent aria-pressed:bg-sf-accent-soft aria-pressed:font-semibold aria-pressed:text-sf-accent-strong';
+  'catalog-chip inline-flex min-h-10 shrink-0 items-center rounded-full border border-sf-line bg-white px-3.5 text-sm font-medium text-sf-text transition-colors hover:border-sf-ink hover:text-sf-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink aria-pressed:border-sf-ink aria-pressed:bg-sf-ink aria-pressed:font-semibold aria-pressed:text-white';
 
 const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
 ---
 
-<section id="produk" class:list={["px-4 pb-8", asPage ? "pt-1" : "pt-6"]}>
-  <div class="mb-3">
+<section id="produk" class:list={["px-4 pb-8", asPage ? "pt-2" : "pt-7"]}>
+  <div class="mb-3.5">
     <div class="flex items-baseline justify-between gap-4">
       {asPage
-        ? <h1 class="text-xl font-bold tracking-[-0.01em] text-sf-ink">{heading.title}</h1>
-        : <h2 class="text-lg font-bold tracking-[-0.01em] text-sf-ink">{heading.title}</h2>}
+        ? <h1 class="text-[22px] font-bold tracking-[-0.02em] text-sf-ink">{heading.title}</h1>
+        : <h2 class="text-lg font-bold tracking-[-0.015em] text-sf-ink">{heading.title}</h2>}
       {!asPage && <a href="/produk" class="-my-2.5 inline-flex min-h-10 shrink-0 items-center text-sm font-semibold text-sf-accent underline-offset-4 hover:underline">Lihat semua</a>}
     </div>
-    {heading.description && <p class="mt-0.5 text-sm leading-5 text-sf-text">{heading.description}</p>}
+    {heading.description && <p class="mt-1 text-sm leading-5 text-sf-text">{heading.description}</p>}
   </div>
 
   <div class="mb-4 flex flex-col gap-3" hidden={products.length === 0}>
@@ -71,9 +71,9 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
         autocomplete="off"
         enterkeyhint="search"
         placeholder="Cari produk"
-        class="h-10 w-full rounded-sf border border-sf-line bg-sf-surface pl-9 pr-3 text-base text-sf-ink placeholder:text-sf-muted focus:border-sf-ink focus:bg-white focus:outline-none"
+        class="h-11 w-full rounded-full border border-transparent bg-sf-surface pl-10 pr-4 text-base text-sf-ink placeholder:text-sf-muted transition-colors focus:border-sf-ink focus:bg-white focus:outline-none"
       />
-      <Icon name="lucide:search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sf-muted" aria-hidden="true" />
+      <Icon name="lucide:search" class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-sf-muted" aria-hidden="true" />
     </form>
     {showChips && (
       <div role="group" aria-label="Kategori" class="catalog-chips -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
@@ -102,7 +102,7 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
     <button type="button" id="catalog-reset" class="mt-4 inline-flex min-h-10 items-center rounded-sf border border-sf-line bg-white px-4 text-sm font-semibold text-sf-ink hover:border-sf-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink">Hapus pencarian</button>
   </div>
 
-  <div id="product-grid" class="grid grid-cols-2 gap-2" hidden={products.length === 0}>
+  <div id="product-grid" class="grid grid-cols-2 gap-2.5" hidden={products.length === 0}>
     {
       products.map((product, idx) => (
         <div
@@ -156,7 +156,6 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
 </section>
 
 <script>
-  import { autoLoadMore } from '../../../lib/auto-load-more';
   import { CATALOG_PAGE_SIZE } from '../../../lib/catalog-page-size';
 
   function initProductCatalog() {
@@ -170,9 +169,17 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
     const emptyEl = document.getElementById('catalog-empty');
     const statusEl = document.getElementById('catalog-status');
     const chips = document.querySelectorAll<HTMLButtonElement>('.catalog-chip');
-    let currentSearch = (new URLSearchParams(window.location.search).get('q') ?? '').trim().toLowerCase().slice(0, 80);
+    const params = new URLSearchParams(window.location.search);
+    let currentSearch = (params.get('q') ?? '').trim().toLowerCase().slice(0, 80);
     if (searchInput && currentSearch && !searchInput.value) searchInput.value = currentSearch;
-    let currentCategory = '';
+    const requestedCategory = (params.get('kategori') ?? '').trim();
+    const matchedChip = requestedCategory
+      ? [...chips].find((chip) => (chip.dataset.category ?? '').toLowerCase() === requestedCategory.toLowerCase())
+      : undefined;
+    let currentCategory = matchedChip?.dataset.category ?? '';
+    if (matchedChip) {
+      chips.forEach((chip) => chip.setAttribute('aria-pressed', String(chip === matchedChip)));
+    }
     let visibleLimit = CATALOG_PAGE_SIZE;
 
     function filterAndRender() {
@@ -243,9 +250,6 @@ const formatPrice = (val: number) => `Rp${val.toLocaleString('id-ID')}`;
     });
 
     filterAndRender();
-    // The next page loads as the button nears the screen; the button stays as the
-    // keyboard and no-script path.
-    autoLoadMore(loadMoreBtn);
   }
 
   if (document.readyState === 'loading') {

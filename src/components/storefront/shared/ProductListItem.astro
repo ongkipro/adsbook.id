@@ -56,7 +56,7 @@ const sold = product.soldCount && product.soldCount > 0
 <article class="sf-card group h-full">
   <a
     href={`/produk/${product.slug}`}
-    class="flex h-full flex-col overflow-hidden rounded-sf border border-sf-line bg-white transition-[border-color,box-shadow] hover:border-sf-line-strong hover:shadow-[0_2px_10px_rgba(17,17,17,0.06)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink"
+    class="flex h-full flex-col overflow-hidden rounded-sf-lg border border-sf-line/90 bg-white transition-[border-color,box-shadow] hover:border-sf-line-strong hover:shadow-[0_4px_14px_rgba(17,17,17,0.06)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink"
   >
     <div class="relative aspect-square overflow-hidden bg-sf-surface">
       <img
@@ -64,37 +64,42 @@ const sold = product.soldCount && product.soldCount > 0
         alt={`Foto produk ${product.productName}`}
         width="320"
         height="320"
-        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
         loading={eager ? 'eager' : 'lazy'}
         fetchpriority={eager ? 'high' : undefined}
         decoding="async"
       />
     </div>
 
-    {/* Four fixed lines, so every card in a row ends level: the title (two
-        lines held, a short one keeps its space), the price, the compare price
-        and discount, then one meta line. 13px body, tabular figures. */}
-    <div class="flex flex-1 flex-col px-2 pb-2 pt-1.5">
-      <h2 class="line-clamp-2 h-9 text-[13px] leading-[18px] text-sf-ink" title={product.productName}>{product.productName}</h2>
-      <p class="sf-num mt-1 flex h-5 items-baseline gap-1 leading-5">
-        {hasRange && <span class="text-xs text-sf-text">Mulai</span>}
-        <span class="text-[15px] font-bold text-sf-ink">{formatPrice(product.price)}</span>
+    <div class="flex flex-1 flex-col px-2.5 pb-3 pt-2.5">
+      <h2 class="line-clamp-2 min-h-[36px] text-[13px] font-medium leading-[18px] text-sf-ink" title={product.productName}>{product.productName}</h2>
+      <p class="sf-num mt-1.5 flex items-baseline gap-1 leading-5">
+        {hasRange && <span class="text-xs font-normal text-sf-text">Mulai</span>}
+        <span class="text-[15px] font-bold tracking-[-0.01em] text-sf-ink">{formatPrice(product.price)}</span>
       </p>
-      <p class="sf-num flex h-4 items-center gap-1.5 text-xs leading-4">
-        {hasDiscount && <span class="text-sf-muted line-through">{formatPrice(comparePrice)}</span>}
-        {discountPercentage > 0 && <span class="font-semibold text-sf-danger">{discountPercentage}%</span>}
-      </p>
-      <p class="sf-num mt-1 flex h-4 items-center gap-1 truncate text-xs leading-4 text-sf-text">
-        {rating && (
-          <>
-            <svg viewBox="0 0 24 24" class="h-3 w-3 shrink-0" aria-hidden="true"><path fill="#111111" d="m12 2.5 2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9Z"/></svg>
-            <span class="text-sf-ink">{rating}</span>
-          </>
-        )}
-        {rating && sold && <span aria-hidden="true" class="text-sf-line-strong">·</span>}
-        {sold && <span>{sold}</span>}
-        {!rating && !sold && product.variants.length > 1 && <span>{product.variants.length} pilihan</span>}
-      </p>
+      {hasDiscount && (
+        <p class="sf-num mt-1 flex items-center gap-1.5 text-xs leading-4">
+          <span class="text-sf-muted line-through">{formatPrice(comparePrice)}</span>
+          {discountPercentage > 0 && (
+            <span class="rounded-sf-sm bg-sf-danger-soft px-1.5 py-0.5 text-xs font-semibold leading-none text-sf-danger">
+              -{discountPercentage}%
+            </span>
+          )}
+        </p>
+      )}
+      {(rating || sold || product.variants.length > 1) && (
+        <p class="sf-num mt-auto flex items-center gap-1 truncate pt-2 text-xs leading-4 text-sf-text">
+          {rating && (
+            <>
+              <svg viewBox="0 0 24 24" class="h-3 w-3 shrink-0" aria-hidden="true"><path fill="#111111" d="m12 2.5 2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9Z"/></svg>
+              <span class="font-medium text-sf-ink">{rating}</span>
+            </>
+          )}
+          {rating && sold && <span aria-hidden="true" class="text-sf-line-strong">·</span>}
+          {sold && <span>{sold}</span>}
+          {!rating && !sold && product.variants.length > 1 && <span>{product.variants.length} pilihan</span>}
+        </p>
+      )}
     </div>
   </a>
 </article>

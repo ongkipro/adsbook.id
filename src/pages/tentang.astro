@@ -12,7 +12,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     { name: 'Tentang Kami', url: '/tentang' },
   ]}
 >
-  <main id="konten-utama" class="min-h-screen bg-sf-surface-soft text-sf-ink">
+  <main id="konten-utama" class="min-h-screen bg-white text-sf-ink">
     <PageIntro
       badge="Tentang Kami"
       title={`Tentang ${Astro.locals.tenant.name}`}
@@ -20,19 +20,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       breadcrumbs={[{ label: 'Beranda', href: '/' }, { label: 'Tentang Kami' }]}
     />
 
-    <section class="mx-auto max-w-[480px] px-5 py-8">
-      <div class="border-b border-sf-line pb-6">
-        <p class="text-[11px] font-normal uppercase tracking-[0.12em] text-sf-ink">Profil Toko</p>
-        <h2 class="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-sf-ink">
+    <section class="mx-auto max-w-[480px] px-4 py-6">
+      <div class="rounded-sf-lg border border-sf-line bg-sf-surface-soft p-5">
+        <h2 class="text-base font-bold tracking-[-0.01em] text-sf-ink">
           Selamat datang di {Astro.locals.tenant.name}
         </h2>
-        <div class="mt-4 space-y-4 text-[14px] leading-7 text-sf-text">
-          <p>
-            {Astro.locals.tenant.description}
-          </p>
-          <p>
-            Jelajahi katalog kami untuk menemukan produk yang Anda butuhkan.
-          </p>
+        <p class="mt-2 text-sm leading-6 text-sf-text">
+          Jelajahi katalog kami untuk melihat pilihan produk, detail varian, dan harga terbaru sebelum memesan.
+        </p>
+        <div class="mt-5">
+          <a
+            href="/produk"
+            class="inline-flex min-h-12 w-full items-center justify-center rounded-sf bg-sf-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-sf-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sf-ink"
+          >
+            Lihat semua produk
+          </a>
         </div>
       </div>
     </section>
