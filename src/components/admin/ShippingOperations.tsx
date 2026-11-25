@@ -32,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { ADMIN_CUSTOM_DATE_FILTER } from "../../lib/admin-date-filter";
+import { ADMIN_CUSTOM_DATE_FILTER, adminDateSelectionFromQuery } from "../../lib/admin-date-filter";
 import {
   AdminDateRangeFilter,
   type AdminDateSelection,
@@ -226,18 +226,23 @@ function LoadingState() {
   );
 }
 
-export function ShippingOperations({ initialQueue }: { initialQueue?: string } = {}) {
+export function ShippingOperations({
+  initialQueue,
+  initialQuery = "",
+}: {
+  initialQueue?: string;
+  initialQuery?: string;
+} = {}) {
+  const [initialParams] = useState(() => new URLSearchParams(initialQuery));
   const [data, setData] = useState<ShippingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => initialParams.get("order") || "");
   const [statusFilter, setStatusFilter] = useState("all");
   const [courierFilter, setCourierFilter] = useState("all");
-  const [dateSelection, setDateSelection] = useState<AdminDateSelection>({
-    filter: "all",
-    start: "",
-    end: "",
-  });
+  const [dateSelection, setDateSelection] = useState<AdminDateSelection>(() =>
+    adminDateSelectionFromQuery(initialParams),
+  );
   // A deep link (the dashboard's Mengantar queues) opens on its queue; read
   // from the server-rendered prop so the first paint and hydration agree.
   const [activeQueue, setActiveQueue] = useState<ShippingQueueId>(() =>

@@ -16,7 +16,7 @@ import {
   type CompareMode,
 } from "./dashboard-compare.ts";
 import { landingRanking, productRanking } from "./insights.ts";
-import { periodClause } from "./insights-period.ts";
+import { jakartaDaySql, jakartaHourBucketSql, periodClause } from "./insights-period.ts";
 import { LEAD_ROW, ORDER_ROW, RELEASED_ORDER } from "./order-metrics.ts";
 
 export const DASHBOARD_MAX_RANGE_DAYS = 31;
@@ -121,9 +121,10 @@ export function parseDashboardSearchParams(searchParams: URLSearchParams): {
   selection: DashboardDateSelection;
   compare: DashboardCompareChoice;
 } {
-  const rawPreset = (searchParams.get("preset") || "").trim();
-  const rawStart = (searchParams.get("start") || "").trim();
-  const rawEnd = (searchParams.get("end") || "").trim();
+  // Accept both dashboard's `preset/start/end` and the shared `date_filter/date_start/date_end` vocabulary (AN-3).
+  const rawPreset = (searchParams.get("preset") || searchParams.get("date_filter") || "").trim();
+  const rawStart = (searchParams.get("start") || searchParams.get("date_start") || "").trim();
+  const rawEnd = (searchParams.get("end") || searchParams.get("date_end") || "").trim();
   const rawCompare = (searchParams.get("compare") || "").trim();
 
   let selection: DashboardDateSelection = {
@@ -169,6 +170,30 @@ export function buildDashboardUrlSearch(
   }
   const encoded = params.toString();
   return encoded ? `?${encoded}` : "";
+}
+
+/**
+ * Outgoing period query string for links from Dashboard into Orders, Shipping,
+ * Abandoned Leads, and Analitik (RT-1, AN-3). Uses the shared `date_filter` /
+ * `date_start` / `date_end` vocabulary; returns "" for "all" so Analitik falls
+ * back to its default instead of refusing an unbounded range.
+ */
+export function dashboardOutgoingPeriodQuery(
+  selection: { filter: string; start: string; end: string },
+  period: { start_date: string | null; end_date: string | null },
+): string {
+  if (selection.filter === "all") return "";
+  if (selection.filter === ADMIN_CUSTOM_DATE_FILTER) {
+    const start = selection.start || period.start_date;
+    const end = selection.end || period.end_date;
+    return start && end ? `date_filter=custom&date_start=${start}&date_end=${end}` : "";
+  }
+  if (isAdminDateFilter(selection.filter)) {
+    return `date_filter=${selection.filter}`;
+  }
+  return period.start_date && period.end_date
+    ? `date_filter=custom&date_start=${period.start_date}&date_end=${period.end_date}`
+    : "";
 }
 
 function buildTrends(
@@ -284,8 +309,8 @@ export async function readDashboardAnalytics(
 
   const groupBy =
     interval === "hour"
-      ? "STRFTIME('%Y-%m-%d %H:00:00', created_at, '+7 hours')"
-      : "DATE(created_at, '+7 hours')";
+      ? jakartaHourBucketSql()
+      : jakartaDaySql();
   const trendSelectSql = (whereClause: string) => `
     SELECT
       ${groupBy} as date,

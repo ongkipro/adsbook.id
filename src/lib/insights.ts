@@ -3,6 +3,7 @@ import { jsonError, jsonOk } from "./api.ts";
 import {
   INSIGHTS_TIMEZONE,
   jakartaDaySql,
+  jakartaStrftimeSql,
   periodClause,
   previousInsightsPeriod,
   resolveInsightsPeriod,
@@ -740,8 +741,8 @@ export function timeStatements(database: D1Database, period: InsightsPeriod, fil
   return [
     database
       .prepare(
-        `SELECT CAST(strftime('%w', created_at, '+7 hours') AS INTEGER) AS weekday,
-          CAST(strftime('%H', created_at, '+7 hours') AS INTEGER) AS hour,
+        `SELECT CAST(${jakartaStrftimeSql("%w")} AS INTEGER) AS weekday,
+          CAST(${jakartaStrftimeSql("%H")} AS INTEGER) AS hour,
           COUNT(*) AS orders
         FROM orders
         WHERE ${ORDER_ROW} AND ${range.sql}${where.sql}

@@ -22,6 +22,8 @@ import {
   PanelsTopLeft,
 } from "lucide-react";
 import { SOURCE_SLUG_NONE_FILTER, SOURCE_SLUG_NONE_LABEL } from "@/lib/source-slug";
+import { ADMIN_CUSTOM_DATE_FILTER, adminDateSelectionFromQuery } from "@/lib/admin-date-filter";
+import { AdminDateRangeFilter, type AdminDateSelection } from "@/components/admin/AdminDateRangeFilter";
 import { SourceSlugChip } from "@/components/admin/SourceSlugChip";
 import { buildWaUrl } from "@/lib/crm-template";
 import { formatIdr } from "@/lib/format-idr";
@@ -180,6 +182,7 @@ const leadRequest = {
     search: string;
     status: FollowUpStatus | "all";
     sourceSlug: string;
+    dateSelection: AdminDateSelection;
     withSourceOptions: boolean;
     page: number;
     signal?: AbortSignal;
@@ -191,6 +194,13 @@ const leadRequest = {
     });
     if (input.search.trim()) query.set("search", input.search.trim());
     if (input.sourceSlug !== "all") query.set("source_slug", input.sourceSlug);
+    if (input.dateSelection.filter && input.dateSelection.filter !== "all") {
+      query.set("date_filter", input.dateSelection.filter);
+      if (input.dateSelection.filter === ADMIN_CUSTOM_DATE_FILTER) {
+        query.set("date_start", input.dateSelection.start);
+        query.set("date_end", input.dateSelection.end);
+      }
+    }
     if (input.withSourceOptions) query.set("source_options", "1");
     const payload = await readJson(
       await fetch(`/api/admin/abandoned-orders?${query}`, {
@@ -581,6 +591,9 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
     return value && Object.hasOwn(followUpLabels, value) ? (value as FollowUpStatus) : "all";
   });
   const [sourceSlug, setSourceSlug] = useState(() => initialParams.get("source_slug") || "all");
+  const [dateSelection, setDateSelection] = useState<AdminDateSelection>(() =>
+    adminDateSelectionFromQuery(initialParams),
+  );
   const [sourceOptions, setSourceOptions] = useState<Array<{ value: string; label: string }> | null>(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, totalItems: 0, totalPages: 0 });
@@ -596,6 +609,7 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
         search,
         status,
         sourceSlug,
+        dateSelection,
         withSourceOptions: !sourceOptions,
         page,
         signal,
@@ -624,7 +638,7 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [page, search, status, sourceSlug]);
+  }, [page, search, status, sourceSlug, dateSelection]);
 
   const followUp = async (lead: Lead) => {
     setUpdatingId(lead.id);
@@ -705,12 +719,29 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
                 ]}
               />
             </FilterField>
+            <FilterField label="Periode lead" htmlFor="abandoned-date" size="sm">
+              <AdminDateRangeFilter
+                value={dateSelection}
+                onChange={(next) => {
+                  setDateSelection(next);
+                  setPage(1);
+                }}
+              />
+            </FilterField>
             <ExportCsvButton
               kind="abandoned"
               query={new URLSearchParams({
                 follow_up_status: status,
                 ...(search.trim() ? { search: search.trim() } : {}),
                 ...(sourceSlug !== "all" ? { source_slug: sourceSlug } : {}),
+                ...(dateSelection.filter && dateSelection.filter !== "all"
+                  ? {
+                      date_filter: dateSelection.filter,
+                      ...(dateSelection.filter === ADMIN_CUSTOM_DATE_FILTER
+                        ? { date_start: dateSelection.start, date_end: dateSelection.end }
+                        : {}),
+                    }
+                  : {}),
               })}
               title="Semua pesanan tertinggal dengan filter ini"
             />

@@ -10,6 +10,7 @@ import {
   buildDashboardUrlSearch,
   DASHBOARD_HIDDEN_PRESETS,
   DASHBOARD_MAX_RANGE_DAYS,
+  dashboardOutgoingPeriodQuery,
   type DashboardAnalyticsData,
   type DashboardCompareChoice,
   type DashboardPaymentBucket,
@@ -405,8 +406,8 @@ export function AnalyticsDashboard({
     {
       label: "Lead conversion",
       value: data.lead_base > 0 ? percentage(data.lead_conversion_rate) : "–",
-      note: `Dari ${data.lead_base} lead + order`,
-      title: "Order dibagi (lead belum checkout + order) pada periode ini.",
+      note: `Dari ${data.lead_base} lead + order · lead maks. 14 hari`,
+      title: "Order dibagi (lead belum checkout + order) pada periode ini. Lead tertinggal dihapus otomatis setelah 14 hari, sehingga periode lebih panjang dapat membuat rasio tampak lebih tinggi.",
       delta: <Delta current={data.lead_conversion_rate} previous={prev && prev.lead_base > 0 && data.lead_base > 0 ? prev.lead_conversion_rate : undefined} kind="points" />,
       tone: "text-slate-950",
     },
@@ -453,28 +454,29 @@ export function AnalyticsDashboard({
   const funnel = data.funnel;
   const funnelMax = Math.max(1, funnel.leads + funnel.orders, funnel.orders);
   const share = (value: number, base: number) => (base > 0 ? percentage((value / base) * 100) : "–");
-  const periodQuery = data.period.start_date && data.period.end_date ? `date_filter=custom&date_start=${data.period.start_date}&date_end=${data.period.end_date}` : "";
+  const periodQuery = dashboardOutgoingPeriodQuery(dateSelection, data.period);
+  const periodSuffix = periodQuery ? `?${periodQuery}` : "";
   const funnelSteps: Array<{ label: string; value: number; note: string; ratio: number; href?: string }> = [
     {
       label: "Leads",
       value: funnel.leads,
-      note: "Belum checkout",
+      note: "Belum checkout · simpan 14 hari",
       ratio: funnel.leads / funnelMax,
-      href: showAttention ? "/admin/orders/abandoned" : undefined,
+      href: showAttention ? `/admin/orders/abandoned${periodSuffix}` : undefined,
     },
     {
       label: "Orders",
       value: funnel.orders,
       note: `${share(funnel.orders, funnel.leads + funnel.orders)} conversion`,
       ratio: funnel.orders / funnelMax,
-      href: showAttention ? `/admin/orders${periodQuery ? `?${periodQuery}` : ""}` : undefined,
+      href: showAttention ? `/admin/orders${periodSuffix}` : undefined,
     },
     {
       label: "Shipped",
       value: funnel.handed_over,
       note: `${share(funnel.handed_over, funnel.orders)} dari orders`,
       ratio: funnel.orders > 0 ? funnel.handed_over / funnel.orders : 0,
-      href: showAttention && !isDigital ? "/admin/shipping" : undefined,
+      href: showAttention && !isDigital ? `/admin/shipping${periodSuffix}` : undefined,
     },
     {
       label: "Delivered",
@@ -746,8 +748,8 @@ export function AnalyticsDashboard({
                 </div>
               ) : (
                 [
-                  { title: "Products", rows: rankings.products, href: "/admin/analytics/products", unit: (row: DashboardRankingRow) => `${row.units ?? 0} unit` },
-                  { title: "Landing pages", rows: rankings.pages, href: "/admin/analytics/landing", unit: (row: DashboardRankingRow) => `${row.orders ?? 0} order` },
+                  { title: "Products", rows: rankings.products, href: `/admin/analytics/products${periodSuffix}`, unit: (row: DashboardRankingRow) => `${row.units ?? 0} unit` },
+                  { title: "Landing pages", rows: rankings.pages, href: `/admin/analytics/landing${periodSuffix}`, unit: (row: DashboardRankingRow) => `${row.orders ?? 0} order` },
                 ].map((list) => (
                   <div key={list.title} className="min-w-0">
                     <div className="flex items-center justify-between gap-2">

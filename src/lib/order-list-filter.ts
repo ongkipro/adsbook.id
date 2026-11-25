@@ -1,5 +1,6 @@
 import { LEAD_FOLLOW_UP_STATUSES } from "./abandoned-lead.ts";
 import { ADMIN_CUSTOM_DATE_FILTER, isAdminDateFilter, parseAdminDateSelection } from "./admin-date-filter.ts";
+import { jakartaDateSql } from "./insights-period.ts";
 import { ADMIN_SHIPPING_STATUSES } from "./order-lifecycle.ts";
 import { sourceSlugPredicate } from "./source-slug.ts";
 
@@ -66,7 +67,7 @@ function periodPredicate(searchParams: URLSearchParams, column: string):
   // unrecognised, `custom` included, silently become the 7-day default.
   const { resolution } = parseAdminDateSelection(searchParams);
   if (!resolution.ok) return { ok: false, status: 422, error: resolution.reason, code: "DATE_RANGE_INVALID" };
-  return { ok: true, sql: `date(${column}, '+7 hours') BETWEEN ? AND ?`, params: [resolution.start, resolution.end] };
+  return { ok: true, sql: `${jakartaDateSql(column)} BETWEEN ? AND ?`, params: [resolution.start, resolution.end] };
 }
 
 /**
@@ -149,8 +150,14 @@ export function abandonedListFilter(searchParams: URLSearchParams):
   if (!includes(LEAD_FOLLOW_UP_FILTERS, followUpStatus)) {
     return { ok: false, status: 400, error: "Filter follow-up tidak valid." };
   }
+  const period = periodPredicate(searchParams, "o.created_at");
+  if (!period.ok) return period;
   const conditions = ["o.shipping_status = 'abandoned'"];
   const params: unknown[] = [];
+  if (period.sql) {
+    conditions.push(period.sql);
+    params.push(...period.params);
+  }
   if (search) {
     const term = `%${search}%`;
     conditions.push("(o.customer_name LIKE ? OR o.customer_phone LIKE ? OR o.order_number LIKE ? OR p.title LIKE ?)");

@@ -347,7 +347,7 @@ test("AnalyticsDashboard server-renders both loading skeleton and populated SSR 
   assert.match(clean, /Kaos Katun/);
   assert.match(clean, /1 antrean &gt;24 jam/);
   assert.match(clean, /Zona waktu WIB/);
-  assert.match(clean, /href="\/admin\/shipping"/);
+  assert.match(clean, /href="\/admin\/shipping\?date_filter=this_month"/);
 
   // DIGITAL-PRODUCTS-SPEC §4.1: a digital store never links to /admin/shipping.
   const digitalHtml = await renderIsland("AnalyticsDashboard.tsx", "AnalyticsDashboard", {
@@ -388,7 +388,7 @@ test("AnalyticsDashboard server-renders both loading skeleton and populated SSR 
       rankings: { products: [], pages: [] },
     },
   });
-  assert.equal(digitalHtml.includes('href="/admin/shipping"'), false);
+  assert.equal(digitalHtml.includes("/admin/shipping"), false);
 });
 
 test("ExpeditionSettings server-renders both loading skeleton and populated SSR data without throwing", async () => {
