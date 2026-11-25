@@ -32,7 +32,9 @@ import type { ReceiverPerformance } from '../../../../lib/receiver-performance';
 import {
   applyOrderLifecycleMutation,
   deleteOrdersReleasingReservations,
+  normalizeShippingChannel,
   OrderLifecycleError,
+  SHIPPING_CHANNELS,
 } from '../../../../lib/order-lifecycle';
 import {
   resolveEligibleShippingRates,
@@ -62,6 +64,7 @@ type OrderUpdatePayload = {
   pickup?: unknown;
   payment_status?: string;
   shipping_status?: string;
+  shipping_channel?: string;
   cnote_no?: string;
   courier_code?: string;
   courier_service?: string;
@@ -108,6 +111,7 @@ type OrderRow = {
   confirmed_at: string | null;
   courier_code: string | null;
   fulfillment_type: string | null;
+  shipping_channel: string | null;
   digital_accessed_at: string | null;
   courier_service: string | null;
   cnote_no: string | null;
@@ -206,6 +210,7 @@ async function loadOrder(database: D1Database, rawOrderKey: string) {
       o.courier_service,
       o.cnote_no,
       o.fulfillment_type,
+      o.shipping_channel,
       o.digital_accessed_at,
       o.provider_order_id,
       o.provider_dispatch_error,
@@ -356,6 +361,7 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
         confirmed_at: order.confirmed_at,
         courier_code: order.courier_code,
         fulfillment_type: order.fulfillment_type === 'digital' ? 'digital' : 'physical',
+        shipping_channel: normalizeShippingChannel(order.shipping_channel),
         digital_accessed_at: order.digital_accessed_at ?? null,
         // The buyer's own order page (/thanks locator) for "Kirim Akses via WhatsApp"; admin-only.
         public_status_token: order.fulfillment_type === 'digital' ? order.public_status_token : null,
@@ -532,6 +538,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
 
     const nextPaymentStatus = typeof body.payment_status === 'string' ? body.payment_status.trim().toLowerCase() : undefined;
     const nextShippingStatus = typeof body.shipping_status === 'string' ? body.shipping_status.trim().toLowerCase() : undefined;
+    const nextShippingChannel = typeof body.shipping_channel === 'string' ? body.shipping_channel.trim().toLowerCase() : undefined;
     const nextCourierCode = typeof body.courier_code === 'string' ? body.courier_code.trim().slice(0, 50) : undefined;
     const nextCourierService = typeof body.courier_service === 'string' ? body.courier_service.trim().slice(0, 120) : undefined;
     const nextCnoteNo = typeof body.cnote_no === 'string' ? body.cnote_no.trim().slice(0, 120) : undefined;
@@ -557,17 +564,12 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
     const destinationChanged =
       nextDestinationAreaId !== undefined &&
       (nextDestinationAreaId || null) !== current.destination_area_id;
-    const hasShippingSelection =
-      destinationChanged ||
-      nextCourierCode !== undefined ||
-      (body.courier_service_id !== undefined &&
-        !isNaN(Number(body.courier_service_id)) &&
-        Number(body.courier_service_id) > 0);
 
     if (
       !action &&
       nextPaymentStatus === undefined &&
       nextShippingStatus === undefined &&
+      nextShippingChannel === undefined &&
       nextCourierCode === undefined &&
       nextCourierService === undefined &&
       nextCnoteNo === undefined &&
@@ -581,11 +583,46 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
     if (nextShippingStatus !== undefined && !SHIPPING_STATUSES.includes(nextShippingStatus as (typeof SHIPPING_STATUSES)[number])) {
       return jsonError('Status pengiriman tidak valid.', 400);
     }
+    if (nextShippingChannel !== undefined && !(SHIPPING_CHANNELS as readonly string[]).includes(nextShippingChannel)) {
+      return jsonError('Jalur pengiriman tidak valid.', 400);
+    }
+
+    const currentChannel = normalizeShippingChannel(current.shipping_channel);
+    if (current.provider_order_id && nextShippingChannel !== undefined && nextShippingChannel !== 'mengantar') {
+      return jsonError('Jalur pengiriman tidak dapat diubah setelah shipment Mengantar dibuat.', 409);
+    }
+    if (current.provider_dispatch_claimed_at && nextShippingChannel === 'external') {
+      return jsonError('Jalur pengiriman tidak dapat diubah saat order sedang diproses ke Mengantar.', 409);
+    }
+    if (currentChannel === 'external' && nextShippingChannel === 'mengantar' && current.shipping_status !== 'pending') {
+      return jsonError('Jalur pengiriman hanya dapat diubah ke Mengantar saat order masih menunggu.', 409);
+    }
+    const effectiveChannel = nextShippingChannel
+      ? normalizeShippingChannel(nextShippingChannel)
+      : currentChannel;
+    const isExternalOrder = effectiveChannel === 'external' && !current.provider_order_id;
+    const hasCourierServiceId =
+      body.courier_service_id !== undefined &&
+      !isNaN(Number(body.courier_service_id)) &&
+      Number(body.courier_service_id) > 0;
+    const hasShippingSelection =
+      destinationChanged ||
+      hasCourierServiceId ||
+      (nextCourierCode !== undefined && !isExternalOrder);
+
     if (current.provider_order_id && (hasCustomerChanges || hasShippingSelection)) {
       return jsonError('Data tujuan tidak dapat diubah setelah shipment Mengantar dibuat.', 409);
     }
-    if (nextCnoteNo !== undefined && (nextCnoteNo || null) !== current.cnote_no) {
+    const cnoteChanged = nextCnoteNo !== undefined && (nextCnoteNo || null) !== current.cnote_no;
+    if (cnoteChanged && !isExternalOrder) {
       return jsonError('Nomor resi hanya dapat diisi dari respons Mengantar.', 409);
+    }
+    if (
+      isExternalOrder &&
+      (cnoteChanged || nextCourierCode !== undefined || nextCourierService !== undefined) &&
+      ['delivered', 'returned', 'cancelled'].includes(current.shipping_status)
+    ) {
+      return jsonError('Kurir dan nomor resi tidak dapat diubah untuk order yang sudah selesai atau dibatalkan.', 409);
     }
     if (nextCustomerName !== undefined && nextCustomerName.length < 2) {
       return jsonError('Nama minimal 2 karakter.', 422);
@@ -744,6 +781,19 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
       if (nextDestinationAreaId !== undefined) addAssignment('destination_area_id', resolvedDestinationAreaId);
     }
 
+    let resolvedCnoteNo = current.cnote_no;
+    if (nextShippingChannel !== undefined && effectiveChannel !== currentChannel) {
+      addAssignment('shipping_channel', effectiveChannel);
+      if (effectiveChannel === 'mengantar' && !current.provider_order_id && current.cnote_no) {
+        resolvedCnoteNo = null;
+        addAssignment('cnote_no', null);
+      }
+    }
+    if (isExternalOrder && cnoteChanged) {
+      resolvedCnoteNo = nextCnoteNo || null;
+      addAssignment('cnote_no', resolvedCnoteNo);
+    }
+
     const resolvedPaymentStatus = nextPaymentStatus ?? current.payment_status;
     const resolvedShippingStatus = nextShippingStatus ?? current.shipping_status;
 
@@ -752,6 +802,9 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
     if (pickupChoice && !pickupChoice.ok) return jsonError(pickupChoice.reason, 400);
 
     if (action === 'dispatch-order') {
+      if (effectiveChannel === 'external') {
+        return jsonError('Order jalur luar Mengantar tidak dikirim ke Mengantar. Ubah jalur ke Mengantar terlebih dahulu.', 409);
+      }
       const resolvedCustomerName = nextCustomerName ?? current.customer_name;
       const resolvedCustomerPhone = nextCustomerPhone ?? current.customer_phone;
       const resolvedAddress = nextAddress ?? current.address;
@@ -806,6 +859,12 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         AND provider_dispatch_claimed_at IS NULL
         AND shipping_status = 'pending'${quoteGuard}`
           : '';
+      const externalWriteGuard =
+        !destinationEditGuard && (nextShippingChannel !== undefined || cnoteChanged)
+          ? `
+        AND provider_order_id IS NULL
+        AND provider_dispatch_claimed_at IS NULL`
+          : '';
       const hasLifecycleChange =
         action !== 'dispatch-order' &&
         (nextPaymentStatus !== undefined || nextShippingStatus !== undefined);
@@ -820,7 +879,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         UPDATE orders
         SET ${assignments.join(', ')}
         WHERE id = ?
-        ${destinationEditGuard}${lifecycleGuard}
+        ${destinationEditGuard}${externalWriteGuard}${lifecycleGuard}
       `).bind(
         ...values,
         current.id,
@@ -831,7 +890,12 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         ? (
             await applyOrderLifecycleMutation(
               db,
-              current,
+              {
+                ...current,
+                shipping_channel: effectiveChannel,
+                courier_code: resolvedCourierCode,
+                cnote_no: resolvedCnoteNo,
+              },
               {
                 paymentStatus: nextPaymentStatus,
                 shippingStatus: nextShippingStatus,
@@ -957,6 +1021,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         courier_code: updated.courier_code,
         courier_service: updated.courier_service,
         cnote_no: updated.cnote_no,
+        shipping_channel: normalizeShippingChannel(updated.shipping_channel),
         provider_order_id: updated.provider_order_id,
         provider_dispatch_error: updated.provider_dispatch_error,
         receiver_delivery_rate: updated.receiver_delivery_rate,

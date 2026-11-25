@@ -47,6 +47,7 @@ type ShippingOrderRow = {
   courierCode: string | null;
   courierService: string | null;
   cnoteNo: string | null;
+  shippingChannel: "mengantar" | "external";
   providerOrderId: string | null;
   providerDispatchError: string | null;
   providerStatusText: string | null;
@@ -73,6 +74,7 @@ type OrderStatusCheckRow = {
   cnote_no: string | null;
   provider_order_id: string | null;
   stock_restored_at: string | null;
+  shipping_channel?: string | null;
 };
 
 type ProviderSyncOrderRow = OrderStatusCheckRow & {
@@ -130,6 +132,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
           o.courier_code AS courierCode,
           o.courier_service AS courierService,
           o.cnote_no AS cnoteNo,
+          COALESCE(o.shipping_channel, 'mengantar') AS shippingChannel,
           o.provider_order_id AS providerOrderId,
           o.provider_dispatch_error AS providerDispatchError,
           o.provider_status_text AS providerStatusText,
@@ -178,18 +181,22 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
     const shipments = ((shipmentResult.results ?? []) as ShippingOrderRow[]).map(
       (shipment) => {
-        const dispatch = getMengantarDispatchEligibility({
-          paymentMethod: shipment.paymentMethod,
-          paymentStatus: shipment.paymentStatus,
-          shippingStatus: shipment.shippingStatus,
-          providerOrderId: shipment.providerOrderId,
-          providerDispatchError: shipment.providerDispatchError,
-          destinationAreaId: shipment.destinationAreaId,
-          courierCode: shipment.courierCode,
-          pickupAddressId: shipment.pickupAddressId,
-        });
+        const channel = shipment.shippingChannel === "external" ? "external" : "mengantar";
+        const dispatch = channel === "external"
+          ? { eligible: false, reason: "Order dikirim di luar Mengantar." }
+          : getMengantarDispatchEligibility({
+              paymentMethod: shipment.paymentMethod,
+              paymentStatus: shipment.paymentStatus,
+              shippingStatus: shipment.shippingStatus,
+              providerOrderId: shipment.providerOrderId,
+              providerDispatchError: shipment.providerDispatchError,
+              destinationAreaId: shipment.destinationAreaId,
+              courierCode: shipment.courierCode,
+              pickupAddressId: shipment.pickupAddressId,
+            });
         return {
           ...shipment,
+          shippingChannel: channel,
           dispatchEligible: dispatch.eligible,
           dispatchReason: dispatch.reason,
         };
@@ -258,7 +265,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
             .prepare(
               `SELECT id, order_number, payment_method, payment_status,
                 shipping_status, courier_code, cnote_no, provider_order_id,
-                stock_restored_at
+                stock_restored_at, shipping_channel
               FROM orders
               WHERE id IN (${requestedIds.map(() => "?").join(", ")})
               ORDER BY id ASC`,
@@ -269,10 +276,11 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
             .prepare(
               `SELECT id, order_number, payment_method, payment_status,
                 shipping_status, courier_code, cnote_no, provider_order_id,
-                stock_restored_at
+                stock_restored_at, shipping_channel
               FROM orders
               WHERE provider_order_id IS NOT NULL
                 AND cnote_no IS NOT NULL
+                AND COALESCE(shipping_channel, 'mengantar') = 'mengantar'
                 AND shipping_status IN ('processing', 'shipped')
               ORDER BY id ASC
               LIMIT 50`,
@@ -307,7 +315,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
       }
 
       const needsProvider = queue.some(
-        ({ row }) => Boolean(row?.provider_order_id && row.cnote_no),
+        ({ row }) => Boolean(row?.provider_order_id && row.cnote_no && row.shipping_channel !== "external"),
       );
       let client: MengantarClient | null = null;
       if (needsProvider) {
@@ -328,6 +336,17 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
             localStatus: "",
             providerStatus: null,
             error: "Order tidak ditemukan.",
+          });
+          continue;
+        }
+        if (row.shipping_channel === "external") {
+          failed += 1;
+          results.push({
+            orderId: row.id,
+            orderNumber: row.order_number,
+            localStatus: row.shipping_status,
+            providerStatus: null,
+            error: "Order dikirim di luar Mengantar dan diperbarui secara manual.",
           });
           continue;
         }
@@ -462,7 +481,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
         .prepare(
           `
         SELECT id, payment_method, payment_status, shipping_status, courier_code,
-          cnote_no, provider_order_id, stock_restored_at
+          cnote_no, provider_order_id, stock_restored_at, shipping_channel
         FROM orders
         WHERE id = ?
         LIMIT 1
@@ -473,7 +492,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
       if (!current) {
         return jsonError("Order tidak ditemukan.", 404);
       }
-      if (!current.provider_order_id) {
+      if (!current.provider_order_id && current.shipping_channel !== "external") {
         return jsonError(
           "Shipment Mengantar belum dibuat untuk order ini.",
           409,
@@ -578,6 +597,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       WHERE warehouse_id = ?
         AND id IN (${placeholders})
         AND shipping_status = 'processing'
+        AND provider_order_id IS NOT NULL
+        AND COALESCE(shipping_channel, 'mengantar') = 'mengantar'
         AND cnote_no IS NOT NULL
         AND pickup_schedule_id IS NULL
         AND mengantar_handover IS NOT 'drop_off'

@@ -114,7 +114,8 @@ class SqliteD1Database {
       CREATE TABLE stores (
         id INTEGER PRIMARY KEY,
         cod_fee_bearer TEXT,
-        catalog_mode TEXT NOT NULL DEFAULT 'physical'
+        catalog_mode TEXT NOT NULL DEFAULT 'physical',
+        mengantar_api_key TEXT
       );
 
       CREATE TABLE products (
@@ -170,6 +171,7 @@ class SqliteD1Database {
         checkout_fingerprint TEXT,
         checkout_dedupe_expires_at TEXT,
         fulfillment_type TEXT NOT NULL DEFAULT 'physical',
+        shipping_channel TEXT NOT NULL DEFAULT 'mengantar',
         created_at TEXT NOT NULL
       );
 

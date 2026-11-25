@@ -178,7 +178,10 @@ export function shippingListFilter(searchParams: URLSearchParams):
   | ListFilterError {
   const period = periodPredicate(searchParams, "o.created_at");
   if (!period.ok) return period;
-  const conditions = ["o.shipping_status IN ('processing', 'shipped', 'delivered', 'returned')", "o.provider_order_id IS NOT NULL"];
+  const conditions = [
+    "o.shipping_status IN ('processing', 'shipped', 'delivered', 'returned')",
+    "(o.provider_order_id IS NOT NULL OR o.shipping_channel = 'external')",
+  ];
   if (period.sql) conditions.push(period.sql);
   return { ok: true, conditions, params: [...period.params] };
 }

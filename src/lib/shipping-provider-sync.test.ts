@@ -90,6 +90,7 @@ class ShippingSyncDatabase {
         courier_code TEXT,
         cnote_no TEXT,
         provider_order_id TEXT,
+        shipping_channel TEXT NOT NULL DEFAULT 'mengantar',
         stock_restored_at TEXT,
         provider_status_text TEXT,
         provider_status_at TEXT,
