@@ -28,7 +28,7 @@ test("llms.txt maps this store's own catalogue, from its lowest price", () => {
     text,
     /- \[Sabun Cair\]\(https:\/\/toko\.example\/produk\/sabun-cair\): mulai Rp97\.500, merek Bersih, kategori Rumah, pilihan 1 L \/ 250 ml\. Sabun cair 1 liter, aroma lemon\./,
   );
-  assert.match(text, /\(https:\/\/toko\.example\/feed\/google-catalog\.xml\)/);
+  assert.match(text, /\(https:\/\/toko\.example\/feed\/catalog\.xml\)/);
   assert.match(text, /\(https:\/\/toko\.example\/sitemap\.xml\)/);
 });
 

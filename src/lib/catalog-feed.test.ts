@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   catalogProductId,
   defaultCatalogContentId,
+  generateCatalogXml,
   generateGoogleCatalogXml,
   generateMetaCatalogXml,
   type CatalogProduct,
@@ -72,7 +73,7 @@ test("generateGoogleCatalogXml emits g:sale_price when comparePrice is greater t
   assert.ok(xml.includes("<g:google_product_category>3032</g:google_product_category>"));
 });
 
-test("generateMetaCatalogXml emits valid fb_product_category and matching content_id g:id", () => {
+test("generateCatalogXml unifies Google, Meta, and TikTok feeds with matching content_id g:id and google_product_category", () => {
   const mockProducts: CatalogProduct[] = [
     {
       productId: 15005,
@@ -84,10 +85,14 @@ test("generateMetaCatalogXml emits valid fb_product_category and matching conten
     },
   ];
 
-  const xml = generateMetaCatalogXml(mockProducts, "https://toko-uji.example");
+  const xml = generateCatalogXml(mockProducts, "https://toko-uji.example");
+  assert.equal(generateGoogleCatalogXml(mockProducts, "https://toko-uji.example"), xml);
+  assert.equal(generateMetaCatalogXml(mockProducts, "https://toko-uji.example"), xml);
   assert.ok(xml.includes("<g:id>15005</g:id>"));
   assert.ok(!xml.includes("<g:item_group_id>"));
-  assert.ok(xml.includes("<g:fb_product_category>"));
+  assert.ok(!xml.includes("<g:fb_product_category>"), "unified RSS feed stays valid for Google Merchant Center");
+  assert.ok(xml.includes("<g:google_product_category>"));
+  assert.ok(xml.includes("<g:identifier_exists>no</g:identifier_exists>"));
   assert.ok(xml.includes("<g:image_link>https://r2.example.com/pompa.jpg</g:image_link>"));
 });
 
@@ -148,8 +153,7 @@ test("a title Google would reject is trimmed rather than disapproved", () => {
   const metaTitle = /<g:title>([^<]*)<\/g:title>/.exec(
     generateMetaCatalogXml([product], "https://toko-uji.example"),
   )?.[1] ?? "";
-  assert.ok(metaTitle.length <= 200, `Meta title was ${metaTitle.length}`);
-  assert.ok(metaTitle.length >= googleTitle.length, "Meta allows at least as much as Google");
+  assert.equal(metaTitle, googleTitle, "unified feed applies the strictest 150-char limit across all ad platforms");
 });
 
 test("clampFeedText trims on a word boundary when one is close", () => {
