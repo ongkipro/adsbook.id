@@ -275,7 +275,7 @@ export function HeadlessApiManagement() {
             <div>
               <CardTitle as="h3" className="flex items-center gap-2 text-base font-semibold">
                 <KeyRound className="size-4 text-blue-600" aria-hidden="true" />
-                API Key Aktif
+                API key aktif
               </CardTitle>
               <p className="mt-1 text-xs leading-5 text-slate-500">
                 Gunakan key server-side untuk integrasi privat. Secret lengkap hanya ditampilkan saat dibuat.
@@ -413,7 +413,7 @@ export function HeadlessApiManagement() {
                   <h4 id="headless-audit-title" className="text-sm font-semibold text-slate-900">Aktivitas API terbaru</h4>
                   <p className="mt-1 text-xs text-slate-500">Hanya keputusan autentikasi, scope, dan kuota. Payload tidak disimpan.</p>
                 </div>
-                <span className="text-xs font-semibold text-slate-500">{auditEvents.length} event</span>
+                <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-slate-500">{auditEvents.length} event</span>
               </div>
               {auditEvents.length === 0 ? (
                 <p className="mt-3 rounded-lg bg-slate-50 px-3 py-4 text-xs text-slate-500">Belum ada penggunaan API tercatat.</p>
@@ -448,7 +448,7 @@ export function HeadlessApiManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle as="h3" className="text-sm font-semibold">Buat API Key Instan</CardTitle>
+          <CardTitle as="h3" className="text-base font-semibold">Buat API key</CardTitle>
           <p className="text-xs leading-5 text-slate-500">Beri nama sesuai aplikasi atau lingkungan pemakai.</p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -508,7 +508,7 @@ export function HeadlessApiManagement() {
             </div>
             <Button type="submit" disabled={creating || scopes.length === 0} className="w-full">
               <KeyRound className="size-4" aria-hidden="true" />
-              {creating ? "Membuat…" : "Generate API Key"}
+              {creating ? "Membuat…" : "Buat API key"}
             </Button>
           </form>
 

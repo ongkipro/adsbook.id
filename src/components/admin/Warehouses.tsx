@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type SubmitEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type SubmitEvent } from "react";
 import { MapPin, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import type { Warehouse } from "../../lib/warehouses";
 import { INDONESIAN_PROVINCES, getProvinceName, normalizeProvinceCode } from "../../lib/province";
@@ -10,7 +10,10 @@ import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { useConfirm } from "./useConfirm";
-import WarehouseOriginPicker, { type WarehouseOrigin } from "./WarehouseOriginPicker";
+import type { WarehouseOrigin } from "./WarehouseOriginPicker";
+
+// Only the editor needs it; most visits read the list. The fallback holds the input's height.
+const WarehouseOriginPicker = lazy(() => import("./WarehouseOriginPicker"));
 
 const ENDPOINT = "/api/admin/warehouses";
 
@@ -377,7 +380,9 @@ export default function Warehouses() {
                 <label htmlFor="originSearch" className="sr-only">
                   Cari kecamatan atau kelurahan origin
                 </label>
-                <WarehouseOriginPicker />
+                <Suspense fallback={<div className="h-12 rounded-lg border border-slate-200 bg-slate-50 md:h-10" aria-hidden="true" />}>
+                  <WarehouseOriginPicker />
+                </Suspense>
                 <p id="originSearchHint" className="mt-1.5 text-xs text-slate-500">
                   Pilih kecamatan atau kelurahan gudang dari database Mengantar.
                 </p>

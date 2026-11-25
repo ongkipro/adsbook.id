@@ -46,13 +46,15 @@ const names = providers
       </CardHeader>
       <CardContent className="pt-4">
         <form id="privacyForm" class="space-y-3">
-          <label for="privacyExtra" class="block text-sm font-semibold text-slate-900">Informasi tambahan dari toko (opsional)</label>
+          <label for="privacyExtra" class="block text-xs font-semibold text-slate-700">Informasi tambahan dari toko (opsional)</label>
           <textarea id="privacyExtra" name="extra" rows="6" maxlength={PRIVACY_EXTRA_MAX} class="admin-input-flat min-h-36 w-full" aria-describedby="privacyHint privacyStatus">{row?.privacy_notice_extra ?? ''}</textarea>
           <p id="privacyHint" class="text-xs text-slate-500">Teks biasa, maksimal {PRIVACY_EXTRA_MAX} karakter. Muncul di akhir kebijakan sebagai bagian terpisah.</p>
-          <div class="flex flex-wrap items-center gap-3">
-            <button type="submit" class={buttonVariants({})}>Simpan</button>
-            <a href="/kebijakan-privasi" target="_blank" rel="noopener" class={buttonVariants({ variant: 'outline' })}>Lihat halaman</a>
-            <p id="privacyStatus" class="text-sm empty:hidden" role="status" aria-live="polite"></p>
+          <div class="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p id="privacyStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite"></p>
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <a href="/kebijakan-privasi" target="_blank" rel="noopener" class={buttonVariants({ variant: 'outline' })}>Lihat halaman</a>
+              <button type="submit" class="btn-blue">Simpan</button>
+            </div>
           </div>
         </form>
       </CardContent>

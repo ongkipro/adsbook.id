@@ -18,22 +18,22 @@ export const prerender = false;
     
     <div id="devError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
 
-    <form id="headlessOriginsForm" inert data-pending class="rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
-      <div class="p-5 md:p-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-base font-semibold text-slate-950">Domain Allowlist Headless API</h2>
-            <p class="mt-1 text-xs leading-5 text-slate-500">
-              Daftar domain & subdomain eksternal yang diizinkan mengakses REST API v1. Setiap request tetap wajib membawa API key aktif.
-            </p>
-          </div>
-          <span class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20">
-            API Key Required
-          </span>
+    <form id="headlessOriginsForm" inert data-pending class="settings-card" novalidate aria-busy="false">
+      <div class="settings-card-head flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h3 class="settings-card-title">Domain yang diizinkan</h3>
+          <p class="settings-card-hint">
+            Domain dan subdomain eksternal yang boleh mengakses REST API v1. Setiap request tetap wajib membawa API key aktif.
+          </p>
         </div>
+        <span class="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20">
+          Wajib API key
+        </span>
+      </div>
+      <div class="settings-card-body">
 
-        <label class="mt-5 block" for="headlessAllowedOrigins">
-          <span class="mb-1.5 block text-xs font-semibold text-slate-700">Origin HTTPS & Subdomain Wildcard yang diizinkan</span>
+        <label class="block" for="headlessAllowedOrigins">
+          <span class="mb-1.5 block text-xs font-semibold text-slate-700">Origin yang diizinkan</span>
           <textarea
             id="headlessAllowedOrigins"
             rows="5"
@@ -47,18 +47,18 @@ export const prerender = false;
         
         <p id="headlessOriginsHelp" class="mt-2 text-xs leading-5 text-slate-500">
           Satu origin per baris. Format yang didukung:
-          <br />• Exact Domain: <code>https://toko.com</code>
-          <br />• Wildcard Subdomain: <code>https://*.toko.com</code> (mengizinkan seluruh subdomain seperti app.toko.com, checkout.toko.com)
-          <br />• Local Dev: <code>http://localhost:3000</code>, <code>http://127.0.0.1:5173</code>
+          <br />• Domain persis: <code>https://toko.com</code>
+          <br />• Semua subdomain: <code>https://*.toko.com</code> (misalnya app.toko.com, checkout.toko.com)
+          <br />• Pengembangan lokal: <code>http://localhost:3000</code>, <code>http://127.0.0.1:5173</code>
         </p>
       </div>
 
-      <div class="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="settings-card-foot">
         <p id="headlessOriginsStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true">
           Perubahan belum ada.
         </p>
         <button id="saveHeadlessOrigins" type="submit" class="btn-blue w-full sm:w-auto">
-          Simpan domain allowlist
+          Simpan domain
         </button>
       </div>
     </form>
@@ -67,7 +67,7 @@ export const prerender = false;
 
     <!-- The endpoint reference lives in the Docs book, generated from the
          operation tables; a hand-written card list here missed two routes. -->
-    <a href="/admin/docs/api-key" class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:bg-slate-50 md:p-5">
+    <a href="/admin/docs/api-key" class="settings-card flex items-center gap-3 px-5 py-4 transition-colors hover:bg-slate-50 md:px-6">
       <span class="min-w-0 flex-1">
         <span class="block text-sm font-semibold text-slate-950">Docs API &amp; CLI</span>
         <span class="mt-0.5 block text-xs leading-5 text-slate-500">Scope, endpoint Headless API dan Operations API, CLI adsbook, serta kode error.</span>
@@ -98,7 +98,7 @@ export const prerender = false;
       isPending = next;
       if (saveButton) {
         saveButton.disabled = next;
-        saveButton.textContent = next ? 'Menyimpan…' : 'Simpan domain allowlist';
+        saveButton.textContent = next ? 'Menyimpan…' : 'Simpan domain';
       }
       form?.setAttribute('aria-busy', String(next));
     };
