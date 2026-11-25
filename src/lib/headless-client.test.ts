@@ -76,8 +76,8 @@ function createJourneyDatabase__raw(keyHash: string, providerBaseUrl: string) {
           if (query.includes("SELECT pv.id, pv.price")) {
             return { id: 11, price: 100_000 };
           }
-          if (query.includes("SELECT id, cod_fee_bearer, catalog_mode FROM stores")) {
-            return { id: 1, cod_fee_bearer: "buyer" };
+          if (query.includes("SELECT id, cod_fee_bearer, catalog_mode")) {
+            return { id: 1, cod_fee_bearer: "buyer", mengantar_api_key: "fixture-provider-key" };
           }
           if (query.includes("shipping_status = 'abandoned'")) return null;
           if (query.includes("UPDATE order_number_counters")) return { last_value: 10001 };

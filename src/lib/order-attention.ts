@@ -64,6 +64,7 @@ type PendingRow = {
   destination_area_id: string | null;
   courier_code: string | null;
   pickup_address_id: string | null;
+  shipping_channel?: string | null;
 };
 
 type ShipmentRow = {
@@ -72,6 +73,7 @@ type ShipmentRow = {
   provider_order_id: string | null;
   pickup_schedule_id: number | null;
   mengantar_handover: string | null;
+  shipping_channel?: string | null;
 };
 
 /**
@@ -93,7 +95,7 @@ export async function readOrderAttention(
         `SELECT o.created_at, o.payment_method, o.payment_status,
            (SELECT ${LIST_SHIPPING_STATUS_SQL} FROM orders s WHERE s.id = o.id) AS list_status,
            o.provider_order_id, o.provider_dispatch_error, o.provider_dispatch_claimed_at,
-           o.destination_area_id, o.courier_code, w.pickup_address_id
+           o.destination_area_id, o.courier_code, o.shipping_channel, w.pickup_address_id
          FROM orders o
          LEFT JOIN warehouses w ON w.id = o.warehouse_id
          WHERE ${orderRowSql("o.")} AND o.shipping_status = 'pending' AND o.stock_restored_at IS NULL
@@ -103,7 +105,7 @@ export async function readOrderAttention(
       .bind(ATTENTION_ROW_LIMIT + 1),
     database
       .prepare(
-        `SELECT o.shipping_status, o.cnote_no, o.provider_order_id, o.pickup_schedule_id, o.mengantar_handover
+        `SELECT o.shipping_status, o.cnote_no, o.provider_order_id, o.pickup_schedule_id, o.mengantar_handover, o.shipping_channel
          FROM orders o
          WHERE ${shipping.conditions.join(" AND ")} AND o.shipping_status = 'processing'
          LIMIT ?`,
@@ -140,18 +142,20 @@ export async function readOrderAttention(
     // A refusal from Mengantar or an unknown outcome waits on a person; a
     // claim still within its two minutes is a push in progress, not a problem.
     if (error && !inFlight) pushProblem += 1;
-    const eligibility = getMengantarDispatchEligibility({
-      paymentMethod: row.payment_method || "",
-      paymentStatus: row.payment_status || "",
-      shippingStatus: "pending",
-      providerOrderId: row.provider_order_id,
-      providerDispatchError: row.provider_dispatch_error,
-      providerDispatchClaimedAt: row.provider_dispatch_claimed_at,
-      destinationAreaId: row.destination_area_id,
-      courierCode: row.courier_code,
-      pickupAddressId: row.pickup_address_id || fallbackPickupAddressId,
-    });
-    if (eligibility.eligible) readyPush += 1;
+    if (row.shipping_channel !== "external") {
+      const eligibility = getMengantarDispatchEligibility({
+        paymentMethod: row.payment_method || "",
+        paymentStatus: row.payment_status || "",
+        shippingStatus: "pending",
+        providerOrderId: row.provider_order_id,
+        providerDispatchError: row.provider_dispatch_error,
+        providerDispatchClaimedAt: row.provider_dispatch_claimed_at,
+        destinationAreaId: row.destination_area_id,
+        courierCode: row.courier_code,
+        pickupAddressId: row.pickup_address_id || fallbackPickupAddressId,
+      });
+      if (eligibility.eligible) readyPush += 1;
+    }
   }
 
   const queueCount = (queue: "needs_waybill" | "needs_pickup" | "needs_drop_off") =>
@@ -163,6 +167,7 @@ export async function readOrderAttention(
           providerOrderId: row.provider_order_id,
           pickupScheduleId: row.pickup_schedule_id,
           handover: row.mengantar_handover,
+          shippingChannel: row.shipping_channel,
         },
         queue,
       ),

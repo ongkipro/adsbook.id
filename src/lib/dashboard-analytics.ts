@@ -223,7 +223,7 @@ function summarySelectSql(whereClause: string) {
       COALESCE(SUM(CASE WHEN payment_method = 'bank_transfer' THEN 1 ELSE 0 END), 0) AS virtual_account_orders,
       COALESCE(SUM(CASE WHEN payment_method = 'qris' THEN 1 ELSE 0 END), 0) AS qris_orders,
       COALESCE(SUM(CASE WHEN payment_method NOT IN ('cod', 'manual_transfer', 'bank_transfer', 'qris') THEN 1 ELSE 0 END), 0) AS unknown_payment_orders,
-      COALESCE(SUM(CASE WHEN provider_order_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS handed_over_orders,
+      COALESCE(SUM(CASE WHEN provider_order_id IS NOT NULL OR shipping_status IN ('shipped', 'delivered', 'returned') THEN 1 ELSE 0 END), 0) AS handed_over_orders,
       COALESCE(SUM(CASE WHEN payment_method = 'cod' AND NOT (${RELEASED_ORDER}) THEN total_amount ELSE 0 END), 0) AS cod_revenue
     FROM orders
     WHERE ${whereClause}
