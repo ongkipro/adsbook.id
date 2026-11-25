@@ -12,11 +12,12 @@ import { origin, owner } from "./tenants.ts";
 const STORE = origin("toko-alfa");
 
 const PAGES = [
-  "/admin/dashboard", "/admin/orders", "/admin/orders/abandoned", "/admin/shipping", "/admin/check",
+  "/admin/dashboard", "/admin/orders", "/admin/orders/abandoned", "/admin/shipping", "/admin/check", "/admin/check/ongkir", "/admin/check/resi",
   "/admin/products", "/admin/products/new", "/admin/landing-pages", "/admin/landing-pages/new",
   "/admin/analytics", "/admin/analytics/products", "/admin/analytics/landing", "/admin/analytics/locations", "/admin/analytics/times", "/admin/analytics/utm",
   "/admin/ads", "/admin/ads/meta", "/admin/ads/google", "/admin/ads/tiktok", "/admin/ads/utm",
-  "/admin/payments", "/admin/balance", "/admin/billing", "/admin/expeditions",
+  "/admin/payments", "/admin/payments/channels", "/admin/payments/fees", "/admin/payments/banks", "/admin/balance", "/admin/billing",
+  "/admin/expeditions", "/admin/expeditions/cod-policy",
   "/admin/settings", "/admin/settings/store", "/admin/settings/theme", "/admin/settings/theme/beranda", "/admin/settings/access",
   "/admin/settings/crm", "/admin/settings/developer", "/admin/settings/domains", "/admin/settings/plugins", "/admin/settings/warehouse",
   "/admin/settings/whatsapp", "/admin/settings/privacy", "/admin/profile", "/admin/status",

@@ -2,6 +2,8 @@
 import { ExpeditionSettings, type ExpeditionSettingsInitial } from '../../components/admin/ExpeditionSettings';
 import { GET as getExpeditions } from '../api/admin/expeditions';
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import SectionRailLayout from '../../components/admin/SectionRailLayout.astro';
+import { EXPEDITIONS_RAIL_GROUPS } from '../../components/admin/section-rails';
 export const prerender = false;
 
 let initial: ExpeditionSettingsInitial | undefined;
@@ -29,6 +31,15 @@ try {
 }
 ---
 
-<AdminLayout title="Ekspedisi" activeMenu="expeditions">
-  <ExpeditionSettings client:load initial={initial} />
+<AdminLayout title="Daftar ekspedisi" activeMenu="expeditions">
+  <SectionRailLayout
+    title="Daftar ekspedisi"
+    description="Atur kurir aktif dan layanan COD yang tersedia di checkout pembeli. Perubahan langsung berlaku."
+    groups={EXPEDITIONS_RAIL_GROUPS}
+    railLabel="Menu ekspedisi"
+    railId="expeditions"
+    maxWidth="4xl"
+  >
+    <ExpeditionSettings client:load initial={initial} view="couriers" />
+  </SectionRailLayout>
 </AdminLayout>

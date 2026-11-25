@@ -1,18 +1,26 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BadgeDollarSign,
+  Boxes,
   ChartNoAxesCombined,
   Clock3,
   CreditCard,
   FilePenLine,
   Globe,
+  Landmark,
   LayoutGrid,
   Link2,
   MapPin,
+  MapPinOff,
   Megaphone,
+  MessageCircle,
   Package,
+  PackageSearch,
+  Percent,
   Share2,
+  SlidersHorizontal,
   Tag,
+  Truck,
 } from "lucide-react";
 import { canAccessAdminRoute, type AdminRole } from "../../lib/auth.ts";
 
@@ -27,6 +35,27 @@ export type RailGroup = {
   label?: string;
   items: RailSection[];
 };
+
+export const EXPEDITIONS_RAIL_GROUPS: RailGroup[] = [
+  {
+    label: "Ekspedisi",
+    items: [
+      { href: "/admin/expeditions", label: "Daftar ekspedisi", hint: "Kurir aktif & layanan COD", icon: Boxes },
+      { href: "/admin/expeditions/cod-policy", label: "Kebijakan provinsi", hint: "Wilayah tanpa pembayaran COD", icon: MapPinOff },
+    ],
+  },
+];
+
+export const CHECK_RAIL_GROUPS: RailGroup[] = [
+  {
+    label: "Pengecekan",
+    items: [
+      { href: "/admin/check", label: "Cek WA (RTS)", hint: "Riwayat terkirim & retur pembeli", icon: MessageCircle },
+      { href: "/admin/check/ongkir", label: "Cek ongkir", hint: "Bandingkan tarif & estimasi kurir", icon: Truck },
+      { href: "/admin/check/resi", label: "Cek resi", hint: "Lacak status & riwayat paket", icon: PackageSearch },
+    ],
+  },
+];
 
 export const ANALYTICS_RAIL_GROUPS: RailGroup[] = [
   {
@@ -62,10 +91,18 @@ export const ADS_RAIL_GROUPS: RailGroup[] = [
 
 export const PAYMENTS_RAIL_GROUPS: RailGroup[] = [
   {
-    label: "Pembayaran",
+    label: "Pengaturan",
     items: [
-      { href: "/admin/payments", label: "Metode pembayaran", hint: "COD, AutoLaris, biaya, rekening", icon: CreditCard },
-      { href: "/admin/balance", label: "Rekonsiliasi", hint: "Verifikasi QRIS & VA", icon: BadgeDollarSign },
+      { href: "/admin/payments", label: "Metode pembayaran", hint: "COD, transfer manual & AutoLaris", icon: CreditCard },
+      { href: "/admin/payments/channels", label: "Channel AutoLaris", hint: "QRIS & Virtual Account di checkout", icon: SlidersHorizontal },
+      { href: "/admin/payments/fees", label: "Biaya transaksi", hint: "Penanggung fee online & COD", icon: Percent },
+      { href: "/admin/payments/banks", label: "Rekening bank", hint: "Rekening transfer manual toko", icon: Landmark },
+    ],
+  },
+  {
+    label: "Verifikasi",
+    items: [
+      { href: "/admin/balance", label: "Rekonsiliasi", hint: "Verifikasi QRIS & VA masuk", icon: BadgeDollarSign },
     ],
   },
 ];

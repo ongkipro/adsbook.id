@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowLeftRight, ArrowUpDown, Copy, ExternalLink, Loader2, MessageCircle, Search, Truck, X } from "lucide-react";
+import { ArrowLeftRight, ArrowUpDown, Copy, ExternalLink, Info, Loader2, MessageCircle, PackageSearch, Search, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -494,20 +494,364 @@ function RateCheck({ defaultOrigin, warehouseName }: { defaultOrigin: DistrictOp
   );
 }
 
+type ResiHistoryEvent = {
+  date: string;
+  time: string;
+  status: string;
+  desc: string;
+  location: string;
+};
+
+type ResiCheckResult = {
+  query: string;
+  cnote: string | null;
+  providerConfigured: boolean;
+  providerError: string | null;
+  order: {
+    orderNumber: string;
+    customerName: string;
+    courierCode: string;
+    cnoteNo: string;
+    shippingStatus: string;
+    shippingStatusLabel: string;
+    paymentMethod: string;
+    totalAmount: number;
+    createdAt: string;
+    detailHref: string;
+  } | null;
+  tracking: {
+    cnoteNo: string;
+    providerOrderId: string | null;
+    courier: string | null;
+    shippingStatus: string;
+    statusLabel: string;
+    latestEvent: string | null;
+    history: ResiHistoryEvent[];
+  } | null;
+};
+
+function resiStatusTone(status: string): (typeof RISK_COPY)[RiskLevel]["tone"] {
+  if (status === "delivered") return "good";
+  if (status === "returned" || status === "rts" || status === "failed" || status === "cancelled") return "bad";
+  if (status === "in_transit" || status === "out_for_delivery" || status === "picked_up" || status === "dispatched" || status === "pickup_scheduled") return "warn";
+  return "none";
+}
+
+function resiWhatsAppSummary(result: ResiCheckResult) {
+  const cnote = result.cnote || result.query;
+  const courier = result.tracking?.courier || result.order?.courierCode;
+  const status = result.tracking?.statusLabel || result.order?.shippingStatusLabel || "Dalam proses";
+  const latest = result.tracking?.latestEvent || result.tracking?.history[0]?.desc || "";
+  const lines = [
+    `Status paket resi *${cnote}*${courier ? ` (${courierDisplayName(courier)})` : ""}`,
+    `Status: *${status}*`,
+  ];
+  if (latest) lines.push(`Update terakhir: ${latest}`);
+  return lines.join("\n");
+}
+
+function ResiCheck({ initialQuery = "" }: { initialQuery?: string }) {
+  const [query, setQuery] = React.useState(initialQuery);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [result, setResult] = React.useState<ResiCheckResult | null>(null);
+
+  const track = React.useCallback(async (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed.length < 3 || trimmed.length > 64) {
+      setError("Masukkan nomor resi atau invoice (3–64 karakter).");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/check/resi?q=${encodeURIComponent(trimmed)}`, {
+        headers: { Accept: "application/json" },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Resi tidak ditemukan.");
+      }
+      setResult((payload.data ?? payload) as ResiCheckResult);
+    } catch (caught) {
+      setResult(null);
+      setError(caught instanceof Error ? caught.message : "Gagal melacak resi.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (initialQuery) void track(initialQuery);
+  }, [initialQuery, track]);
+
+  const activeStatus = result?.tracking?.shippingStatus || result?.order?.shippingStatus || "";
+  const activeStatusLabel = result?.tracking?.statusLabel || result?.order?.shippingStatusLabel || "Tidak diketahui";
+  const tone = resiStatusTone(activeStatus);
+  const courierCode = result?.tracking?.courier || result?.order?.courierCode || "";
+
+  return (
+    <CheckLayout
+      resultKey={result}
+      form={
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2" className="flex items-center gap-2 text-base font-semibold">
+              <PackageSearch className="size-4 text-muted-foreground" aria-hidden="true" /> Lacak pengiriman
+            </CardTitle>
+            <CardDescription>Masukkan nomor resi kurir atau nomor invoice pesanan toko (mis. INV-10001).</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <form
+              className="@container space-y-2"
+              noValidate
+              onSubmit={(event) => {
+                event.preventDefault();
+                void track(query);
+              }}
+            >
+              <label htmlFor="check-resi-input" className="text-xs font-medium text-foreground">
+                Nomor resi atau invoice
+              </label>
+              <div className="flex flex-col gap-2 @xs:flex-row">
+                <InputGroup className="flex-1">
+                  <InputGroupInput
+                    id="check-resi-input"
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      if (error) setError("");
+                    }}
+                    placeholder="Contoh: DEV5597746533 atau INV-10001"
+                    autoComplete="off"
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? "check-resi-error" : undefined}
+                  />
+                  {query && (
+                    <InputGroupAddon align="inline-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Hapus nomor resi"
+                        onClick={() => {
+                          setQuery("");
+                          setError("");
+                        }}
+                      >
+                        <X className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    </InputGroupAddon>
+                  )}
+                </InputGroup>
+                <Button type="submit" size="lg" disabled={loading}>
+                  {loading ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Search aria-hidden="true" />}
+                  {loading ? "Melacak…" : "Lacak resi"}
+                </Button>
+              </div>
+              {error && (
+                <p id="check-resi-error" role="alert" className="text-xs font-medium text-rose-700">
+                  {error}
+                </p>
+              )}
+            </form>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Pencarian otomatis mencocokkan nomor resi/invoice dengan pesanan di toko lalu mengambil status &amp; riwayat perjalanan terbaru dari Mengantar.
+            </p>
+          </CardContent>
+        </Card>
+      }
+      result={
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle as="h3" className="text-base font-semibold">Hasil pelacakan</CardTitle>
+            <CardDescription>
+              {result
+                ? `${result.cnote || result.query}${courierCode ? ` · ${courierDisplayName(courierCode)}` : ""}`
+                : "Status pengiriman dan riwayat checkpoint kurir tampil di sini."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!result && (
+              <EmptyResult icon={loading ? Loader2 : PackageSearch}>
+                {loading ? "Mengambil riwayat pengiriman dari Mengantar…" : "Masukkan nomor resi atau invoice di sebelah kiri untuk melacak paket."}
+              </EmptyResult>
+            )}
+            {result && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={TONE_CLASS[tone]}>
+                        {activeStatusLabel}
+                      </Badge>
+                      {courierCode && (
+                        <Badge variant="secondary">{courierDisplayName(courierCode)}</Badge>
+                      )}
+                    </div>
+                    <p className="font-mono text-sm font-semibold text-slate-950 break-all">
+                      {result.cnote || "Belum ada nomor resi"}
+                    </p>
+                    {result.tracking?.latestEvent && (
+                      <p className="text-xs text-slate-600">{result.tracking.latestEvent}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {result.cnote && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void copy(result.cnote!, "Nomor resi disalin.")}
+                      >
+                        <Copy aria-hidden="true" /> Salin resi
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void copy(resiWhatsAppSummary(result), "Ringkasan status disalin untuk WhatsApp.")}
+                    >
+                      <MessageCircle aria-hidden="true" /> Salin untuk WA
+                    </Button>
+                  </div>
+                </div>
+
+                {result.order && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs">
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="font-semibold text-slate-900">
+                        Pesanan {result.order.orderNumber} · {result.order.customerName}
+                      </p>
+                      <p className="text-slate-500">
+                        {result.order.paymentMethod.toUpperCase()} · {formatIdr(result.order.totalAmount)} · Status toko: {result.order.shippingStatusLabel}
+                      </p>
+                    </div>
+                    <a
+                      href={result.order.detailHref}
+                      className={buttonVariants({ variant: "outline", size: "sm" })}
+                    >
+                      Buka detail order <ExternalLink className="size-3.5" aria-hidden="true" />
+                    </a>
+                  </div>
+                )}
+
+                {result.providerError && (
+                  <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900">
+                    {result.providerError}
+                  </p>
+                )}
+
+                {result.tracking && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
+                      Riwayat perjalanan ({result.tracking.history.length})
+                    </h4>
+                    {result.tracking.history.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-muted-foreground">
+                        Belum ada riwayat checkpoint dari kurir untuk resi ini.
+                      </p>
+                    ) : (
+                      <ol className="relative space-y-3 border-l border-slate-200 pl-4">
+                        {result.tracking.history.map((event, index) => (
+                          <li key={`${event.date}-${event.time}-${index}`} className="relative">
+                            <span
+                              className={`absolute -left-[21px] top-1.5 size-2.5 rounded-full ring-4 ring-white ${
+                                index === 0 ? "bg-blue-600" : "bg-slate-300"
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <div className="space-y-0.5">
+                              <p className={`text-sm ${index === 0 ? "font-semibold text-slate-950" : "font-medium text-slate-800"}`}>
+                                {event.desc}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {[event.date, event.time, event.location].filter(Boolean).join(" · ") || "Waktu tidak tercatat"}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      }
+    />
+  );
+}
+
 export default function RateCheckTools({
   defaultOrigin,
   warehouseName,
   initialPhone = "",
+  initialResi = "",
   initialTab = "wa",
+  mode = "tabs",
 }: {
   defaultOrigin: DistrictOption | null;
   warehouseName: string;
   initialPhone?: string;
+  initialResi?: string;
   initialTab?: "wa" | "ongkir";
+  mode?: "wa" | "ongkir" | "resi" | "tabs";
 }) {
-  // One check per tab, each input-left / result-right. `?tab=ongkir` opens
-  // the rate check; a `?search=` phone opens the WA check. Both panels stay
-  // mounted so a result survives switching tabs.
+  if (mode === "wa") {
+    return (
+      <div className="space-y-5">
+        <ReceiverCheck initialPhone={initialPhone} />
+        <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+          <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+            <Info className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+            Keterangan cek WA (RTS)
+          </p>
+          <p className="mt-1.5">
+            Skor diambil dari riwayat pengiriman nomor penerima di jaringan Mengantar. Gunakan untuk menilai risiko retur sebelum melepaskan pesanan COD.
+          </p>
+        </aside>
+      </div>
+    );
+  }
+
+  if (mode === "ongkir") {
+    return (
+      <div className="space-y-5">
+        <RateCheck defaultOrigin={defaultOrigin} warehouseName={warehouseName} />
+        <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+          <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+            <Info className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+            Keterangan cek ongkir
+          </p>
+          <p className="mt-1.5">
+            Kecamatan asal otomatis mengikuti gudang utama toko dan dapat diganti sementara untuk simulasi. Klik <strong>Salin untuk WA</strong> untuk mengirim perbandingan ongkir ke calon pembeli.
+          </p>
+        </aside>
+      </div>
+    );
+  }
+
+  if (mode === "resi") {
+    return (
+      <div className="space-y-5">
+        <ResiCheck initialQuery={initialResi} />
+        <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+          <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+            <Info className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+            Keterangan cek resi
+          </p>
+          <p className="mt-1.5">
+            Anda bisa memasukkan nomor resi kurir maupun nomor invoice pesanan toko. Jika pesanan ditemukan di toko, tautan langsung ke detail order ikut ditampilkan.
+          </p>
+        </aside>
+      </div>
+    );
+  }
+
+  // Legacy tabbed view kept for unit-test compatibility when `mode` is omitted.
   const [tab, setTab] = React.useState(initialTab);
   return (
     <Tabs
@@ -517,7 +861,6 @@ export default function RateCheckTools({
         setTab(next);
         const url = new URL(window.location.href);
         url.searchParams.set("tab", next);
-        // `?search=` always opens the WA check; leaving it would undo this switch on reload.
         if (next === "ongkir") url.searchParams.delete("search");
         window.history.replaceState(null, "", url);
       }}

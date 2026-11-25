@@ -16,7 +16,7 @@ import {
   useComboboxAnchor,
 } from '../ui/combobox';
 
-import { AlertTriangleIcon, BoxesIcon, LoaderCircleIcon, MapPinOffIcon, RefreshCwIcon, SaveIcon, WarehouseIcon } from 'lucide-react';
+import { AlertTriangleIcon, InfoIcon, LoaderCircleIcon, RefreshCwIcon, SaveIcon, WarehouseIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
@@ -112,7 +112,15 @@ function Toggle({ checked, disabled, pending, label, onChange }: {
     </div>
   );
 }
-export function ExpeditionSettings({ initial }: { initial?: ExpeditionSettingsInitial } = {}) {
+export type ExpeditionSettingsView = 'couriers' | 'cod-policy' | 'all';
+
+export function ExpeditionSettings({
+  initial,
+  view = 'all',
+}: {
+  initial?: ExpeditionSettingsInitial;
+  view?: ExpeditionSettingsView;
+} = {}) {
   const [couriers, setCouriers] = useState<CourierRule[]>(() => initial?.couriers ?? []);
   const [loading, setLoading] = useState(!initial);
   const [loadError, setLoadError] = useState('');
@@ -267,79 +275,30 @@ export function ExpeditionSettings({ initial }: { initial?: ExpeditionSettingsIn
     return <section className="rounded-xl border border-rose-200 bg-white p-8 text-center shadow-sm" role="alert"><AlertTriangleIcon className="mx-auto size-8 text-rose-600" aria-hidden="true" /><h2 className="mt-4 text-base font-semibold text-slate-950">Ekspedisi gagal dimuat</h2><p className="mt-2 text-sm text-slate-600">{loadError}</p><button type="button" onClick={() => void load()} className="btn-primary mt-5"><RefreshCwIcon className="size-4" aria-hidden="true" /> Coba lagi</button></section>;
   }
 
+  const showCodPolicy = view === 'all' || view === 'cod-policy';
+  const showCouriers = view === 'all' || view === 'couriers';
+
   return (
-    <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
-      <aside className="hidden space-y-3 xl:sticky xl:top-0 xl:block">
-        <nav aria-label="Menu ekspedisi" className="rounded-xl border border-slate-200 bg-white p-1.5">
-          <p className="px-2.5 pb-1 pt-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-400">Ekspedisi</p>
-          <ul className="flex flex-col gap-0.5">
-            <li>
-              <a href="#kebijakan-cod" className="flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600/40">
-                <span className="grid size-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
-                  <MapPinOffIcon className="size-4" />
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium">Kebijakan COD</span>
-                  <span className="truncate text-xs text-slate-500">
-                    {metrics.nonCodProvinces === 0 ? 'Aktif di semua provinsi' : `${metrics.nonCodProvinces} provinsi non-COD`}
-                  </span>
-                </span>
-              </a>
-            </li>
-            <li>
-              <a href="#daftar-ekspedisi" className="flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600/40">
-                <span className="grid size-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
-                  <BoxesIcon className="size-4" />
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium">Daftar ekspedisi</span>
-                  <span className="truncate text-xs text-slate-500">
-                    {metrics.active} aktif · {metrics.cod} COD
-                  </span>
-                </span>
-              </a>
-            </li>
-          </ul>
-          <div className="mt-1 border-t border-slate-100 pt-1">
-            <p className="px-2.5 pb-1 pt-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-400">Asal kirim</p>
-            <a href="/admin/settings/warehouse" className="flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-slate-900 outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600/40">
-              <span className="grid size-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
-                <WarehouseIcon className="size-4" />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium">{originWarehouse?.name || 'Gudang utama'}</span>
-                <span className="truncate text-xs text-slate-500">
-                  {originWarehouse ? (originWarehouse.city || originWarehouse.originLabel || 'Sudah diatur') : 'Belum diatur'}
-                </span>
-              </span>
-            </a>
-          </div>
-        </nav>
-      </aside>
+    <div className="min-w-0 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <p className="text-sm text-slate-600" aria-label="Ringkasan ekspedisi">
+          <span className="font-semibold text-slate-950">{metrics.active}</span> dari {metrics.total} ekspedisi aktif ·{' '}
+          <span className="font-semibold text-slate-950">{metrics.cod}</span> menerima COD ·{' '}
+          <span className="font-semibold text-slate-950">{metrics.nonCodProvinces}</span> provinsi tanpa COD
+        </p>
+        <a
+          href="/admin/settings/warehouse"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 transition-colors hover:text-blue-700"
+        >
+          <WarehouseIcon className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <span>Asal kirim: {originWarehouse ? `${originWarehouse.name}${originWarehouse.city ? ` (${originWarehouse.city})` : ''}` : 'Belum diatur'}</span>
+        </a>
+      </div>
 
-      <div className="min-w-0 max-w-4xl space-y-5">
-        <header className="flex flex-col gap-3 border-b border-slate-200/80 pb-4 sm:flex-row sm:items-end sm:justify-between sm:pb-5">
-          <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">Layanan ekspedisi</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-500 md:leading-6">
-              Atur kurir dan layanan COD di checkout. Perubahan langsung berlaku.
-            </p>
-          </div>
-        </header>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-slate-600" aria-label="Ringkasan ekspedisi">
-            <span className="font-semibold text-slate-950">{metrics.active}</span> dari {metrics.total} ekspedisi aktif ·{' '}
-            <span className="font-semibold text-slate-950">{metrics.cod}</span> menerima COD ·{' '}
-            <span className="font-semibold text-slate-950">{metrics.nonCodProvinces}</span> provinsi tanpa COD
-          </p>
-          <nav aria-label="Lompat ke bagian" className="flex items-center gap-1.5 xl:hidden">
-            <a href="#kebijakan-cod" className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50">Kebijakan COD</a>
-            <a href="#daftar-ekspedisi" className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50">Daftar ekspedisi</a>
-          </nav>
-        </div>
-
-        {/* Non-COD Policy */}
-        <section id="kebijakan-cod" className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-5 md:p-6">
+      {/* Non-COD Policy */}
+      {showCodPolicy && (
+        <>
+          <section id="kebijakan-cod" className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-5 md:p-6">
         <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-base font-semibold tracking-tight text-slate-950">Kebijakan COD per provinsi</h2>
@@ -376,8 +335,24 @@ export function ExpeditionSettings({ initial }: { initial?: ExpeditionSettingsIn
         </div>
       </section>
 
+      <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+        <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+          <InfoIcon className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+          Keterangan kebijakan COD provinsi
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Kebijakan ini berlaku untuk semua kurir di toko Anda dan terpisah dari batasan area bawaan masing-masing ekspedisi.</li>
+          <li>Jika minimal satu provinsi dikecualikan dari COD, pastikan toko memiliki <a href="/admin/payments/banks" className="font-medium text-blue-700 underline underline-offset-2">rekening transfer manual</a> atau AutoLaris aktif agar pembeli di wilayah tersebut tetap bisa checkout.</li>
+          <li>Pembeli di provinsi non-COD otomatis melihat metode pembayaran online saat memilih alamat tujuan.</li>
+        </ul>
+      </aside>
+        </>
+      )}
+
       {/* Courier List */}
-      <section id="daftar-ekspedisi" className="scroll-mt-4 rounded-xl border border-slate-200 bg-white overflow-hidden">
+      {showCouriers && (
+        <>
+          <section id="daftar-ekspedisi" className="scroll-mt-4 rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="border-b border-slate-100 p-5 md:p-6 space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -444,7 +419,20 @@ export function ExpeditionSettings({ initial }: { initial?: ExpeditionSettingsIn
           </ul>
         )}
       </section>
-      </div>
+
+      <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+        <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+          <InfoIcon className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+          Keterangan daftar ekspedisi
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Hanya kurir berstatus <strong>Aktif</strong> yang muncul di perhitungan ongkir checkout dan badge pengiriman di halaman toko.</li>
+          <li>Pembayaran <strong>COD</strong> hanya tersedia pada kurir yang toggle Aktif dan COD-nya sama-sama menyala, dan tidak dikecualikan di <a href="/admin/expeditions/cod-policy" className="font-medium text-blue-700 underline underline-offset-2">Kebijakan provinsi</a>.</li>
+          <li>Tarif ongkir dihitung dari <a href="/admin/settings/warehouse" className="font-medium text-blue-700 underline underline-offset-2">gudang utama</a> yang sedang aktif.</li>
+        </ul>
+      </aside>
+        </>
+      )}
     </div>
   );
 }

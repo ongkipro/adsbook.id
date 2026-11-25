@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   EllipsisVertical,
+  Info,
   Landmark,
   Lock,
   RefreshCw,
@@ -186,7 +187,17 @@ export type PaymentSettingsInitial = {
   manualActiveCount: number;
 };
 
-export default function PaymentSettings({ channels, initial }: { channels: PaymentChannel[]; initial?: PaymentSettingsInitial }) {
+export type PaymentSettingsView = "methods" | "channels" | "fees" | "banks" | "all";
+
+export default function PaymentSettings({
+  channels,
+  initial,
+  view = "all",
+}: {
+  channels: PaymentChannel[];
+  initial?: PaymentSettingsInitial;
+  view?: PaymentSettingsView;
+}) {
   // Server-rendered first state: switches start at their real positions instead
   // of sliding from off to on after the page paints.
   const [hydrated, setHydrated] = useState(false);
@@ -266,15 +277,27 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
   useEffect(() => {
     setHydrated(true);
     if (!initial) void load();
-  }, []);
+    if (view === "banks" && typeof window !== "undefined" && window.location.hash === "#rekening-bank-section") {
+      requestAnimationFrame(() => {
+        const section = document.getElementById("rekening-bank-section");
+        section?.scrollIntoView({ behavior: "instant", block: "nearest" });
+        section?.focus({ preventScroll: true });
+      });
+    }
+  }, [view]);
 
   const usableChannels = useMemo(() => channels.filter((channel) => !channel.lockReason), [channels]);
   const activeChannelCount = autolarisEnabled && apiReady
     ? usableChannels.filter((channel) => !disabledChannels.includes(channel.code)).length
     : 0;
   const providerCount = Number(codEnabled) + Number(autolarisEnabled && apiReady);
-  // On a phone the bank editor opens far below the button: bring it into view and give it focus.
+  // On the split methods view, "Kelola rekening" goes directly to the dedicated
+  // bank-accounts page and focuses #rekening-bank-section there.
   const openBankAccounts = () => {
+    if (view === "methods") {
+      window.location.assign("/admin/payments/banks#rekening-bank-section");
+      return;
+    }
     setBanksOpen(true);
     requestAnimationFrame(() => {
       const section = document.getElementById("rekening-bank-section");
@@ -381,8 +404,14 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
     );
   }
 
+  const showMethods = view === "all" || view === "methods";
+  const showChannels = view === "all" || view === "channels";
+  const showFees = view === "all" || view === "fees";
+  const showBanks = view === "all" || view === "banks";
+
   return (
     <div className="space-y-5" aria-busy={loading || Boolean(busy)}>
+      {showMethods && (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Badge variant="outline" className="h-7 gap-1.5 bg-card px-3 text-xs">
           {loading ? <RefreshCw className="animate-spin" /> : <CheckCircle2 className="text-emerald-600" />}
@@ -401,14 +430,14 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      )}
 
       <InlineNotice notice={notice} />
 
-      {/* Two columns on a wide screen: what is live at checkout on the left,
-          how it is configured on the right. One column made the page a long
-          scroll with half the desktop empty. */}
-      <div className="grid grid-cols-1 items-start gap-5 2xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+      <div className={view === "all" ? "grid grid-cols-1 items-start gap-5 2xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]" : "space-y-5"}>
+      {(showMethods || showChannels) && (
       <div className="min-w-0 space-y-5">
+      {showMethods && (
       <Card>
         <CardHeader className="border-b">
           <CardTitle as="h3" className="font-semibold">Status metode pembayaran</CardTitle>
@@ -466,7 +495,10 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {showChannels && (
+      <>
       <Card>
         <CardHeader className="border-b">
           <CardTitle as="h3" className="font-semibold">Channel AutoLaris</CardTitle>
@@ -551,9 +583,28 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           </Table>
         </CardContent>
       </Card>
+      {view === "channels" && (
+        <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+          <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+            <Info className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+            Keterangan channel AutoLaris
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>Channel yang aktif otomatis tampil di halaman checkout dan badge pembayaran di storefront.</li>
+            <li>Channel bertanda <strong>Tidak aktif di provider</strong> dikunci dari sisi AutoLaris dan tidak dapat dinyalakan dari toko.</li>
+            <li>Pastikan toggle utama AutoLaris di <a href="/admin/payments" className="font-medium text-blue-700 underline underline-offset-2">Metode pembayaran</a> juga dalam keadaan aktif.</li>
+          </ul>
+        </aside>
+      )}
+      </>
+      )}
       </div>
+      )}
 
+      {(showMethods || showFees || showBanks) && (
       <div className="min-w-0 space-y-5">
+      {showFees && (
+      <>
       <Card>
         <CardHeader className="border-b">
           <CardTitle as="h3" className="font-semibold">Kebijakan biaya transaksi</CardTitle>
@@ -582,7 +633,24 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           </Button>
         </div>
       </Card>
+      {view === "fees" && (
+        <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+          <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+            <Info className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+            Keterangan kebijakan biaya transaksi
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>Jika ditanggung <strong>Pembeli</strong>, biaya admin muncul terpisah di ringkasan checkout dan ditambahkan ke total bayar.</li>
+            <li>Jika ditanggung <strong>Seller</strong>, pembeli membayar tepat sebesar harga produk + ongkir, dan biaya dipotong dari settlement.</li>
+            <li>Perubahan kebijakan hanya berlaku untuk pesanan baru yang dibuat setelah tombol Simpan diklik.</li>
+          </ul>
+        </aside>
+      )}
+      </>
+      )}
 
+      {showMethods && (
+      <>
       <Collapsible open={credentialsOpen} onOpenChange={setCredentialsOpen}>
         <Card>
           <CardHeader className="border-b">
@@ -632,7 +700,53 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           </CollapsibleContent>
         </Card>
       </Collapsible>
+      {view === "methods" && (
+        <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+          <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+            <Info className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+            Keterangan metode pembayaran
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li><strong>Transfer Bank Manual</strong> siap pakai sejak hari pertama dan melayani provinsi non-COD maupun produk digital.</li>
+            <li><strong>COD</strong> tersedia untuk produk fisik sesuai kurir aktif di <a href="/admin/expeditions" className="font-medium text-blue-700 underline underline-offset-2">Daftar ekspedisi</a> dan <a href="/admin/expeditions/cod-policy" className="font-medium text-blue-700 underline underline-offset-2">Kebijakan provinsi</a>.</li>
+            <li><strong>AutoLaris</strong> bersifat opsional; setelah API key tersimpan, pilih channel aktif di menu <a href="/admin/payments/channels" className="font-medium text-blue-700 underline underline-offset-2">Channel AutoLaris</a>.</li>
+          </ul>
+        </aside>
+      )}
+      </>
+      )}
 
+      {showBanks && (
+        view === "banks" ? (
+          <>
+            <Card id="rekening-bank-section" className="scroll-mt-20 outline-none" tabIndex={-1}>
+              <CardHeader className="border-b">
+                <CardTitle as="h3" className="font-semibold">Rekening transfer manual</CardTitle>
+                <CardDescription>Rekening aktif langsung tersedia di checkout sesuai urutan, termasuk untuk provinsi non-COD dan produk digital.</CardDescription>
+                <div className="col-start-1">
+                  <Badge variant="outline">{manualActiveCount} aktif</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <SellerBankAccounts onAccountsChange={(accounts) => {
+                  const active = accounts.filter((account) => Boolean(account.is_active)).length;
+                  setManualActiveCount(active);
+                }} />
+              </CardContent>
+            </Card>
+            <aside className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs leading-5 text-slate-600">
+              <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+                <Info className="size-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+                Keterangan transfer manual
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-4">
+                <li>Pembeli melihat nomor rekening aktif setelah checkout dan dapat menghubungi WhatsApp CS untuk konfirmasi bukti transfer.</li>
+                <li>Setelah mutasi masuk dicek, tandai <strong>Transfer Diterima</strong> di halaman <a href="/admin/orders" className="font-medium text-blue-700 underline underline-offset-2">Pesanan</a> agar status lunas dan sinyal Purchase terkirim ke iklan.</li>
+                <li>Minimal 1 rekening aktif atau AutoLaris wajib menyala bila toko mengecualikan provinsi COD atau menjual produk digital.</li>
+              </ul>
+            </aside>
+          </>
+        ) : (
       <Collapsible open={banksOpen} onOpenChange={setBanksOpen}>
         <Card id="rekening-bank-section" className="scroll-mt-20 outline-none" tabIndex={-1}>
           <CardHeader className="border-b">
@@ -661,7 +775,10 @@ export default function PaymentSettings({ channels, initial }: { channels: Payme
           </CollapsibleContent>
         </Card>
       </Collapsible>
+        )
+      )}
       </div>
+      )}
       </div>
 
       <style>{`
