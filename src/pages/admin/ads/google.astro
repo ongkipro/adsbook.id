@@ -255,7 +255,7 @@ const feedUrl = `${Astro.locals.tenant.siteUrl.replace(/\/$/, '')}/feed/catalog.
             <input id="offlineLoginId" name="login_customer_id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" aria-describedby="offlineLoginIdHint" class="admin-input-flat mt-2 font-mono" />
             <p id="offlineLoginIdHint" class="mt-1.5 text-xs text-slate-500">Isi bila akses lewat akun manajer (MCC).</p>
           </div>
-          <div class="min-w-0" data-developer-token>
+          <div class="min-w-0" data-developer-token hidden>
             <label for="offlineDeveloperToken" class="block text-xs font-semibold text-slate-900">Developer token</label>
             <input id="offlineDeveloperToken" name="developer_token" type="password" autocomplete="off" spellcheck="false" aria-describedby="offlineDeveloperTokenHint" class="admin-input-flat mt-2 font-mono" />
             <p id="offlineDeveloperTokenHint" class="mt-1.5 text-xs text-slate-500">Hanya untuk Google Ads API. Kosongkan untuk mempertahankan nilai tersimpan.</p>
