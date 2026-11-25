@@ -124,6 +124,7 @@ export function AnalyticsDashboard({
   showPaymentsLink = false,
   showAttention = false,
   showInsights = false,
+  isDigital = false,
   initialData = null,
   initialAttention = null,
   initialSelection,
@@ -135,6 +136,8 @@ export function AnalyticsDashboard({
   showAttention?: boolean;
   /** Roles that may read the Analitik menu see its top products and pages. */
   showInsights?: boolean;
+  /** DIGITAL-PRODUCTS-SPEC §4.1: a digital store ships nothing, so never link to /admin/shipping. */
+  isDigital?: boolean;
   initialData?: DashboardAnalyticsData | null;
   initialAttention?: DashboardAttentionState | null;
   initialSelection?: AdminDateSelection;
@@ -471,7 +474,7 @@ export function AnalyticsDashboard({
       value: funnel.handed_over,
       note: `${share(funnel.handed_over, funnel.orders)} dari orders`,
       ratio: funnel.orders > 0 ? funnel.handed_over / funnel.orders : 0,
-      href: showAttention ? "/admin/shipping" : undefined,
+      href: showAttention && !isDigital ? "/admin/shipping" : undefined,
     },
     {
       label: "Delivered",

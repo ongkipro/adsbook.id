@@ -98,6 +98,7 @@ const initialAttention = initialAttentionRaw
       showPaymentsLink={mayManagePayments}
       showAttention={mayManageOrders}
       showInsights={mayReadInsights}
+      isDigital={Astro.locals.tenant.catalogMode === 'digital'}
       initialData={initialAnalytics}
       initialAttention={initialAttention}
       initialSelection={initialSelection}

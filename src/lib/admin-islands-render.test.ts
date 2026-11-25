@@ -347,6 +347,48 @@ test("AnalyticsDashboard server-renders both loading skeleton and populated SSR 
   assert.match(clean, /Kaos Katun/);
   assert.match(clean, /1 antrean &gt;24 jam/);
   assert.match(clean, /Zona waktu WIB/);
+  assert.match(clean, /href="\/admin\/shipping"/);
+
+  // DIGITAL-PRODUCTS-SPEC §4.1: a digital store never links to /admin/shipping.
+  const digitalHtml = await renderIsland("AnalyticsDashboard.tsx", "AnalyticsDashboard", {
+    showPaymentsLink: true,
+    showAttention: true,
+    showInsights: true,
+    isDigital: true,
+    initialNowIso: "2026-08-18T05:00:00.000Z",
+    initialData: {
+      total_revenue: 100_000,
+      collected_revenue: 100_000,
+      total_orders: 1,
+      live_orders: 1,
+      online_orders: 1,
+      average_order_value: 100_000,
+      lead_conversion_rate: 100,
+      lead_base: 1,
+      cod_revenue: 0,
+      prepaid_revenue: 100_000,
+      conversion_rate: 100,
+      rts_rate: 0,
+      rts_base: 0,
+      cod_percentage: 0,
+      transfer_percentage: 0,
+      qris_percentage: 100,
+      payment_methods: {
+        total: 1,
+        cod: { count: 0, percentage: 0 },
+        manual_transfer: { count: 0, percentage: 0 },
+        virtual_account: { count: 0, percentage: 0 },
+        qris: { count: 1, percentage: 100 },
+        unknown_count: 0,
+      },
+      period: { start_date: "2026-08-01", end_date: "2026-08-18", timezone: "Asia/Jakarta", basis: "order_created_at", interval: "day" },
+      trends: [{ date: "2026-08-18", revenue: 100_000, orders: 1 }],
+      funnel: { leads: 0, orders: 1, handed_over: 0, delivered: 0, returned: 0 },
+      previous: null,
+      rankings: { products: [], pages: [] },
+    },
+  });
+  assert.equal(digitalHtml.includes('href="/admin/shipping"'), false);
 });
 
 test("ExpeditionSettings server-renders both loading skeleton and populated SSR data without throwing", async () => {
