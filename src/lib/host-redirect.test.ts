@@ -12,6 +12,7 @@ test('http goes to https on the same host with path and query; https stays', () 
 
 test('api paths and local hosts are never moved', () => {
   assert.equal(go('http://toko.adsbook.my.id/api/webhooks/autolaris'), null);
+  assert.equal(go('http://toko.adsbook.my.id/api/webhooks/mengantar/tok'), null);
   assert.equal(go('http://merchant.com/api/submit-order'), null);
   assert.equal(go('http://localhost:4321/'), null);
   assert.equal(go('http://toko.localhost:8787/'), null);

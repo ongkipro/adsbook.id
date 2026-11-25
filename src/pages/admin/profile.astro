@@ -19,7 +19,13 @@ type InitialCredential = {
 };
 
 type InitialIntegrations = {
-  mengantar: InitialCredential;
+  mengantar: InitialCredential & {
+    webhook_issued_at: string | null;
+    webhook_secret_configured: boolean;
+    webhook_secret_masked: string;
+    webhook_last_event_at: string | null;
+    webhook_stale_warning: boolean;
+  };
   autolaris: InitialCredential & {
     order_origin_id: string;
     order_destination_id: string;
@@ -90,9 +96,28 @@ const mengantar = initialIntegrations?.mengantar ?? null;
 const autolaris = initialIntegrations?.autolaris ?? null;
 const integrationsReady = Boolean(initialIntegrations);
 
+const formatWib = (iso: string) =>
+  `${new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(iso))} WIB`;
+
 const webhookFormatted = autolaris?.webhook_issued_at
-  ? `Aktif sejak ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(autolaris.webhook_issued_at))} WIB.`
+  ? `Aktif sejak ${formatWib(autolaris.webhook_issued_at)}.`
   : 'Belum dibuat.';
+
+const mengantarWebhookFormatted = (() => {
+  if (!mengantar) return 'Belum dipasang (sinkron otomatis per jam tetap berjalan).';
+  if (mengantar.webhook_secret_configured && mengantar.webhook_issued_at) {
+    return mengantar.webhook_last_event_at
+      ? `Aktif · event terakhir ${formatWib(mengantar.webhook_last_event_at)}.`
+      : `Aktif sejak ${formatWib(mengantar.webhook_issued_at)} · menunggu event pertama.`;
+  }
+  if (mengantar.webhook_issued_at && !mengantar.webhook_secret_configured) {
+    return `URL dibuat ${formatWib(mengantar.webhook_issued_at)} · tempel Webhook Secret agar aktif.`;
+  }
+  if (mengantar.webhook_secret_configured && !mengantar.webhook_issued_at) {
+    return 'Webhook Secret tersimpan · klik Buat URL webhook baru lalu tempel di Mengantar.';
+  }
+  return 'Belum dipasang (sinkron otomatis per jam tetap berjalan).';
+})();
 
 const pageTitle = mustChangePassword
   ? 'Amankan akun admin'
@@ -111,7 +136,7 @@ const pageDescription = mustChangePassword
       : 'grid grid-cols-1 items-start gap-6 xl:grid-cols-[240px_minmax(0,1fr)]',
   ]}>
     {!mustChangePassword && (
-      <aside class="hidden space-y-3 xl:sticky xl:top-0 xl:block">
+      <aside class="hidden space-y-3 xl:sticky xl:top-0 xl:block xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto">
         <div class="rounded-xl border border-slate-200 bg-white p-3.5">
           <div class="flex items-center gap-3">
             <span class="grid size-10 shrink-0 place-items-center rounded-lg bg-blue-600/10 text-sm font-semibold text-blue-700" aria-hidden="true">
@@ -380,50 +405,99 @@ const pageDescription = mustChangePassword
               </div>
 
               <div class="settings-card-body space-y-4">
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700" for="mengantarKey">API key baru</label>
+                  <div class="relative mt-2 max-w-xl">
+                    <input
+                      id="mengantarKey"
+                      name="mengantar_api_key"
+                      type="password"
+                      autocomplete="new-password"
+                      placeholder={mengantar?.api_key_masked || 'Masukkan API key Mengantar'}
+                      class="admin-input-flat pr-24 font-mono sm:text-sm"
+                    />
+                    <button
+                      id="toggleMengantarKey"
+                      type="button"
+                      class="absolute inset-y-1 right-1 min-w-20 rounded-lg bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
+                      aria-controls="mengantarKey"
+                      aria-label="Tampilkan API key Mengantar"
+                      aria-pressed="false"
+                    >
+                      Lihat
+                    </button>
+                  </div>
+                  <p id="mengantarKeyHint" class="mt-1.5 text-xs text-slate-500">
+                    Endpoint resmi Mengantar dipakai otomatis. Kosongkan untuk mempertahankan key saat ini.
+                  </p>
+                  <label class="mt-2.5 inline-flex items-center gap-2 text-xs font-medium text-slate-600">
+                    <input type="checkbox" name="mengantar_clear_key" class="size-4 rounded border-slate-300" />
+                    Hapus key tersimpan (Mengantar berhenti dipakai)
+                  </label>
+                </div>
+
+                <div id="mengantarWebhookCard" class="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="min-w-0">
+                      <p class="text-xs font-semibold text-slate-900">Webhook Mengantar (sinkron status otomatis)</p>
+                      <p id="mengantarWebhookState" class="mt-0.5 text-xs text-slate-600">{mengantarWebhookFormatted}</p>
+                    </div>
+                    <button id="issueMengantarWebhook" type="button" class="btn-secondary shrink-0">Buat URL webhook baru</button>
+                  </div>
+
+                  <div
+                    id="mengantarWebhookWarning"
+                    class:list={[
+                      'rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900',
+                      !mengantar?.webhook_stale_warning && 'hidden',
+                    ]}
+                    role="status"
+                  >
+                    Tidak ada event webhook 48 jam terakhir padahal ada order aktif — cek apakah pengiriman webhook dijeda di dashboard Mengantar (klik <strong>Aktifkan kembali</strong>).
+                  </div>
+
+                  <div id="mengantarWebhookWrap" class="hidden flex-col gap-2 sm:flex-row sm:items-center">
+                    <output id="mengantarWebhookUrl" class="min-w-0 flex-1 break-all rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-900"></output>
+                    <button id="copyMengantarWebhookUrl" type="button" class="btn-secondary shrink-0">Salin URL</button>
+                  </div>
+
                   <div>
-                    <label class="block text-xs font-semibold text-slate-700" for="mengantarKey">API key baru</label>
-                    <div class="relative mt-2">
+                    <label class="block text-xs font-semibold text-slate-700" for="mengantarWebhookSecret">Webhook Secret Mengantar</label>
+                    <div class="relative mt-1.5 max-w-xl">
                       <input
-                        id="mengantarKey"
-                        name="mengantar_api_key"
+                        id="mengantarWebhookSecret"
+                        name="mengantar_webhook_secret"
                         type="password"
                         autocomplete="new-password"
-                        placeholder={mengantar?.api_key_masked || 'Masukkan API key Mengantar'}
+                        placeholder={mengantar?.webhook_secret_masked || 'Tempel Webhook Secret dari Mengantar'}
                         class="admin-input-flat pr-24 font-mono sm:text-sm"
                       />
                       <button
-                        id="toggleMengantarKey"
+                        id="toggleMengantarWebhookSecret"
                         type="button"
                         class="absolute inset-y-1 right-1 min-w-20 rounded-lg bg-white px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300"
-                        aria-controls="mengantarKey"
-                        aria-label="Tampilkan API key Mengantar"
+                        aria-controls="mengantarWebhookSecret"
+                        aria-label="Tampilkan Webhook Secret Mengantar"
                         aria-pressed="false"
                       >
                         Lihat
                       </button>
                     </div>
-                    <p id="mengantarKeyHint" class="mt-1.5 text-xs text-slate-500">Kosongkan untuk mempertahankan key saat ini.</p>
+                    <label class="mt-2 inline-flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <input type="checkbox" name="mengantar_clear_webhook_secret" class="size-4 rounded border-slate-300" />
+                      Hapus Webhook Secret tersimpan
+                    </label>
                   </div>
 
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-700" for="mengantarUrl">Base URL</label>
-                    <input
-                      id="mengantarUrl"
-                      name="mengantar_base_url"
-                      type="url"
-                      value={mengantar?.base_url ?? ''}
-                      required
-                      class="admin-input-flat mt-2 font-mono sm:text-sm"
-                    />
-                    <p class="mt-1.5 text-xs text-slate-500">Biarkan URL bawaan kecuali diminta mengganti endpoint.</p>
+                  <div class="space-y-1 border-t border-slate-200/80 pt-2.5 text-xs leading-5 text-slate-500">
+                    <p>
+                      <strong class="font-semibold text-slate-700">Cara pasang:</strong> buka dashboard Mengantar → <strong>Settings → Account → Integrasi Public API</strong> → tempel URL webhook di atas → simpan, lalu salin <strong>Webhook Secret</strong> ke kolom ini dan klik <strong>Simpan Integrasi</strong>. Di production, menu Webhook muncul setelah akun diaktifkan oleh Mengantar (di sandbox langsung terbuka).
+                    </p>
+                    <p>
+                      <strong class="font-semibold text-slate-700">Penting:</strong> membuat ulang API key Mengantar juga mengganti Webhook Secret (URL tetap) — tempel ulang Secret baru di sini bila API key dirotasi.
+                    </p>
                   </div>
                 </div>
-
-                <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
-                  <input type="checkbox" name="mengantar_clear_key" class="size-4 rounded border-slate-300" />
-                  Hapus key tersimpan (Mengantar berhenti dipakai)
-                </label>
               </div>
             </fieldset>
 
@@ -498,17 +572,6 @@ const pageDescription = mustChangePassword
                     Lanjutan <span class="font-normal text-slate-500">(tidak perlu diisi)</span>
                   </summary>
                   <div class="mt-4 space-y-4">
-                    <div>
-                      <label class="block text-xs font-semibold text-slate-700" for="autolarisUrl">Base URL</label>
-                      <input
-                        id="autolarisUrl"
-                        name="autolaris_base_url"
-                        type="url"
-                        value={autolaris?.base_url ?? ''}
-                        placeholder="https://api-h2h.autolaris.com"
-                        class="admin-input-flat mt-2 font-mono sm:text-sm"
-                      />
-                    </div>
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div class="min-w-0">
                         <label class="block text-xs font-semibold text-slate-700" for="autolarisOrigin">Area origin</label>
@@ -579,7 +642,13 @@ const pageDescription = mustChangePassword
   <script>
     type Credential = { configured: boolean; api_key_masked: string; base_url: string; source: 'dashboard' | 'none' };
     type Credentials = {
-      mengantar: Credential;
+      mengantar: Credential & {
+        webhook_issued_at: string | null;
+        webhook_secret_configured: boolean;
+        webhook_secret_masked: string;
+        webhook_last_event_at: string | null;
+        webhook_stale_warning: boolean;
+      };
       autolaris: Credential & {
         order_origin_id: string;
         order_destination_id: string;
@@ -657,15 +726,16 @@ const pageDescription = mustChangePassword
       button?.addEventListener('click', () => setSecretVisibility(input, button, label, input?.type === 'password'));
     };
 
+    const formatWibClient = (iso: string) =>
+      `${new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(iso))} WIB`;
+
     const render = (credentials: Credentials) => {
-      const mengantarUrl = byId<HTMLInputElement>('mengantarUrl');
-      const autolarisUrl = byId<HTMLInputElement>('autolarisUrl');
       const mengantarKey = byId<HTMLInputElement>('mengantarKey');
+      const mengantarWebhookSecret = byId<HTMLInputElement>('mengantarWebhookSecret');
       const autolarisKey = byId<HTMLInputElement>('autolarisKey');
       const mengantarToggle = byId<HTMLButtonElement>('toggleMengantarKey');
+      const mengantarSecretToggle = byId<HTMLButtonElement>('toggleMengantarWebhookSecret');
       const autolarisToggle = byId<HTMLButtonElement>('toggleAutolarisKey');
-      if (mengantarUrl) mengantarUrl.value = credentials.mengantar.base_url;
-      if (autolarisUrl) autolarisUrl.value = credentials.autolaris.base_url;
       const setValue = (id: string, value: string) => { const input = byId<HTMLInputElement>(id); if (input) input.value = value; };
       setValue('autolarisOrigin', credentials.autolaris.order_origin_id);
       setValue('autolarisDestination', credentials.autolaris.order_destination_id);
@@ -674,18 +744,44 @@ const pageDescription = mustChangePassword
       if (webhookState) {
         const issued = credentials.autolaris.webhook_issued_at;
         webhookState.textContent = issued
-          ? `Aktif sejak ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(issued))} WIB.`
+          ? `Aktif sejak ${formatWibClient(issued)}.`
           : 'Belum dibuat.';
       }
+      const mengantarWebhookState = byId('mengantarWebhookState');
+      if (mengantarWebhookState) {
+        const m = credentials.mengantar;
+        if (m.webhook_secret_configured && m.webhook_issued_at) {
+          mengantarWebhookState.textContent = m.webhook_last_event_at
+            ? `Aktif · event terakhir ${formatWibClient(m.webhook_last_event_at)}.`
+            : `Aktif sejak ${formatWibClient(m.webhook_issued_at)} · menunggu event pertama.`;
+        } else if (m.webhook_issued_at && !m.webhook_secret_configured) {
+          mengantarWebhookState.textContent = `URL dibuat ${formatWibClient(m.webhook_issued_at)} · tempel Webhook Secret agar aktif.`;
+        } else if (m.webhook_secret_configured && !m.webhook_issued_at) {
+          mengantarWebhookState.textContent = 'Webhook Secret tersimpan · klik Buat URL webhook baru lalu tempel di Mengantar.';
+        } else {
+          mengantarWebhookState.textContent = 'Belum dipasang (sinkron otomatis per jam tetap berjalan).';
+        }
+      }
+      byId('mengantarWebhookWarning')?.classList.toggle('hidden', !credentials.mengantar.webhook_stale_warning);
       if (mengantarKey) { mengantarKey.value = ''; mengantarKey.placeholder = credentials.mengantar.api_key_masked || 'Masukkan API key Mengantar'; }
+      if (mengantarWebhookSecret) { mengantarWebhookSecret.value = ''; mengantarWebhookSecret.placeholder = credentials.mengantar.webhook_secret_masked || 'Tempel Webhook Secret dari Mengantar'; }
       if (autolarisKey) { autolarisKey.value = ''; autolarisKey.placeholder = credentials.autolaris.api_key_masked || 'Masukkan API key AutoLaris'; }
+      const clearCheckbox = (name: string) => {
+        const box = document.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+        if (box) box.checked = false;
+      };
+      clearCheckbox('mengantar_clear_key');
+      clearCheckbox('mengantar_clear_webhook_secret');
+      clearCheckbox('autolaris_clear_key');
       setSecretVisibility(mengantarKey, mengantarToggle, 'API key Mengantar', false);
+      setSecretVisibility(mengantarWebhookSecret, mengantarSecretToggle, 'Webhook Secret Mengantar', false);
       setSecretVisibility(autolarisKey, autolarisToggle, 'API key AutoLaris', false);
       paintSource('mengantarSource', 'railMengantarHint', credentials.mengantar.source);
       paintSource('autolarisSource', 'railAutolarisHint', credentials.autolaris.source);
     };
 
     wireSecretToggle('mengantarKey', 'toggleMengantarKey', 'API key Mengantar');
+    wireSecretToggle('mengantarWebhookSecret', 'toggleMengantarWebhookSecret', 'Webhook Secret Mengantar');
     wireSecretToggle('autolarisKey', 'toggleAutolarisKey', 'API key AutoLaris');
 
     const loadIntegrations = async () => {
@@ -781,42 +877,53 @@ const pageDescription = mustChangePassword
       }
     });
 
-    byId<HTMLButtonElement>('issueWebhook')?.addEventListener('click', async (event) => {
-      const button = event.currentTarget as HTMLButtonElement;
-      if (button.disabled) return;
-      button.disabled = true;
-      showStatus('Membuat URL webhook…', 'idle');
-      try {
-        const response = await fetch('/api/admin/settings', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'issue-webhook-token' }),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload.success) throw new Error(payload.error || 'URL webhook gagal dibuat.');
-        render(payload.data.credentials);
-        const output = byId('autolarisWebhookUrl');
-        const wrap = byId('autolarisWebhookWrap');
-        if (output) output.textContent = payload.data.webhook_url;
-        if (wrap) { wrap.classList.remove('hidden'); wrap.classList.add('flex'); }
-        showStatus(payload.message || 'URL webhook dibuat.', 'success');
-      } catch (error) {
-        showStatus(error instanceof Error ? error.message : 'URL webhook gagal dibuat.', 'error');
-      } finally {
-        button.disabled = false;
-      }
-    });
+    const wireWebhookIssuer = (
+      buttonId: string,
+      outputId: string,
+      wrapId: string,
+      copyButtonId: string,
+      provider: 'autolaris' | 'mengantar',
+    ) => {
+      byId<HTMLButtonElement>(buttonId)?.addEventListener('click', async (event) => {
+        const button = event.currentTarget as HTMLButtonElement;
+        if (button.disabled) return;
+        button.disabled = true;
+        showStatus('Membuat URL webhook…', 'idle');
+        try {
+          const response = await fetch('/api/admin/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'issue-webhook-token', provider }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || !payload.success) throw new Error(payload.error || 'URL webhook gagal dibuat.');
+          render(payload.data.credentials);
+          const output = byId(outputId);
+          const wrap = byId(wrapId);
+          if (output) output.textContent = payload.data.webhook_url;
+          if (wrap) { wrap.classList.remove('hidden'); wrap.classList.add('flex'); }
+          showStatus(payload.message || 'URL webhook dibuat.', 'success');
+        } catch (error) {
+          showStatus(error instanceof Error ? error.message : 'URL webhook gagal dibuat.', 'error');
+        } finally {
+          button.disabled = false;
+        }
+      });
 
-    byId<HTMLButtonElement>('copyWebhookUrl')?.addEventListener('click', async () => {
-      const url = byId('autolarisWebhookUrl')?.textContent?.trim();
-      if (!url) return;
-      try {
-        await navigator.clipboard.writeText(url);
-        showStatus('URL webhook disalin.', 'success');
-      } catch {
-        showStatus('Browser menolak akses clipboard. Salin URL secara manual.', 'error');
-      }
-    });
+      byId<HTMLButtonElement>(copyButtonId)?.addEventListener('click', async () => {
+        const url = byId(outputId)?.textContent?.trim();
+        if (!url) return;
+        try {
+          await navigator.clipboard.writeText(url);
+          showStatus('URL webhook disalin.', 'success');
+        } catch {
+          showStatus('Browser menolak akses clipboard. Salin URL secara manual.', 'error');
+        }
+      });
+    };
+
+    wireWebhookIssuer('issueWebhook', 'autolarisWebhookUrl', 'autolarisWebhookWrap', 'copyWebhookUrl', 'autolaris');
+    wireWebhookIssuer('issueMengantarWebhook', 'mengantarWebhookUrl', 'mengantarWebhookWrap', 'copyMengantarWebhookUrl', 'mengantar');
 
     integrationsForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -833,9 +940,8 @@ const pageDescription = mustChangePassword
             action: 'save-integrations',
             integrations: {
               mengantar_api_key: values.get('mengantar_clear_key') ? null : values.get('mengantar_api_key'),
-              mengantar_base_url: values.get('mengantar_base_url'),
+              mengantar_webhook_secret: values.get('mengantar_clear_webhook_secret') ? null : values.get('mengantar_webhook_secret'),
               autolaris_api_key: values.get('autolaris_clear_key') ? null : values.get('autolaris_api_key'),
-              autolaris_base_url: values.get('autolaris_base_url'),
               autolaris_order_origin_id: values.get('autolaris_order_origin_id'),
               autolaris_order_destination_id: values.get('autolaris_order_destination_id'),
               autolaris_shipper_email: values.get('autolaris_shipper_email'),
@@ -852,5 +958,70 @@ const pageDescription = mustChangePassword
         setPending(false);
       }
     });
+
+    // Scroll in-page section links strictly inside #admin-main so the browser
+    // never scrolls outer layout containers or shifts the sticky rail under the topbar.
+    const adminMain = byId('admin-main');
+    const railLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Menu profil"] a[href^="#"]'));
+    const setActiveRail = (hash: string) => {
+      for (const link of railLinks) {
+        const active = link.getAttribute('href') === hash;
+        link.setAttribute('aria-current', active ? 'location' : 'false');
+        link.classList.toggle('bg-blue-600/[0.07]', active);
+        link.classList.toggle('text-blue-700', active);
+        link.classList.toggle('text-slate-900', !active);
+        const iconBox = link.firstElementChild;
+        if (iconBox) {
+          iconBox.classList.toggle('bg-blue-600/10', active);
+          iconBox.classList.toggle('text-blue-700', active);
+          iconBox.classList.toggle('bg-slate-100', !active);
+          iconBox.classList.toggle('text-slate-600', !active);
+        }
+      }
+    };
+    const scrollToSection = (hash: string, smooth: boolean) => {
+      const targetId = hash.replace(/^#/, '');
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (!target || !adminMain) return;
+      const mainRect = adminMain.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const nextTop = Math.max(0, adminMain.scrollTop + (targetRect.top - mainRect.top) - 16);
+      adminMain.scrollTo({ top: nextTop, behavior: smooth ? 'smooth' : 'auto' });
+      setActiveRail(`#${targetId}`);
+    };
+    document.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Menu profil"] a[href^="#"], nav[aria-label="Lompat ke bagian profil"] a[href^="#"]').forEach((link) => {
+      link.addEventListener('click', (event) => {
+        const hash = link.getAttribute('href') || '';
+        if (!hash.startsWith('#')) return;
+        event.preventDefault();
+        window.history.replaceState(null, '', hash);
+        scrollToSection(hash, true);
+      });
+    });
+    if (adminMain && railLinks.length > 0) {
+      let spyFrame = 0;
+      const syncActiveRailFromScroll = () => {
+        spyFrame = 0;
+        const mainTop = adminMain.getBoundingClientRect().top;
+        let currentHash = railLinks[0]?.getAttribute('href') || '#kredensial-login';
+        for (const link of railLinks) {
+          const hash = link.getAttribute('href') || '';
+          const section = hash.startsWith('#') ? document.getElementById(hash.slice(1)) : null;
+          if (!section) continue;
+          if (section.getBoundingClientRect().top - mainTop <= 96) {
+            currentHash = hash;
+          }
+        }
+        setActiveRail(currentHash);
+      };
+      adminMain.addEventListener('scroll', () => {
+        if (!spyFrame) spyFrame = window.requestAnimationFrame(syncActiveRailFromScroll);
+      }, { passive: true });
+    }
+    if (window.location.hash) {
+      window.requestAnimationFrame(() => scrollToSection(window.location.hash, false));
+    } else if (railLinks[0]) {
+      setActiveRail(railLinks[0].getAttribute('href') || '#kredensial-login');
+    }
   </script>
 </AdminLayout>
