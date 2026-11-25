@@ -12,6 +12,7 @@ import { collectOperationalHealth, recordSchedulerRun } from "../lib/operational
 import { readSetupRequiredLeft, writeHealthSnapshot } from "../lib/health-snapshot.ts";
 import { backfillReceiverScores } from "../lib/rts-scoring.ts";
 import { reconcileStaleMengantarOrders } from "../lib/mengantar-shipping-sync.ts";
+import { purgeExpiredMengantarWebhookEvents } from "../lib/mengantar-webhook.ts";
 import { purgeExpiredRateLimits } from "../lib/rate-limit.ts";
 import { reconcileNativeLandingPages } from "../lib/landing-pages.ts";
 import { activeNativeLandingPages } from "../lib/native-landing-pages.ts";
@@ -100,6 +101,10 @@ export async function runTenantMaintenance(
   const purgedProviderCallbacks = await housekeeping(
     "scheduled-callback-purge-failed",
     () => purgeExpiredAutoLarisCallbacks(database, new Date(scheduledTime)),
+  );
+  const purgedMengantarWebhookEvents = await housekeeping(
+    "scheduled-mengantar-webhook-purge-failed",
+    () => purgeExpiredMengantarWebhookEvents(database, new Date(scheduledTime)),
   );
   const purgedNotifications = await housekeeping(
     "scheduled-notification-purge-failed",
@@ -274,6 +279,7 @@ export async function runTenantMaintenance(
     purgedRateLimitWindows,
     expiredPaymentInstructions,
     purgedProviderCallbacks,
+    purgedMengantarWebhookEvents,
     purgedNotifications,
     purgedCapiOutboxEvents,
     purgedGoogleAdsConversions,

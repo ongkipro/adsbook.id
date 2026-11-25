@@ -95,6 +95,12 @@ type ShippingData = {
   pickups: PickupSchedule[];
   warehouses: Warehouse[];
   readyPickupIds: number[];
+  autoSync?: {
+    hourlyEnabled: boolean;
+    webhookEnabled: boolean;
+    lastWebhookAt: string | null;
+    webhookStaleWarning?: boolean;
+  };
 };
 
 type Notice =
@@ -520,9 +526,33 @@ export function ShippingOperations({
       <section className="space-y-3 md:space-y-4">
         <header className="flex flex-col gap-3 border-b border-slate-200/80 pb-4 sm:flex-row sm:items-end sm:justify-between sm:pb-5">
           <div className="max-w-2xl">
-            <h2 className="text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">
-              Pengiriman & pickup
-            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">
+                Pengiriman & pickup
+              </h2>
+              {(data.autoSync?.webhookEnabled || data.autoSync?.hourlyEnabled) && (
+                data.autoSync.webhookEnabled && data.autoSync.webhookStaleWarning ? (
+                  <a
+                    href="/admin/profile#integrasi-mengantar"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-900 ring-1 ring-inset ring-amber-200 hover:bg-amber-100"
+                  >
+                    <span className="size-1.5 rounded-full bg-amber-600" aria-hidden="true" />
+                    {data.autoSync.hourlyEnabled
+                      ? "Webhook hening >48j · Per jam aktif"
+                      : "Webhook hening >48j · Cek profil"}
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200">
+                    <span className="size-1.5 rounded-full bg-emerald-600" aria-hidden="true" />
+                    {data.autoSync.webhookEnabled && data.autoSync.hourlyEnabled
+                      ? "Sinkron otomatis aktif · Webhook + per jam"
+                      : data.autoSync.webhookEnabled
+                        ? "Sinkron otomatis aktif · Webhook"
+                        : "Sinkron otomatis aktif · Per jam"}
+                  </span>
+                )
+              )}
+            </div>
             <p className="mt-1 text-sm leading-5 text-slate-500 md:leading-6">
               Order jalur Mengantar dan pengiriman luar Mengantar masuk ke sini. Sinkron status dan jadwal pickup berlaku khusus order Mengantar.
             </p>

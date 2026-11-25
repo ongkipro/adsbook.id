@@ -592,7 +592,7 @@ test("301 to the active custom primary: www and the store's subdomain move, APIs
   assert.equal(at("https://www.domain.com/produk/x?fbclid=123", custom), "https://domain.com/produk/x?fbclid=123");
   assert.equal(at("https://tokodia.adsbook.my.id/?utm_source=fb&gclid=g", sub, "HEAD"), "https://domain.com/?utm_source=fb&gclid=g");
   assert.equal(at("https://domain.com/produk/x", custom), null, "the primary serves");
-  for (const path of ["/api/webhooks/autolaris/tok", "/api/handoff", "/api/owner-recovery", "/api/submit-order", "/pemulihan", "/hello", "/admin", "/admin/orders", "/.well-known/adsbook-probe"]) {
+  for (const path of ["/api/webhooks/autolaris/tok", "/api/webhooks/mengantar/tok", "/api/handoff", "/api/owner-recovery", "/api/submit-order", "/pemulihan", "/hello", "/admin", "/admin/orders", "/.well-known/adsbook-probe"]) {
     assert.equal(at(`https://tokodia.adsbook.my.id${path}`, sub), null, path);
   }
   assert.equal(at("https://tokodia.adsbook.my.id/produk/x", sub, "POST"), null, "only GET and HEAD");
