@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import SettingsLayout from '../../../components/admin/SettingsLayout.astro';
 export const prerender = false;
 import NativeSelect from '../../../components/ui/NativeSelect.astro';
 import { StoreRemoval } from '../../../components/admin/StoreRemoval';
@@ -9,13 +9,10 @@ const isOwner = Astro.locals.admin?.role === 'owner';
 ---
 
 <AdminLayout title="Toko & customer service" activeMenu="settings">
-  <div class="space-y-6">
-    <AdminPageHeader
-      title="Toko & customer service"
-      description="Informasi merchant dan kontak yang dipakai dalam komunikasi pelanggan."
-      backHref="/admin/settings"
-      backLabel="Pengaturan"
-    />
+  <SettingsLayout
+    title="Toko & customer service"
+    description="Informasi merchant dan kontak yang dipakai dalam komunikasi pelanggan."
+  >
     <div id="storeLoading" class="sr-only" role="status" aria-live="polite" aria-busy="true" aria-atomic="true"><span class="sr-only">Memuat profil store.</span></div>
     <div id="storeError" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-800" role="alert" aria-live="assertive"></div>
     <form id="storeForm" inert data-pending class="rounded-xl border border-slate-200 bg-white shadow-sm" novalidate aria-busy="false">
@@ -183,7 +180,7 @@ const isOwner = Astro.locals.admin?.role === 'owner';
       <div class="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><p id="embedOriginsStatus" class="min-h-5 text-xs font-semibold text-slate-500" role="status" aria-live="polite" aria-atomic="true">Perubahan belum ada.</p><button id="saveEmbedOrigins" type="submit" class="btn-blue w-full sm:w-auto">Simpan domain embed</button></div>
     </form>
     {isOwner && <StoreRemoval client:load />}
-  </div>
+  </SettingsLayout>
   <script>
     const form = document.getElementById('storeForm') as HTMLFormElement | null;
     const name = document.getElementById('storeName') as HTMLInputElement | null;

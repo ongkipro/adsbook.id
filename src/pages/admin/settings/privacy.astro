@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
+import SettingsLayout from '../../../components/admin/SettingsLayout.astro';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { buttonVariants } from '../../../components/ui/button';
 import { tenantDatabase } from '../../../lib/tenant-database.ts';
@@ -29,11 +29,10 @@ const names = providers
 ---
 
 <AdminLayout title="Kebijakan privasi toko" activeMenu="settings">
-  <div class="space-y-4 md:space-y-5">
-    <AdminPageHeader
-      title="Kebijakan privasi toko"
-      description="Ditampilkan ke pembeli di /kebijakan-privasi. Daftar penyedia dibuat otomatis dari pengaturan toko."
-    />
+  <SettingsLayout
+    title="Kebijakan privasi toko"
+    description="Ditampilkan ke pembeli di /kebijakan-privasi. Daftar penyedia dibuat otomatis dari pengaturan toko."
+  >
     <Card>
       <CardHeader className="border-b">
         <CardTitle as="h3" className="font-semibold">Penyedia yang disebut</CardTitle>
@@ -58,7 +57,7 @@ const names = providers
         </form>
       </CardContent>
     </Card>
-  </div>
+  </SettingsLayout>
 </AdminLayout>
 
 <script>

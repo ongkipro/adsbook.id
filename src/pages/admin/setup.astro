@@ -1,7 +1,7 @@
 ---
 import { tenantDatabase } from '../../lib/tenant-database.ts';
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import AdminPageHeader from '../../components/admin/AdminPageHeader.astro';
+import SettingsLayout from '../../components/admin/SettingsLayout.astro';
 import SetupChecklist from '../../components/admin/SetupChecklist.astro';
 import { buildSetupChecklist, readSetupFacts } from '../../lib/setup-checklist';
 
@@ -25,11 +25,10 @@ const hybridNote =
 ---
 
 <AdminLayout title="Siapkan toko" activeMenu="settings">
-  <div class="space-y-4 md:space-y-5">
-    <AdminPageHeader
-      title={welcome ? `Selamat datang di ${Astro.locals.tenant.name}` : 'Siapkan toko'}
-      description="Langkah wajib membuka toko untuk pembeli. Langkah opsional membantu merek dan iklan Anda."
-    />
+  <SettingsLayout
+    title={welcome ? `Selamat datang di ${Astro.locals.tenant.name}` : 'Siapkan toko'}
+    description="Langkah wajib membuka toko untuk pembeli. Langkah opsional membantu merek dan iklan Anda."
+  >
 
     {welcome && (
       <section id="welcomeBanner" class="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-950 shadow-xs md:p-5" aria-label="Informasi akun toko baru">
@@ -64,5 +63,5 @@ const hybridNote =
         Gagal memuat, muat ulang.
       </p>
     )}
-  </div>
+  </SettingsLayout>
 </AdminLayout>
