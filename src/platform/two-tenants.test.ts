@@ -3020,7 +3020,7 @@ test("T-48: a key saved through the admin route is stored sealed, opens only on 
 
 test("T-48: the tenant maintenance run seals every legacy plaintext credential, and a second run changes nothing", async () => {
   const store = await readinessHarness("kunci-lama");
-  store.sql.exec(`UPDATE stores SET mengantar_api_key = 'legacy-mengantar', autolaris_api_key = 'legacy-autolaris',
+  store.sql.exec(`UPDATE stores SET mengantar_api_key = 'legacy-mengantar', mengantar_webhook_secret = 'legacy-mengantar-webhook', autolaris_api_key = 'legacy-autolaris',
     meta_capi_token = 'legacy-meta', google_ads_developer_token = 'legacy-dev', google_ads_client_secret = 'legacy-client',
     google_ads_refresh_token = 'legacy-refresh', tiktok_access_token = 'legacy-tiktok'`);
   assert.equal((await getProviderConfig(store.database)).mengantar.apiKey, "legacy-mengantar", "legacy plaintext still reads while a key is present");
@@ -3076,6 +3076,7 @@ test("T-48: every credential saved through its own admin route is stored sealed,
   };
   const secrets = {
     mengantar: "mengantar-rahasia-semua-001",
+    mengantarWebhook: "mengantar-webhook-rahasia-semua-008",
     autolaris: "autolaris-rahasia-semua-002",
     meta: "EAAB-meta-rahasia-semua-003",
     developer: "google-dev-rahasia-semua-004",
@@ -3092,7 +3093,7 @@ test("T-48: every credential saved through its own admin route is stored sealed,
   try {
     const saves = [
       await call(adminSettingsRoute, "/api/admin/settings", { action: "save-integrations", integrations: {
-        mengantar_api_key: secrets.mengantar, autolaris_api_key: secrets.autolaris,
+        mengantar_api_key: secrets.mengantar, mengantar_webhook_secret: secrets.mengantarWebhook, autolaris_api_key: secrets.autolaris,
         mengantar_base_url: "https://api-public.mengantar.com", autolaris_base_url: "https://api-h2h.autolaris.com",
         autolaris_order_origin_id: "1", autolaris_order_destination_id: "2" } }),
       await call(adminAdsRoute, "/api/admin/ads", { action: "save-meta", meta_pixel_id: "100000000000001", meta_capi_token: secrets.meta }),

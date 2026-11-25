@@ -12,7 +12,7 @@
  */
 import type { TenantContext } from "./control-plane.ts";
 
-export const WEBHOOK_PROVIDERS = ["autolaris"] as const;
+export const WEBHOOK_PROVIDERS = ["autolaris", "mengantar"] as const;
 export type WebhookProvider = (typeof WEBHOOK_PROVIDERS)[number];
 
 const TOKEN = /^[0-9a-f]{64}$/;

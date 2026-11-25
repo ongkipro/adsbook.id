@@ -33,7 +33,7 @@ const outline = buttonVariants({ variant: 'outline' });
             <div class="min-w-0 flex-1 basis-[calc(100%-3rem)] space-y-0.5 sm:basis-auto">
               <p class="flex items-center gap-2 font-medium text-foreground">Mengantar <span id="mengantarBadge" class="rounded-md border px-1.5 py-0.5 text-xs font-medium">Memuat</span></p>
               <p class="text-sm text-muted-foreground">Ongkir, COD, resi, pickup, dan tracking.</p>
-              <p class="font-mono text-xs text-muted-foreground">Key <span id="mengantarKey">••••</span> · <span id="mengantarUrl"></span></p>
+              <p class="font-mono text-xs text-muted-foreground">Key <span id="mengantarKey">••••</span></p>
               <p id="mengantarStatus" class="text-xs empty:hidden" role="status" aria-live="polite"></p>
             </div>
             <button id="testMengantar" type="button" class:list={[outline, "w-full sm:w-auto"]}>Tes koneksi</button>
@@ -85,7 +85,6 @@ const outline = buttonVariants({ variant: 'outline' });
         const autolarisConfigured = Boolean(data.autolaris.api_key_configured);
         badge('autolarisBadge', autolarisConfigured, autolarisConfigured ? 'Tersimpan' : 'Belum diatur');
         text('mengantarKey', data.mengantar.api_key_masked || 'belum diatur');
-        text('mengantarUrl', data.mengantar.base_url || '');
         text('autolarisKey', data.autolaris.api_key_masked || 'belum diatur');
         loading?.setAttribute('aria-busy', 'false');
         loading?.classList.add('hidden');

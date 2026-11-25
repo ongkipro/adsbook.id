@@ -13,7 +13,8 @@ import { parseHeadlessAllowedOrigins } from "../../../lib/headless-api.ts";
 import { LOCALE_PATTERN, SUPPORT_EMAIL_PATTERN, THEME_COLOR_PATTERN } from "../../../lib/tenant.ts";
 import { isAllowedLogoUrl } from "../../../lib/store-logo.ts";
 import { getRuntimeEnv, maskSecretValue } from "../../../lib/env.ts";
-import { issueWebhookToken, webhookTokenIssuedAt, webhookUrl } from "../../../platform/webhook-secrets.ts";
+import { issueWebhookToken, WEBHOOK_PROVIDERS, webhookTokenIssuedAt, webhookUrl, type WebhookProvider } from "../../../platform/webhook-secrets.ts";
+import { readMengantarWebhookHealth, readMengantarWebhookSecret } from "../../../lib/mengantar-webhook.ts";
 import {
   addStorefrontTemplate,
   listStorefrontTemplates,
@@ -31,6 +32,7 @@ import {
 import { MengantarClient } from "../../../lib/mengantar-client.ts";
 import {
   DEFAULT_AUTOLARIS_BASE_URL,
+  DEFAULT_MENGANTAR_BASE_URL,
   getProviderConfig,
   parseAutoLarisOrderIdentity,
   resolveCredentialUpdate,
@@ -82,8 +84,10 @@ type SettingsPayload = {
   headless_allowed_origins?: unknown;
   payment_fee_bearer?: "buyer" | "seller";
   cod_fee_bearer?: "buyer" | "seller";
+  provider?: string;
   integrations?: {
     mengantar_api_key?: string | null;
+    mengantar_webhook_secret?: string | null;
     mengantar_base_url?: string;
     autolaris_api_key?: string | null;
     autolaris_base_url?: string;
@@ -261,15 +265,22 @@ async function getSettingsRow(database: D1Database) {
 }
 
 /** The tenant's webhook token is kept hashed in PLATFORM_DB; only when it was issued is shown. */
-async function autolarisWebhookIssuedAt(locals: App.Locals): Promise<string | null> {
+async function tenantWebhookIssuedAt(locals: App.Locals, provider: WebhookProvider): Promise<string | null> {
   const platformDb = getRuntimeEnv(locals)?.PLATFORM_DB as D1Database | undefined;
   const tenantId = locals.tenantContext?.tenantId;
   if (!platformDb || !tenantId) return null;
-  return webhookTokenIssuedAt(platformDb, tenantId, "autolaris").catch(() => null);
+  return webhookTokenIssuedAt(platformDb, tenantId, provider).catch(() => null);
 }
 
 async function credentialStatus(database: D1Database, locals: App.Locals) {
-  const config = await getProviderConfig(database, locals);
+  const [config, mengantarWebhookSecret, autolarisIssuedAt, mengantarIssuedAt] = await Promise.all([
+    getProviderConfig(database, locals),
+    readMengantarWebhookSecret(database),
+    tenantWebhookIssuedAt(locals, "autolaris"),
+    tenantWebhookIssuedAt(locals, "mengantar"),
+  ]);
+  const mengantarWebhookConfigured = Boolean(mengantarWebhookSecret && mengantarIssuedAt);
+  const webhookHealth = await readMengantarWebhookHealth(database, mengantarWebhookConfigured);
 
   return {
     mengantar: {
@@ -277,6 +288,11 @@ async function credentialStatus(database: D1Database, locals: App.Locals) {
       api_key_masked: maskSecretValue(config.mengantar.apiKey),
       base_url: config.mengantar.baseUrl,
       source: config.mengantar.source,
+      webhook_issued_at: mengantarIssuedAt,
+      webhook_secret_configured: Boolean(mengantarWebhookSecret),
+      webhook_secret_masked: maskSecretValue(mengantarWebhookSecret),
+      webhook_last_event_at: webhookHealth.lastEventAt,
+      webhook_stale_warning: webhookHealth.stale48hWarning,
     },
     autolaris: {
       configured: Boolean(config.autolaris.apiKey),
@@ -288,7 +304,7 @@ async function credentialStatus(database: D1Database, locals: App.Locals) {
       order_origin_id: config.autolaris.customArea ? config.autolaris.originId : "",
       order_destination_id: config.autolaris.customArea ? config.autolaris.destinationId : "",
       shipper_email: config.autolaris.shipperEmail,
-      webhook_issued_at: await autolarisWebhookIssuedAt(locals),
+      webhook_issued_at: autolarisIssuedAt,
       source: config.autolaris.source,
     },
   };
@@ -387,17 +403,23 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     if (body.action === "issue-webhook-token") {
       // SEC-5: a new token replaces the old one at once; the URL is shown this
       // one time only (the store keeps a hash), so the owner pastes it into
-      // AutoLaris now.
+      // the provider dashboard now.
+      const rawProvider = typeof body.provider === "string" ? body.provider.trim().toLowerCase() : "autolaris";
+      if (!(WEBHOOK_PROVIDERS as readonly string[]).includes(rawProvider)) {
+        return jsonError("Provider webhook tidak valid.", 400);
+      }
+      const provider = rawProvider as WebhookProvider;
       const platformDb = getRuntimeEnv(locals)?.PLATFORM_DB as D1Database | undefined;
       const tenantId = locals.tenantContext?.tenantId;
       if (!platformDb || !tenantId) return jsonError("Webhook belum tersedia.", 503);
       // Checked before rotating, so a tenant without a subdomain keeps its old token.
-      const base = await webhookUrl(platformDb, tenantId, "autolaris", "");
+      const base = await webhookUrl(platformDb, tenantId, provider, "");
       if (!base) return jsonError("Subdomain toko belum aktif.", 409);
-      const url = base + (await issueWebhookToken(platformDb, tenantId, "autolaris"));
+      const url = base + (await issueWebhookToken(platformDb, tenantId, provider));
+      const label = provider === "mengantar" ? "Mengantar" : "AutoLaris";
       return jsonOk({
-        message: "URL webhook AutoLaris baru dibuat. Salin sekarang; URL ini tidak ditampilkan lagi.",
-        data: { webhook_url: url, credentials: await credentialStatus(db, locals) },
+        message: `URL webhook ${label} baru dibuat. Salin sekarang; URL ini tidak ditampilkan lagi.`,
+        data: { provider, webhook_url: url, credentials: await credentialStatus(db, locals) },
       });
     }
     const providerConfig = await getProviderConfig(db, locals);
@@ -674,17 +696,28 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       const mengantarKey = resolveCredentialUpdate(
         body.integrations?.mengantar_api_key,
       );
+      const mengantarWebhookSecret = resolveCredentialUpdate(
+        body.integrations?.mengantar_webhook_secret,
+      );
       const autolarisKey = resolveCredentialUpdate(
         body.integrations?.autolaris_api_key,
       );
       const mengantarApiKey = clean(mengantarKey.value, 1000);
+      const mengantarWebhookSecretValue = clean(mengantarWebhookSecret.value, 1000);
       const autolarisApiKey = clean(autolarisKey.value, 1000);
+      // Base URLs are hidden from seller UI; omitting or leaving blank keeps the
+      // existing/default endpoint while explicit test/dev overrides remain validated.
+      const rawMengantarBaseUrl = typeof body.integrations?.mengantar_base_url === "string"
+        ? body.integrations.mengantar_base_url.trim()
+        : "";
+      const rawAutolarisBaseUrl = typeof body.integrations?.autolaris_base_url === "string"
+        ? body.integrations.autolaris_base_url.trim()
+        : "";
       const mengantarBaseUrl = normalizeHttpUrl(
-        body.integrations?.mengantar_base_url,
+        rawMengantarBaseUrl || providerConfig.mengantar.baseUrl || DEFAULT_MENGANTAR_BASE_URL,
       );
-      // Base URL lives under "Lanjutan"; a blank one means the default, never an error.
       const autolarisBaseUrl = normalizeHttpUrl(
-        body.integrations?.autolaris_base_url || DEFAULT_AUTOLARIS_BASE_URL,
+        rawAutolarisBaseUrl || providerConfig.autolaris.baseUrl || DEFAULT_AUTOLARIS_BASE_URL,
       );
       if (!mengantarBaseUrl || !autolarisBaseUrl) {
         return jsonError(
@@ -701,17 +734,19 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         // The store's own saved pair, never the default pair: a field left out
         // keeps what the store chose, and the default must not be saved as a choice.
         await (async () => {
-          const stored = (await getProviderConfig(db)).autolaris;
+          const stored = providerConfig.autolaris;
           return { ...stored, originId: stored.customArea ? stored.originId : "", destinationId: stored.customArea ? stored.destinationId : "" };
         })(),
       );
       if (!orderIdentity.ok) return jsonError(orderIdentity.error, 400);
 
-      // ADR-040: a new key is stored sealed; without the platform key nothing is written.
+      // ADR-040: a new key or webhook secret is stored sealed; without the platform key nothing is written.
       let sealedMengantarKey = "";
+      let sealedMengantarWebhookSecret = "";
       let sealedAutolarisKey = "";
       try {
         sealedMengantarKey = await sealCredential(db, "mengantar_api_key", mengantarApiKey);
+        sealedMengantarWebhookSecret = await sealCredential(db, "mengantar_webhook_secret", mengantarWebhookSecretValue);
         sealedAutolarisKey = await sealCredential(db, "autolaris_api_key", autolarisApiKey);
       } catch (error) {
         if (error instanceof CredentialKeyUnavailableError) return jsonError(CREDENTIAL_KEY_UNAVAILABLE_MESSAGE, 503);
@@ -724,6 +759,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         UPDATE stores
         SET mengantar_api_key = CASE WHEN ? = 1 THEN NULL
               ELSE COALESCE(NULLIF(?, ''), mengantar_api_key) END,
+            mengantar_webhook_secret = CASE WHEN ? = 1 THEN NULL
+              ELSE COALESCE(NULLIF(?, ''), mengantar_webhook_secret) END,
             mengantar_base_url = ?,
             autolaris_api_key = CASE WHEN ? = 1 THEN NULL
               ELSE COALESCE(NULLIF(?, ''), autolaris_api_key) END,
@@ -737,6 +774,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         .bind(
           mengantarKey.clear ? 1 : 0,
           sealedMengantarKey,
+          mengantarWebhookSecret.clear ? 1 : 0,
+          sealedMengantarWebhookSecret,
           mengantarBaseUrl,
           autolarisKey.clear ? 1 : 0,
           sealedAutolarisKey,

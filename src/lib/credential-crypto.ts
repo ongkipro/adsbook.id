@@ -25,6 +25,7 @@ const INFO = new TextEncoder().encode("adsbook.id/provider-credentials/v1");
 /** The `stores` columns that hold a provider secret. */
 export const STORE_CREDENTIAL_COLUMNS = [
   "mengantar_api_key",
+  "mengantar_webhook_secret",
   "autolaris_api_key",
   "meta_capi_token",
   "google_ads_developer_token",

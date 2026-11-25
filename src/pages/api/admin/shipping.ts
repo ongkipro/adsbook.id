@@ -3,6 +3,9 @@ import { jsonError, jsonOk } from "../../../lib/api";
 import { matchesShippingQueue } from "../../../lib/shipping-queue";
 import { MengantarClient } from "../../../lib/mengantar-client";
 import { syncSingleMengantarOrder } from "../../../lib/mengantar-shipping-sync";
+import { readMengantarWebhookHealth, readMengantarWebhookSecret } from "../../../lib/mengantar-webhook";
+import { getRuntimeEnv } from "../../../lib/env";
+import { webhookTokenIssuedAt } from "../../../platform/webhook-secrets";
 import { pickMengantarTimeId, resolveMengantarPickupSlot } from "../../../lib/mengantar-order";
 import { getMengantarDispatchEligibility } from "../../../lib/payment-dispatch-policy";
 import { getProviderConfig } from "../../../lib/provider-config";
@@ -208,8 +211,33 @@ export const GET: APIRoute = async ({ locals, url }) => {
       .filter((shipment) => shipment.dispatchEligible)
       .map((shipment) => shipment.id);
 
+    // A-6: surface whether Mengantar auto-sync (hourly reconciliation / webhook) is active.
+    const autoSync = await (async () => {
+      try {
+        const [provider, webhookSecret] = await Promise.all([
+          getProviderConfig(db, locals).catch(() => null),
+          readMengantarWebhookSecret(db).catch(() => ""),
+        ]);
+        const platformDb = getRuntimeEnv(locals)?.PLATFORM_DB as D1Database | undefined;
+        const tenantId = locals.tenantContext?.tenantId;
+        const issuedAt = platformDb && tenantId
+          ? await webhookTokenIssuedAt(platformDb, tenantId, "mengantar").catch(() => null)
+          : null;
+        const webhookActive = Boolean(webhookSecret && issuedAt);
+        const health = webhookActive ? await readMengantarWebhookHealth(db, true).catch(() => null) : null;
+        return {
+          hourlyEnabled: Boolean(provider?.mengantar.apiKey) && !locals.billing?.adSignalsPaused,
+          webhookEnabled: webhookActive,
+          lastWebhookAt: health?.lastEventAt ?? null,
+          webhookStaleWarning: Boolean(health?.stale48hWarning),
+        };
+      } catch {
+        return { hourlyEnabled: false, webhookEnabled: false, lastWebhookAt: null, webhookStaleWarning: false };
+      }
+    })();
+
     return jsonOk({
-      data: { shipments, pickups, warehouses, readyPickupIds, dispatchableIds },
+      data: { shipments, pickups, warehouses, readyPickupIds, dispatchableIds, autoSync },
     });
   } catch (error) {
     console.error("admin-shipping-get", error);

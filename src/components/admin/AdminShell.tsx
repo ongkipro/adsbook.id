@@ -158,7 +158,7 @@ export function AdminShell({
 
   return (
     <TooltipProvider>
-      <SidebarProvider open={sidebarOpen}>
+      <SidebarProvider open={sidebarOpen} className="h-full min-h-0 overflow-clip">
         <AppSidebar
           adminName={adminName}
           siteName={siteName}
@@ -172,7 +172,7 @@ export function AdminShell({
           onOpenChangelog={() => setChangelogOpen(true)}
           docsHref={docsHref}
         />
-        <SidebarInset className="min-w-0 bg-transparent">
+        <SidebarInset className="h-full min-h-0 min-w-0 overflow-clip bg-transparent">
           <header className="admin-topbar sticky top-0 z-30 flex h-[60px] shrink-0 items-center border-b border-slate-200/70 bg-white/90 px-3 backdrop-blur-xl md:h-16 md:px-6">
             <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
               <button
