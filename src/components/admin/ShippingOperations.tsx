@@ -146,7 +146,7 @@ const shippingQueues: Array<{
   {
     id: "all",
     label: "Semua Pengiriman",
-    note: "Seluruh order provider",
+    note: "Mengantar & luar Mengantar",
     icon: TruckIcon,
     tone: "text-slate-700 bg-slate-100",
     activeTone: "border-slate-900 ring-slate-900/10",
@@ -403,6 +403,7 @@ export function ShippingOperations({
     const ids = filteredShipments
       .filter(
         (shipment) =>
+          shipment.shippingChannel !== "external" &&
           shipment.providerOrderId &&
           shipment.cnoteNo &&
           ["processing", "shipped", "delivered"].includes(
@@ -737,8 +738,8 @@ export function ShippingOperations({
             >
               <RotateCcw aria-hidden="true" /> Reset
             </Button>
-            {/* The export answers for the period: every shipment Mengantar holds
-                in it, whatever queue, courier or search narrows the list. */}
+            {/* The export answers for the period: every shipment in it (Mengantar
+                and external), whatever queue, courier or search narrows the list. */}
             <ExportCsvButton
               kind="shipping"
               query={new URLSearchParams(

@@ -146,6 +146,7 @@ class DispatchDatabase {
       );
     `);
     this.sqlite.exec("ALTER TABLE orders ADD COLUMN mengantar_handover TEXT");
+    this.sqlite.exec("ALTER TABLE orders ADD COLUMN shipping_channel TEXT NOT NULL DEFAULT 'mengantar'");
   }
 
   prepare(sql: string) {
@@ -548,4 +549,23 @@ test("a local failure after Mengantar accepted the shipment blocks the order ins
   assert.equal((await dispatchOrderToMengantar(asD1(database), locals, 1)).status, "already_dispatched");
   assert.equal(orderCalls, 1, "still one POST /order");
   assert.equal(await linkAcceptedMengantarShipment(asD1(database), 1), null, "nothing left to link");
+});
+
+test("X-4: external shipping channel order is refused before calling Mengantar", async (t) => {
+  const database = new DispatchDatabase();
+  database.sqlite.exec("UPDATE orders SET shipping_channel = 'external' WHERE id = 1");
+  let fetchCalled = false;
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    return acceptedResponse();
+  };
+
+  const outcome = await dispatchOrderToMengantar(asD1(database), locals, 1);
+  assert.equal(outcome.status, "waiting_for_confirmation");
+  assert.match(outcome.error ?? "", /luar Mengantar/);
+  assert.equal(fetchCalled, false, "external order must never hit Mengantar");
 });

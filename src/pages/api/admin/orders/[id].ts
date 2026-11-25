@@ -307,6 +307,7 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
       destinationAreaId: order.destination_area_id,
       courierCode: order.courier_code,
       fulfillmentType: order.fulfillment_type,
+      shippingChannel: order.shipping_channel,
       pickupAddressId: order.pickup_address_id || '',
     });
 
@@ -517,6 +518,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
         destinationAreaId: updated.destination_area_id,
         courierCode: updated.courier_code,
         fulfillmentType: updated.fulfillment_type,
+        shippingChannel: updated.shipping_channel,
         pickupAddressId: updated.pickup_address_id || '',
       });
       return jsonOk({

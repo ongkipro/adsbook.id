@@ -53,6 +53,7 @@ type DispatchOrderRow = {
   provider_order_id: string | null;
   cnote_no: string | null;
   provider_dispatch_error: string | null;
+  shipping_channel?: string | null;
   pickup_address_id: string | null;
   warehouse_id: number | null;
 };
@@ -313,7 +314,7 @@ export async function dispatchOrderToMengantar(
         o.id, o.order_number, o.customer_name, o.customer_phone, o.address,
         o.destination_area_id, o.courier_code, o.payment_method, o.payment_status,
         o.shipping_status, o.total_amount, o.provider_order_id, o.cnote_no,
-        o.provider_dispatch_error, w.pickup_address_id, o.warehouse_id
+        o.provider_dispatch_error, o.shipping_channel, w.pickup_address_id, o.warehouse_id
       FROM orders o
       LEFT JOIN warehouses w ON w.id = o.warehouse_id
       WHERE o.id = ?
@@ -331,6 +332,12 @@ export async function dispatchOrderToMengantar(
       error: unpaid
         ? "Shipment Mengantar sudah dibuat tetapi masih menunggu nomor resi."
         : undefined,
+    };
+  }
+  if (order.shipping_channel === "external") {
+    return {
+      status: "waiting_for_confirmation",
+      error: "Order dikirim di luar Mengantar dan tidak dapat dipush ke Mengantar.",
     };
   }
   if (isDispatchOutcomeUnknown(order.provider_dispatch_error)) {
@@ -407,6 +414,8 @@ export async function dispatchOrderToMengantar(
         AND shipping_status = 'pending'
         -- DIGITAL-PRODUCTS-SPEC §4.3: a digital order ships nothing, ever.
         AND fulfillment_type <> 'digital'
+        -- MENGANTAR-WEBHOOK-AUTOSYNC-SPEC §5A X-4: external-channel orders never dispatch to Mengantar.
+        AND COALESCE(shipping_channel, 'mengantar') = 'mengantar'
         AND COALESCE(provider_dispatch_error, '') NOT LIKE ?
         AND (
           COALESCE(provider_dispatch_error, '') <> 'DISPATCHING'

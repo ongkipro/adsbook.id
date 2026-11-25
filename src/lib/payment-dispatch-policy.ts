@@ -27,6 +27,7 @@ export type MengantarDispatchEligibilityInput = {
   courierCode?: string | null;
   pickupAddressId?: string | null;
   fulfillmentType?: string | null;
+  shippingChannel?: string | null;
 };
 
 export type MengantarDispatchEligibility = {
@@ -97,6 +98,9 @@ export function getMengantarDispatchEligibility(
 ): MengantarDispatchEligibility {
   if (input.fulfillmentType === "digital") {
     return { eligible: false, reason: "Pesanan produk digital tidak dikirim lewat ekspedisi." };
+  }
+  if (input.shippingChannel === "external") {
+    return { eligible: false, reason: "Order dikirim di luar Mengantar." };
   }
   if (input.providerOrderId?.trim()) {
     return { eligible: false, reason: "Shipment Mengantar sudah dibuat." };

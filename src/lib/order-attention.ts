@@ -139,10 +139,10 @@ export async function readOrderAttention(
     const error = row.provider_dispatch_error;
     const claimedAt = Date.parse(row.provider_dispatch_claimed_at || "");
     const inFlight = error === "DISPATCHING" && Number.isFinite(claimedAt) && now - claimedAt < MENGANTAR_DISPATCH_CLAIM_TTL_MS;
-    // A refusal from Mengantar or an unknown outcome waits on a person; a
-    // claim still within its two minutes is a push in progress, not a problem.
-    if (error && !inFlight) pushProblem += 1;
     if (row.shipping_channel !== "external") {
+      // A refusal from Mengantar or an unknown outcome waits on a person; a
+      // claim still within its two minutes is a push in progress, not a problem.
+      if (error && !inFlight) pushProblem += 1;
       const eligibility = getMengantarDispatchEligibility({
         paymentMethod: row.payment_method || "",
         paymentStatus: row.payment_status || "",
@@ -152,6 +152,7 @@ export async function readOrderAttention(
         providerDispatchClaimedAt: row.provider_dispatch_claimed_at,
         destinationAreaId: row.destination_area_id,
         courierCode: row.courier_code,
+        shippingChannel: row.shipping_channel,
         pickupAddressId: row.pickup_address_id || fallbackPickupAddressId,
       });
       if (eligibility.eligible) readyPush += 1;

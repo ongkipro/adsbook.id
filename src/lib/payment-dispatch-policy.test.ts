@@ -114,3 +114,12 @@ test("DIGITAL-PRODUCTS-SPEC §4.3: a digital order is never offered to Mengantar
   const dispatch = readFileSync(new URL("./mengantar-dispatch.ts", import.meta.url), "utf8");
   assert.match(dispatch, /SET provider_dispatch_error = 'DISPATCHING'[\s\S]*?AND fulfillment_type <> 'digital'/);
 });
+
+test("MENGANTAR-WEBHOOK-AUTOSYNC-SPEC §5A X-4: an external-channel order is never dispatchable to Mengantar", async () => {
+  const result = getMengantarDispatchEligibility({ ...completeOrder, shippingChannel: "external" });
+  assert.equal(result.eligible, false);
+  assert.match(result.reason, /luar Mengantar/);
+  const { readFileSync } = await import("node:fs");
+  const dispatch = readFileSync(new URL("./mengantar-dispatch.ts", import.meta.url), "utf8");
+  assert.match(dispatch, /SET provider_dispatch_error = 'DISPATCHING'[\s\S]*?COALESCE\(shipping_channel, 'mengantar'\) = 'mengantar'/);
+});

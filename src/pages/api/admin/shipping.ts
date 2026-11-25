@@ -179,18 +179,17 @@ export const GET: APIRoute = async ({ locals, url }) => {
     const shipments = ((shipmentResult.results ?? []) as ShippingOrderRow[]).map(
       (shipment) => {
         const channel = shipment.shippingChannel === "external" ? "external" : "mengantar";
-        const dispatch = channel === "external"
-          ? { eligible: false, reason: "Order dikirim di luar Mengantar." }
-          : getMengantarDispatchEligibility({
-              paymentMethod: shipment.paymentMethod,
-              paymentStatus: shipment.paymentStatus,
-              shippingStatus: shipment.shippingStatus,
-              providerOrderId: shipment.providerOrderId,
-              providerDispatchError: shipment.providerDispatchError,
-              destinationAreaId: shipment.destinationAreaId,
-              courierCode: shipment.courierCode,
-              pickupAddressId: shipment.pickupAddressId,
-            });
+        const dispatch = getMengantarDispatchEligibility({
+          paymentMethod: shipment.paymentMethod,
+          paymentStatus: shipment.paymentStatus,
+          shippingStatus: shipment.shippingStatus,
+          providerOrderId: shipment.providerOrderId,
+          providerDispatchError: shipment.providerDispatchError,
+          destinationAreaId: shipment.destinationAreaId,
+          courierCode: shipment.courierCode,
+          shippingChannel: channel,
+          pickupAddressId: shipment.pickupAddressId,
+        });
         return {
           ...shipment,
           shippingChannel: channel,

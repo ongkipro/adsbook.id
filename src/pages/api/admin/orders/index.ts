@@ -14,6 +14,7 @@ import { getMengantarDispatchEligibility } from '../../../../lib/payment-dispatc
 import {
   ADMIN_SHIPPING_STATUSES,
   deleteOrdersReleasingReservations,
+  normalizeShippingChannel,
   OrderLifecycleError,
   updateAdminOrderShippingStatuses,
 } from '../../../../lib/order-lifecycle.ts';
@@ -71,6 +72,7 @@ type OrderRow = {
   shipping_status: string;
   courier_code: string | null;
   fulfillment_type: string | null;
+  shipping_channel?: string | null;
   digital_accessed_at: string | null;
   cnote_no: string | null;
   seller_name: string | null;
@@ -233,6 +235,7 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
           courier_code,
           cnote_no,
           fulfillment_type,
+          shipping_channel,
           digital_accessed_at,
           (
             SELECT name
@@ -357,6 +360,7 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
           destinationAreaId: row.destination_area_id,
           courierCode: row.courier_code,
           fulfillmentType: row.fulfillment_type,
+          shippingChannel: row.shipping_channel,
           pickupAddressId: row.pickup_address_id || '',
         });
         return {
@@ -380,6 +384,7 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
           shipping_status: row.shipping_status,
           courier_code: row.courier_code,
           fulfillment_type: row.fulfillment_type === 'digital' ? 'digital' : 'physical',
+          shipping_channel: normalizeShippingChannel(row.shipping_channel),
           digital_accessed_at: row.digital_accessed_at ?? null,
           cnote_no: row.cnote_no,
           seller_name: row.seller_name,
