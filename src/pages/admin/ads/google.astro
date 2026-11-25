@@ -12,7 +12,7 @@ export const prerender = false;
 // someone else's feed to submit to Merchant Center.
 const storeName = Astro.locals.tenant.name;
 const outline = buttonVariants({ variant: 'outline' });
-const feedUrl = `${Astro.locals.tenant.siteUrl.replace(/\/$/, '')}/feed/google-catalog.xml`;
+const feedUrl = `${Astro.locals.tenant.siteUrl.replace(/\/$/, '')}/feed/catalog.xml`;
 ---
 
 <AdminLayout title="Google Ads & Merchant Center" activeMenu="ads">
@@ -26,7 +26,7 @@ const feedUrl = `${Astro.locals.tenant.siteUrl.replace(/\/$/, '')}/feed/google-c
   >
     <div slot="actions" class="flex items-center gap-2">
       <a
-        href="/feed/google-catalog.xml"
+        href="/feed/catalog.xml"
         target="_blank"
         rel="noopener noreferrer"
         class="btn-secondary"
@@ -463,8 +463,8 @@ const feedUrl = `${Astro.locals.tenant.siteUrl.replace(/\/$/, '')}/feed/google-c
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <span class="inline-block rounded-md bg-blue-100 px-2 py-0.5 text-xs font-semibold uppercase text-blue-800">Automated XML Engine</span>
-            <h3 class="mt-1 text-base font-semibold text-slate-900">Google Merchant Center Product Catalog Feed</h3>
-            <p class="mt-1 text-xs text-slate-500">Feed XML otomatis dari seluruh produk toko dengan pemetaan taksonomi <code>google_product_category</code> (GPC ID).</p>
+            <h3 class="mt-1 text-base font-semibold text-slate-900">Product Catalog XML Feed (Google, Meta &amp; TikTok)</h3>
+            <p class="mt-1 text-xs text-slate-500">Satu feed XML otomatis (<code>/feed/catalog.xml</code>) untuk Google Merchant Center, Meta Commerce, dan TikTok Catalog dengan pemetaan taksonomi <code>google_product_category</code> (GPC ID).</p>
           </div>
           <div class="flex items-center gap-2">
             <button
@@ -475,7 +475,7 @@ const feedUrl = `${Astro.locals.tenant.siteUrl.replace(/\/$/, '')}/feed/google-c
               Salin Link Feed
             </button>
             <a
-              href="/feed/google-catalog.xml"
+              href="/feed/catalog.xml"
               target="_blank"
               rel="noopener noreferrer"
               class="btn-blue"

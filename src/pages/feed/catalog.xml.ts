@@ -1,0 +1,45 @@
+import type { APIRoute } from "astro";
+import { getStorefrontProducts } from "../../lib/catalog";
+import { generateCatalogXml } from "../../lib/catalog-feed";
+
+export const prerender = false;
+
+/**
+ * Canonical RSS 2.0 product catalog XML feed shared by Google Merchant Center,
+ * Meta Commerce Manager, and TikTok Catalog Manager.
+ */
+export const GET: APIRoute = async ({ locals }) => {
+  const tenantConfig = locals.tenant;
+  const origin = tenantConfig.siteUrl.replace(/\/$/, "");
+  const siteTitle = tenantConfig.name || "Toko Online";
+  const siteDescription =
+    tenantConfig.description || tenantConfig.tagline || "Solusi Produk Berkualitas";
+
+  try {
+    const products = await getStorefrontProducts(locals);
+    const xml = generateCatalogXml(
+      products,
+      origin,
+      siteTitle,
+      siteDescription,
+      tenantConfig.defaultBrand,
+    );
+
+    return new Response(xml, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+      },
+    });
+  } catch (error) {
+    console.error("catalog-xml-error", error);
+    return new Response(
+      `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Error</title></channel></rss>`,
+      {
+        status: 500,
+        headers: { "Content-Type": "application/xml; charset=utf-8" },
+      },
+    );
+  }
+};

@@ -137,7 +137,7 @@ test("digital store: signup → menu without shipping → digital product → op
   const productPage = await visitor.goto(`${STORE}/produk/${PRODUCT_SLUG}`);
   expect(productPage!.status()).toBe(200);
   expect(await productPage!.text()).not.toContain("drive.example.test");
-  for (const feed of ["google-catalog.xml", "meta-catalog.xml", "tiktok-catalog.xml"]) {
+  for (const feed of ["catalog.xml", "google-catalog.xml", "meta-catalog.xml", "tiktok-catalog.xml"]) {
     const xml = await (await visitor.request.get(`${STORE}/feed/${feed}`)).text();
     expect(xml, feed).not.toContain("drive.example.test");
     expect(xml, `${feed} carries no digital item`).not.toContain("E-book Resep Nusantara");

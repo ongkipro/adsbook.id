@@ -125,121 +125,8 @@ export function feedImagePath(path: string): string {
   return path.replace(UPLOADED_WEBP, "$1.jpg");
 }
 
-/**
- * The two feeds, which are one feed.
- *
- * Google and Meta differ in exactly three places — the channel title, whether
- * `fb_product_category` is emitted, and whether GTIN-substitute identity is —
- * and everything else was copied. That copy was not free: the fix that stops a
- * legacy row taking a whole catalog down had to be written twice, in step, or
- * one platform would still have been serving a 500 stub. A flavor makes the
- * three differences the only thing either caller states.
- */
-type CatalogFeedFlavor = {
-  /** Google caps title at 150 and description at 5000; Meta at 200 and 9999.
-   *  Over the cap the item is disapproved, not truncated. */
-  titleMax: number;
-  descriptionMax: number;
-  /** Appended to the store name in `<channel><title>`. */
-  channelSuffix: string;
-  /** Category elements, in the order this platform expects them. */
-  categoryXml: (taxonomy: ReturnType<typeof getAdTaxonomy>) => string;
-  /** Product-identity elements. Google wants them; Meta infers. */
-  identityXml: (variant: CatalogProductVariant) => string;
-};
-
-function buildCatalogXml(
-  products: CatalogProduct[],
-  siteOrigin: string,
-  title: string | undefined,
-  description: string | undefined,
-  flavor: CatalogFeedFlavor,
-  defaultBrand?: string,
-): string {
-  const origin = siteOrigin.replace(/\/$/, "");
-  const siteTitle = title || "Toko Online";
-  const siteDescription = description || "Solusi Produk Berkualitas";
-
-  let itemsXml = "";
-
-  for (const product of products) {
-    if (!product.variants || product.variants.length === 0) continue;
-    // DIGITAL-PRODUCTS-SPEC §6.2: these are shopping feeds of shipped goods. A
-    // digital item has no shipping, and Merchant Center disapproves it there.
-    if (product.productType === "digital") continue;
-
-    // A category the merchant chose from Google's taxonomy is sent exactly;
-    // the keyword engine is only the fallback for a product without one. Meta
-    // takes `google_product_category` or `fb_product_category`, not both, so a
-    // chosen id also drops the engine's Meta guess.
-    const guessed = getAdTaxonomy(product.category, product.productName, product.description || product.headline);
-    const taxonomy = product.googleCategoryId
-      ? {
-          ...guessed,
-          googleCategoryId: product.googleCategoryId,
-          metaCategoryName: undefined,
-          productType: product.googleCategoryPath || guessed.productType,
-        }
-      : guessed;
-    const productLink = `${origin}/produk/${product.slug}`;
-    const heroImage = feedImagePath(product.heroImage);
-    const imageLink = heroImage.startsWith("http") ? heroImage : `${origin}${heroImage}`;
-
-    // The cheapest variant: the "from" price the product page and every card
-    // already show. `variants[0]` was whichever was entered first, so a product
-    // whose large size came first was listed at a price its page never showed
-    // — a price mismatch Merchant Center disapproves.
-    const variant = cheapestVariant(product.variants)!;
-    // One row that predates the five-digit scheme must not take the catalog
-    // down. The strict identity rule still governs what gets published — an
-    // unpublishable row is left out — but the feed is an aggregate, and
-    // throwing here returned the 500 stub for every other product too, which
-    // Merchant Center and Meta Commerce read as the whole catalog failing.
-    const itemId = catalogProductIdOrNull(product.productId);
-    if (!itemId) continue;
-    const titleText = product.productName;
-    const hasSale = typeof variant.comparePrice === "number" && variant.comparePrice > variant.price;
-    const basePriceFormatted = `${hasSale ? variant.comparePrice : variant.price} IDR`;
-    const salePriceXml = hasSale
-      ? `\n      <g:sale_price>${escapeXml(`${variant.price} IDR`)}</g:sale_price>`
-      : "";
-    // The merchant's own description first: it is product facts. The SEO
-    // description is a 155-character page summary, and a generated one.
-    const itemDescription =
-      product.catalogDescription || product.description || product.seoDescription || product.headline || siteDescription;
-
-    itemsXml += `
-    <item>
-      <g:id>${escapeXml(itemId)}</g:id>
-      <g:title>${escapeXml(clampFeedText(titleText, flavor.titleMax))}</g:title>
-      <g:description>${escapeXml(clampFeedText(itemDescription, flavor.descriptionMax))}</g:description>
-      <g:link>${escapeXml(productLink)}</g:link>
-      <g:image_link>${escapeXml(imageLink)}</g:image_link>
-      <g:availability>in_stock</g:availability>
-      <g:price>${escapeXml(basePriceFormatted)}</g:price>${salePriceXml}
-${flavor.categoryXml(taxonomy)}
-      <g:product_type>${escapeXml(taxonomy.productType)}</g:product_type>
-      <g:brand>${escapeXml(product.brand?.trim() || defaultBrand?.trim() || siteTitle)}</g:brand>
-      <g:condition>new</g:condition>${flavor.identityXml(variant)}
-    </item>`;
-  }
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
-  <channel>
-    <title>${escapeXml(siteTitle)} - ${flavor.channelSuffix}</title>
-    <link>${escapeXml(origin)}</link>
-    <description>${escapeXml(siteDescription)}</description>${itemsXml}
-  </channel>
-</rss>`;
-}
-
-// Omitted when no taxonomy rule was confident. Both platforms treat the
-// category as optional; a wrong one can cause feed disapproval.
-const googleCategoryXml = (taxonomy: ReturnType<typeof getAdTaxonomy>) =>
-  taxonomy.googleCategoryId
-    ? `\n      <g:google_product_category>${taxonomy.googleCategoryId}</g:google_product_category>`
-    : "";
+const CATALOG_TITLE_MAX = 150;
+const CATALOG_DESCRIPTION_MAX = 5000;
 
 /**
  * Platform field limits, and why they are enforced here.
@@ -269,52 +156,106 @@ export function clampFeedText(value: string, max: number): string {
   return (useBoundary ? cut.slice(0, lastSpace) : cut).trimEnd();
 }
 
-export function generateGoogleCatalogXml(
+/**
+ * One canonical RSS 2.0 (`xmlns:g="http://base.google.com/ns/1.0"`) product
+ * catalog feed shared by Google Merchant Center, Meta Commerce Manager, and
+ * TikTok Catalog Manager (`/feed/catalog.xml`).
+ *
+ * Uses the strictest common limits (150-char title, 5000-char description),
+ * standard `g:google_product_category` (accepted natively by all three),
+ * `g:identifier_exists=no` (required by Google, accepted by Meta/TikTok — and
+ * no `g:mpn` because merchant SKU is editable), and `.jpg` siblings for
+ * uploaded WebP images (required by Meta, accepted by all).
+ */
+export function generateCatalogXml(
   products: CatalogProduct[],
   siteOrigin: string,
   title?: string,
   description?: string,
   defaultBrand?: string,
 ): string {
-  return buildCatalogXml(products, siteOrigin, title, description, {
-    channelSuffix: "Google Merchant Catalog",
-    titleMax: 150,
-    descriptionMax: 5000,
-    categoryXml: googleCategoryXml,
-    // `identifier_exists: no` alone, and no `g:mpn`.
-    //
-    // The two together contradict each other: `identifier_exists: no` declares
-    // the product carries no manufacturer identifier, while `g:mpn` supplies
-    // one. Google reads that pairing as inconsistent, and the `g:mpn` was never
-    // truthful anyway — an MPN is assigned by a manufacturer, and `sku` here is
-    // nullable, merchant-editable and changes whenever an operator edits it.
-    //
-    // The previous comment argued the MPN kept Merchant Center from rejecting
-    // an item for a missing global identifier. That is exactly the job
-    // `identifier_exists: no` already does; the MPN was redundant as well as
-    // contradictory, and this schema has no column for a real one.
-    identityXml: () => `\n      <g:identifier_exists>no</g:identifier_exists>`,
-  }, defaultBrand);
+  const origin = siteOrigin.replace(/\/$/, "");
+  const siteTitle = title || "Toko Online";
+  const siteDescription = description || "Solusi Produk Berkualitas";
+
+  let itemsXml = "";
+
+  for (const product of products) {
+    if (!product.variants || product.variants.length === 0) continue;
+    // DIGITAL-PRODUCTS-SPEC §6.2: these are shopping feeds of shipped goods. A
+    // digital item has no shipping, and Merchant Center disapproves it there.
+    if (product.productType === "digital") continue;
+
+    // A category the merchant chose from Google's taxonomy is sent exactly;
+    // the keyword engine is only the fallback for a product without one.
+    const guessed = getAdTaxonomy(product.category, product.productName, product.description || product.headline);
+    const taxonomy = product.googleCategoryId
+      ? {
+          ...guessed,
+          googleCategoryId: product.googleCategoryId,
+          productType: product.googleCategoryPath || guessed.productType,
+        }
+      : guessed;
+    const productLink = `${origin}/produk/${product.slug}`;
+    const heroImage = feedImagePath(product.heroImage);
+    const imageLink = heroImage.startsWith("http") ? heroImage : `${origin}${heroImage}`;
+
+    // The cheapest variant: the "from" price the product page and every card
+    // already show. `variants[0]` was whichever was entered first, so a product
+    // whose large size came first was listed at a price its page never showed
+    // — a price mismatch Merchant Center disapproves.
+    const variant = cheapestVariant(product.variants)!;
+    // One row that predates the five-digit scheme must not take the catalog
+    // down. The strict identity rule still governs what gets published — an
+    // unpublishable row is left out — but the feed is an aggregate, and
+    // throwing here returned the 500 stub for every other product too, which
+    // Merchant Center and Meta Commerce read as the whole catalog failing.
+    const itemId = catalogProductIdOrNull(product.productId);
+    if (!itemId) continue;
+    const titleText = product.productName;
+    const hasSale = typeof variant.comparePrice === "number" && variant.comparePrice > variant.price;
+    const basePriceFormatted = `${hasSale ? variant.comparePrice : variant.price} IDR`;
+    const salePriceXml = hasSale
+      ? `\n      <g:sale_price>${escapeXml(`${variant.price} IDR`)}</g:sale_price>`
+      : "";
+    // Omitted when no taxonomy rule was confident. All three platforms treat
+    // the category as optional; a wrong one can cause feed disapproval.
+    const categoryXml = taxonomy.googleCategoryId
+      ? `\n      <g:google_product_category>${taxonomy.googleCategoryId}</g:google_product_category>`
+      : "";
+    // The merchant's own description first: it is product facts. The SEO
+    // description is a 155-character page summary, and a generated one.
+    const itemDescription =
+      product.catalogDescription || product.description || product.seoDescription || product.headline || siteDescription;
+
+    itemsXml += `
+    <item>
+      <g:id>${escapeXml(itemId)}</g:id>
+      <g:title>${escapeXml(clampFeedText(titleText, CATALOG_TITLE_MAX))}</g:title>
+      <g:description>${escapeXml(clampFeedText(itemDescription, CATALOG_DESCRIPTION_MAX))}</g:description>
+      <g:link>${escapeXml(productLink)}</g:link>
+      <g:image_link>${escapeXml(imageLink)}</g:image_link>
+      <g:availability>in_stock</g:availability>
+      <g:price>${escapeXml(basePriceFormatted)}</g:price>${salePriceXml}${categoryXml}
+      <g:product_type>${escapeXml(taxonomy.productType)}</g:product_type>
+      <g:brand>${escapeXml(product.brand?.trim() || defaultBrand?.trim() || siteTitle)}</g:brand>
+      <g:condition>new</g:condition>
+      <g:identifier_exists>no</g:identifier_exists>
+    </item>`;
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
+  <channel>
+    <title>${escapeXml(siteTitle)} - Product Catalog</title>
+    <link>${escapeXml(origin)}</link>
+    <description>${escapeXml(siteDescription)}</description>${itemsXml}
+  </channel>
+</rss>`;
 }
 
-export function generateMetaCatalogXml(
-  products: CatalogProduct[],
-  siteOrigin: string,
-  title?: string,
-  description?: string,
-  defaultBrand?: string,
-): string {
-  return buildCatalogXml(products, siteOrigin, title, description, {
-    channelSuffix: "Meta Commerce Catalog",
-    titleMax: 200,
-    descriptionMax: 9999,
-    // Meta's own category when the keyword engine guessed one, and Google's id.
-    // A merchant-chosen Google id clears the Meta guess upstream: Meta's help
-    // centre asks for one of the two fields, not both.
-    categoryXml: (taxonomy) =>
-      (taxonomy.metaCategoryName
-        ? `\n      <g:fb_product_category>${escapeXml(taxonomy.metaCategoryName)}</g:fb_product_category>`
-        : "") + googleCategoryXml(taxonomy),
-    identityXml: () => "",
-  }, defaultBrand);
-}
+/** Backwards-compatible alias of `generateCatalogXml`. */
+export const generateGoogleCatalogXml = generateCatalogXml;
+
+/** Backwards-compatible alias of `generateCatalogXml`. */
+export const generateMetaCatalogXml = generateCatalogXml;

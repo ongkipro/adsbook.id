@@ -75,7 +75,7 @@ export function buildLlmsTxt(store: LlmsTxtStore, products: readonly Product[]):
     "## Data terstruktur",
     "",
     `- [Sitemap](${origin}/sitemap.xml)`,
-    `- [Feed produk (Google Merchant, RSS 2.0)](${origin}/feed/google-catalog.xml)`,
+    `- [Feed produk (Catalog XML RSS 2.0)](${origin}/feed/catalog.xml)`,
     "- Setiap halaman produk memuat JSON-LD `Product` dengan satu `Offer` per varian.",
     "",
   ].join("\n");

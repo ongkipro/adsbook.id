@@ -10,7 +10,7 @@ export const prerender = false;
 // store and its feed URL, which no merchant reading them can use.
 const storeName = Astro.locals.tenant.name;
 const origin = Astro.locals.tenant.siteUrl.replace(/\/$/, '');
-const feedUrl = `${origin}/feed/meta-catalog.xml`;
+const feedUrl = `${origin}/feed/catalog.xml`;
 const outline = buttonVariants({ variant: 'outline' });
 ---
 
@@ -25,7 +25,7 @@ const outline = buttonVariants({ variant: 'outline' });
   >
     <div slot="actions" class="flex items-center gap-2">
       <a
-        href="/feed/meta-catalog.xml"
+        href="/feed/catalog.xml"
         target="_blank"
         rel="noopener noreferrer"
         class="btn-secondary"
@@ -269,9 +269,9 @@ const outline = buttonVariants({ variant: 'outline' });
           <div>
             <span class="inline-block rounded-md bg-sky-50 px-2 py-0.5 text-xs font-semibold uppercase text-sky-700">Meta Commerce Manager Feed</span>
             <h3 class="mt-1 text-sm font-semibold text-slate-900">Feed Produk Otomatis (Advantage+ Shopping Ads)</h3>
-            <p class="mt-1 text-xs text-slate-500">Feed XML real-time dengan pemetaan kategori otomatis <code>fb_product_category</code> untuk Meta Catalog & Marketplace.</p>
+            <p class="mt-1 text-xs text-slate-500">Satu feed Catalog XML real-time (<code>/feed/catalog.xml</code>) dengan <code>google_product_category</code> standar untuk Meta Commerce, Google Merchant Center, dan TikTok Catalog.</p>
           </div>
-          <a href="/feed/meta-catalog.xml" target="_blank" rel="noopener noreferrer" class="btn-secondary">
+          <a href="/feed/catalog.xml" target="_blank" rel="noopener noreferrer" class="btn-secondary">
             Buka XML Feed ↗
           </a>
         </div>
