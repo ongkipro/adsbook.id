@@ -217,3 +217,62 @@ test("PDP category breadcrumb filters /produk via ?kategori= and secondary + pay
   await expect(page.locator("#check-status-btn")).toBeHidden();
   await page.screenshot({ path: "test-results/storefront-payment-390.png", fullPage: true });
 });
+
+// The one page PR #89 restyled without a rendered order behind it. Local only:
+// the order lands in the test store's own database as `pending`, and checkout
+// never dispatches to a courier.
+test("/thanks after a real COD order from the middle form: the order's own figures, 12px floor, no overflow, no dead WhatsApp link", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setExtraHTTPHeaders({ "x-user-province": "Jawa Barat" });
+  await page.goto(`${STORE}/`);
+  const href = await page.locator("#product-grid a[href^='/produk/']").first().getAttribute("href");
+  await page.goto(`${STORE}${href}`);
+  const form = page.locator("#form-pemesanan");
+  await expect(form.locator("[data-canonical-order-form]")).toHaveAttribute("data-resolved-mode", "middle");
+  const productName = (await page.locator("h1").first().textContent())!.trim();
+  await form.getByLabel(/Nama lengkap/).fill("Siti Pembeli");
+  await form.getByLabel(/Nomor WhatsApp/).fill("081234567890");
+  await form.getByLabel(/Alamat lengkap/).fill("Jl. Dago No. 12, Coblong, Bandung");
+  const submit = form.locator("#submit-button");
+  await expect(submit).toHaveAttribute("data-state", "ready");
+  await submit.click();
+  await page.waitForURL(/\/thanks/, { timeout: 30_000 });
+
+  const shell = page.locator("#thanks-shell");
+  await expect(shell).toBeVisible({ timeout: 15_000 });
+  // The locator leaves the address bar; the order is this buyer's own.
+  expect(new URL(page.url()).hash).toBe("");
+  await expect(page.locator("#product-name")).toHaveText(productName);
+  await expect(page.locator("#customer-name")).toHaveText("Siti Pembeli");
+  await expect(page.locator("#order-id")).not.toHaveText(/^\s*(-|Memuat.*)?\s*$/);
+  // The middle form's order is a lead: CS confirms shipping, so the figure is the product estimate.
+  await expect(page.locator("#total-label")).toHaveText("Estimasi produk");
+  await expect(page.locator("#payment-badge")).toHaveText("COD · Total Menyusul");
+  const total = (await page.locator("#total-payment").textContent())!.trim();
+  expect(total).toMatch(/^Rp\s?[1-9][\d.]*$/);
+  await expect(page.locator("#total-payment-hero")).toHaveText(total);
+
+  // Entrance motion fades sections in; measure once it has settled.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForTimeout(1200);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), "no horizontal overflow").toBeLessThanOrEqual(390);
+  expect((await shell.boundingBox())!.width).toBeLessThanOrEqual(390);
+  const tiny = await page.evaluate(() =>
+    [...document.querySelectorAll("#thanks-shell *")]
+      .filter((el) => (el as HTMLElement).offsetParent && [...el.childNodes].some((node) => node.nodeType === 3 && node.textContent!.trim()))
+      .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 12)
+      .map((el) => `${el.tagName}#${el.id} ${getComputedStyle(el).fontSize} "${el.textContent!.trim().slice(0, 20)}"`),
+  );
+  expect(tiny, "/thanks keeps the 12px floor").toEqual([]);
+  // A visible wa.me link must carry a number: the test store has no support line.
+  const deadLinks = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLAnchorElement>('#thanks-shell a[href*="wa.me"]')]
+      .filter((link) => link.offsetParent && !/wa\.me\/\d{8,}/.test(link.href))
+      .map((link) => link.href),
+  );
+  expect(deadLinks, "no WhatsApp link without a number").toEqual([]);
+  // ...and with nothing to act on, "Langkah berikutnya" is not shown at all.
+  await expect(page.locator("#whatsapp-section")).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Hubungi admin" })).toBeHidden();
+  await page.screenshot({ path: "test-results/storefront-thanks-390.png", fullPage: true });
+});

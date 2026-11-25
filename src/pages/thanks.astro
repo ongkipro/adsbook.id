@@ -458,6 +458,12 @@ const productCatalog = products.map((item) => ({
   </main>
 
   <style>
+    /* "Langkah berikutnya" is an invitation to act. With no support number and
+       nothing left to pay, every control in it is hidden, so the section goes
+       too rather than asking the buyer to contact an admin it cannot reach. */
+    #whatsapp-section:not(:has(a:not([hidden]))) {
+      display: none;
+    }
     /* The gradient `.logo-text` wordmark that used to live here is gone with the
        product-name header it styled. The store name renders in the storefront's
        own micro-label style instead, so this page reads as the same shop the
