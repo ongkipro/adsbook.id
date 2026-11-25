@@ -2642,8 +2642,8 @@ test("T-41/PR-26: the demo store browses without readiness, refuses every provid
     for (const path of ["/", "/produk/x", "/kebijakan-privasi"]) {
       assert.equal((await store.open(path)).reached, true, `${path} renders on the demo store`);
     }
-    // District search, quotes, payment methods, geo: refused before the route.
-    for (const path of ["/api/locations?search=bandung", "/api/shipping-rates", "/api/shipping-options", "/api/payment-methods", "/api/v1/geo/provinces"]) {
+    // District search, quotes, payment methods, geo, and admin provider GET tools: refused before the route.
+    for (const path of ["/api/locations?search=bandung", "/api/shipping-rates", "/api/shipping-options", "/api/payment-methods", "/api/v1/geo/provinces", "/api/admin/check?phone=081234567890", "/api/admin/check/resi?q=JNE123", "/api/admin/ongkir?origin=1&destination=2&weight=1000"]) {
       const response = await store.open(path);
       assert.equal(response.status, 403, path);
       assert.equal(response.reached, false, `${path} reached its route`);
@@ -2665,6 +2665,22 @@ test("T-41/PR-26: the demo store browses without readiness, refuses every provid
   // No provider credential is stored for it.
   const row = store.sql.prepare("SELECT mengantar_api_key, autolaris_api_key, meta_capi_token FROM stores").get() as Record<string, unknown>;
   assert.deepEqual({ ...row }, { mengantar_api_key: null, autolaris_api_key: null, meta_capi_token: null });
+
+  // Demo store hourly alarm always runs with adSignalsPaused=true so no CAPI,
+  // Google/TikTok outbox drain, or Mengantar reconciliation fires for demo.
+  let alarmPaused: boolean | null = null;
+  const demoTenantRow = platformDb.sqlite.prepare("SELECT id FROM tenants WHERE slug = 'demo'").get() as { id: string };
+  await runTenantAlarm({
+    tenantId: demoTenantRow.id,
+    now: Date.now(),
+    schemaState: () => ({ applied: 90, bundled: 90, readerFloor: 90, protocol: 1, recovery: false, historyUnknown: false }),
+    readTenant: (id) => readTenantRow(platformDb as unknown as D1Database, id),
+    maintain: async (_tenantId, _scheduledTime, _primaryHost, paused) => {
+      alarmPaused = paused;
+    },
+    setAlarm: async () => undefined,
+  });
+  assert.equal(alarmPaused, true, "demo tenant alarm always pauses outbound signals and reconciliation");
 });
 
 test("T-41/PR-26: one demo tenant at most, its usage is not counted, and an ordinary unready store is still closed", async () => {

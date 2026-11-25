@@ -160,27 +160,40 @@ function latestTrackingHistory(
   return events[0];
 }
 
+function normalizeMengantarStatusToken(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+}
+
 function activeMengantarStatusFlags(status: string | undefined): string[] {
   if (!status) return [];
-  try {
-    const parsed = JSON.parse(status) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
-    return Object.entries(parsed)
-      .filter(([, active]) => active === true)
-      .map(([flag]) =>
-        flag
-          .normalize("NFKD")
-          .replace(/[^\p{L}\p{N}]+/gu, "_")
-          .toUpperCase(),
-      );
-  } catch {
-    return [];
+  const trimmed = status.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+      return Object.entries(parsed)
+        .filter(([, active]) => active === true)
+        .map(([flag]) => normalizeMengantarStatusToken(flag))
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
   }
+  // Mengantar Public API v2 returns `status` as a plain status category string
+  // (e.g. "ON DELIVERY", "PICKED UP", "DELIVERED", "RTS", "active", "CANCELED").
+  const token = normalizeMengantarStatusToken(trimmed);
+  return token ? [token] : [];
 }
 
 /**
- * Converts only Mengantar's active status flags into the local lifecycle while
- * retaining the latest raw history description and provider event time.
+ * Converts Mengantar's active status flags (legacy JSON object string) or v2
+ * plain status category string into the local lifecycle while retaining the
+ * latest raw history description and provider event time.
  */
 export function mapMengantarStatusEvidence(
   tracking: MengantarOrderTracking,
@@ -221,6 +234,7 @@ export function mapMengantarStatusEvidence(
         "SHIPPED",
         "IN_TRANSIT",
         "TRANSIT",
+        "ON_DELIVERY",
         "OUT_FOR_DELIVERY",
         "MANIFESTED",
       ].includes(flag),

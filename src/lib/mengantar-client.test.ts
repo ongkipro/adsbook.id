@@ -283,6 +283,45 @@ test("maps Mengantar status flags while preserving latest raw history", () => {
   });
 });
 
+test("maps Mengantar Public API v2 plain-string status categories observed in sandbox", () => {
+  const cases = [
+    { status: "active", expected: "processing" },
+    { status: "PENDING PICKUP", expected: "processing" },
+    { status: "PICKED UP", expected: "shipped" },
+    { status: "ON DELIVERY", expected: "shipped" },
+    { status: "DELIVERED", expected: "delivered" },
+    { status: "RTS", expected: "returned" },
+    { status: "CANCELED", expected: "processing" },
+    { status: "CANCELLED", expected: "processing" },
+    { status: "ERROR", expected: "processing" },
+  ] as const;
+
+  for (const { status, expected } of cases) {
+    assert.equal(
+      mapMengantarStatusEvidence({
+        status,
+        history: [{ date: "12-09-2026 11:02", desc: `Event ${status}` }],
+      }).shippingStatus,
+      expected,
+      `v2 status "${status}"`,
+    );
+  }
+  assert.deepEqual(
+    mapMengantarStatusEvidence({
+      status: "DELIVERED",
+      history: [
+        { date: "12-09-2026 07:06", desc: "Paket akan dikirim ke alamat penerima" },
+        { date: "12-09-2026 11:02", desc: "Paket telah diterima" },
+      ],
+    }),
+    {
+      shippingStatus: "delivered",
+      description: "Paket telah diterima",
+      occurredAt: "2026-09-12T04:02:00.000Z",
+    },
+  );
+});
+
 test("selects only monotonic provider lifecycle advances", () => {
   assert.equal(selectProviderShippingAdvance("pending", "processing"), "processing");
   assert.equal(selectProviderShippingAdvance("processing", "shipped"), "shipped");

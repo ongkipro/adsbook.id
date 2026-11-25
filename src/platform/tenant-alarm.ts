@@ -67,9 +67,10 @@ export async function runTenantAlarm(deps: TenantAlarmDeps): Promise<TenantAlarm
   const health = (outcome: { ok: boolean; error?: string }) =>
     deps.recordHealth?.(tenantId, outcome).catch((error) => console.error("tenant-alarm-health-failed", { tenant_id: tenantId, error: String(error) }));
   try {
-    // ADR-041: outbox drains (Meta CAPI, Google Ads) stop while the store is
-    // not live; the demo store never has an outbox.
-    const paused = Number(tenant.is_demo) !== 1 && !isLive(billingState({ subscriptionEndsAt: tenant.subscription_ends_at, graceEndsAt: tenant.grace_ends_at }, new Date(now)));
+    // ADR-041 & PR-26: outbox drains and provider reconciliation stop while a
+    // store is not live, and ALWAYS stay paused on the demo store so dummy
+    // orders never trigger outbound provider or ad-platform calls.
+    const paused = Number(tenant.is_demo) === 1 || !isLive(billingState({ subscriptionEndsAt: tenant.subscription_ends_at, graceEndsAt: tenant.grace_ends_at }, new Date(now)));
     await deps.maintain(tenantId, now, tenant.primary_host, paused);
     await health({ ok: true });
     return "ran";

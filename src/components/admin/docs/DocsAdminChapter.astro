@@ -34,8 +34,8 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
 
     <h3>Dashboard</h3>
     <ul>
-      <li>Enam angka utama: Revenue (nilai pesanan aktif; uang COD baru dihitung setelah paket diterima), Orders, AOV, Lead conversion, Online payment rate (tanpa COD), dan RTS rate (retur ÷ terkirim dan retur).</li>
-      <li>Rentang tanggal maksimal 31 hari, dengan pembanding "vs same day last week", "vs same dates last month", atau "vs previous period".</li>
+      <li>Enam angka utama: Revenue (nilai pesanan aktif; tooltip memisahkan <em>Pembayaran online lunas</em> dan <em>COD terkirim</em> di luar ongkir &amp; biaya COD), Orders, AOV, Lead conversion (lead tertinggal disimpan 14 hari), Online payment rate (tanpa COD), dan RTS rate (retur ÷ terkirim dan retur).</li>
+      <li>Rentang tanggal maksimal 31 hari (berdasarkan tanggal masuk pertama, zona waktu WIB), dengan pembanding "vs same day last week", "vs same dates last month", atau "vs previous period".</li>
       <li>Panel <strong>Action needed</strong> memperbarui diri tiap menit dan hanya menampilkan pekerjaan yang ada: Menunggu konfirmasi, Siap push ke Mengantar, Push Mengantar bermasalah, Menunggu pembayaran online, Lead belum dihubungi, Perlu dibuatkan resi, Perlu jadwal pickup, Perlu drop-off. Lencana merah "&gt;24j" berarti sudah menunggu lebih dari sehari. Angkanya selalu sama dengan daftar yang dibukanya.</li>
       <li>Owner dan admin melihat kartu "Siapkan toko untuk jualan" selama masih ada langkah wajib yang belum selesai; "Lihat semua langkah" membuka <a href="/admin/setup">Siapkan toko</a>. Setelah toko siap, kartu menjadi satu baris "Toko siap jualan", dan hilang setelah langkah opsional juga selesai.</li>
     </ul>
@@ -114,7 +114,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
     <ul>
       <li>Pilih beberapa pesanan lalu "Ubah status ke…" atau "Hapus N Order" (1–100 sekaligus).</li>
       <li>Pesanan yang menunggu hanya bisa dibatalkan sebelum di-push. Tidak ada status yang kembali ke Menunggu. Batal dan RTS tidak bisa dibuka lagi.</li>
-      <li>Dikirim, Selesai, dan RTS butuh pengiriman Mengantar dengan resi. Pesanan non-COD baru bisa Selesai bila sudah lunas. QRIS/VA hanya bisa ditandai lunas lewat rekonsiliasi AutoLaris.</li>
+      <li>Dikirim, Selesai, dan RTS untuk jalur <strong>Mengantar</strong> memakai pengiriman Mengantar dengan resi resmi; untuk jalur <strong>Kirim di luar Mengantar</strong> (eksternal per order), operator cukup mengisi kurir dan nomor resi manual. Pesanan non-COD baru bisa Selesai bila sudah lunas. QRIS/VA hanya bisa ditandai lunas lewat rekonsiliasi AutoLaris.</li>
       <li>Pesanan yang sudah lunas atau sudah di Mengantar tidak bisa dihapus; batalkan atau refund. Hapus bersifat permanen.</li>
     </ul>
 
@@ -125,7 +125,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
 
 {slug === 'pengiriman' && (
   <>
-    <p class="lead">Menu <strong>Pengiriman</strong> berisi pesanan yang sudah ada di Mengantar. <strong>Ekspedisi</strong> mengatur kurir yang tampil di checkout, dan <strong>Cek WA &amp; Ongkir</strong> membantu CS menjawab pembeli.</p>
+    <p class="lead">Menu <strong>Pengiriman</strong> berisi pesanan jalur Mengantar maupun pengiriman di luar Mengantar. <strong>Ekspedisi</strong> mengatur kurir yang tampil di checkout, dan <strong>Cek WA, Ongkir &amp; Resi</strong> membantu CS menjawab pembeli.</p>
 
     <h3>Antrean pengiriman</h3>
     <div class="table-wrap">
@@ -140,9 +140,9 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
       </table>
     </div>
     <ul>
-      <li>"Sinkronkan status" mengambil status terbaru dari Mengantar (1–50 pesanan sekali sinkron).</li>
-      <li>"Jadwalkan pickup" memilih gudang pickup dan catatan kurir. Pickup hanya untuk paket yang sudah punya resi, pukul 09.00–18.00 WIB, minimal 90 menit dari sekarang.</li>
-      <li>Resi tidak bisa diketik manual; resi selalu datang dari Mengantar.</li>
+      <li>Status pengiriman jalur <strong>Mengantar</strong> tersinkron otomatis setiap jam (hingga 25 order per siklus) dan real-time bila <strong>Webhook Mengantar</strong> dipasang di <a href="/admin/profile#integrasi-mengantar">Profil &amp; Integrasi</a>. Tombol "Sinkronkan status" tetap tersedia untuk pengecekan langsung (1–50 pesanan).</li>
+      <li>"Jadwalkan pickup" memilih gudang pickup dan catatan kurir (khusus jalur Mengantar). Pickup hanya untuk paket yang sudah punya resi, pukul 09.00–18.00 WIB, minimal 90 menit dari sekarang.</li>
+      <li>Resi jalur Mengantar selalu datang dari Mengantar dan tidak bisa diketik manual. Untuk order yang dikirim lewat agregator lain atau langsung ke kurir, pilih <strong>Kirim di luar Mengantar</strong> di detail pesanan lalu isi kurir dan nomor resi manual.</li>
     </ul>
 
     <h3>Ekspedisi</h3>
@@ -151,17 +151,18 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
       <li>"Kebijakan Wilayah Khusus Non-COD" adalah daftar provinsi milik toko yang tidak boleh COD, terpisah dari batasan provinsi tiap kurir (tampil sebagai "−N prov" dan tidak bisa diubah dari sini). Tombol bantu: Pilih Semua Jawa, Pilih Semua Luar Jawa, Reset Pilihan, lalu "Simpan kebijakan".</li>
     </ul>
 
-    <h3>Cek WA &amp; Ongkir</h3>
+    <h3>Cek WA, Ongkir &amp; Resi</h3>
     <ul>
       <li><strong>Cek WA</strong>: "Periksa riwayat" menampilkan jumlah paket Terkirim, RTS, dan Sedang berjalan untuk nomor WA itu per kurir, dengan tingkat Risiko RTS rendah, sedang, atau tinggi.</li>
       <li><strong>Cek ongkir</strong>: pilih kecamatan asal (bawaan: gudang utama), tujuan, dan berat, lalu "Cek tarif kurir". Saring "Bisa COD", urutkan menurut harga atau estimasi, dan salin daftar tarif untuk dikirim lewat WhatsApp. Tarif dibaca langsung dari Mengantar, termasuk kurir yang dinonaktifkan di Ekspedisi.</li>
+      <li><strong>Cek resi</strong> (<code>/admin/check/resi</code>): masukkan nomor resi atau nomor invoice untuk melacak riwayat perjalanan paket langsung dari Mengantar lengkap dengan ringkasan siap salin ke WhatsApp.</li>
     </ul>
   </>
 )}
 
 {slug === 'iklan-analitik' && (
   <>
-    <p class="lead"><strong>Iklan &amp; tracking</strong> menghubungkan toko ke Meta dan Google. <strong>Analitik</strong> membaca hasilnya dari pesanan yang sebenarnya, bukan dari dashboard iklan.</p>
+    <p class="lead"><strong>Iklan &amp; tracking</strong> menghubungkan toko ke Meta, Google, dan TikTok (browser + server 1:1). <strong>Analitik</strong> membaca hasilnya dari pesanan yang sebenarnya, bukan dari dashboard iklan.</p>
 
     <h3>Meta Pixel &amp; Conversions API</h3>
     <ul>
@@ -187,8 +188,14 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
 
     <h3>Google Ads &amp; Merchant Center</h3>
     <ul>
-      <li>"Google Tag Manager Container ID" (opsional), atau "Google Ads Conversion ID" (<code>AW-…</code>) bersama "Purchase Conversion Label"; keduanya wajib diisi berpasangan.</li>
+      <li>"Google Tag Manager Container ID" (opsional), atau "Google Ads Conversion ID" (<code>AW-…</code>) bersama "Purchase Conversion Label"; keduanya wajib diisi berpasangan. Untuk upload konversi offline dari server, Data Manager API direkomendasikan tanpa perlu developer token.</li>
       <li>Feed katalog produk (Google Merchant, Meta Commerce, TikTok Catalog): <code>/feed/catalog.xml</code> (URL lama <code>/feed/*-catalog.xml</code> tetap aktif sebagai alias). Harga di feed mengikuti varian termurah.</li>
+    </ul>
+
+    <h3>TikTok Pixel &amp; Events API</h3>
+    <ul>
+      <li>Isi "TikTok Pixel ID" dan "Events API Access Token" di <strong>Iklan &amp; tracking › TikTok Ads</strong>. Browser dan server berbagi <code>event_id</code> yang sama (nomor pesanan) agar konversi <code>CompletePayment</code> tidak terhitung ganda.</li>
+      <li>Pilih waktu kirim konversi COD: saat pesanan dibuat (rekomendasi agar cepat keluar dari learning phase) atau saat paket terkirim.</li>
     </ul>
 
     <h3>Link UTM</h3>
@@ -208,7 +215,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
         </tbody>
       </table>
     </div>
-    <p>Pilihan periode di sistem: {dateFilters}, ditambah rentang tanggal sendiri. Di Analitik, rentang sendiri maksimal 90 hari dan dibandingkan dengan periode sama panjang tepat sebelumnya. Di Dashboard maksimal 31 hari dengan tiga pilihan pembanding.</p>
+    <p>Pilihan periode di sistem: {dateFilters}, ditambah rentang tanggal sendiri. Semua laporan dikelompokkan berdasarkan <strong>tanggal masuk pertama</strong> (lead/pesanan dibuat, WIB) agar konsisten dengan atribusi iklan; data lead tertinggal disimpan 14 hari dan log Purchase ke Meta 30 hari. Di Analitik, rentang sendiri maksimal 90 hari dan dibandingkan dengan periode sama panjang tepat sebelumnya. Di Dashboard maksimal 31 hari dengan tiga pilihan pembanding.</p>
   </>
 )}
 
@@ -218,7 +225,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
 
     <h3>Integrasi</h3>
     <ul>
-      <li>API key Mengantar dan AutoLaris diisi di <a href="/admin/profile">Profil</a>, bagian "Mengantar &amp; AutoLaris", dan hanya owner yang bisa menyimpannya. Mengosongkan kolom berarti key lama tetap dipakai. Key tidak pernah ditampilkan utuh.</li>
+      <li>API key Mengantar, <strong>Webhook Mengantar</strong> (URL sekali tampil + Webhook Secret terenkripsi), dan AutoLaris diisi di <a href="/admin/profile#integrasi-mengantar">Profil &amp; Integrasi</a> oleh owner atau admin. Endpoint resmi provider dipakai otomatis tanpa perlu mengisi Base URL. Mengosongkan kolom saat menyimpan berarti kredensial lama tetap dipakai dan tidak pernah ditampilkan utuh.</li>
       <li>Di Pengaturan, "Tes koneksi" Mengantar mengecek ongkir dari gudang (butuh key dan gudang). "Periksa konfigurasi" AutoLaris hanya memeriksa pengaturan, bukan membuktikan dana masuk.</li>
     </ul>
 
