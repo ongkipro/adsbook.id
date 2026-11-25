@@ -1,11 +1,8 @@
 import type { APIRoute } from "astro";
 import { jsonError, jsonOk } from "../../../lib/api";
 import { matchesShippingQueue } from "../../../lib/shipping-queue";
-import {
-  mapMengantarStatusEvidence,
-  MengantarClient,
-  selectProviderShippingAdvance,
-} from "../../../lib/mengantar-client";
+import { MengantarClient } from "../../../lib/mengantar-client";
+import { syncSingleMengantarOrder } from "../../../lib/mengantar-shipping-sync";
 import { pickMengantarTimeId, resolveMengantarPickupSlot } from "../../../lib/mengantar-order";
 import { getMengantarDispatchEligibility } from "../../../lib/payment-dispatch-policy";
 import { getProviderConfig } from "../../../lib/provider-config";
@@ -339,119 +336,18 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
           });
           continue;
         }
-        if (row.shipping_channel === "external") {
-          failed += 1;
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus: row.shipping_status,
-            providerStatus: null,
-            error: "Order dikirim di luar Mengantar dan diperbarui secara manual.",
-          });
-          continue;
-        }
-        if (!row.provider_order_id) {
-          failed += 1;
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus: row.shipping_status,
-            providerStatus: null,
-            error: "Shipment Mengantar belum dibuat.",
-          });
-          continue;
-        }
-        if (!row.cnote_no) {
-          failed += 1;
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus: row.shipping_status,
-            providerStatus: null,
-            error: "Nomor resi Mengantar belum tersedia.",
-          });
-          continue;
-        }
-
-        let providerStatus: string | null = null;
-        let localStatus = row.shipping_status;
-        try {
-          const tracking = await client!.getOrderByTrackingId(row.cnote_no);
-          const evidence = mapMengantarStatusEvidence(tracking);
-          providerStatus = evidence.description;
-          const observation = await db
-            .prepare(
-              `UPDATE orders
-              SET provider_status_text = ?, provider_status_at = ?,
-                provider_synced_at = ?
-              WHERE id = ?`,
-            )
-            .bind(
-              evidence.description,
-              evidence.occurredAt,
-              syncedAt,
-              row.id,
-            )
-            .run();
-          if (!observation.meta?.changes) {
-            throw new Error("Observasi status provider gagal disimpan.");
-          }
-          synced += 1;
-
-          const nextStatus = selectProviderShippingAdvance(
-            row.shipping_status,
-            evidence.shippingStatus,
-          );
-          if (!nextStatus) {
-            unchanged += 1;
-          } else {
-            const transition = await applyOrderLifecycleMutation(
-              db,
-              row,
-              { shippingStatus: nextStatus },
-              db
-                .prepare(
-                  `UPDATE orders
-                  SET shipping_status = ?
-                  WHERE id = ? AND shipping_status = ?`,
-                )
-                .bind(nextStatus, row.id, row.shipping_status),
-            );
-            if (transition.updated) {
-              updated += 1;
-              localStatus = nextStatus;
-            } else {
-              const current = await db
-                .prepare(
-                  "SELECT shipping_status FROM orders WHERE id = ? LIMIT 1",
-                )
-                .bind(row.id)
-                .first<{ shipping_status: string }>();
-              localStatus = current?.shipping_status || row.shipping_status;
-              unchanged += 1;
-            }
-          }
-
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus,
-            providerStatus,
-            error: null,
-          });
-        } catch (error) {
-          failed += 1;
-          results.push({
-            orderId: row.id,
-            orderNumber: row.order_number,
-            localStatus,
-            providerStatus,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Gagal menyinkronkan status Mengantar.",
-          });
-        }
+        const outcome = await syncSingleMengantarOrder(db, client!, row, syncedAt);
+        if (outcome.synced) synced += 1;
+        if (outcome.updated) updated += 1;
+        if (outcome.unchanged) unchanged += 1;
+        if (outcome.error) failed += 1;
+        results.push({
+          orderId: outcome.orderId,
+          orderNumber: outcome.orderNumber,
+          localStatus: outcome.localStatus,
+          providerStatus: outcome.providerStatus,
+          error: outcome.error,
+        });
       }
 
       return jsonOk({
