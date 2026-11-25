@@ -11,6 +11,7 @@ import {
 import { collectOperationalHealth, recordSchedulerRun } from "../lib/operational-health.ts";
 import { readSetupRequiredLeft, writeHealthSnapshot } from "../lib/health-snapshot.ts";
 import { backfillReceiverScores } from "../lib/rts-scoring.ts";
+import { reconcileStaleMengantarOrders } from "../lib/mengantar-shipping-sync.ts";
 import { purgeExpiredRateLimits } from "../lib/rate-limit.ts";
 import { reconcileNativeLandingPages } from "../lib/landing-pages.ts";
 import { activeNativeLandingPages } from "../lib/native-landing-pages.ts";
@@ -231,6 +232,26 @@ export async function runTenantMaintenance(
     backfillReceiverScores(database, scheduledLocals),
   );
 
+  // Spec A Phase 1 (§4.4 R-2/R-3): hourly Mengantar status reconciliation for
+  // stale 'mengantar' orders (max 25 per tenant). Skips Preview/expired stores
+  // (ADR-041), digital-only stores, and stores without a Mengantar API key.
+  let mengantarReconciliation = { checked: 0, synced: 0, updated: 0, unchanged: 0, failed: 0 };
+  await housekeeping("scheduled-mengantar-shipping-reconcile-failed", async () => {
+    const summary = await reconcileStaleMengantarOrders(
+      database,
+      scheduledLocals,
+      new Date(scheduledTime),
+    );
+    mengantarReconciliation = {
+      checked: summary.checked,
+      synced: summary.synced,
+      updated: summary.updated,
+      unchanged: summary.unchanged,
+      failed: summary.failed,
+    };
+    return summary.updated;
+  });
+
   const health = await collectOperationalHealth(database, scheduledLocals);
   const alerts = await evaluateOperationalAlerts(
     alertsFromOperationalHealth(health),
@@ -258,6 +279,7 @@ export async function runTenantMaintenance(
     purgedGoogleAdsConversions,
     purgedTikTokOutboxEvents,
     backfilledReceiverScores,
+    mengantarReconciliation,
     autoLarisReconciliation: {
       checked: autoLarisReconciliation.checked,
       paid: autoLarisReconciliation.paidOrderIds.length,
