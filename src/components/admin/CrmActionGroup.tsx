@@ -118,11 +118,15 @@ export function CrmActionGroup({ orderId, crmUrls, initialRows }: {
     } finally { setRecording(list => list.filter(key => key !== step.key)); }
   }
 
-  // `px-0`: five chips share the column; the longest label (Welcome) needs every pixel.
+  // `px-0`: five chips share the column. Tracks are `auto`, not equal fifths:
+  // Welcome (55px) and Process (48px) were cut to "Welc…" in a 244px column
+  // whose equal fifths were 47px, while FU 1–5 needed under 30px. Sized to
+  // their labels the ten chips fit in the same column; `truncate` stays as the
+  // floor for a narrower one.
   const chip = 'w-full min-w-0 px-0';
   return <div ref={root} className="min-w-0">
     {error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-xs">{error}<Button variant="outline" size="sm" onClick={refresh}>Coba lagi</Button></div> :
-      <div role="group" aria-label="Tahap follow-up" aria-busy={!rows} className="grid grid-cols-5 gap-0.5">
+      <div role="group" aria-label="Tahap follow-up" aria-busy={!rows} className="grid grid-cols-[repeat(5,auto)] gap-0.5">
         {CRM_STEPS.map(step => {
           const done = Boolean(rows?.find(entry => entry.step === step.key)?.completed);
           const url = crmUrls[step.key];

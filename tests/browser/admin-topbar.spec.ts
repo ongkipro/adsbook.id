@@ -226,3 +226,19 @@ test("keyboard focus is visible on the ads tabs and on a shared Button", async (
   const afterPointer = await outline(exportCsv);
   expect(afterPointer.focusVisible, "no lingering focus ring after a pointer press").toBe(false);
 });
+
+test("the WhatsApp CRM chips read in full in the orders table", async ({ page }) => {
+  await signIn(page);
+  for (const width of [1280, 1366]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`${STORE}/admin/orders`);
+    await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+    const group = page.locator('[aria-label="Tabel order desktop"] [aria-label="Tahap follow-up"]').first();
+    await expect(group.locator("a, button")).toHaveCount(10);
+    // Equal fifths of the 244px column cut "Welcome" and "Process" to "Welc…" (PR #108).
+    const cut = await group.locator("span.truncate").evaluateAll((spans) =>
+      spans.filter((span) => (span as HTMLElement).scrollWidth > (span as HTMLElement).clientWidth + 0.5).map((span) => span.textContent),
+    );
+    expect(cut, `no CRM chip label is truncated at ${width}px`).toEqual([]);
+  }
+});
