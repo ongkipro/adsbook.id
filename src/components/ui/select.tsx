@@ -2,6 +2,7 @@ import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 
 import { cn } from "@/lib/utils"
+import { returnFocusUnlessPointer } from "./final-focus"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
 const Select = SelectPrimitive.Root
@@ -60,10 +61,6 @@ function SelectTrigger({
  )
 }
 
-const keyboardOnlySelectFinalFocus: NonNullable<SelectPrimitive.Popup.Props["finalFocus"]> = (
- closeType
-) => closeType === "keyboard"
-
 function SelectContent({
  className,
  children,
@@ -72,7 +69,7 @@ function SelectContent({
  align = "center",
  alignOffset = 0,
  alignItemWithTrigger = true,
- finalFocus = keyboardOnlySelectFinalFocus,
+ finalFocus = returnFocusUnlessPointer,
  ...props
 }: SelectPrimitive.Popup.Props &
  Pick<

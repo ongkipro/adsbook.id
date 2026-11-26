@@ -84,7 +84,8 @@ test("admin popups and containers avoid lingering click-away borders and decorat
     "src/components/ui/dialog.tsx",
   ]) {
     const src = readFileSync(popupFile, "utf8");
-    assert.match(src, /closeType === "keyboard"/, `${popupFile} restores focus only on keyboard close`);
+    // One shared rule (final-focus.ts): a close made in code must not drop a keyboard user on <body>.
+    assert.match(src, /finalFocus = returnFocusUnlessPointer/, `${popupFile} uses the shared final-focus rule`);
     assert.doesNotMatch(src, /zoom-in-95|zoom-out-95|slide-in-from-/, `${popupFile} uses instant open without decorative zoom/slide`);
   }
 

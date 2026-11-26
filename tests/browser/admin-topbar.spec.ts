@@ -155,4 +155,36 @@ test("dropdown click-away leaves no lingering focus border and #admin-main stays
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expectNoFocusBorder(orderAction, "Orders row action trigger");
   await expectNoFocusBorder(page.locator("#admin-main"), "#admin-main on orders");
+
+  // 5. A dialog closed in code (useConfirm's Batal) by keyboard returns focus to the row menu, never <body>.
+  const dialog = page.getByRole("dialog");
+  const openDeleteByKeyboard = async () => {
+    await orderAction.focus();
+    await page.keyboard.press("Enter");
+    const item = page.getByRole("menuitem", { name: /Hapus pesanan/ });
+    await expect(item).toBeVisible();
+    await item.focus();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+  };
+  await openDeleteByKeyboard();
+  await dialog.getByRole("button", { name: "Batal" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(orderAction, "keyboard Batal returns focus to the row menu").toBeFocused();
+
+  // 6. The same Batal by mouse leaves no focus ring on the trigger (a pointer user has no focus to lose).
+  await orderAction.click();
+  await page.getByRole("menuitem", { name: /Hapus pesanan/ }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Batal" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expectNoFocusBorder(orderAction, "Orders row action trigger after a mouse Batal");
+
+  // 7. Then a keyboard user who tabs into the page again and uses Batal still gets focus back.
+  await openDeleteByKeyboard();
+  await dialog.getByRole("button", { name: "Batal" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(orderAction, "keyboard after mouse: focus still returns").toBeFocused();
 });

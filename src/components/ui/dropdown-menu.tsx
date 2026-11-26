@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { cn } from "@/lib/utils"
+import { returnFocusUnlessPointer } from "./final-focus"
 import { ChevronRightIcon, CheckIcon } from "lucide-react"
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
@@ -15,20 +16,13 @@ function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
   return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
 }
 
-// Return focus to the trigger only when closed via keyboard (Escape/Enter),
-// never on pointer click-away — otherwise Chromium paints a lingering focus
-// border on the trigger button after clicking empty space.
-const keyboardOnlyFinalFocus: NonNullable<MenuPrimitive.Popup.Props["finalFocus"]> = (
-  closeType
-) => closeType === "keyboard"
-
 function DropdownMenuContent({
   align = "start",
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
   collisionPadding,
-  finalFocus = keyboardOnlyFinalFocus,
+  finalFocus = returnFocusUnlessPointer,
   className,
   ...props
 }: MenuPrimitive.Popup.Props &
