@@ -86,7 +86,7 @@ export function SearchInput({
 
 /** One trigger look for every toolbar menu — the date filter and FilterSelect. */
 export const FILTER_TRIGGER_CLASS =
-  "flex h-10 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-white px-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 data-popup-open:bg-slate-50";
+  "flex h-10 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-white px-2.5 text-left text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-60 data-popup-open:bg-slate-50";
 
 export type FilterOption<T extends string> = { value: T; label: string };
 

@@ -99,3 +99,60 @@ test("Dashboard filters load their list on first click and still filter", async 
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(page.locator("section[aria-label='Date range dan pembanding'] button").first()).toContainText("Kemarin");
 });
+
+test("dropdown click-away leaves no lingering focus border and #admin-main stays borderless", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+
+  const expectNoFocusBorder = async (locator: ReturnType<Page["locator"]>, label: string) => {
+    const state = await locator.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return {
+        isActive: document.activeElement === el,
+        focusVisible: el.matches(":focus-visible"),
+        outlineStyle: cs.outlineStyle,
+        outlineWidth: cs.outlineWidth,
+      };
+    });
+    expect(state.focusVisible, `${label} must not stay :focus-visible after pointer click-away`).toBe(false);
+    expect(state.outlineStyle === "none" || state.outlineWidth === "0px", `${label} must not show an outline`).toBe(true);
+  };
+
+  // 1. Dashboard compare dropdown → click empty page area
+  const compare = page.locator("#dashboard-compare");
+  await compare.click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  const menuAnim = await page.locator('[data-slot="dropdown-menu-content"]').evaluate((el) => getComputedStyle(el).animationName);
+  expect(menuAnim, "admin dropdowns open immediately without decorative animation").toBe("none");
+  await page.mouse.click(700, 110);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectNoFocusBorder(compare, "#dashboard-compare");
+  await expectNoFocusBorder(page.locator("#admin-main"), "#admin-main");
+
+  // 2. Account menu → click empty page area
+  const accountBtn = page.getByRole("button", { name: /^Menu akun/ });
+  await accountBtn.click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.mouse.click(700, 110);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectNoFocusBorder(accountBtn, "Account menu trigger");
+
+  // 3. Keyboard Escape still restores focus to trigger for accessibility
+  await compare.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(compare).toBeFocused();
+
+  // 4. Orders row action menu → click empty area
+  await page.goto(`${STORE}/admin/orders`);
+  await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  const orderAction = page.getByRole("button", { name: /Aksi order/ }).first();
+  await orderAction.click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.mouse.click(700, 110);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectNoFocusBorder(orderAction, "Orders row action trigger");
+  await expectNoFocusBorder(page.locator("#admin-main"), "#admin-main on orders");
+});

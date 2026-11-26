@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { buttonVariants } from "../ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
@@ -52,8 +51,8 @@ const compactRupiah = (value: number) => {
   if (value >= 1_000) return `Rp${Math.round(value / 1_000)}rb`;
   return `Rp${Math.round(value)}`;
 };
-/** Phone size for a KPI value by length: 13 characters ("Rp 12.345.678") at 16px is the most a 360px half-width card holds. */
-const kpiValueSize = (value: string) => (value.length <= 13 ? "text-base" : value.length <= 14 ? "text-sm" : "text-xs");
+/** Phone size for a KPI value by length: keeps figures readable without clipping in 2-up mobile cards. */
+const kpiValueSize = (value: string) => (value.length <= 10 ? "text-lg" : value.length <= 13 ? "text-base" : "text-sm");
 const percentage = (value: number) => `${value.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`;
 const dmy = (value: string) => value.split("-").reverse().join("/");
 const num = (value: unknown) => Number(value) || 0;
@@ -68,7 +67,7 @@ function RelativeTime({ at }: { at: number }) {
     return () => window.clearInterval(timer);
   }, [at]);
   return (
-    <span className="text-xs text-slate-400" title="Diperbarui otomatis tiap menit">
+    <span className="text-xs text-slate-500" title="Diperbarui otomatis tiap menit">
       {minutesAgo < 1 ? "baru saja" : `${minutesAgo} mnt lalu`}
     </span>
   );
@@ -88,7 +87,7 @@ function Delta({ current, previous, kind, invert = false }: { current: number; p
       );
     }
     return (
-      <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-400" title="Belum ada data pembanding">
+      <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500" title="Belum ada data pembanding">
         —<span className="sr-only">Belum ada data pembanding</span>
       </span>
     );
@@ -387,7 +386,7 @@ export function AnalyticsDashboard({
       note: `COD ${compactRupiah(data.cod_revenue)} · Non-COD ${compactRupiah(data.prepaid_revenue)}`,
       title: `Nilai ${data.live_orders} order aktif. Pembayaran online lunas ${currency(data.collected_revenue)} · COD terkirim ${currency(deliveredCodRevenue)} (nilai produk di luar ongkir & biaya COD; pencairan aktual mengikuti rekening/wallet kurir).`,
       delta: <Delta current={data.total_revenue} previous={prev?.total_revenue} kind="percent" />,
-      tone: "text-emerald-700",
+      tone: "text-slate-950",
     },
     {
       label: "Orders",
@@ -494,8 +493,8 @@ export function AnalyticsDashboard({
   const doneCount = (attention?.items.length ?? 0) - openItems.length;
 
   const attentionCard = showAttention && (
-    <Card id="action-needed" aria-labelledby="attention-heading" className="min-w-0 scroll-mt-20 border-slate-200 shadow-none">
-      <CardHeader className="flex-row items-center justify-between border-b border-slate-100 pb-3">
+    <Card id="action-needed" aria-labelledby="attention-heading" className="order-first min-w-0 scroll-mt-20 gap-0 border-slate-200 py-0 shadow-none xl:order-none">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 px-4 py-3">
         <CardTitle as="h3" id="attention-heading" className="text-sm font-semibold text-slate-950 md:text-base">Action needed</CardTitle>
         {attention && <RelativeTime at={attention.at} />}
       </CardHeader>
@@ -520,7 +519,7 @@ export function AnalyticsDashboard({
                 <a
                   href={item.href}
                   title={item.hint}
-                  className="group flex min-h-10 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                  className="group flex min-h-11 items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 md:min-h-10"
                 >
                   <span className="min-w-0 flex-1 truncate text-slate-800">{item.label}</span>
                   {(item.stale ?? 0) > 0 && (
@@ -531,16 +530,52 @@ export function AnalyticsDashboard({
                   <span className={`w-10 shrink-0 text-right text-base font-semibold tabular-nums ${toneClass[item.tone]}`}>
                     {item.count.toLocaleString("id-ID")}{attention.capped && CAPPED_KEYS.has(item.key) ? "+" : ""}
                   </span>
-                  <ChevronRight className="size-4 shrink-0 text-slate-300 group-hover:text-slate-500" aria-hidden="true" />
+                  <ChevronRight className="size-4 shrink-0 text-slate-400 group-hover:text-slate-600" aria-hidden="true" />
                 </a>
               </li>
             ))}
           </ul>
         )}
         {attention && openItems.length > 0 && doneCount > 0 && (
-          <p className="px-2 pb-1 pt-2 text-xs text-slate-400">
+          <p className="px-2.5 pb-1.5 pt-2 text-xs text-slate-500">
             <CircleCheck className="mr-1 inline size-3.5 text-emerald-600" aria-hidden="true" />
             {doneCount} antrean lain beres
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const paymentMixCard = (
+    <Card aria-labelledby="payment-mix-heading" className="min-w-0 gap-0 border-slate-200 py-0 shadow-none">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <CardTitle as="h3" id="payment-mix-heading" className="text-sm font-semibold text-slate-950 md:text-base">Payment mix</CardTitle>
+        {showPaymentsLink && (
+          <a href="/admin/payments" className="shrink-0 text-xs font-medium text-blue-700 hover:underline">Kelola payment</a>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3 p-4">
+        {data.payment_methods.total === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+            <CreditCard className="mx-auto size-5 text-slate-500" aria-hidden="true" />
+            <p className="mt-2 text-xs font-semibold text-slate-800">Belum ada order pada periode ini.</p>
+          </div>
+        ) : (
+          payments.map((item) => (
+            <div key={item.name} title={item.detail}>
+              <div className="flex items-baseline justify-between gap-3 text-xs">
+                <span className="truncate font-medium text-slate-800">{item.name}</span>
+                <span className="shrink-0 font-semibold tabular-nums text-slate-950">{item.count} · {percentage(item.percentage)}</span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className={`h-full rounded-full ${item.bar}`} style={{ width: `${Math.max(0, Math.min(100, item.percentage))}%` }} aria-hidden="true" />
+              </div>
+            </div>
+          ))
+        )}
+        {data.payment_methods.unknown_count > 0 && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">
+            {data.payment_methods.unknown_count} order memakai metode legacy yang belum dipetakan.
           </p>
         )}
       </CardContent>
@@ -607,11 +642,11 @@ export function AnalyticsDashboard({
 
       <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6" aria-label="KPI">
         {metrics.map((metric) => (
-          <Card key={metric.label} className="overflow-hidden border-slate-200 shadow-none" title={metric.title}>
-            <CardContent className="p-3.5 sm:p-4">
-              <p className="text-xs font-medium text-slate-500">{metric.label}</p>
-              <p className={`mt-1.5 whitespace-nowrap font-semibold tabular-nums tracking-tight sm:text-xl ${kpiValueSize(metric.value)} ${metric.tone}`}>{metric.value}</p>
-              <div className="mt-1 flex min-h-5 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <Card key={metric.label} className="gap-0 overflow-hidden border-slate-200 py-0 shadow-none" title={metric.title}>
+            <CardContent className="p-3 sm:p-3.5">
+              <p className="truncate text-xs font-medium text-slate-500">{metric.label}</p>
+              <p className={`mt-1 whitespace-nowrap font-semibold tabular-nums tracking-tight sm:text-xl ${kpiValueSize(metric.value)} ${metric.tone}`}>{metric.value}</p>
+              <div className="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 {metric.delta}
                 <span className="line-clamp-2 text-xs leading-4 text-slate-500">{metric.note}</span>
               </div>
@@ -621,13 +656,13 @@ export function AnalyticsDashboard({
       </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-        <Card aria-labelledby="trend-heading" className="min-w-0 border-slate-200 shadow-none">
-          <CardHeader className="flex-row flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 pb-3">
+        <Card aria-labelledby="trend-heading" className="min-w-0 gap-0 border-slate-200 py-0 shadow-none">
+          <CardHeader className="flex flex-row flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-4 py-3">
             <CardTitle as="h3" id="trend-heading" className="text-sm font-semibold text-slate-950 md:text-base">
               Revenue {hourly ? "(kumulatif per jam · WIB)" : "per hari"}
             </CardTitle>
             {prev && (
-              <CardDescription className="flex items-center gap-3 text-xs">
+              <CardDescription className="flex items-center gap-3 text-xs text-slate-500">
                 <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--admin-accent)]" aria-hidden="true" />Periode ini</span>
                 <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed border-slate-400" aria-hidden="true" />{COMPARE_LABELS[prev.mode].replace(/^vs /, "")}</span>
               </CardDescription>
@@ -637,12 +672,12 @@ export function AnalyticsDashboard({
             {chartData.length === 0 ? (
               <div className="grid h-[240px] place-items-center rounded-xl bg-slate-50 text-center">
                 <div>
-                  <PackageCheck className="mx-auto size-6 text-slate-300" aria-hidden="true" />
+                  <PackageCheck className="mx-auto size-6 text-slate-400" aria-hidden="true" />
                   <p className="mt-2 text-sm font-medium text-slate-700">Belum ada data periode ini</p>
                 </div>
               </div>
             ) : (
-              <div className="h-[240px] w-full sm:h-[260px]">
+              <div className="h-[240px] w-full sm:h-[250px]">
                 {mounted ? (
                   <Suspense fallback={<Skeleton className="h-full w-full rounded-xl" />}>
                     <DashboardRevenueChart
@@ -660,45 +695,13 @@ export function AnalyticsDashboard({
           </CardContent>
         </Card>
 
-        <Card aria-labelledby="payment-mix-heading" className="min-w-0 border-slate-200 shadow-none">
-          <CardHeader className="border-b border-slate-100 pb-3">
-            <CardTitle as="h3" id="payment-mix-heading" className="text-sm font-semibold text-slate-950 md:text-base">Payment mix</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3.5 p-4">
-            {data.payment_methods.total === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
-                <CreditCard className="mx-auto size-5 text-slate-400" aria-hidden="true" />
-                <p className="mt-2 text-xs font-semibold text-slate-800">Belum ada order pada periode ini.</p>
-              </div>
-            ) : (
-              payments.map((item) => (
-                <div key={item.name} title={item.detail}>
-                  <div className="flex items-baseline justify-between gap-3 text-xs">
-                    <span className="truncate font-medium text-slate-800">{item.name}</span>
-                    <span className="shrink-0 font-semibold tabular-nums text-slate-950">{item.count} · {percentage(item.percentage)}</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div className={`h-full rounded-full ${item.bar}`} style={{ width: `${Math.max(0, Math.min(100, item.percentage))}%` }} aria-hidden="true" />
-                  </div>
-                </div>
-              ))
-            )}
-            {data.payment_methods.unknown_count > 0 && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">
-                {data.payment_methods.unknown_count} order memakai metode legacy yang belum dipetakan.
-              </p>
-            )}
-            {showPaymentsLink && (
-              <a href="/admin/payments" className={buttonVariants({ variant: "outline", size: "sm", className: "w-full" })}>Kelola payment</a>
-            )}
-          </CardContent>
-        </Card>
+        {attentionCard ?? paymentMixCard}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        {attentionCard}
-        <Card aria-labelledby="funnel-heading" className="min-w-0 border-slate-200 shadow-none">
-          <CardHeader className="border-b border-slate-100 pb-3">
+        {showAttention && paymentMixCard}
+        <Card aria-labelledby="funnel-heading" className="min-w-0 gap-0 border-slate-200 py-0 shadow-none">
+          <CardHeader className="border-b border-slate-100 px-4 py-3">
             <CardTitle as="h3" id="funnel-heading" className="text-sm font-semibold text-slate-950 md:text-base">Sales funnel</CardTitle>
           </CardHeader>
           <CardContent className="p-3">
@@ -709,7 +712,7 @@ export function AnalyticsDashboard({
                   <>
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-xs font-medium text-slate-500">{step.label}</span>
-                      {step.href && <ChevronRight className="size-3.5 shrink-0 text-slate-300 group-hover:text-slate-500" aria-hidden="true" />}
+                      {step.href && <ChevronRight className="size-3.5 shrink-0 text-slate-400 group-hover:text-slate-600" aria-hidden="true" />}
                     </div>
                     <span className="mt-0.5 text-lg font-semibold tabular-nums text-slate-950">{step.value.toLocaleString("id-ID")}</span>
                     <div className="my-1.5 h-1 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
@@ -734,8 +737,8 @@ export function AnalyticsDashboard({
         </Card>
 
         {showRankingsCard && (
-          <Card aria-labelledby="top-heading" className="min-w-0 border-slate-200 shadow-none">
-            <CardHeader className="border-b border-slate-100 pb-3">
+          <Card aria-labelledby="top-heading" className="min-w-0 gap-0 border-slate-200 py-0 shadow-none">
+            <CardHeader className="border-b border-slate-100 px-4 py-3">
               <CardTitle as="h3" id="top-heading" className="text-sm font-semibold text-slate-950 md:text-base">Top products & landing pages</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2 xl:grid-cols-1">
@@ -755,17 +758,17 @@ export function AnalyticsDashboard({
                 ].map((list) => (
                   <div key={list.title} className="min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-slate-500">{list.title}</p>
-                      <a href={list.href} className="text-xs font-medium text-slate-600 underline-offset-4 hover:text-slate-900 hover:underline">Semua</a>
+                      <p className="text-xs font-semibold text-slate-600">{list.title}</p>
+                      <a href={list.href} className="inline-flex min-h-8 items-center text-xs font-medium text-blue-700 underline-offset-4 hover:underline">Semua</a>
                     </div>
                     {list.rows.length === 0 ? (
-                      <p className="mt-1.5 text-xs text-slate-400">Belum ada data.</p>
+                      <p className="mt-1.5 text-xs text-slate-500">Belum ada data.</p>
                     ) : (
                       <ol className="mt-1.5 space-y-1">
                         {list.rows.map((row, index) => (
                           <li key={`${row.label}-${index}`} className="flex items-baseline justify-between gap-3 text-sm" title={`${row.label} · ${list.unit(row)}`}>
                             <span className="min-w-0 truncate text-slate-800">
-                              <span className="mr-1.5 tabular-nums text-slate-400">{index + 1}</span>{row.label}
+                              <span className="mr-1.5 tabular-nums text-slate-500">{index + 1}</span>{row.label}
                             </span>
                             <span className="shrink-0 font-semibold tabular-nums text-slate-950">{compactRupiah(row.revenue)}</span>
                           </li>

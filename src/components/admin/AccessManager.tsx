@@ -25,6 +25,14 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { AdminRole } from "../../lib/auth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../ui/table";
 
 const ROLE_FILTER_LABELS: Record<string, string> = {
   all: "Semua Role",
@@ -933,48 +941,43 @@ export function AccessManager() {
           </div>
 
           {/* Desktop Table View */}
-          <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
-            <table className="w-full min-w-[640px] text-left text-xs">
-              <thead className="bg-slate-50/80">
-                <tr>
-                  <th
-                    scope="col"
-                    className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                  >
+          <div className="hidden overflow-hidden rounded-xl border border-slate-200 md:block">
+            <Table className="min-w-[640px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">
                     Area Operasional
-                  </th>
+                  </TableHead>
                   {PERMISSION_COLUMNS.map((column) => (
-                    <th
+                    <TableHead
                       key={column.role}
                       scope="col"
-                      className="px-4 py-3.5 text-center whitespace-nowrap"
+                      className="text-center text-slate-900"
                     >
-                      <span className="text-xs font-semibold text-slate-900">
-                        {column.label}
-                      </span>
-                    </th>
+                      {column.label}
+                    </TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {PERMISSION_ROWS.map((row) => (
-                  <tr key={row.capability} className="hover:bg-slate-50/50">
-                    <td className="px-4 py-3.5">
+                  <TableRow key={row.capability}>
+                    <TableCell className="whitespace-normal">
                       <p className="font-semibold text-slate-950">{row.capability}</p>
                       <p className="mt-0.5 text-xs text-slate-500">
                         {row.description}
                       </p>
-                    </td>
+                    </TableCell>
                     {PERMISSION_COLUMNS.map((column) => {
                       const level = row.access[column.role];
                       const allowed = level === "full";
                       return (
-                        <td key={column.role} className="px-4 py-3.5 text-center">
+                        <TableCell key={column.role} className="text-center">
                           <span
                             className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                               allowed
                                 ? "bg-emerald-50 text-emerald-800 border border-emerald-200/80"
-                                : "bg-slate-100 text-slate-400"
+                                : "bg-slate-100 text-slate-500"
                             }`}
                           >
                             {allowed ? (
@@ -992,13 +995,13 @@ export function AccessManager() {
                               </>
                             )}
                           </span>
-                        </td>
+                        </TableCell>
                       );
                     })}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

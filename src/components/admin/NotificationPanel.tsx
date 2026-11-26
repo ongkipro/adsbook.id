@@ -80,7 +80,7 @@ export function NotificationPanel({
               <button
                 type="button"
                 onClick={onMarkAllRead}
-                className="rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50"
+                className="rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-50"
               >
                 Tandai semua dibaca
               </button>
@@ -91,7 +91,7 @@ export function NotificationPanel({
               aria-pressed={muted}
               title={muted ? "Bunyikan notifikasi" : "Bisukan notifikasi"}
               aria-label={muted ? "Bunyikan notifikasi" : "Bisukan notifikasi"}
-              className="grid size-7 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+              className="grid size-7 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
             >
               {muted ? (
                 <VolumeX className="size-4" aria-hidden="true" />
@@ -122,7 +122,7 @@ export function NotificationPanel({
                 key={item.id}
                 type="button"
                 onClick={() => onOpenItem(item)}
-                className={`flex w-full items-start gap-2.5 border-b border-slate-100 px-3 py-2.5 text-left transition last:border-b-0 hover:bg-slate-50 ${
+                className={`flex w-full items-start gap-2.5 border-b border-slate-100 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-slate-50 ${
                   item.unread ? "bg-blue-50/40" : ""
                 }`}
               >
@@ -141,7 +141,7 @@ export function NotificationPanel({
                   <span className="mt-0.5 block truncate text-xs text-slate-600">
                     {item.body}
                   </span>
-                  <span className="mt-0.5 block text-xs font-medium text-slate-400">
+                  <span className="mt-0.5 block text-xs font-medium text-slate-500">
                     {relativeTime(item.created_at)}
                   </span>
                 </span>

@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { catalogProductIdOrNull } from "../../lib/catalog-feed";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { SearchInput } from "@/components/admin/filter-bar";
 import { FilterSelect } from "@/components/admin/filter-bar";
 import {
@@ -527,83 +526,55 @@ export function ProductCatalog({
 
   return (
     <div className="space-y-6">
-      {/* Metrics Cards / Summary Hierarchy */}
+      {/* Compact summary strip matching OrdersTable hierarchy */}
       <section
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-2.5 sm:grid-cols-4"
         aria-label="Ringkasan katalog produk"
       >
-        <Card className="border-slate-200 shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Total Produk
-            </CardTitle>
-            <Package className="size-4 text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold tracking-tight text-slate-950">
-              {products.length}
-            </div>
-            <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-              Produk terdaftar di katalog.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-slate-500">Total produk</p>
+            <Package className="size-4 text-slate-500" aria-hidden="true" />
+          </div>
+          <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-slate-950 sm:text-2xl">
+            {products.length}
+          </p>
+        </div>
 
-        <Card className="border-slate-200 shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Produk Aktif
-            </CardTitle>
-            <CheckCircle2 className="size-4 text-emerald-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-semibold tracking-tight text-slate-950">
-                {activeCount}
-              </span>
-              <span className="text-xs font-semibold text-emerald-700">
-                ({products.length ? Math.round((activeCount / products.length) * 100) : 0}%)
-              </span>
-            </div>
-            <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-              Aktif & tayang di storefront.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-slate-500">Produk aktif</p>
+            <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-xl font-semibold tabular-nums tracking-tight text-slate-950 sm:text-2xl">
+              {activeCount}
+            </span>
+            <span className="text-xs font-semibold tabular-nums text-emerald-700">
+              {products.length ? `${Math.round((activeCount / products.length) * 100)}%` : "0%"}
+            </span>
+          </div>
+        </div>
 
-        <Card className="border-slate-200 shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Total Varian
-            </CardTitle>
-            <Layers className="size-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold tracking-tight text-slate-950">
-              {variantCount}
-            </div>
-            <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-              Varian harga & opsi dari seluruh produk.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-slate-500">Total varian</p>
+            <Layers className="size-4 text-blue-600" aria-hidden="true" />
+          </div>
+          <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-slate-950 sm:text-2xl">
+            {variantCount}
+          </p>
+        </div>
 
-        <Card className="border-slate-200 shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Kategori
-            </CardTitle>
-            <Tag className="size-4 text-amber-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold tracking-tight text-slate-950">
-              {categoryCount}
-            </div>
-            <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-              Kategori unik produk.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-slate-500">Kategori</p>
+            <Tag className="size-4 text-amber-600" aria-hidden="true" />
+          </div>
+          <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-slate-950 sm:text-2xl">
+            {categoryCount}
+          </p>
+        </div>
       </section>
 
       {/* Main Catalog Container */}
@@ -619,7 +590,7 @@ export function ProductCatalog({
                 type="button"
                 onClick={() => setStatusFilter("all")}
                 aria-pressed={statusFilter === "all"}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-all ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
                   statusFilter === "all"
                     ? "bg-white text-slate-950 shadow-xs font-semibold"
                     : "text-slate-600 hover:text-slate-900"
@@ -634,7 +605,7 @@ export function ProductCatalog({
                 type="button"
                 onClick={() => setStatusFilter("active")}
                 aria-pressed={statusFilter === "active"}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-all ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
                   statusFilter === "active"
                     ? "bg-white text-emerald-800 shadow-xs font-semibold"
                     : "text-slate-600 hover:text-slate-900"
@@ -649,7 +620,7 @@ export function ProductCatalog({
                 type="button"
                 onClick={() => setStatusFilter("draft")}
                 aria-pressed={statusFilter === "draft"}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-all ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
                   statusFilter === "draft"
                     ? "bg-white text-slate-950 shadow-xs font-semibold"
                     : "text-slate-600 hover:text-slate-900"
@@ -907,7 +878,7 @@ export function ProductCatalog({
                               </a>
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="font-mono text-xs text-slate-400">
+                              <span className="font-mono text-xs text-slate-500">
                                 /{product.slug}
                               </span>
                               {product.category && (
@@ -926,7 +897,7 @@ export function ProductCatalog({
                       {/* Price range */}
                       <TableCell className="py-3.5 px-4">
                         <span className="font-semibold text-slate-900 text-sm">
-                          {priceRange || <span className="text-slate-400 font-normal text-xs">Belum set</span>}
+                          {priceRange || <span className="text-slate-500 font-normal text-xs">Belum set</span>}
                         </span>
                       </TableCell>
 

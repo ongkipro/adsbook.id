@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../ui/button";
+import { DataTableShell } from "./DataTableShell";
 import { ExportCsvButton } from "./ExportCsvButton";
 import { SHIPPING_STATUS_LABELS } from "@/lib/shipping-status";
 import { MengantarPickupFields } from "./MengantarPickupFields";
@@ -154,8 +155,8 @@ const shippingQueues: Array<{
     label: "Semua Pengiriman",
     note: "Mengantar & luar Mengantar",
     icon: TruckIcon,
-    tone: "text-slate-700 bg-slate-100",
-    activeTone: "border-slate-900 ring-slate-900/10",
+    tone: "text-blue-700 bg-blue-50",
+    activeTone: "border-blue-600 bg-blue-50/25 ring-blue-600/15",
   },
   {
     id: "needs_waybill",
@@ -652,7 +653,7 @@ export function ShippingOperations({
       </section>
 
       <section
-        className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-5"
+        className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 xl:grid-cols-5"
         aria-label="Antrean operasional pengiriman"
         role="tablist"
       >
@@ -683,28 +684,22 @@ export function ShippingOperations({
                     ?.focus(),
                 );
               }}
-              className={`min-h-24 rounded-xl border bg-white p-3 text-left shadow-sm ring-2 ring-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-4 ${
+              className={`min-h-20 w-44 shrink-0 rounded-xl border bg-white px-3.5 py-3 text-left ring-2 ring-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:w-auto sm:shrink ${
                 selected
                   ? queue.activeTone
                   : "border-slate-200 hover:border-slate-300"
               }`}
             >
-              <span className="flex items-start justify-between gap-3">
-                <span className="min-w-0">
-                  <span className="block text-xs font-semibold uppercase leading-4 tracking-wider text-slate-500">
-                    {queue.label}
-                  </span>
-                  <span className="mt-1.5 block text-2xl font-semibold tracking-tight text-slate-950 sm:mt-2">
-                    {queueCounts[queue.id]}
-                  </span>
+              <span className="flex items-center justify-between gap-2">
+                <span className="truncate text-xs font-medium text-slate-600">
+                  {queue.label}
                 </span>
-                <span
-                  className={`grid size-9 shrink-0 place-items-center rounded-xl sm:size-10 ${queue.tone}`}
-                >
-                  <queue.icon className="size-4 sm:size-5" aria-hidden="true" />
-                </span>
+                <queue.icon className="size-4 shrink-0 text-slate-500" aria-hidden="true" />
               </span>
-              <span className="mt-1 hidden text-xs leading-4 text-slate-500 sm:block">
+              <span className="mt-1 block text-xl font-semibold tabular-nums tracking-tight text-slate-950 sm:text-2xl">
+                {queueCounts[queue.id]}
+              </span>
+              <span className="mt-0.5 hidden truncate text-xs leading-4 text-slate-500 sm:block">
                 {queue.note}
               </span>
             </button>
@@ -727,8 +722,8 @@ export function ShippingOperations({
         </div>
       )}
 
-      <section className="bg-transparent">
-        <div className="pb-5">
+      <DataTableShell
+        toolbar={
           <FilterBar>
             <FilterField label="Cari pengiriman" htmlFor="search-shipping" size="grow">
               <SearchInput id="search-shipping" placeholder="Invoice, nama, WA, atau resi" value={search} onValueChange={setSearch} />
@@ -785,10 +780,13 @@ export function ShippingOperations({
               title="Semua pengiriman pada periode ini"
             />
           </FilterBar>
-          <p className="mt-3 text-xs font-semibold text-slate-500" aria-live="polite">
+        }
+        meta={
+          <p className="text-xs font-medium text-slate-600" aria-live="polite">
             Menampilkan {filteredShipments.length} dari {data.shipments.length} pengiriman
           </p>
-        </div>
+        }
+      >
 
         <div id="shipping-queue-results" role="tabpanel" aria-live="polite">
         {filteredShipments.length === 0 ? (
@@ -888,7 +886,7 @@ export function ShippingOperations({
                 width widens the implicit column past the viewport and the wrapper clips
                 the right-hand controls out of reach on mobile. */}
             <div
-              className="grid grid-cols-1 gap-3 py-3 lg:hidden"
+              className="grid grid-cols-1 gap-3 p-3 lg:hidden"
               aria-label="Daftar pengiriman mobile"
             >
             {filteredShipments.map((shipment) => {
@@ -934,9 +932,11 @@ export function ShippingOperations({
                     <div>
                       <p className="text-slate-500">Kurir</p>
                       <p className="mt-1 font-semibold text-slate-950">
-                        {shipment.courierCode || "Belum dipilih"}{" "}
-                        {shipment.courierService
-                          ? `· ${shipment.courierService}`
+                        {shipment.courierCode || "Belum dipilih"}
+                        {shipment.courierService &&
+                        shipment.courierService.trim().toLowerCase() !==
+                          (shipment.courierCode || "").trim().toLowerCase()
+                          ? ` · ${shipment.courierService}`
                           : ""}
                       </p>
                     </div>
@@ -1097,7 +1097,7 @@ export function ShippingOperations({
                         <p className="mt-1 font-semibold text-slate-700">
                           {shipment.customerName}
                         </p>
-                        <p className="mt-1 font-mono text-xs text-slate-400">
+                        <p className="mt-1 font-mono text-xs text-slate-500">
                           {shipment.customerPhone}
                         </p>
                       </TableCell>
@@ -1116,9 +1116,11 @@ export function ShippingOperations({
                       </TableCell>
                       <TableCell className="px-3 py-4">
                         <p className="font-semibold text-slate-900">
-                          {shipment.courierCode || "Belum dipilih"}{" "}
-                          {shipment.courierService
-                            ? `· ${shipment.courierService}`
+                          {shipment.courierCode || "Belum dipilih"}
+                          {shipment.courierService &&
+                          shipment.courierService.trim().toLowerCase() !==
+                            (shipment.courierCode || "").trim().toLowerCase()
+                            ? ` · ${shipment.courierService}`
                             : ""}
                         </p>
                         <p
@@ -1131,7 +1133,7 @@ export function ShippingOperations({
                             Error: {providerDispatchErrorText(shipment.providerDispatchError)}
                           </p>
                         )}
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-slate-500">
                           Ongkir {currency(shipment.shippingCost)}
                         </p>
                       </TableCell>
@@ -1176,7 +1178,7 @@ export function ShippingOperations({
                           </>
                         ) : (
                           <p
-                            className={`font-semibold ${shipment.handover === "drop_off" ? "text-violet-700" : ready ? "text-sky-700" : "text-slate-400"}`}
+                            className={`font-semibold ${shipment.handover === "drop_off" ? "text-violet-700" : ready ? "text-sky-700" : "text-slate-500"}`}
                           >
                             {shipment.handover === "drop_off" ? "Drop-off di counter" : ready ? "Siap dijadwalkan" : "Belum siap"}
                           </p>
@@ -1208,7 +1210,7 @@ export function ShippingOperations({
           </>
         )}
         </div>
-      </section>
+      </DataTableShell>
 
       <div>
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

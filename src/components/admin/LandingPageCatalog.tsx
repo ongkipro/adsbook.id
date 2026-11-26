@@ -338,7 +338,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
               type="button"
               onClick={() => setStatusFilter("all")}
               aria-pressed={statusFilter === "all"}
-              className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
+              className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${
                 statusFilter === "all"
                   ? "bg-white text-slate-900 shadow-xs font-semibold"
                   : "text-slate-600 hover:text-slate-900"
@@ -353,7 +353,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
               type="button"
               onClick={() => setStatusFilter("published")}
               aria-pressed={statusFilter === "published"}
-              className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
+              className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${
                 statusFilter === "published"
                   ? "bg-white text-emerald-700 shadow-xs font-semibold"
                   : "text-slate-600 hover:text-slate-900"
@@ -368,7 +368,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
               type="button"
               onClick={() => setStatusFilter("draft")}
               aria-pressed={statusFilter === "draft"}
-              className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
+              className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${
                 statusFilter === "draft"
                   ? "bg-white text-amber-700 shadow-xs font-semibold"
                   : "text-slate-600 hover:text-slate-900"
@@ -383,7 +383,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
               type="button"
               onClick={() => setStatusFilter("product_page")}
               aria-pressed={statusFilter === "product_page"}
-              className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
+              className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${
                 statusFilter === "product_page"
                   ? "bg-white text-blue-700 shadow-xs font-semibold"
                   : "text-slate-600 hover:text-slate-900"
@@ -415,7 +415,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
       <Card className="border border-slate-200 shadow-xs overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-500">
               <div className="w-6 h-6 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
               <span className="text-xs font-medium">Memuat katalog landing page...</span>
             </div>
@@ -782,7 +782,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                                 {page.product_title || (isStatic ? "Static Landing Page" : "Unknown Product")}
                               </p>
                               {page.product_id && (
-                                <p className="mt-0.5 font-mono text-xs text-slate-400">ID: {page.product_id}</p>
+                                <p className="mt-0.5 font-mono text-xs text-slate-500">ID: {page.product_id}</p>
                               )}
                             </TableCell>
 

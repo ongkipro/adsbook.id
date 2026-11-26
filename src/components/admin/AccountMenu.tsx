@@ -88,7 +88,7 @@ export function AccountMenu({
           <DropdownMenuItem onClick={onOpenChangelog}>
             <History aria-hidden="true" />
             What's new
-            <span className="ml-auto font-mono text-xs text-slate-400">v{version}</span>
+            <span className="ml-auto font-mono text-xs text-slate-500">v{version}</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

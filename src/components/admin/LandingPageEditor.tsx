@@ -716,7 +716,7 @@ export default function LandingPageEditor({ landingPageId }: Props) {
                       id={`landing-section-${section.id}`}
                       key={section.id}
                       onClick={() => setEditingSectionId(section.id)}
-                      className={`rounded-xl border bg-white shadow-sm transition-all overflow-hidden cursor-pointer ${
+                      className={`rounded-xl border bg-white shadow-sm transition-colors overflow-hidden cursor-pointer ${
                         isEditing ? "border-blue-400 ring-4 ring-blue-50" : "border-slate-200 hover:border-slate-400"
                       }`}
                     >
