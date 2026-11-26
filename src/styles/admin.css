@@ -66,7 +66,7 @@
      height, padding, radius and type, so a call site passes layout only
      (width, margin, shrink). admin-controls.test.ts refuses geometry overrides. */
   .btn-primary, .btn-blue, .btn-secondary {
-    @apply inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0;
+    @apply inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0;
   }
 
   .btn-primary {
@@ -271,13 +271,17 @@
   --accent-foreground: oklch(0.22 0.025 255);
   --border: oklch(0.91 0.009 255);
   --input: oklch(0.89 0.012 255);
-  --ring: oklch(0.58 0.12 255);
+  /* The keyboard focus ring every primitive draws (focus-visible:ring-ring):
+     the accent itself, 5.2:1 on white. The old muted blue was ~3.4:1, and the
+     primitives had stopped using it for slate-300 (1.5:1). */
+  --ring: var(--admin-accent);
   --radius: 0.375rem;
   --sidebar: oklch(0.985 0.003 255);
   --sidebar-foreground: oklch(0.19 0.024 255);
   --sidebar-accent: oklch(0.95 0.008 255);
   --sidebar-accent-foreground: oklch(0.19 0.024 255);
   --sidebar-border: oklch(0.91 0.009 255);
+  --sidebar-ring: var(--admin-accent);
   background: #f6f7f9;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -288,19 +292,24 @@
 .admin-shell .admin-main { scrollbar-gutter: stable; }
 .admin-shell :where(button, a, input, textarea, select) { -webkit-tap-highlight-color: transparent; }
 /* Programmatic focus containers (#admin-main, alert anchors, popups) must never draw a sudden page border. */
-/* The keyboard focus indicator for every admin control. Unlayered on purpose:
-   inside a layer, the `focus-visible:outline-none` that shadcn primitives and
-   the ads tabs carry beat it, and keyboard focus showed nothing (PR #108).
-   Full accent, not a tint: #2563eb is 5.2:1 on white, the 1px slate-300 ring
-   underneath is 1.5:1 and is not an indicator on its own (WCAG 1.4.11). A
-   pointer click never matches :focus-visible, so nothing lingers after one. */
-.admin-shell :where(button, a, input, textarea, select):focus-visible {
+/* Keyboard focus for the plain controls no primitive styles: hand-built links
+   and buttons, and the ads pages' tab strip. A shadcn primitive (data-slot)
+   draws its own accent ring (focus-visible:ring-ring), so it is skipped here,
+   and text fields are left out on purpose: a mouse click into a field matches
+   :focus-visible too, and the field already shows its own focus frame.
+   Unlayered: inside a layer, the `focus:outline-none` those tabs carry wins and
+   keyboard focus showed nothing (PR #108). */
+.admin-shell :where(a, button):not([data-slot]):focus-visible {
   outline: 2px solid var(--admin-accent);
   outline-offset: 2px;
 }
-/* A tab in a scrolling strip (the ads pages): an outside outline is clipped by
-   the strip's overflow, so draw it inside the button instead. */
-.admin-shell .tab-btn:focus-visible { outline-offset: -2px; }
+/* The ads tab strip scrolls sideways, which clips an outside outline. Inside,
+   it would paint over the active tab's 2px underline, so the tab gets an inset
+   ring on its other three sides instead. */
+.admin-shell .tab-btn:focus-visible {
+  outline: none;
+  box-shadow: inset 2px 2px 0 0 var(--admin-accent), inset -2px 0 0 0 var(--admin-accent);
+}
 .admin-shell [tabindex="-1"]:focus { outline: none; }
 /* Both draw their focus on the surrounding frame (InputGroup ring, command box). */
 .admin-shell :where([data-slot="command-input"], [data-slot="input-group-control"]):focus-visible { outline: none; }

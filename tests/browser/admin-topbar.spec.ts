@@ -189,41 +189,63 @@ test("dropdown click-away leaves no lingering focus border and #admin-main stays
   await expect(orderAction, "keyboard after mouse: focus still returns").toBeFocused();
 });
 
-test("keyboard focus is visible on the ads tabs and on a shared Button", async ({ page }) => {
+test("keyboard focus is visible in the accent on primitives, ads tabs and plain links; a click into a field adds no second frame", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await signIn(page);
-  const outline = (locator: ReturnType<Page["locator"]>) =>
-    locator.evaluate((el) => {
+  // What the browser actually paints once the ring's transition has settled.
+  const indicator = (locator: ReturnType<Page["locator"]>) =>
+    locator.evaluate(async (el) => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
       const cs = getComputedStyle(el);
-      return { focusVisible: el.matches(":focus-visible"), style: cs.outlineStyle, width: cs.outlineWidth };
+      const accent = /rgb\(37, 99, 235\)/;
+      const rings = cs.boxShadow.split(/,(?![^(]*\))/).filter((part) => accent.test(part) && !/ 0px 0px 0px 0px/.test(part));
+      return {
+        focusVisible: el.matches(":focus-visible"),
+        outline: cs.outlineStyle === "none" ? 0 : parseFloat(cs.outlineWidth),
+        accentRing: rings.length > 0,
+      };
     });
-  for (const path of ["/admin/ads/google", "/admin/ads/meta", "/admin/ads/tiktok"]) {
-    await page.goto(`${STORE}${path}`);
-    const tab = page.locator(".tab-btn").nth(1);
-    await tab.focus();
+  const tabIn = async (locator: ReturnType<Page["locator"]>) => {
+    await locator.focus();
     await page.keyboard.press("Shift+Tab");
     await page.keyboard.press("Tab");
-    const state = await outline(tab);
-    expect(state.focusVisible, `${path} tab is keyboard-focused`).toBe(true);
-    expect(state.style, `${path} tab shows a focus outline`).toBe("solid");
-    expect(state.width, `${path} tab focus outline width`).toBe("2px");
-    // The strip scrolls sideways (overflow-x-auto): an outside outline would be clipped to its two vertical edges.
-    expect(await tab.evaluate((el) => getComputedStyle(el).outlineOffset), `${path} tab outline drawn inside the strip`).toBe("-2px");
+  };
+
+  for (const path of ["/admin/ads/google", "/admin/ads/meta", "/admin/ads/tiktok"]) {
+    await page.goto(`${STORE}${path}`);
+    // The active tab: its 2px underline stays, and the inset ring draws the other three sides.
+    const active = page.locator(".tab-btn").first();
+    await tabIn(page.locator(".tab-btn").nth(1));
+    await page.keyboard.press("Shift+Tab");
+    const state = await indicator(active);
+    expect(state.focusVisible, `${path} active tab is keyboard-focused`).toBe(true);
+    expect(state.accentRing, `${path} tab shows an accent focus ring`).toBe(true);
+    expect(state.outline, `${path} tab draws no outline over its underline`).toBe(0);
   }
+
   await page.goto(`${STORE}/admin/orders`);
   await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  // A shadcn Button and a Base UI checkbox (a <span>): their own 2px accent ring.
   const exportCsv = page.getByRole("button", { name: /Export CSV/ });
-  await exportCsv.focus();
-  await page.keyboard.press("Shift+Tab");
-  await page.keyboard.press("Tab");
-  const button = await outline(exportCsv);
+  await tabIn(exportCsv);
+  const button = await indicator(exportCsv);
   expect(button.focusVisible).toBe(true);
-  expect(button.style, "a shadcn Button shows a focus outline").toBe("solid");
-  // A mouse click on the same button leaves no outline behind.
-  await exportCsv.click({ button: "right" }).catch(() => undefined);
-  await page.keyboard.press("Escape");
+  expect(button.accentRing, "a shadcn Button shows an accent focus ring").toBe(true);
+  expect(button.outline, "and no second outline around it").toBe(0);
+  const checkbox = page.locator('[aria-label="Tabel order desktop"] [role="checkbox"]').first();
+  await tabIn(checkbox);
+  expect((await indicator(checkbox)).accentRing, "a Base UI checkbox shows an accent focus ring").toBe(true);
+
+  // A mouse click into a text field: its own focus frame only, no outline on top.
+  const search = page.getByPlaceholder(/Invoice, nama/);
+  await search.click();
+  expect((await indicator(search)).outline, "no outline over a clicked field").toBe(0);
+
+  // A mouse click on a button leaves no ring behind.
   await page.mouse.click(5, 300);
-  const afterPointer = await outline(exportCsv);
+  await exportCsv.click();
+  await page.keyboard.press("Escape").catch(() => undefined);
+  const afterPointer = await indicator(exportCsv);
   expect(afterPointer.focusVisible, "no lingering focus ring after a pointer press").toBe(false);
 });
 

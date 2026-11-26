@@ -98,18 +98,26 @@ test("admin popups and containers avoid lingering click-away borders and decorat
   }
 });
 
-test("keyboard focus shows on every admin control: the fallback outline is unlayered and full accent", () => {
+test("keyboard focus: every primitive draws a 2px accent ring, plain links and buttons an accent outline, text fields no second frame", () => {
   const css = readFileSync("src/styles/admin.css", "utf8");
-  const rule = ".admin-shell :where(button, a, input, textarea, select):focus-visible";
+  // The ring token is the accent (5.2:1 on white), not a tint or a grey (slate-300 is 1.5:1).
+  assert.match(css, /\.admin-shell \{[^}]*--ring: var\(--admin-accent\);/, "admin --ring is the accent");
+  assert.match(css, /\.admin-shell \{[^}]*--sidebar-ring: var\(--admin-accent\);/, "admin --sidebar-ring is the accent");
+  for (const primitive of ["button", "input", "textarea", "checkbox", "switch", "select", "tabs", "badge"]) {
+    const src = readFileSync(`src/components/ui/${primitive}.tsx`, "utf8");
+    assert.match(src, /focus-visible:ring-2 focus-visible:ring-ring/, `${primitive} draws a 2px ring in the ring token`);
+    assert.doesNotMatch(src, /ring-slate-300/, `${primitive} no longer draws a 1.5:1 grey ring`);
+  }
+  // The fallback outline: unlayered (inside a layer, a utility's outline-none wins), and never on a primitive or a text field.
+  const rule = ".admin-shell :where(a, button):not([data-slot]):focus-visible";
   const at = css.indexOf(rule);
-  assert.ok(at > 0, "the fallback focus rule exists");
-  // Inside any @layer, a utility's `focus-visible:outline-none` wins and the indicator disappears.
+  assert.ok(at > 0, "the fallback rule covers plain links and buttons only");
   const open: boolean[] = [];
   for (let i = 0; i < at; i += 1) {
     if (css[i] === "{") open.push(/@layer\b/.test(css.slice(Math.max(css.lastIndexOf("}", i - 1), css.lastIndexOf(";", i - 1)) + 1, i)));
     else if (css[i] === "}") open.pop();
   }
-  assert.equal(open.some(Boolean), false, "the fallback focus rule must not sit inside an @layer");
-  const body = css.slice(at, css.indexOf("}", at));
-  assert.match(body, /outline:\s*2px solid var\(--admin-accent\)/, "a 2px outline in the full accent, not a tint");
+  assert.equal(open.some(Boolean), false, "the fallback rule is not inside an @layer");
+  assert.match(css.slice(at, css.indexOf("}", at)), /outline:\s*2px solid var\(--admin-accent\)/);
+  assert.doesNotMatch(css, /:where\([^)]*\binput\b[^)]*\):focus-visible\s*\{\s*outline:\s*2px/, "a mouse click into a field must not add an outline over its own focus frame");
 });
