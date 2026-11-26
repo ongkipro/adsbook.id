@@ -322,6 +322,16 @@ test("maps Mengantar Public API v2 plain-string status categories observed in sa
   );
 });
 
+test("a status that is not a string is no evidence, never a throw", () => {
+  for (const status of [{ DELIVERED: true }, 7, true, null, ["DELIVERED"]]) {
+    assert.equal(
+      mapMengantarStatusEvidence({ status: status as never, history: [] }).shippingStatus,
+      "processing",
+      JSON.stringify(status),
+    );
+  }
+});
+
 test("selects only monotonic provider lifecycle advances", () => {
   assert.equal(selectProviderShippingAdvance("pending", "processing"), "processing");
   assert.equal(selectProviderShippingAdvance("processing", "shipped"), "shipped");

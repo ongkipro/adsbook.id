@@ -151,6 +151,31 @@ test("omset excludes cancelled and failed orders, and collected revenue counts p
   assert.equal(data.live_orders, 3);
 });
 
+test("AN-1: a COD order never lands in both figures, and a released one in neither", async () => {
+  const { sqlite, d1 } = createAnalyticsDatabase();
+  const insert = sqlite.prepare(`
+    INSERT INTO orders (id, total_amount, payment_method, payment_status, shipping_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  [
+    [1, 200_000, "qris", "paid", "pending", "2026-08-17T18:00:00.000Z"],     // paid online
+    [2, 150_000, "cod", "paid", "delivered", "2026-08-17T19:00:00.000Z"],    // COD marked paid by the operator, delivered: COD figure only
+    [3, 120_000, "cod", "paid", "shipped", "2026-08-17T20:00:00.000Z"],      // COD marked paid, not delivered: neither
+    [4, 90_000, "cod", "refunded", "delivered", "2026-08-17T21:00:00.000Z"], // delivered, then refunded: released
+    [5, 80_000, "cod", "failed", "delivered", "2026-08-17T22:00:00.000Z"],   // delivered, payment failed: released
+  ].forEach((row) => insert.run(...row));
+
+  const response = await GET({
+    locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1} },
+    url: new URL("https://cms.test/api/admin/analytics?startDate=2026-08-18&endDate=2026-08-18&interval=hour"),
+  } as never);
+  const data = ((await response.json()) as any).data;
+
+  assert.equal(data.collected_revenue, 200_000, "online payments only");
+  assert.equal(data.delivered_cod_revenue, 150_000, "delivered COD that is still money in play");
+  assert.ok(data.collected_revenue + data.delivered_cod_revenue <= data.total_revenue, "the two figures never exceed live revenue");
+});
+
 test("payment success is measured over online orders only — COD cannot prepay", async () => {
   const { sqlite, d1 } = createAnalyticsDatabase();
   const insert = sqlite.prepare(`

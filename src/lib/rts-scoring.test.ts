@@ -238,6 +238,18 @@ test("a store without a Mengantar key makes no call at all", async (context) => 
   assert.equal(calls(), 0);
 });
 
+test("a paused store (demo, Preview or expired) makes no call and writes nothing, even with a key and waiting orders", async (context) => {
+  const calls = mockMengantar(context, () => Response.json({}));
+  const { database, writes } = backfillDatabase();
+
+  assert.equal(
+    await backfillReceiverScores(database, { runtimeEnv: {}, billing: { state: "expired", adSignalsPaused: true } } as never),
+    0,
+  );
+  assert.equal(calls(), 0);
+  assert.equal(writes.length, 0);
+});
+
 test("a failing Mengantar stops the backfill after two misses in a row", async (context) => {
   const originalError = console.error;
   console.error = () => {};

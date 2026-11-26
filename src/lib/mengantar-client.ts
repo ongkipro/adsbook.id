@@ -169,7 +169,8 @@ function normalizeMengantarStatusToken(value: string): string {
 }
 
 function activeMengantarStatusFlags(status: string | undefined): string[] {
-  if (!status) return [];
+  // The provider owns this field: anything but a string is no evidence, not a throw.
+  if (typeof status !== "string") return [];
   const trimmed = status.trim();
   if (!trimmed) return [];
   if (trimmed.startsWith("{")) {
