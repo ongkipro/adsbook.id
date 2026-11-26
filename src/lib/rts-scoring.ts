@@ -146,6 +146,9 @@ export async function backfillReceiverScores(
   budgetMs = RECEIVER_SCORE_BACKFILL_BUDGET_MS,
 ): Promise<number> {
   const deadline = Date.now() + budgetMs;
+  // The alarm pauses provider traffic for the demo store and for a store that
+  // is not live (ADR-041, PR-26), the same gate as `reconcileStaleMengantarOrders`.
+  if (locals.billing?.adSignalsPaused) return 0;
   if (!(await getProviderConfig(database, locals)).mengantar.apiKey) return 0;
   const { results } = await database
     .prepare(
