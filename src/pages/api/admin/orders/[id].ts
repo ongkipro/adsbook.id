@@ -118,6 +118,9 @@ type OrderRow = {
   provider_order_id: string | null;
   provider_dispatch_error: string | null;
   provider_dispatch_claimed_at: string | null;
+  provider_status_text: string | null;
+  provider_status_at: string | null;
+  provider_synced_at: string | null;
   receiver_delivery_rate: number | null;
   receiver_risk_label: string | null;
   receiver_performance_json: string | null;
@@ -215,6 +218,9 @@ async function loadOrder(database: D1Database, rawOrderKey: string) {
       o.provider_order_id,
       o.provider_dispatch_error,
       o.provider_dispatch_claimed_at,
+      o.provider_status_text,
+      o.provider_status_at,
+      o.provider_synced_at,
       o.receiver_rts_score AS receiver_delivery_rate,
       o.rts_risk_label AS receiver_risk_label,
       o.receiver_performance_json,
@@ -370,6 +376,10 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
         cnote_no: order.cnote_no,
         provider_order_id: order.provider_order_id,
         provider_dispatch_error: order.provider_dispatch_error,
+        // The courier's latest word on the parcel (sync or webhook), for the order page's journey row.
+        provider_status_text: order.provider_status_text,
+        provider_status_at: order.provider_status_at,
+        provider_synced_at: order.provider_synced_at,
         dispatchEligible: dispatch.eligible,
         dispatchReason: dispatch.reason,
         receiver_delivery_rate: order.receiver_delivery_rate,
