@@ -73,6 +73,11 @@ test("TikTok Pixel + Events API: admin setup, storefront pixel and server twin, 
 
   // ---- The storefront, as an anonymous buyer ----
   const buyer = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  // If another spec leaves Google Ads configured, keep its live script from
+  // running here. The TikTok CSP assertion still checks every violation.
+  await buyer.route("https://www.googletagmanager.com/gtag/js?*", (route) =>
+    route.fulfill({ contentType: "application/javascript", body: "" }),
+  );
   const libraryRequests: string[] = [];
   await buyer.route("https://analytics.tiktok.com/**", (route) => {
     libraryRequests.push(route.request().url());
