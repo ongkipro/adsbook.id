@@ -97,3 +97,19 @@ test("admin popups and containers avoid lingering click-away borders and decorat
     assert.doesNotMatch(readFileSync(controlFile, "utf8"), /\btransition-all\b/, `${controlFile} avoids transition-all`);
   }
 });
+
+test("keyboard focus shows on every admin control: the fallback outline is unlayered and full accent", () => {
+  const css = readFileSync("src/styles/admin.css", "utf8");
+  const rule = ".admin-shell :where(button, a, input, textarea, select):focus-visible";
+  const at = css.indexOf(rule);
+  assert.ok(at > 0, "the fallback focus rule exists");
+  // Inside any @layer, a utility's `focus-visible:outline-none` wins and the indicator disappears.
+  const open: boolean[] = [];
+  for (let i = 0; i < at; i += 1) {
+    if (css[i] === "{") open.push(/@layer\b/.test(css.slice(Math.max(css.lastIndexOf("}", i - 1), css.lastIndexOf(";", i - 1)) + 1, i)));
+    else if (css[i] === "}") open.pop();
+  }
+  assert.equal(open.some(Boolean), false, "the fallback focus rule must not sit inside an @layer");
+  const body = css.slice(at, css.indexOf("}", at));
+  assert.match(body, /outline:\s*2px solid var\(--admin-accent\)/, "a 2px outline in the full accent, not a tint");
+});

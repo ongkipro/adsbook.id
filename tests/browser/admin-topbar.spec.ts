@@ -188,3 +188,41 @@ test("dropdown click-away leaves no lingering focus border and #admin-main stays
   await expect(dialog).toHaveCount(0);
   await expect(orderAction, "keyboard after mouse: focus still returns").toBeFocused();
 });
+
+test("keyboard focus is visible on the ads tabs and on a shared Button", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await signIn(page);
+  const outline = (locator: ReturnType<Page["locator"]>) =>
+    locator.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { focusVisible: el.matches(":focus-visible"), style: cs.outlineStyle, width: cs.outlineWidth };
+    });
+  for (const path of ["/admin/ads/google", "/admin/ads/meta", "/admin/ads/tiktok"]) {
+    await page.goto(`${STORE}${path}`);
+    const tab = page.locator(".tab-btn").nth(1);
+    await tab.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    const state = await outline(tab);
+    expect(state.focusVisible, `${path} tab is keyboard-focused`).toBe(true);
+    expect(state.style, `${path} tab shows a focus outline`).toBe("solid");
+    expect(state.width, `${path} tab focus outline width`).toBe("2px");
+    // The strip scrolls sideways (overflow-x-auto): an outside outline would be clipped to its two vertical edges.
+    expect(await tab.evaluate((el) => getComputedStyle(el).outlineOffset), `${path} tab outline drawn inside the strip`).toBe("-2px");
+  }
+  await page.goto(`${STORE}/admin/orders`);
+  await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  const exportCsv = page.getByRole("button", { name: /Export CSV/ });
+  await exportCsv.focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  const button = await outline(exportCsv);
+  expect(button.focusVisible).toBe(true);
+  expect(button.style, "a shadcn Button shows a focus outline").toBe("solid");
+  // A mouse click on the same button leaves no outline behind.
+  await exportCsv.click({ button: "right" }).catch(() => undefined);
+  await page.keyboard.press("Escape");
+  await page.mouse.click(5, 300);
+  const afterPointer = await outline(exportCsv);
+  expect(afterPointer.focusVisible, "no lingering focus ring after a pointer press").toBe(false);
+});
