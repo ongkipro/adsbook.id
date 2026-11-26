@@ -70,17 +70,17 @@ export default function DashboardRevenueChart({
             }}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 11, fill: "#64748b" }}
+            tick={{ fontSize: 12, fill: "#64748b" }}
             dy={8}
-            minTickGap={8}
+            minTickGap={12}
           />
-          {/* 76px: "Rp1,4jt" and "Rp700rb" stay unclipped at 11px ticks. */}
+          {/* 80px: "Rp1,4jt" and "Rp700rb" stay unclipped at 12px ticks. */}
           <YAxis
-            width={76}
+            width={80}
             tickFormatter={(value) => formatValue(Number(value))}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 11, fill: "#64748b" }}
+            tick={{ fontSize: 12, fill: "#64748b" }}
           />
           <ChartTooltip
             cursor={{ fill: "rgba(148,163,184,0.06)" }}

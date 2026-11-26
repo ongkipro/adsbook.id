@@ -153,6 +153,7 @@ function Sidebar({
  side = "left",
  variant = "sidebar",
  collapsible = "offcanvas",
+ contained = false,
  className,
  children,
  dir,
@@ -161,6 +162,8 @@ function Sidebar({
  side?: "left" | "right"
  variant?: "sidebar" | "floating" | "inset"
  collapsible?: "offcanvas" | "icon" | "none"
+ /** When true, the desktop sidebar flows inside a centered shell frame instead of fixing to viewport left:0. */
+ contained?: boolean
 }) {
  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
@@ -203,6 +206,39 @@ function Sidebar({
      <div className="flex h-full w-full flex-col">{children}</div>
     </SheetContent>
    </Sheet>
+  )
+ }
+
+ if (contained) {
+  return (
+   <div
+    className="group peer relative hidden h-full shrink-0 text-sidebar-foreground md:flex"
+    data-state={state}
+    data-collapsible={state === "collapsed" ? collapsible : ""}
+    data-variant={variant}
+    data-side={side}
+    data-slot="sidebar"
+   >
+    <div
+     data-slot="sidebar-container"
+     data-side={side}
+     className={cn(
+      "relative z-10 flex h-full w-(--sidebar-width) shrink-0 flex-col transition-[width] duration-200 ease-linear",
+      "group-data-[collapsible=offcanvas]:w-0 group-data-[collapsible=offcanvas]:overflow-hidden",
+      "group-data-[collapsible=icon]:w-12",
+      className
+     )}
+     {...props}
+    >
+     <div
+      data-sidebar="sidebar"
+      data-slot="sidebar-inner"
+      className="flex size-full flex-col bg-transparent"
+     >
+      {children}
+     </div>
+    </div>
+   </div>
   )
  }
 

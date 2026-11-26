@@ -65,7 +65,7 @@ export const adminNavGroups: AdminNavGroup[] = [
         id: "orders",
         href: "/admin/orders",
         label: "Pesanan",
-        shortLabel: "Order",
+        shortLabel: "Pesanan",
         description: "Validasi dan proses pesanan",
         icon: ShoppingBag,
         keywords: "orders pesanan transaksi pelanggan terbengkalai abandoned leads",
@@ -209,7 +209,7 @@ export const adminNavGroups: AdminNavGroup[] = [
 export const profileNavItem: AdminNavItem = {
   id: "profile",
   href: "/admin/profile",
-  label: "Profil & Integrasi",
+  label: "Profil & integrasi",
   shortLabel: "Profil",
   description: "Akun, keamanan, dan API",
   icon: CircleUserRound,

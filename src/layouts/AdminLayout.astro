@@ -33,6 +33,7 @@ const billingNotice =
         ? { urgent: true, title: 'Langganan berakhir.', body: 'Pesanan, iklan, dan AI dijeda. Semua data toko tetap aman dan kembali aktif begitu langganan diperpanjang.', cta: 'Perpanjang langganan' }
         : null;
 const sidebarDefaultOpen = Astro.cookies.get('sidebar_state')?.value !== 'false';
+const wideLayoutDefault = Astro.cookies.get('wide_layout')?.value === 'true';
 // IAM-5: a browser that sends no Fetch Metadata cannot save anything here; say
 // so before the operator fills a form, not after.
 const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
@@ -86,6 +87,7 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
       adminUsername={Astro.locals.admin?.username ?? ''}
       mustChangePassword={mustChangePassword}
       sidebarDefaultOpen={sidebarDefaultOpen}
+      wideLayoutDefault={wideLayoutDefault}
       catalogMode={Astro.locals.tenant.catalogMode}
     >
       {browserUnsupported && (

@@ -4,10 +4,11 @@ import { join } from "node:path";
 import test from "node:test";
 
 /**
- * AdminShell owns the page width (`max-w-[1560px]`). Pages that set their own
- * centred max-width gave five different content edges at 1920px — the header
- * and cards jumped left and right between menus. Inner blocks may still limit
- * a paragraph or a preview; a centred page-level container may not come back.
+ * AdminShell owns the 2-layer centered width contract (`max-w-[1440px]` shell
+ * with optional `Layar Lebar` wide toggle, 240px in-flow sidebar, 1152px
+ * universal content canvas, and unified 220px section rail). Pages must never
+ * set their own centred max-width or rival rail widths — every menu shares one
+ * left and right edge.
  */
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {

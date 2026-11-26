@@ -40,7 +40,6 @@ import {
   getVisibleNavGroups,
   isAdminNavHrefActive,
   profileNavItem,
-  statusNavItem,
   type AdminRole,
 } from "./admin-navigation";
 
@@ -58,6 +57,7 @@ interface AdminShellProps {
   adminUsername?: string;
   mustChangePassword?: boolean;
   sidebarDefaultOpen?: boolean;
+  wideLayoutDefault?: boolean;
   /** DIGITAL-PRODUCTS-SPEC §4.1: a digital store's menu has nothing that ships. */
   catalogMode?: CatalogMode;
 }
@@ -75,6 +75,7 @@ export function AdminShell({
   adminUsername = "",
   mustChangePassword = false,
   sidebarDefaultOpen = true,
+  wideLayoutDefault = false,
   catalogMode = "hybrid",
 }: AdminShellProps) {
   const [searchOpen, setSearchOpen] = React.useState(false);
@@ -100,20 +101,32 @@ export function AdminShell({
   );
   const [isDesktop, setIsDesktop] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(sidebarDefaultOpen);
+  const [wideLayout, setWideLayout] = React.useState(wideLayoutDefault);
   const [changelogOpen, setChangelogOpen] = React.useState(false);
   const [accountMenuLoaded, setAccountMenuLoaded] = React.useState(false);
+  const handleWideLayoutChange = (next: boolean) => {
+    setWideLayout(next);
+    document.cookie = `wide_layout=${next}; path=/; max-age=31536000; samesite=lax`;
+  };
+  const shellWidthClass = wideLayout ? "max-w-none" : "max-w-[1440px]";
+  const rawStoreName = siteName || adminName;
+  const storeName = rawStoreName
+    .replace(/\s+preview\s+ops$/i, "")
+    .replace(/\s+preview$/i, "")
+    .replace(/\s+ops$/i, "")
+    .replace(/\s+dashboard$/i, "")
+    .replace(/\s+cms$/i, "")
+    .trim();
+  const displayDomain = siteUrl.replace(/^https?:\/\//, "") || "adsbook.internal";
   const groups = mustChangePassword ? [] : getVisibleNavGroups(adminRole, catalogMode);
   // The API & CLI docs speak to whoever manages API keys: owner and admin
   // (auth.ts ADMIN_PAGE_ROUTES holds /admin/docs for them alone).
-  const accountButtonClass = `ml-1 flex h-9 shrink-0 items-center gap-2 rounded-full pl-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:pr-2.5 data-popup-open:bg-slate-100 ${
+  const accountButtonClass = `ml-0.5 flex h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full pl-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 md:ml-1 md:h-9 md:min-w-0 lg:pr-2.5 data-popup-open:bg-slate-100 ${
                     activeMenu === "profile" ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`;
   const docsHref = !mustChangePassword && (adminRole === "owner" || adminRole === "admin") ? "/admin/docs" : undefined;
   const searchItems = mustChangePassword ? [] : getSearchableNavItems(adminRole, catalogMode);
   const allItems = groups.flatMap((group) => group.items);
-  const currentItem = [...allItems, profileNavItem, statusNavItem].find(
-    (item) => item.id === activeMenu,
-  );
   const mobilePrimaryIds = adminRole === "advertiser"
     ? ["dashboard", "products", "content", "ads"]
     : adminRole === "customer_service"
@@ -158,152 +171,169 @@ export function AdminShell({
 
   return (
     <TooltipProvider>
-      <SidebarProvider open={sidebarOpen} className="h-full min-h-0 overflow-clip">
-        <AppSidebar
-          adminName={adminName}
-          siteName={siteName}
-          siteLogo={siteLogo}
-          activeMenu={activeMenu}
-          currentPath={currentPath}
-          siteUrl={siteUrl}
-          adminRole={adminRole}
-          catalogMode={catalogMode}
-          restricted={mustChangePassword}
-          onOpenChangelog={() => setChangelogOpen(true)}
-          docsHref={docsHref}
-        />
-        <SidebarInset className="h-full min-h-0 min-w-0 overflow-clip bg-transparent">
-          <header className="admin-topbar sticky top-0 z-30 flex h-[60px] shrink-0 items-center border-b border-slate-200/70 bg-white/90 px-3 backdrop-blur-xl md:h-16 md:px-6">
-            <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
-              <button
-                type="button"
-                onClick={() => setMenuOpen(true)}
-                className={`${TOPBAR_ICON_BUTTON} md:hidden`}
-                aria-label="Buka menu navigasi"
+      <SidebarProvider open={sidebarOpen} style={{ "--sidebar-width": "15rem" } as React.CSSProperties} className="h-full min-h-0 flex-col overflow-clip">
+        <header className="admin-topbar z-30 w-full shrink-0 border-b border-slate-200/80 bg-white">
+          <div className={`mx-auto flex h-[60px] w-full items-center gap-1 px-1.5 md:h-16 md:gap-0 md:px-0 ${shellWidthClass}`}>
+            {/* Desktop brand column: aligned 1:1 over the 240px sidebar (or 48px tablet rail). */}
+            <div className="hidden shrink-0 items-center md:flex md:w-12 md:justify-center lg:w-60 lg:justify-start lg:px-3">
+              <a
+                href={mustChangePassword ? "/admin/profile" : "/admin/dashboard"}
+                aria-label={mustChangePassword ? "Keamanan akun" : `Buka dashboard ${storeName}`}
+                className="flex min-w-0 items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:w-full"
               >
-                <Menu className="size-5" aria-hidden="true" />
-              </button>
-              <a href={mustChangePassword ? "/admin/profile" : "/admin/dashboard"} className="flex size-8 shrink-0 items-center justify-center md:hidden" aria-label={mustChangePassword ? "Keamanan akun" : `Dashboard ${adminName}`}>
-                <StoreMark logo={siteLogo} name={siteName || adminName} className="size-8" />
+                <StoreMark logo={siteLogo} name={storeName} className="size-8 shrink-0" />
+                <span className="hidden min-w-0 flex-1 leading-tight lg:block">
+                  <span className="block truncate text-sm font-semibold tracking-tight text-slate-950">{storeName}</span>
+                  <span className="block truncate text-xs text-slate-500">{displayDomain}</span>
+                </span>
               </a>
-              <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold tracking-tight text-slate-950">
-                  {title}
-                </h1>
-                <p className="hidden truncate text-xs font-medium text-slate-500 lg:block">
-                  {currentItem?.description ?? "Workspace operasional"}
-                </p>
-              </div>
             </div>
 
-            {!mustChangePassword && <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="group mx-4 hidden h-9 w-full max-w-md flex-1 items-center gap-2.5 rounded-lg bg-slate-100/80 px-3 text-left text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 md:flex xl:mx-6"
-            >
-              <Search className="size-4 text-slate-400 transition-colors group-hover:text-slate-600" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate">Cari halaman atau tugas…</span>
-              <kbd className="rounded bg-white px-1.5 py-0.5 font-sans text-xs font-medium text-slate-400 ring-1 ring-slate-200">
-                ⌘K
-              </kbd>
-            </button>}
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-1 md:gap-3 md:px-6">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen(true)}
+                  className={`${TOPBAR_ICON_BUTTON} md:hidden`}
+                  aria-label="Buka menu navigasi"
+                >
+                  <Menu className="size-5" aria-hidden="true" />
+                </button>
+                <a href={mustChangePassword ? "/admin/profile" : "/admin/dashboard"} className="flex size-9 shrink-0 items-center justify-center md:hidden" aria-label={mustChangePassword ? "Keamanan akun" : `Dashboard ${adminName}`}>
+                  <StoreMark logo={siteLogo} name={storeName} className="size-8" />
+                </a>
+                <h1 className="min-w-0 truncate text-base font-semibold tracking-tight text-slate-950">
+                  {title}
+                </h1>
+              </div>
 
-            <div className="flex flex-1 items-center justify-end gap-1">
               {!mustChangePassword && <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className={`${TOPBAR_ICON_BUTTON} md:hidden`}
-                aria-label="Cari halaman admin"
+                className="group mx-2 hidden h-9 w-full max-w-md flex-1 items-center gap-2.5 rounded-lg bg-slate-100/80 px-3 text-left text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 md:flex xl:mx-4"
               >
-                <Search className="size-[18px]" aria-hidden="true" />
+                <Search className="size-4 text-slate-500 transition-colors group-hover:text-slate-700" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">Cari halaman atau tugas…</span>
+                <kbd className="rounded bg-white px-1.5 py-0.5 font-sans text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+                  ⌘K
+                </kbd>
               </button>}
-              {!mustChangePassword && <a href="/" target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost", className: "hidden h-9 gap-1 font-normal text-slate-500 xl:inline-flex" })}>
-                Lihat storefront <ArrowUpRight className="size-3.5" aria-hidden="true" />
-              </a>}
-              {!mustChangePassword && <span className="mx-1 hidden h-5 w-px bg-slate-200 xl:block" aria-hidden="true" />}
-              {/* A first-run session may only rotate its password. Advertiser
-                  may not read notifications; asking logged a 403 on every page
-                  (audit 2026-10-31 L1). */}
-              {!mustChangePassword && adminRole !== "advertiser" && <NotificationBell />}
-              {/* Owner and admin only: the other roles send no status request (A39). */}
-              {!mustChangePassword && (adminRole === "owner" || adminRole === "admin") && (
-                <OperationalStatusIcon active={activeMenu === "status"} />
-              )}
-              {/* The account menu: who is signed in, their profile, the store's
-                  settings (roles that have them), the storefront, the release
-                  notes, and Keluar - which used to sit at the foot of the sidebar. */}
-              {/* The account menu loads on first open (AccountMenu.tsx): until then a
-                  plain button stands in, so the menu and its popup code are not
-                  in every admin page's first download. */}
-              {accountMenuLoaded ? (
-                <React.Suspense fallback={<AccountButton className={accountButtonClass} label={roleLabel} showLabel={!mustChangePassword} />}>
-                  <AccountMenu
-                    defaultOpen
-                    triggerClassName={accountButtonClass}
-                    roleLabel={roleLabel}
-                    showRoleLabel={!mustChangePassword}
-                    adminUsername={adminUsername}
-                    storeLabel={siteName || adminName}
-                    profileHref={profileNavItem.href}
-                    profileLabel={mustChangePassword ? "Keamanan akun" : "Profil & keamanan"}
-                    showSettings={!mustChangePassword && allItems.some((item) => item.id === "settings")}
-                    showStorefront={!mustChangePassword}
-                    docsHref={docsHref}
-                    version={CMS_VERSION.version}
-                    onOpenChangelog={() => setChangelogOpen(true)}
-                  />
-                </React.Suspense>
-              ) : (
-                <AccountButton
-                  className={accountButtonClass}
-                  label={roleLabel}
-                  showLabel={!mustChangePassword}
-                  onClick={() => setAccountMenuLoaded(true)}
-                />
-              )}
-            </div>
-          </header>
 
-          {mustChangePassword && (
-            <div role="status" className="border-b border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950 md:px-6">
-              <div className="mx-auto flex w-full max-w-[1560px] items-start gap-3">
-                <span className="mt-1 size-2 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
-                <p className="leading-5"><strong>Amankan akun sebelum melanjutkan.</strong> Ganti password bawaan; menu operasional akan terbuka setelah Anda login kembali.</p>
+              <div className="flex shrink-0 items-center justify-end gap-0.5 md:flex-1 md:gap-1">
+                {!mustChangePassword && <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className={`${TOPBAR_ICON_BUTTON} md:hidden`}
+                  aria-label="Cari halaman admin"
+                >
+                  <Search className="size-[18px]" aria-hidden="true" />
+                </button>}
+                {!mustChangePassword && <a href="/" target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost", className: "hidden h-9 gap-1 font-normal text-slate-600 xl:inline-flex" })}>
+                  Lihat storefront <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                </a>}
+                {!mustChangePassword && <span className="mx-1 hidden h-5 w-px bg-slate-200 xl:block" aria-hidden="true" />}
+                {/* A first-run session may only rotate its password. Advertiser
+                    may not read notifications; asking logged a 403 on every page
+                    (audit 2026-10-31 L1). */}
+                {!mustChangePassword && adminRole !== "advertiser" && <NotificationBell />}
+                {/* Owner and admin only: the other roles send no status request (A39). */}
+                {!mustChangePassword && (adminRole === "owner" || adminRole === "admin") && (
+                  <OperationalStatusIcon active={activeMenu === "status"} />
+                )}
+                {/* The account menu loads on first open (AccountMenu.tsx): until then a
+                    plain button stands in, so the menu and its popup code are not
+                    in every admin page's first download. */}
+                {accountMenuLoaded ? (
+                  <React.Suspense fallback={<AccountButton className={accountButtonClass} label={roleLabel} showLabel={!mustChangePassword} />}>
+                    <AccountMenu
+                      defaultOpen
+                      triggerClassName={accountButtonClass}
+                      roleLabel={roleLabel}
+                      showRoleLabel={!mustChangePassword}
+                      adminUsername={adminUsername}
+                      storeLabel={siteName || adminName}
+                      profileHref={profileNavItem.href}
+                      profileLabel={mustChangePassword ? "Keamanan akun" : "Profil & keamanan"}
+                      showSettings={!mustChangePassword && allItems.some((item) => item.id === "settings")}
+                      showStorefront={!mustChangePassword}
+                      docsHref={docsHref}
+                      version={CMS_VERSION.version}
+                      onOpenChangelog={() => setChangelogOpen(true)}
+                    />
+                  </React.Suspense>
+                ) : (
+                  <AccountButton
+                    className={accountButtonClass}
+                    label={roleLabel}
+                    showLabel={!mustChangePassword}
+                    onClick={() => setAccountMenuLoaded(true)}
+                  />
+                )}
               </div>
             </div>
-          )}
-
-          <div id="admin-main" tabIndex={-1} className="admin-main min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-8 md:pt-6 xl:px-8">
-            {/* The one page-width contract: every admin page fills this box, so the
-                header and content edges line up across menus. Pages do not set
-                their own max-width. */}
-            <div className="mx-auto w-full max-w-[1560px]">{children}</div>
           </div>
+        </header>
 
-          <nav aria-label="Navigasi utama mobile" className="admin-bottom-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] backdrop-blur-xl md:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-            <div className="grid h-16 items-stretch" style={{ gridTemplateColumns: `repeat(${mobilePrimary.length + 1}, minmax(0, 1fr))` }}>
-              {mobilePrimary.map((item) => {
-                const active = activeMenu === item.id;
-                return (
-                  <a key={item.href} href={item.href} aria-current={isAdminNavHrefActive(currentPath, item.href) ? "page" : undefined} className={`group flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${active ? "font-medium text-slate-950" : "font-normal text-slate-500"}`}>
-                    <span className="relative grid size-8 place-items-center rounded-xl transition-colors" style={active ? { backgroundColor: `${ADMIN_ACCENT}14`, color: ADMIN_ACCENT } : undefined}>
-                      <item.icon className="size-[19px]" aria-hidden="true" />
-                      {active && <span className="absolute -bottom-1 h-0.5 w-3 rounded-full" style={{ backgroundColor: ADMIN_ACCENT }} aria-hidden="true" />}
-                    </span>
-                    <span className="w-full truncate text-center">{item.shortLabel ?? item.label}</span>
-                  </a>
-                );
-              })}
-              <button id="admin-mobile-menu-trigger" type="button" onClick={() => setMenuOpen(true)} aria-current={menuIsActive ? "page" : undefined} className={`flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${menuIsActive ? "font-medium text-slate-950" : "font-normal text-slate-500"}`} aria-label={mustChangePassword ? "Buka menu akun" : "Buka semua menu"}>
-                <span className="relative grid size-8 place-items-center rounded-xl" style={menuIsActive ? { backgroundColor: `${ADMIN_ACCENT}14`, color: ADMIN_ACCENT } : undefined}>
-                  <Menu className="size-[19px]" aria-hidden="true" />
-                  {menuIsActive && <span className="absolute -bottom-1 h-0.5 w-3 rounded-full" style={{ backgroundColor: ADMIN_ACCENT }} aria-hidden="true" />}
-                </span>
-                <span>Menu</span>
-              </button>
-            </div>
-          </nav>
-        </SidebarInset>
+        <div className="min-h-0 w-full flex-1 overflow-clip">
+          <div className={`mx-auto flex h-full min-h-0 w-full ${shellWidthClass}`}>
+            <AppSidebar
+              adminName={adminName}
+              siteName={siteName}
+              siteLogo={siteLogo}
+              activeMenu={activeMenu}
+              currentPath={currentPath}
+              siteUrl={siteUrl}
+              adminRole={adminRole}
+              catalogMode={catalogMode}
+              restricted={mustChangePassword}
+              wideLayout={wideLayout}
+              onWideLayoutChange={handleWideLayoutChange}
+              onOpenChangelog={() => setChangelogOpen(true)}
+              docsHref={docsHref}
+            />
+            <SidebarInset className="h-full min-h-0 min-w-0 flex-1 overflow-clip bg-transparent">
+              {mustChangePassword && (
+                <div role="status" className="border-b border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950 md:px-6">
+                  <div className="flex w-full items-start gap-3">
+                    <span className="mt-1 size-2 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+                    <p className="leading-5"><strong>Amankan akun sebelum melanjutkan.</strong> Ganti password bawaan; menu operasional akan terbuka setelah Anda login kembali.</p>
+                  </div>
+                </div>
+              )}
+
+              <div id="admin-main" tabIndex={-1} className="admin-main min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] pt-4 outline-none focus:outline-none md:px-6 md:pb-8 md:pt-6">
+                {/* Centered 2-layer width contract: every page fills the 1152px
+                    canvas (inside the 1440px shell) — or expands when Layar Lebar
+                    is active — so all 54 routes share one left and right edge. */}
+                <div className="w-full">{children}</div>
+              </div>
+            </SidebarInset>
+          </div>
+        </div>
+
+        <nav aria-label="Navigasi utama mobile" className="admin-bottom-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] backdrop-blur-xl md:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+          <div className="grid h-16 items-stretch" style={{ gridTemplateColumns: `repeat(${mobilePrimary.length + 1}, minmax(0, 1fr))` }}>
+            {mobilePrimary.map((item) => {
+              const active = activeMenu === item.id;
+              return (
+                <a key={item.href} href={item.href} aria-current={isAdminNavHrefActive(currentPath, item.href) ? "page" : undefined} className={`group flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${active ? "font-medium text-slate-950" : "font-normal text-slate-500"}`}>
+                  <span className="relative grid size-8 place-items-center rounded-xl transition-colors" style={active ? { backgroundColor: `${ADMIN_ACCENT}14`, color: ADMIN_ACCENT } : undefined}>
+                    <item.icon className="size-[19px]" aria-hidden="true" />
+                    {active && <span className="absolute -bottom-1 h-0.5 w-3 rounded-full" style={{ backgroundColor: ADMIN_ACCENT }} aria-hidden="true" />}
+                  </span>
+                  <span className="w-full truncate text-center">{item.shortLabel ?? item.label}</span>
+                </a>
+              );
+            })}
+            <button id="admin-mobile-menu-trigger" type="button" onClick={() => setMenuOpen(true)} aria-current={menuIsActive ? "page" : undefined} className={`flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${menuIsActive ? "font-medium text-slate-950" : "font-normal text-slate-500"}`} aria-label={mustChangePassword ? "Buka menu akun" : "Buka semua menu"}>
+              <span className="relative grid size-8 place-items-center rounded-xl" style={menuIsActive ? { backgroundColor: `${ADMIN_ACCENT}14`, color: ADMIN_ACCENT } : undefined}>
+                <Menu className="size-[19px]" aria-hidden="true" />
+                {menuIsActive && <span className="absolute -bottom-1 h-0.5 w-3 rounded-full" style={{ backgroundColor: ADMIN_ACCENT }} aria-hidden="true" />}
+              </span>
+              <span>Menu</span>
+            </button>
+          </div>
+        </nav>
 
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
           <SheetContent
@@ -318,7 +348,7 @@ export function AdminShell({
             <div ref={scrollMenuToCurrent} data-menu-scroll className="overflow-y-auto overscroll-contain px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
               {groups.map((group) => (
                 <section key={group.label} className="mb-3">
-                  <h2 className="px-2 pb-1.5 text-xs font-medium uppercase tracking-wider text-slate-400">{group.label}</h2>
+                  <h2 className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">{group.label}</h2>
                   <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                     {group.items.map((item) => {
                       const active = activeMenu === item.id;

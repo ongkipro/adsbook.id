@@ -163,3 +163,8 @@ test("admin destructive actions confirm through useConfirm, never window.confirm
   const offenders = files.filter((file) => file !== "src/components/admin/useConfirm.tsx" && /\bwindow\.confirm\s*\(|(?<![\w.])confirm\s*\(\s*[`"']/.test(readFileSync(file, "utf8")));
   assert.deepEqual(offenders, []);
 });
+
+test("admin React islands use shadcn Table, never raw HTML <table>", () => {
+  const offenders = islands.filter((file) => /<table\b/.test(readFileSync(file, "utf8")));
+  assert.deepEqual(offenders, []);
+});

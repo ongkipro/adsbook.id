@@ -156,7 +156,7 @@ export function ChangelogModal({ open, onOpenChange }: ChangelogModalProps) {
                         <span className="min-w-0 flex-1">
                           <span className="flex items-baseline gap-2">
                             <span className="font-mono text-xs font-semibold text-slate-900">v{rel.version}</span>
-                            <time className="text-xs text-slate-400">{rel.date}</time>
+                            <time className="text-xs text-slate-500">{rel.date}</time>
                           </span>
                           <span className="mt-0.5 block truncate text-xs leading-5 text-slate-600 group-open:whitespace-normal">{rel.highlight}</span>
                         </span>

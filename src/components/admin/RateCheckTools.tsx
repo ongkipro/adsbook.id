@@ -455,7 +455,7 @@ function RateCheck({ defaultOrigin, warehouseName }: { defaultOrigin: DistrictOp
                     {rates.length === 0 ? "Tidak ada kurir yang melayani rute ini." : "Tidak ada kurir yang cocok dengan filter."}
                   </p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-slate-200" role="region" aria-label="Tarif ongkir per kurir" tabIndex={0}>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-slate-300" role="region" aria-label="Tarif ongkir per kurir" tabIndex={0}>
                     <Table>
                       <TableHeader>
                         <TableRow>

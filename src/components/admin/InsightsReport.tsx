@@ -128,6 +128,12 @@ export function InsightsReport({ report, initialQuery = '', sources = [], produc
     changeQuery(params);
   }
   const appliedDate = insightsDateSelection(query);
+  const appliedParams = new URLSearchParams(query);
+  const hasPendingFilterChanges =
+    date.filter !== appliedDate.filter ||
+    (date.filter === 'custom' && (date.start !== appliedDate.start || date.end !== appliedDate.end)) ||
+    (report !== 'landing' && channel !== (appliedParams.get('channel') || '')) ||
+    (report === 'trend' && (source !== (appliedParams.get('source') || '') || product !== (appliedParams.get('product_id') || '')));
   const sourceOptions = [{ value: '', label: 'Semua halaman' }, { value: SOURCE_SLUG_NONE_FILTER, label: SOURCE_SLUG_NONE_LABEL }, ...sources];
   if (source && !sourceOptions.some((item) => item.value === source)) sourceOptions.push({ value: source, label: source });
   const productOptions = [{ value: '', label: 'Semua produk' }, ...products];
@@ -150,7 +156,11 @@ export function InsightsReport({ report, initialQuery = '', sources = [], produc
           <FilterField label="Slug historis (opsional)" htmlFor="insights-slug" size="lg"><SearchInput id="insights-slug" value={source === SOURCE_SLUG_NONE_FILTER ? '' : source} onValueChange={(value) => { setSource(value.trim()); setProduct(''); }} placeholder="Contoh: promo-kopi" /></FilterField>
         </>}
         </div>
-        <Button onClick={apply} disabled={busy}>Terapkan</Button><Button variant="outline" onClick={reset}>Reset</Button>
+        <Button onClick={apply} disabled={busy} className="relative">
+          {hasPendingFilterChanges && <span className="size-1.5 shrink-0 rounded-full bg-amber-300" aria-hidden="true" />}
+          {hasPendingFilterChanges ? 'Terapkan perubahan' : 'Terapkan'}
+        </Button>
+        <Button variant="outline" onClick={reset}>Reset</Button>
       </FilterBar>
     </div>
     {report !== 'trend' && (source || product) && <p className="flex flex-wrap items-center gap-2 text-sm">
@@ -182,7 +192,7 @@ export function InsightsReport({ report, initialQuery = '', sources = [], produc
 // same rows become a compact list: name and the headline number on one line,
 // the other figures as one line of small text.
 
-const tableShell = 'hidden overflow-x-auto rounded-lg border border-border bg-card md:block [&>div]:overflow-visible';
+const tableShell = 'hidden overflow-x-auto rounded-lg border border-border bg-card outline-none focus-visible:ring-2 focus-visible:ring-slate-300 md:block [&>div]:overflow-visible';
 const headCell = 'px-3 text-xs uppercase tracking-wide text-muted-foreground';
 // The pinned column needs an opaque fill: slate-50 is admin.css's thead and
 // row-hover colour, so the pinned cell matches its row in both states.
@@ -343,7 +353,7 @@ function TimesView({ data }: { data: Times }) {
   return <section className="flex min-w-0 flex-col gap-3">
     <p className="text-sm">{number(data.total)} pesanan · jam tersibuk {String(busiest).padStart(2, '0')}:00 WIB ({number(hourTotals[busiest] || 0)} pesanan)</p>
     <p className="text-xs text-muted-foreground">Angka = jumlah pesanan per jam dan hari (WIB); warna makin pekat = makin banyak (maks {number(data.max)}). – = tidak ada pesanan.</p>
-    <div className="overflow-x-auto rounded-lg border border-border bg-card [&>div]:overflow-visible" tabIndex={0} role="region" aria-label="Tabel waktu beli, geser untuk melihat semua hari"><Table>
+    <div className="overflow-x-auto rounded-lg border border-border bg-card outline-none focus-visible:ring-2 focus-visible:ring-slate-300 [&>div]:overflow-visible" tabIndex={0} role="region" aria-label="Tabel waktu beli, geser untuk melihat semua hari"><Table>
       <TableHeader><TableRow><TableHead className={nameHead}>Jam</TableHead>{WEEKDAYS.map((day) => <TableHead key={day} className={cn(headCell, 'text-center')}>{day}</TableHead>)}<TableHead className={numHead}>Total</TableHead></TableRow></TableHeader>
       <TableBody>
         {hourTotals.map((total, hour) => <TableRow key={hour}>

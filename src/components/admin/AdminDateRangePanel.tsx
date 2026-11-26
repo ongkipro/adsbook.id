@@ -69,7 +69,7 @@ function CalendarMonth({
     <div className="min-w-0 flex-1">
       <div className="mb-2 grid grid-cols-7 text-center">
         {ADMIN_WEEKDAY_NAMES.map((name) => (
-          <span key={name} className="text-xs font-semibold uppercase text-slate-400">
+          <span key={name} className="text-xs font-semibold uppercase text-slate-500">
             {name}
           </span>
         ))}
@@ -94,7 +94,7 @@ function CalendarMonth({
               onMouseEnter={() => onHover(date)}
               aria-pressed={isStart || isEnd}
               className={[
-                "mx-auto grid h-8 w-8 place-items-center rounded-lg text-xs tabular-nums transition",
+                "mx-auto grid h-8 w-8 place-items-center rounded-lg text-xs tabular-nums transition-colors",
                 disabled
                   ? "cursor-not-allowed text-slate-300"
                   : "text-slate-700 hover:bg-slate-100",
@@ -249,7 +249,7 @@ export function AdminDateRangePanel({
                   key={option.value}
                   type="button"
                   onClick={() => choosePreset(option.value)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition hover:bg-slate-100 ${
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors hover:bg-slate-100 ${
                     active ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-700"
                   }`}
                 >
@@ -268,7 +268,7 @@ export function AdminDateRangePanel({
               <button
                 type="button"
                 onClick={() => setViewMonth(shiftAdminMonth(viewMonth, -1))}
-                className="grid size-7 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100"
+                className="grid size-7 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100"
                 aria-label="Bulan sebelumnya"
               >
                 <ChevronLeft className="size-4" aria-hidden="true" />
@@ -285,7 +285,7 @@ export function AdminDateRangePanel({
                 type="button"
                 onClick={() => canGoNext && setViewMonth(shiftAdminMonth(viewMonth, 1))}
                 disabled={!canGoNext}
-                className="grid size-7 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+                className="grid size-7 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Bulan berikutnya"
               >
                 <ChevronRight className="size-4" aria-hidden="true" />

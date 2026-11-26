@@ -5,6 +5,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { ApiKeyScope } from "@/lib/developer-api-keys";
 
 type HeadlessScope = ApiKeyScope;
@@ -419,26 +427,26 @@ export function HeadlessApiManagement() {
                 <p className="mt-3 rounded-lg bg-slate-50 px-3 py-4 text-xs text-slate-500">Belum ada penggunaan API tercatat.</p>
               ) : (
                 <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-slate-200">
-                  <table className="w-full min-w-[560px] text-left text-xs">
-                    <thead className="sticky top-0 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2" scope="col">Waktu</th>
-                        <th className="px-3 py-2" scope="col">Key</th>
-                        <th className="px-3 py-2" scope="col">Operasi</th>
-                        <th className="px-3 py-2" scope="col">Hasil</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
+                  <Table className="min-w-[560px]">
+                    <TableHeader className="sticky top-0 z-10">
+                      <TableRow>
+                        <TableHead scope="col">Waktu</TableHead>
+                        <TableHead scope="col">Key</TableHead>
+                        <TableHead scope="col">Operasi</TableHead>
+                        <TableHead scope="col">Hasil</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {auditEvents.map((event) => (
-                        <tr key={event.id}>
-                          <td className="px-3 py-2 text-slate-500">{formatTimestamp(event.created_at)}</td>
-                          <td className="px-3 py-2 font-semibold text-slate-700">{event.key_name}</td>
-                          <td className="px-3 py-2 font-mono text-xs text-slate-600">{event.operation}</td>
-                          <td className="px-3 py-2 text-slate-600">{AUDIT_OUTCOME_LABELS[event.outcome] || "Ditolak"} · {event.status_code}</td>
-                        </tr>
+                        <TableRow key={event.id}>
+                          <TableCell className="text-xs text-slate-500">{formatTimestamp(event.created_at)}</TableCell>
+                          <TableCell className="text-xs font-semibold text-slate-700">{event.key_name}</TableCell>
+                          <TableCell className="font-mono text-xs text-slate-600">{event.operation}</TableCell>
+                          <TableCell className="text-xs text-slate-600">{AUDIT_OUTCOME_LABELS[event.outcome] || "Ditolak"} · {event.status_code}</TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </section>

@@ -8,10 +8,11 @@ import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 
 const FOLLOW_UP_SAVED = 'adsbook:follow-up-saved';
-// WhatsApp green for a step still to send, grey once sent. The text is a dark
-// green, not white: white on #25D366 is about 2:1, too faint to read.
-const WA_TODO = 'border-[#1fb957] bg-[#25D366] text-[#06331a] hover:bg-[#1fc15c] hover:text-[#06331a]';
-const WA_DONE = 'border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-600';
+// Calm WhatsApp-emerald tint for steps still to send (with full WhatsApp green
+// on hover), grey once sent — readable at >8:1 contrast without turning dense
+// order rows into a wall of neon green.
+const WA_TODO = 'border-emerald-300 bg-emerald-50 text-emerald-900 hover:border-[#1fb957] hover:bg-[#25D366] hover:text-[#06331a]';
+const WA_DONE = 'border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700';
 
 /**
  * Ten step chips, two rows of five. The order list hands each panel its
@@ -121,7 +122,7 @@ export function CrmActionGroup({ orderId, crmUrls, initialRows }: {
   const chip = 'w-full min-w-0 px-0';
   return <div ref={root} className="min-w-0">
     {error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-xs">{error}<Button variant="outline" size="sm" onClick={refresh}>Coba lagi</Button></div> :
-      <div role="group" aria-label="Tahap follow-up" aria-busy={!rows} className="grid grid-cols-5 gap-1">
+      <div role="group" aria-label="Tahap follow-up" aria-busy={!rows} className="grid grid-cols-5 gap-0.5">
         {CRM_STEPS.map(step => {
           const done = Boolean(rows?.find(entry => entry.step === step.key)?.completed);
           const url = crmUrls[step.key];

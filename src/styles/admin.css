@@ -47,6 +47,13 @@
    a black line under card headers, tables and panels. */
 @layer base {
   *, ::before, ::after, ::backdrop { border-color: var(--border); }
+  /* Fallback keyboard focus ring for unstyled native links/buttons; placed in
+     @layer base so Tailwind `focus-visible:outline-none` on shadcn primitives
+     wins cleanly instead of painting a second outline around a ring. */
+  .admin-shell :where(button, a, input, textarea, select):focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--admin-accent) 55%, white);
+    outline-offset: 2px;
+  }
 }
 @source "../layouts/AdminLayout.astro";
 
@@ -66,7 +73,7 @@
      height, padding, radius and type, so a call site passes layout only
      (width, margin, shrink). admin-controls.test.ts refuses geometry overrides. */
   .btn-primary, .btn-blue, .btn-secondary {
-    @apply inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0;
+    @apply inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0;
   }
 
   .btn-primary {
@@ -124,13 +131,6 @@
   .admin-field-error::before {
     content: "";
     @apply mt-[5px] size-1.5 shrink-0 bg-rose-600;
-  }
-
-  .btn-primary:focus-visible,
-  .btn-blue:focus-visible,
-  .btn-secondary:focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
   }
 
   .btn-primary:disabled,
@@ -285,9 +285,7 @@
   --sidebar-accent: oklch(0.95 0.008 255);
   --sidebar-accent-foreground: oklch(0.19 0.024 255);
   --sidebar-border: oklch(0.91 0.009 255);
-  background:
-    radial-gradient(circle at 82% -10%, color-mix(in srgb, var(--admin-accent) 5%, transparent) 0, transparent 28rem),
-    #f6f7f9;
+  background: #f6f7f9;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
@@ -296,22 +294,23 @@
 .admin-shell .btn-blue:hover { background-color: color-mix(in srgb, var(--admin-accent) 86%, #000); }
 .admin-shell .admin-main { scrollbar-gutter: stable; }
 .admin-shell :where(button, a, input, textarea, select) { -webkit-tap-highlight-color: transparent; }
-.admin-shell :where(button, a, input, textarea, select):focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--admin-accent) 64%, white);
-  outline-offset: 2px;
-}
+/* Programmatic focus containers (#admin-main, alert anchors, popups) must never draw a sudden page border. */
+.admin-shell [tabindex="-1"]:focus { outline: none; }
 /* Both draw their focus on the surrounding frame (InputGroup ring, command box). */
 .admin-shell :where([data-slot="command-input"], [data-slot="input-group-control"]):focus-visible { outline: none; }
 .admin-shell [data-slot="sidebar-container"] { border-color: rgba(226, 232, 240, 0.82); box-shadow: 1px 0 0 rgba(15, 23, 42, 0.015); }
 .admin-shell [data-slot="sidebar-menu-button"] { letter-spacing: -0.01em; }
 
-/* Navigation is deliberately immediate: this is an operator tool, not a
- * decorative surface. Keep feedback motion on actual mutations only. */
+/* Navigation and operator popups are deliberately immediate: this is a work
+ * surface, not a decorative showcase. Keep motion on actual loading states only. */
 .admin-shell :where(
   [data-slot="sidebar"], [data-slot="sidebar"] *,
   [data-slot="collapsible-content"], [data-slot="collapsible-content"] *,
   [data-slot="tooltip-content"], [data-slot="tooltip-content"] *,
   [data-slot="sheet-overlay"], [data-slot="sheet-content"], [data-slot="sheet-content"] *,
+  [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+  [data-slot="select-content"], [data-slot="combobox-content"],
+  [data-slot="dialog-overlay"], [data-slot="dialog-content"],
   .admin-bottom-nav, .admin-bottom-nav *
 ) { animation: none !important; transition: none !important; }
 
@@ -320,14 +319,15 @@
    down), dimmed and `inert` until the page's script fills it. */
 .admin-shell [data-pending] { opacity: 0.55; }
 
-/* A shadcn Card (base-nova) draws no outline of its own; the hand-built
-   sections here do. One 1px frame for both, so every panel reads the same. */
+/* One crisp 1px border for every white admin surface (shadcn Card + static
+   sections), suppressing Card's default ring-1 so cards never draw a double edge. */
 .admin-shell [data-slot="card"],
 .admin-shell section.bg-white,
 .admin-shell article.bg-white {
-  border: 1px solid rgba(203, 213, 225, 0.75);
+  border: 1px solid rgb(226 232 240);
   border-radius: var(--radius-xl);
-  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px -1px rgba(15, 23, 42, 0.02);
+  --tw-ring-shadow: 0 0 #0000;
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.03);
 }
 .admin-shell .admin-main *::-webkit-scrollbar {
   width: 6px;
@@ -353,7 +353,8 @@
   background-color: #fff;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
 }
-.admin-shell .admin-main :where(input:not([type="checkbox"]):not([type="radio"]):not([data-slot="input-group-control"]), select, textarea):focus,
+.admin-shell .admin-main :where(input:not([type="checkbox"]):not([type="radio"]):not([data-slot="input-group-control"]), textarea):focus,
+.admin-shell .admin-main :where(select):focus-visible,
 .admin-shell .admin-main [data-slot="input-group"]:focus-within {
   border-color: color-mix(in srgb, var(--admin-accent) 48%, #cbd5e1);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--admin-accent) 10%, transparent);

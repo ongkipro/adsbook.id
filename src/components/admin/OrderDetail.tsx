@@ -551,7 +551,7 @@ function EditCustomerDialog({
               and the save action on the right, where they stay in view. */}
           <div className="min-w-0 space-y-4">
           {submitError && (
-            <div ref={submitErrorRef} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800" role="alert" tabIndex={-1}>
+            <div ref={submitErrorRef} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 outline-none" role="alert" tabIndex={-1}>
               {submitError}
             </div>
           )}
@@ -742,7 +742,7 @@ function EditCustomerDialog({
               <p
                 tabIndex={-1}
                 data-validation-error="true"
-                className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800"
+                className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800 outline-none"
                 role="alert"
               >
                 Pilih layanan kurir untuk lokasi COD yang baru sebelum menyimpan.
@@ -1336,6 +1336,7 @@ export function OrderDetail({
   };
   const paymentFailed = ["failed", "expired"].includes(paymentStatus);
   const paymentRefunded = paymentStatus === "refunded";
+  const isCodPending = order.payment_method === "cod" && !paymentPaid && !paymentFailed && !paymentRefunded;
 
   const paymentDotColor = paymentPaid
     ? "bg-emerald-500"
@@ -1343,7 +1344,9 @@ export function OrderDetail({
       ? "bg-rose-500"
       : paymentRefunded
         ? "bg-purple-500"
-        : "bg-amber-500";
+        : isCodPending
+          ? "bg-slate-400"
+          : "bg-amber-500";
 
   const paymentStatusStyle = paymentPaid
     ? "bg-emerald-50 text-emerald-900 border-emerald-200"
@@ -1351,7 +1354,13 @@ export function OrderDetail({
       ? "bg-rose-50 text-rose-900 border-rose-200"
       : paymentRefunded
         ? "bg-purple-50 text-purple-900 border-purple-200"
-        : "bg-amber-50 text-amber-900 border-amber-200";
+        : isCodPending
+          ? "bg-slate-50 text-slate-700 border-slate-200"
+          : "bg-amber-50 text-amber-900 border-amber-200";
+
+  const paymentStatusText = isCodPending
+    ? "Bayar di tempat (COD)"
+    : paymentLabels[paymentStatus] || order.payment_status;
 
   const paymentReady =
     order.payment_method === "cod" ||
@@ -1441,7 +1450,7 @@ export function OrderDetail({
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={`gap-1.5 text-xs font-medium ${paymentStatusStyle}`}>
                 <span className={`size-1.5 shrink-0 rounded-full ${paymentDotColor}`} aria-hidden="true" />
-                {paymentLabels[paymentStatus] || order.payment_status}
+                {paymentStatusText}
               </Badge>
               <Badge variant="outline" className={`gap-1.5 text-xs font-medium ${shippingStatusBadges[order.shipping_status] || "bg-slate-100 text-slate-800"}`}>
                 <span className={`size-1.5 shrink-0 rounded-full ${shippingStatusDots[order.shipping_status] || "bg-slate-400"}`} aria-hidden="true" />
@@ -2039,7 +2048,7 @@ export function OrderDetail({
                 <span className="text-slate-500 font-medium">Status Pembayaran</span>
                 <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${paymentStatusStyle}`}>
                   <span className={`size-1.5 shrink-0 rounded-full ${paymentDotColor}`} aria-hidden="true" />
-                  {paymentLabels[paymentStatus] || order.payment_status}
+                  {paymentStatusText}
                 </span>
               </div>
 

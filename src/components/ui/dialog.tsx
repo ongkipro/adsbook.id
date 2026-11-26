@@ -21,6 +21,10 @@ function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
+const keyboardOnlyDialogFinalFocus: NonNullable<DialogPrimitive.Popup.Props["finalFocus"]> = (
+  closeType
+) => closeType === "keyboard"
+
 function DialogOverlay({
   className,
   ...props
@@ -29,7 +33,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-slate-950/25",
         className
       )}
       {...props}
@@ -40,12 +44,12 @@ function DialogOverlay({
 // Centred with `inset-0 m-auto`, not `translate(-50%, -50%)`: a transform
 // makes the dialog the containing block of every fixed descendant, so a
 // Select popup inside it was placed from the dialog's corner (Embed dialog,
-// 2026-11-23). The scale animation below is a transform too, but only while
-// opening; nothing inside is positioned before it ends.
+// 2026-11-23).
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  finalFocus = keyboardOnlyDialogFinalFocus,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
@@ -55,8 +59,9 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        finalFocus={finalFocus}
         className={cn(
-          "fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] grid-cols-1 w-full max-w-[calc(100%-2rem)] overflow-y-auto gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] grid-cols-1 w-full max-w-[calc(100%-2rem)] overflow-y-auto gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10 outline-none sm:max-w-sm",
           className
         )}
         {...props}
@@ -75,7 +80,7 @@ function DialogContent({
           >
             <XIcon
             />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">Tutup</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>
@@ -113,7 +118,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close render={<Button variant="outline" />}>
-          Close
+          Tutup
         </DialogPrimitive.Close>
       )}
     </div>

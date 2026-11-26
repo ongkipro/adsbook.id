@@ -112,7 +112,8 @@ test("owner: Plugin is its own workspace right before Pengaturan, lit on the lis
   await hydrated(page);
   expect(Math.abs((await fromSettings.evaluate((el) => Math.round(el.getBoundingClientRect().top))) - pluginY), "Plugin stays under the pointer").toBeLessThanOrEqual(2);
   await page.setViewportSize({ width: 900, height: 900 });
-  await expect(page.locator('[data-sidebar="content"]')).toHaveCSS("padding-bottom", "112px");
+  // In-flow SidebarFooter never overlaps SidebarContent, so the icon rail uses its static pb-3 (12px) padding without --sidebar-restore-pad.
+  await expect(page.locator('[data-sidebar="content"]')).toHaveCSS("padding-bottom", "12px");
 
   // Icon rail (tablet width): the Plugin icon is there and names itself on hover.
   await page.setViewportSize({ width: 900, height: 900 });

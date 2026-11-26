@@ -22,6 +22,7 @@ import {
   type AdminDateSelection,
 } from "./AdminDateRangeFilter";
 import { Button } from "../ui/button";
+import { DataTableShell } from "./DataTableShell";
 import { ExportCsvButton } from "./ExportCsvButton";
 import { SHIPPING_STATUS_LABELS } from "@/lib/shipping-status";
 import { FilterBar, FilterField, FilterSelect, SearchInput, type FilterOption } from "./filter-bar";
@@ -60,7 +61,6 @@ import {
 } from "../ui/select";
 import {
   MoreHorizontal,
-  ChevronDown,
   Eye,
   Truck,
   Filter,
@@ -267,8 +267,9 @@ const quickStatusFilters = [
   { value: "processing", label: "Diproses" },
   { value: "shipped", label: "Dikirim" },
   { value: "delivered", label: "Selesai" },
+  { value: "returned", label: "RTS" },
   { value: "cancelled", label: "Batal" },
-];
+] as const;
 
 type QuickStatus = (typeof quickStatusFilters)[number]["value"];
 type StatusCounts = Record<QuickStatus, number>;
@@ -317,46 +318,46 @@ function OrderActionMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isUpdating}
-          className="px-3 border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:text-slate-950 transition-colors" />}>
-          {isUpdating ? (
-            <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-800" aria-hidden="true" />
-          ) : (
-            <MoreHorizontal className="size-4 text-slate-600" />
-          )}
-          <span>Aksi</span>
-          <ChevronDown className="size-3 text-slate-400" />
-        </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl">
-        <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            disabled={isUpdating}
+            aria-label={`Aksi order ${order.orderNumber}`}
+          />
+        }
+      >
+        {isUpdating ? (
+          <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-800" aria-hidden="true" />
+        ) : (
+          <MoreHorizontal className="size-4 text-slate-600" aria-hidden="true" />
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="px-2 py-1 text-xs font-medium uppercase tracking-wider text-slate-500">
           Order {order.orderNumber}
         </DropdownMenuLabel>
-        
-        <DropdownMenuItem render={<a
-            href={`/admin/orders/${encodeURIComponent(order.orderNumber)}`}
-            className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-slate-800 rounded-lg hover:bg-slate-100 cursor-pointer" />}>
-            <Eye className="size-4 text-slate-500" />
-            <span>Lihat Detail Order</span>
-          </DropdownMenuItem>
+
+        <DropdownMenuItem render={<a href={`/admin/orders/${encodeURIComponent(order.orderNumber)}`} />}>
+          <Eye className="text-slate-500" aria-hidden="true" />
+          <span>Lihat Detail Order</span>
+        </DropdownMenuItem>
 
         <DropdownMenuItem
           onClick={() => onRefreshScoring(order.id)}
           disabled={isUpdating}
-          className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer"
         >
-          <ShieldAlert className="size-4 text-slate-500" />
-          <span>Cek Risiko RTS (Mengantar)</span>
+          <ShieldAlert className="text-slate-500" aria-hidden="true" />
+          <span>Cek risiko RTS</span>
         </DropdownMenuItem>
-        <DropdownMenuSeparator className="my-1 bg-slate-100" />
+        <DropdownMenuSeparator />
 
         {order.providerOrderId ? (
           <>
-            <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Update Status Ekspedisi
+            <DropdownMenuLabel className="px-2 py-1 text-xs font-medium uppercase tracking-wider text-slate-500">
+              Status ekspedisi
             </DropdownMenuLabel>
             {Object.entries(shippingLabels).map(([value, label]) => {
               const isCurrent = order.shippingStatus === value;
@@ -364,15 +365,13 @@ function OrderActionMenu({
                 <DropdownMenuItem
                   key={value}
                   onClick={() => onShippingStatusChange(order.id, value)}
-                  className={`flex items-center justify-between px-2 py-1.5 text-xs font-semibold rounded-lg cursor-pointer ${
-                    isCurrent ? 'bg-emerald-50 text-emerald-900 font-semibold' : 'hover:bg-slate-100 text-slate-700'
-                  }`}
+                  className={isCurrent ? "justify-between bg-emerald-50 font-medium text-emerald-900" : "justify-between"}
                 >
                   <span className="flex items-center gap-2">
-                    <span className={`size-2 rounded-full ${shippingStatusStyles[value] || 'bg-slate-400'}`} />
+                    <span className={`size-2 rounded-full ${shippingStatusStyles[value] || "bg-slate-400"}`} />
                     {label}
                   </span>
-                  {isCurrent && <CheckCircle2 className="size-3.5 text-emerald-600" />}
+                  {isCurrent && <CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden="true" />}
                 </DropdownMenuItem>
               );
             })}
@@ -381,43 +380,33 @@ function OrderActionMenu({
           <DropdownMenuItem
             onClick={() => onDispatch(order.id)}
             disabled={isUpdating || dispatching}
-            className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 rounded-lg cursor-pointer"
+            className="font-medium text-emerald-700 focus:bg-emerald-50 focus:text-emerald-900"
           >
-            <Truck className="size-4 text-emerald-600" />
+            <Truck className="text-emerald-600" aria-hidden="true" />
             <span>Push ke Mengantar</span>
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem disabled className="flex items-center gap-2 px-2 py-2 text-xs font-medium text-slate-400 rounded-lg">
-            <AlertCircle className="size-4 text-amber-500 shrink-0" />
+          <DropdownMenuItem disabled>
+            <AlertCircle className="text-amber-500" aria-hidden="true" />
             <span className="truncate">{order.dispatchReason || "Belum siap dipush"}</span>
           </DropdownMenuItem>
         )}
 
-        <DropdownMenuSeparator className="my-1 bg-slate-100" />
+        <DropdownMenuSeparator />
 
         <DropdownMenuItem
           variant="destructive"
           onClick={() => onDelete(order.id)}
           disabled={dispatching}
-          className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 hover:text-rose-900 rounded-lg cursor-pointer"
         >
-          <Trash2 className="size-4 text-rose-600" />
-          <span>Hapus Order</span>
+          <Trash2 aria-hidden="true" />
+          <span>Hapus pesanan</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
-// The filter menus list the statuses an operator filters by, labelled once.
-const SHIPPING_FILTER_OPTIONS: FilterOption<string>[] = [
-  { value: "all", label: "Semua status" },
-  { value: "pending", label: "Menunggu" },
-  { value: "processing", label: "Diproses" },
-  { value: "shipped", label: "Dikirim" },
-  { value: "delivered", label: "Selesai" },
-  { value: "returned", label: "RTS" },
-  { value: "cancelled", label: "Batal" },
-] as const;
+// The filter menus list the payment and source choices an operator filters by.
 const PAYMENT_FILTER_OPTIONS: FilterOption<string>[] = [
   { value: "all", label: "Semua status" },
   { value: "unpaid", label: "Belum dibayar (online)" },
@@ -507,26 +496,26 @@ function RiskBadge({
 
   return (
     <div
-      className="min-w-36"
+      className="min-w-28"
       aria-label={
         hasValidRate
           ? `Risiko RTS ${styles.label}, tingkat keberhasilan pengiriman ${deliveryRate} persen`
           : `Risiko RTS ${styles.label}`
       }
     >
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-1.5">
         <span
-          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${styles.badge}`}
+          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${styles.badge}`}
         >
           RTS {styles.label}
         </span>
         {/* The rate is delivery success, not RTS; unlabelled it read as "RTS 16%" (audit 2026-10-31 L3). */}
         <span className="text-xs text-slate-500">
-          {hasValidRate ? <>sukses <span className="font-mono font-semibold text-slate-900">{deliveryRate}%</span></> : "—"}
+          {hasValidRate ? <span className="font-mono font-semibold text-slate-900">{deliveryRate}%</span> : "—"}
         </span>
       </div>
       <div
-        className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"
+        className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"
         aria-hidden="true"
       >
         <div
@@ -536,7 +525,7 @@ function RiskBadge({
           }}
         ></div>
       </div>
-      <p className="mt-1.5 text-xs font-semibold text-slate-500">
+      <p className="mt-1 truncate text-xs font-medium text-slate-500">
         {styles.guidance}
       </p>
     </div>
@@ -620,12 +609,12 @@ function OrderSourceLine({ order, className = "" }: { order: OrderItem; classNam
 function BuyerArea({ order, className = "" }: { order: OrderItem; className?: string }) {
   const area = buyerAreaLines(order.district, order.city, order.province);
   if (!area.local && !area.region) {
-    return <p className={`text-xs text-slate-400 ${className}`}>Alamat belum lengkap</p>;
+    return <p className={`text-xs text-slate-500 ${className}`}>Alamat belum lengkap</p>;
   }
   return (
     <div className={`min-w-0 text-xs leading-5 ${className}`} title={area.full}>
       {area.local && <p className="truncate text-slate-600">{area.local}</p>}
-      {area.region && <p className="truncate text-slate-400">{area.region}</p>}
+      {area.region && <p className="truncate text-slate-500">{area.region}</p>}
     </div>
   );
 }
@@ -687,6 +676,7 @@ export function OrdersTable({
     processing: Number(initialStatusCounts?.processing) || 0,
     shipped: Number(initialStatusCounts?.shipped) || 0,
     delivered: Number(initialStatusCounts?.delivered) || 0,
+    returned: Number(initialStatusCounts?.returned) || 0,
     cancelled: Number(initialStatusCounts?.cancelled) || 0,
   });
 
@@ -755,6 +745,7 @@ export function OrdersTable({
           processing: Number(payload.status_counts?.processing) || 0,
           shipped: Number(payload.status_counts?.shipped) || 0,
           delivered: Number(payload.status_counts?.delivered) || 0,
+          returned: Number(payload.status_counts?.returned) || 0,
           cancelled: Number(payload.status_counts?.cancelled) || 0,
         });
       } catch (error) {
@@ -798,7 +789,6 @@ export function OrdersTable({
       : firstVisibleOrder + filteredOrders.length - 1;
   const activeFilterCount = [
     dateSelection.filter !== "all",
-    shippingFilter !== "all",
     paymentFilter !== "all",
     sourceFilter !== "all",
     sourceSlugFilter !== "all",
@@ -1012,7 +1002,18 @@ export function OrdersTable({
   };
   const deleteOrders = async (orderIds: string[]) => {
     if (orderIds.length === 0) return;
-    if (!(await confirm({ title: `Hapus ${orderIds.length} pesanan?`, description: "Pesanan terhapus permanen dan tidak dapat dikembalikan.", confirmLabel: "Hapus pesanan" }))) {
+    const affectedInvoices = orderIds
+      .map((id) => orders.find((order) => order.id === id)?.orderNumber ?? `#${id}`)
+      .slice(0, 5);
+    const extraCount = orderIds.length - affectedInvoices.length;
+    const invoiceSummary = `${affectedInvoices.join(", ")}${extraCount > 0 ? ` dan ${extraCount} lainnya` : ""}`;
+    if (
+      !(await confirm({
+        title: `Hapus ${orderIds.length} pesanan permanen?`,
+        description: `Pesanan (${invoiceSummary}) akan dihapus permanen dan tidak dapat dikembalikan.`,
+        confirmLabel: `Hapus ${orderIds.length} pesanan`,
+      }))
+    ) {
       return;
     }
     setDispatching(true);
@@ -1160,49 +1161,31 @@ export function OrdersTable({
         </div>
       )}
       <section
-        className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4"
+        className="grid grid-cols-2 gap-2.5 xl:grid-cols-4"
         aria-label="Ringkasan order"
       >
-        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Total order
-          </p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:px-3.5 sm:py-3">
+          <p className="text-xs font-medium text-slate-500">Total order</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">
             {summary.totalOrders}
           </p>
-          <p className="mt-1 hidden text-xs text-slate-500 sm:block">Semua pesanan masuk.</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Belum dibayar
-          </p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-amber-700">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:px-3.5 sm:py-3">
+          <p className="text-xs font-medium text-slate-500">Belum dibayar (online)</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-amber-700 sm:mt-1 sm:text-2xl">
             {summary.unpaidCount}
           </p>
-          <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-            Order online (QRIS/VA/transfer) menunggu pembayaran.
-          </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Risiko RTS tinggi
-          </p>
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-rose-700">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:px-3.5 sm:py-3">
+          <p className="text-xs font-medium text-slate-500">Risiko RTS tinggi</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-rose-700 sm:mt-1 sm:text-2xl">
             {summary.highRiskCount}
           </p>
-          <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-            Prioritaskan verifikasi penerima.
-          </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Nilai order
-          </p>
-          <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:px-3.5 sm:py-3">
+          <p className="text-xs font-medium text-slate-500">Nilai bruto</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">
             {formatCurrency(summary.totalValue)}
-          </p>
-          <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-            Nilai bruto semua status.
           </p>
         </div>
       </section>
@@ -1256,7 +1239,7 @@ export function OrdersTable({
         >
           <div>
             <p className="text-sm font-semibold text-slate-950">
-              {selectedOrderIds.length} order dipilih
+              {selectedOrderIds.length} pesanan dipilih
             </p>
             <button
               type="button"
@@ -1317,16 +1300,16 @@ export function OrdersTable({
               disabled={dispatching || bulkUpdating}
               className="w-full sm:w-auto"
             >
-              Hapus {selectedOrderIds.length} Order
+              Hapus {selectedOrderIds.length} pesanan
             </Button>
           </div>
         </section>
       )}
 
-      <section className="bg-transparent">
-        <div className="pb-5">
+      <DataTableShell
+        toolbar={
           <FilterBar>
-            <FilterField label="Cari order" htmlFor="search-order" size="grow">
+            <FilterField label="Cari pesanan" htmlFor="search-order" size="grow">
               <SearchInput
                 id="search-order"
                 placeholder="Invoice, nama, WA, atau resi"
@@ -1343,136 +1326,193 @@ export function OrdersTable({
               <Filter aria-hidden="true" />Filter{activeFilterCount ? ` (${activeFilterCount})` : ""}
             </Button>
             <div className={filtersOpen ? "contents" : "contents max-md:hidden"}>
-            <FilterField label="Periode order" htmlFor="filter-date" size="sm">
-              <AdminDateRangeFilter
-                value={dateSelection}
-                onChange={(next) => {
-                  setDateSelection(next);
-                  setPage(1);
-                }}
-              />
-            </FilterField>
-            <FilterField label="Status pengiriman" htmlFor="filter-shipping" size="sm">
-              <FilterSelect
-                id="filter-shipping"
-                icon={Truck}
-                value={shippingFilter}
-                onValueChange={(value) => {
-                  setShippingFilter(value);
-                  setPage(1);
-                }}
-                options={SHIPPING_FILTER_OPTIONS}
-              />
-            </FilterField>
-            <FilterField label="Status pembayaran" htmlFor="filter-payment" size="sm">
-              <FilterSelect
-                id="filter-payment"
-                icon={CreditCard}
-                value={paymentFilter}
-                onValueChange={(value) => {
-                  setPaymentFilter(value);
-                  setPage(1);
-                }}
-                options={PAYMENT_FILTER_OPTIONS}
-              />
-            </FilterField>
-            <FilterField label="Sumber lead" htmlFor="filter-source" size="sm">
-              <FilterSelect
-                id="filter-source"
-                icon={Megaphone}
-                value={sourceFilter}
-                onValueChange={(value) => {
-                  setSourceFilter(value);
-                  setPage(1);
-                }}
-                options={SOURCE_FILTER_OPTIONS}
-              />
-            </FilterField>
-            <FilterField label="Halaman sumber" htmlFor="filter-source-page" size="sm">
-              <FilterSelect
-                id="filter-source-page"
-                icon={PanelsTopLeft}
-                value={sourceSlugFilter}
-                onValueChange={(value) => {
-                  setSourceSlugFilter(value);
-                  setPage(1);
-                }}
-                options={[
-                  { value: "all", label: "Semua halaman" },
-                  ...(sourceSlugOptions ?? []),
-                  ...(sourceSlugFilter !== "all" &&
-                  sourceSlugFilter !== SOURCE_SLUG_NONE_FILTER &&
-                  !(sourceSlugOptions ?? []).some((option) => option.value === sourceSlugFilter)
-                    ? [{ value: sourceSlugFilter, label: sourceSlugFilter }]
-                    : []),
-                  { value: SOURCE_SLUG_NONE_FILTER, label: SOURCE_SLUG_NONE_LABEL },
-                ]}
-              />
-            </FilterField>
+              <FilterField label="Periode order" htmlFor="filter-date" size="sm">
+                <AdminDateRangeFilter
+                  value={dateSelection}
+                  onChange={(next) => {
+                    setDateSelection(next);
+                    setPage(1);
+                  }}
+                />
+              </FilterField>
+              <FilterField label="Status pembayaran" htmlFor="filter-payment" size="sm">
+                <FilterSelect
+                  id="filter-payment"
+                  icon={CreditCard}
+                  value={paymentFilter}
+                  onValueChange={(value) => {
+                    setPaymentFilter(value);
+                    setPage(1);
+                  }}
+                  options={PAYMENT_FILTER_OPTIONS}
+                />
+              </FilterField>
+              <FilterField label="Sumber lead" htmlFor="filter-source" size="sm">
+                <FilterSelect
+                  id="filter-source"
+                  icon={Megaphone}
+                  value={sourceFilter}
+                  onValueChange={(value) => {
+                    setSourceFilter(value);
+                    setPage(1);
+                  }}
+                  options={SOURCE_FILTER_OPTIONS}
+                />
+              </FilterField>
+              <FilterField label="Halaman sumber" htmlFor="filter-source-page" size="sm">
+                <FilterSelect
+                  id="filter-source-page"
+                  icon={PanelsTopLeft}
+                  value={sourceSlugFilter}
+                  onValueChange={(value) => {
+                    setSourceSlugFilter(value);
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: "all", label: "Semua halaman" },
+                    ...(sourceSlugOptions ?? []),
+                    ...(sourceSlugFilter !== "all" &&
+                    sourceSlugFilter !== SOURCE_SLUG_NONE_FILTER &&
+                    !(sourceSlugOptions ?? []).some((option) => option.value === sourceSlugFilter)
+                      ? [{ value: sourceSlugFilter, label: sourceSlugFilter }]
+                      : []),
+                    { value: SOURCE_SLUG_NONE_FILTER, label: SOURCE_SLUG_NONE_LABEL },
+                  ]}
+                />
+              </FilterField>
             </div>
             <Button variant="outline" onClick={resetFilters} disabled={!hasFilters}>
               <RotateCcw aria-hidden="true" /> Reset
             </Button>
-            <ExportCsvButton
-              kind="orders"
-              query={new URLSearchParams(
-                orderListQuery({ search: searchTerm, shippingFilter, paymentFilter, dateSelection, sourceFilter, sourceSlugFilter }, 1, false),
-              )}
-              title="Semua order dengan filter ini, satu baris per produk"
-            />
           </FilterBar>
-          <p
-            className="mt-3 text-xs font-semibold text-slate-500"
-            aria-live="polite"
-          >
-            {refreshing
-              ? "Memperbarui…"
-              : `Menampilkan ${firstVisibleOrder}–${lastVisibleOrder} dari ${pagination.totalItems} order`}
-          </p>
-          {/* lazy: the ready orders of this page and filter (≤ 20), not every page; the
-              endpoint takes 50 a call. Upgrade: a server-side "all ready" query. */}
-          {visibleDispatchableIds.length > 0 && selectedOrderIds.length === 0 && (
-            <Button type="button" variant="outline" className="mt-3" disabled={dispatching} onClick={() => dispatchOrders(visibleDispatchableIds)}>
-              <Truck aria-hidden="true" />
-              Push semua yang siap ({visibleDispatchableIds.length}) ke Mengantar
-            </Button>
-          )}
-          {updateNotice && (
-            <p className="mt-2 text-xs font-semibold text-slate-600" role="status">
-              {updateNotice}
-            </p>
-          )}
-        </div>
-
-
+        }
+        meta={
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-xs font-medium text-slate-600" aria-live="polite">
+                {refreshing
+                  ? "Memperbarui…"
+                  : `Menampilkan ${firstVisibleOrder}–${lastVisibleOrder} dari ${pagination.totalItems} order`}
+              </p>
+              {updateNotice && (
+                <p className="text-xs font-medium text-blue-700" role="status">
+                  {updateNotice}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* lazy: the ready orders of this page and filter (≤ 20), not every page; the
+                  endpoint takes 50 a call. Upgrade: a server-side "all ready" query. */}
+              {visibleDispatchableIds.length > 0 && selectedOrderIds.length === 0 && (
+                <Button type="button" variant="outline" size="sm" disabled={dispatching} onClick={() => dispatchOrders(visibleDispatchableIds)}>
+                  <Truck aria-hidden="true" />
+                  Push semua yang siap ({visibleDispatchableIds.length}) ke Mengantar
+                </Button>
+              )}
+              <ExportCsvButton
+                kind="orders"
+                query={new URLSearchParams(
+                  orderListQuery({ search: searchTerm, shippingFilter, paymentFilter, dateSelection, sourceFilter, sourceSlugFilter }, 1, false),
+                )}
+                title="Semua order dengan filter ini, satu baris per produk"
+              />
+            </div>
+          </>
+        }
+        footer={
+          pagination.totalPages > 1 ? (
+            <Pagination>
+              <PaginationContent className="w-full justify-between">
+                <div className="flex items-center">
+                  <p className="text-xs font-medium text-slate-600">
+                    Halaman {pagination.page} dari {pagination.totalPages}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (!refreshing && pagination.page > 1)
+                          setPage((c) => Math.max(1, c - 1));
+                      }}
+                      className={
+                        refreshing || pagination.page <= 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                  <PaginationItem className="hidden sm:block">
+                    <PaginationLink
+                      href="#"
+                      isActive
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      {pagination.page}
+                    </PaginationLink>
+                  </PaginationItem>
+                  {pagination.totalPages > pagination.page && (
+                    <PaginationItem className="hidden sm:block">
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  )}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (
+                          !refreshing &&
+                          pagination.page < pagination.totalPages
+                        )
+                          setPage((c) =>
+                            Math.min(pagination.totalPages, c + 1),
+                          );
+                      }}
+                      className={
+                        refreshing || pagination.page >= pagination.totalPages
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </div>
+              </PaginationContent>
+            </Pagination>
+          ) : undefined
+        }
+      >
         {/* grid-cols-1 expands to minmax(0, 1fr); without it a card's min-content
             width widens the implicit column past the viewport and the wrapper clips
             the right-hand controls out of reach on mobile. */}
-        <div className="grid grid-cols-1 gap-3 py-3 lg:hidden" aria-label="Daftar order mobile">
+        <div className="grid grid-cols-1 gap-3 p-3 lg:hidden" aria-label="Daftar order mobile">
             {filteredOrders.map((order) => {
               const selected = selectedOrderIds.includes(order.id);
               return (
               // Phone card (Paduka, 2026-10-31): one header row with the
               // selector, invoice and RTS pill; two plain lines for goods and
-              // delivery; the follow-up chips; actions in the header. It was
-              // ~640 px per order.
+              // delivery; the follow-up chips; actions in the header.
               <article
                 key={order.id}
-                className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs transition-colors"
+                className="rounded-xl border border-slate-200 bg-white p-3.5 transition-colors"
               >
-                <div className="flex items-start gap-2.5">
-                  <Checkbox
-                    checked={selected}
-                    onCheckedChange={(checked) =>
-                      setSelectedOrderIds((current) =>
-                        checked
-                          ? [...new Set([...current, order.id])]
-                          : current.filter((id) => id !== order.id),
-                      )
-                    }
-                    aria-label={`Pilih order ${order.orderNumber}`}
-                    className="mt-0.5 size-5 data-checked:border-blue-600 data-checked:bg-blue-600"
-                  />
+                <div className="flex items-start gap-2">
+                  <label className="-m-2.5 inline-flex size-11 shrink-0 cursor-pointer items-center justify-center">
+                    <Checkbox
+                      checked={selected}
+                      onCheckedChange={(checked) =>
+                        setSelectedOrderIds((current) =>
+                          checked
+                            ? [...new Set([...current, order.id])]
+                            : current.filter((id) => id !== order.id),
+                        )
+                      }
+                      aria-label={`Pilih order ${order.orderNumber}`}
+                      className="size-5 data-checked:border-blue-600 data-checked:bg-blue-600"
+                    />
+                  </label>
                   <div className="min-w-0 flex-1">
                     <a
                       href={`/admin/orders/${encodeURIComponent(order.orderNumber)}`}
@@ -1481,7 +1521,7 @@ export function OrdersTable({
                       <HighlightSearchMatch text={order.orderNumber} query={searchTerm} />
                     </a>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-xs text-slate-400">{formatDateTime(order.createdAt)}</span>
+                      <span className="text-xs text-slate-500">{formatDateTime(order.createdAt)}</span>
                       <RiskBadge level={order.receiverRiskLabel} deliveryRate={order.receiverDeliveryRate} compact />
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
@@ -1535,11 +1575,11 @@ export function OrdersTable({
               </article>
             ); })}
           </div>
-        <div className="hidden lg:block overflow-x-auto pb-16" aria-label="Tabel order desktop">
-            <Table className="min-w-[1180px]">
+        <div className="hidden lg:block" aria-label="Tabel order desktop">
+            <Table className="w-full min-w-[1040px]">
               <TableHeader>
-                <TableRow className="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  <TableHead className="w-12 px-4 py-3">
+                <TableRow>
+                  <TableHead className="w-8 pl-3 pr-1">
                     <Checkbox
                       checked={allVisibleSelected}
                       indeterminate={
@@ -1565,18 +1605,17 @@ export function OrdersTable({
                       className="data-checked:border-blue-600 data-checked:bg-blue-600"
                     />
                   </TableHead>
-                  <TableHead className="w-48 px-5 py-3 border-r border-slate-200">
+                  <TableHead className="w-36 border-r border-slate-100 px-2">
                     Invoice
                   </TableHead>
-                  <TableHead className="w-52 px-4 py-3">Pemesan</TableHead>
-                  <TableHead className="w-44 px-4 py-3">Risiko RTS</TableHead>
-                  <TableHead className="w-48 px-4 py-3">Pengiriman</TableHead>
-                  <TableHead className="w-48 px-4 py-3 text-right">
+                  <TableHead className="w-36 px-2">Pemesan</TableHead>
+                  <TableHead className="w-32 px-2">Risiko RTS</TableHead>
+                  <TableHead className="w-40 px-2">Pengiriman</TableHead>
+                  <TableHead className="w-32 px-2 text-right">
                     Produk & Total
                   </TableHead>
-                  <TableHead className="w-80 px-4 py-3">WhatsApp CRM</TableHead>
-                  {/* The table outgrows a 1440 laptop by ~270px; the row actions stay pinned so they never scroll away. */}
-                  <TableHead className="sticky right-0 z-10 w-28 bg-slate-50 px-4 py-3 text-right shadow-[-8px_0_12px_-10px_rgba(15,23,42,0.25)]">
+                  <TableHead className="w-[244px] px-2">WhatsApp CRM</TableHead>
+                  <TableHead className="sticky right-0 z-10 w-12 bg-slate-50/95 pl-1.5 pr-3 text-right">
                     Aksi
                   </TableHead>
                 </TableRow>
@@ -1587,9 +1626,10 @@ export function OrdersTable({
                   return (
                   <TableRow
                     key={order.id}
-                    className="align-top transition-colors hover:bg-slate-50"
+                    data-state={selected ? "selected" : undefined}
+                    className="align-top"
                   >
-                    <TableCell className="px-4 py-4">
+                    <TableCell className="pl-3 pr-1 py-3">
                       <Checkbox
                         checked={selected}
                         onCheckedChange={(checked) =>
@@ -1603,7 +1643,7 @@ export function OrdersTable({
                         className="data-checked:border-blue-600 data-checked:bg-blue-600"
                       />
                     </TableCell>
-                    <TableCell className="px-5 py-4 border-r border-slate-200">
+                    <TableCell className="border-r border-slate-100 px-2 py-3">
                       <a
                         href={`/admin/orders/${encodeURIComponent(order.orderNumber)}`}
                         className="whitespace-nowrap font-semibold text-slate-950 hover:text-blue-600 hover:underline"
@@ -1613,29 +1653,29 @@ export function OrdersTable({
                           query={searchTerm}
                         />
                       </a>
-                      <p className="mt-1 text-xs text-slate-400">
+                      <p className="mt-0.5 text-xs text-slate-500">
                         {formatDateTime(order.createdAt)}
                       </p>
                       {/* `w-0 min-w-full`: these rows take the column's width and never
                           set it, so they wrap instead of widening the invoice column. */}
-                      <OrderPaymentLine order={order} className="mt-2 w-0 min-w-full" />
-                      <OrderSourceLine order={order} className="mt-1 w-0 min-w-full" />
+                      <OrderPaymentLine order={order} className="mt-1 w-0 min-w-full" />
+                      <OrderSourceLine order={order} className="mt-0.5 w-0 min-w-full" />
                     </TableCell>
-                    <TableCell className="max-w-[210px] px-4 py-4">
+                    <TableCell className="max-w-[144px] px-2 py-3">
                       <a
                         href={`/admin/orders/${encodeURIComponent(order.orderNumber)}`}
                         className="block truncate font-semibold text-slate-900 hover:underline"
                       >
                         {order.customerName}
                       </a>
-                      <p className="mt-1 font-mono text-xs text-slate-500">
+                      <p className="mt-0.5 font-mono text-xs text-slate-500">
                         {order.customerPhone}
                       </p>
-                      <BuyerArea order={order} className="mt-1" />
+                      <BuyerArea order={order} className="mt-0.5" />
                     </TableCell>
-                    <TableCell className="px-4 py-4">
+                    <TableCell className="px-2 py-3">
                       {order.fulfillmentType === "digital" ? (
-                        <span className="text-xs text-slate-400">—</span>
+                        <span className="text-xs text-slate-500">—</span>
                       ) : (
                         <RiskBadge
                           level={order.receiverRiskLabel}
@@ -1643,46 +1683,45 @@ export function OrdersTable({
                         />
                       )}
                     </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <p className={`font-semibold ${deliveryStatus(order).tone}`}>
+                    <TableCell className="max-w-[156px] px-2 py-3">
+                      <p className={`truncate font-semibold ${deliveryStatus(order).tone}`}>
                         {deliveryStatus(order).label}
                       </p>
                       {order.fulfillmentType === "digital" ? (
                         <p className="mt-1"><DigitalOrderBadge accessedAt={order.digitalAccessedAt} /></p>
                       ) : (
-                        <p className="mt-1 font-mono text-xs text-slate-500">
+                        <p className="mt-0.5 truncate font-mono text-xs text-slate-500" title={`${order.courierCode || ""}${order.cnoteNo ? ` · ${order.cnoteNo}` : ""}`}>
                           {order.courierCode}
                           {order.cnoteNo
                             ? ` · ${order.cnoteNo}`
-                            : " · resi belum tersedia"}
+                            : " · belum ada resi"}
                         </p>
                       )}
                       {order.providerDispatchError && (
-                        <p className="mt-1 text-xs text-rose-600 font-semibold max-w-[200px] leading-tight">
+                        <p className="mt-1 max-w-[150px] whitespace-normal text-xs font-semibold leading-tight text-rose-600">
                           Error: {providerDispatchErrorText(order.providerDispatchError)}
                         </p>
                       )}
                     </TableCell>
-                    <TableCell className="px-4 py-4 text-right">
+                    <TableCell className="px-2 py-3 text-right">
                       {order.productName && (
-                        <p className="font-semibold text-slate-900 text-xs truncate max-w-[180px] ml-auto">
+                        <p className="ml-auto max-w-[126px] truncate text-xs font-semibold text-slate-900">
                           {order.productName}
                         </p>
                       )}
                       {order.variantName && (
-                        <p className="text-xs text-slate-500 truncate max-w-[180px] ml-auto mt-0.5">
+                        <p className="ml-auto mt-0.5 max-w-[126px] truncate text-xs text-slate-500">
                           {order.variantName}
                         </p>
                       )}
-                      <p className="mt-1 font-semibold text-slate-950 text-sm">
+                      <p className="mt-1 text-sm font-semibold tabular-nums text-slate-950">
                         {formatCurrency(order.totalAmount)}
                       </p>
                     </TableCell>
-                    <TableCell className="px-4 py-4">
-                      {/* The sticky Aksi column covers anything wider. */}
-                      <div className="w-80 whitespace-normal">{renderCrmActions(order)}</div>
+                    <TableCell className="px-2 py-3">
+                      <div className="w-[244px] whitespace-normal">{renderCrmActions(order)}</div>
                     </TableCell>
-                    <TableCell className="sticky right-0 z-10 bg-white px-4 py-4 text-right shadow-[-8px_0_12px_-10px_rgba(15,23,42,0.25)]">
+                    <TableCell className="sticky right-0 z-10 bg-white pl-1.5 pr-3 py-3 text-right group-hover:bg-slate-50 group-data-[state=selected]:bg-blue-50">
                       <OrderActionMenu
                         order={order}
                         updatingOrderId={updatingOrderId}
@@ -1699,85 +1738,38 @@ export function OrdersTable({
             </Table>
           </div>
 
-        {pagination.totalPages > 1 && (
-          <div className="border-t border-slate-200 py-3 px-4 md:px-5">
-            <Pagination>
-              <PaginationContent className="w-full justify-between">
-                <div className="flex items-center">
-                  <p className="text-xs font-semibold text-slate-500">
-                    Halaman {pagination.page} dari {pagination.totalPages}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <PaginationItem>
-                    <PaginationPrevious
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (!refreshing && pagination.page > 1)
-                          setPage((c) => Math.max(1, c - 1));
-                      }}
-                      className={
-                        refreshing || pagination.page <= 1
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
-                      }
-                    />
-                  </PaginationItem>
-                  <PaginationItem className="hidden sm:block">
-                    <PaginationLink href="#" isActive>
-                      {pagination.page}
-                    </PaginationLink>
-                  </PaginationItem>
-                  {pagination.totalPages > pagination.page && (
-                    <PaginationItem className="hidden sm:block">
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  )}
-                  <PaginationItem>
-                    <PaginationNext
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (
-                          !refreshing &&
-                          pagination.page < pagination.totalPages
-                        )
-                          setPage((c) =>
-                            Math.min(pagination.totalPages, c + 1),
-                          );
-                      }}
-                      className={
-                        refreshing || pagination.page >= pagination.totalPages
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
-                      }
-                    />
-                  </PaginationItem>
-                </div>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
-
         {filteredOrders.length === 0 && (
-          <div className="border-t border-slate-200 p-10 text-center">
-            <p className="text-sm font-semibold text-slate-950">
-              Order tidak ditemukan
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Ubah kata pencarian atau reset filter untuk melihat semua order.
-            </p>
-            <Button
-              variant="secondary"
-              onClick={resetFilters}
-              size="lg" className="mt-4"
-            >
-              Reset filter
-            </Button>
+          <div className="border-t border-slate-100 p-10 text-center">
+            {hasFilters ? (
+              <>
+                <p className="text-sm font-semibold text-slate-950">
+                  Order tidak ditemukan
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Ubah kata pencarian atau reset filter untuk melihat semua order.
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={resetFilters}
+                  size="lg"
+                  className="mt-4"
+                >
+                  Reset filter
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-slate-950">
+                  Belum ada pesanan masuk
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Pesanan baru dari storefront atau landing page Anda akan muncul otomatis di sini.
+                </p>
+              </>
+            )}
           </div>
         )}
-      </section>
+      </DataTableShell>
     </div>
   );
 }

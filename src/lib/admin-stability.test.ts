@@ -73,3 +73,26 @@ test("the admin layout holds its first paint until the shell is parsed", () => {
   assert.ok(marker > source.indexOf("</AdminShell>"), "its target comes after the whole shell, so nothing paints half-parsed");
   assert.ok(marker < source.indexOf("</body>"), "and inside the body, or the paint would wait for the end of the document anyway");
 });
+
+test("admin popups and containers avoid lingering click-away borders and decorative zoom/slide effects", () => {
+  const shell = readFileSync("src/components/admin/AdminShell.tsx", "utf8");
+  assert.match(shell, /id="admin-main"[^>]*outline-none/, "#admin-main never flashes a page-wide focus border");
+
+  for (const popupFile of [
+    "src/components/ui/dropdown-menu.tsx",
+    "src/components/ui/select.tsx",
+    "src/components/ui/dialog.tsx",
+  ]) {
+    const src = readFileSync(popupFile, "utf8");
+    assert.match(src, /closeType === "keyboard"/, `${popupFile} restores focus only on keyboard close`);
+    assert.doesNotMatch(src, /zoom-in-95|zoom-out-95|slide-in-from-/, `${popupFile} uses instant open without decorative zoom/slide`);
+  }
+
+  for (const controlFile of [
+    "src/components/ui/switch.tsx",
+    "src/components/ui/tabs.tsx",
+    "src/components/ui/badge.tsx",
+  ]) {
+    assert.doesNotMatch(readFileSync(controlFile, "utf8"), /\btransition-all\b/, `${controlFile} avoids transition-all`);
+  }
+});
