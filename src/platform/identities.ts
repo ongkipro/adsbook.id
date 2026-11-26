@@ -72,38 +72,81 @@ export function desiredIdentities(ownerEmail: string, credentials: readonly Cred
 }
 
 /**
+ * The tenant states a normal sync may write for (positive allowlist). A store
+ * in `recovery`, `purging` or `purged` — or with no row at all — is never
+ * written by it: a request admitted before a restore fence must not re-point
+ * names at credentials the restore rewound, and a purge must not see names
+ * come back. Reconciling a fenced store is a separate, explicit step.
+ */
+const SYNCABLE_STATUSES = ["provisioning", "active", "suspended"] as const;
+/** The approved reconciliation of a restored store (`checkPostSyncOwnerIdentity` reads its result). Never a purge. */
+const RECONCILABLE_STATUSES = ["recovery"] as const;
+
+/**
  * Makes this store's `platform_identities` equal to its credentials, in one
  * batch. A name another store holds is skipped (never taken) and reported.
+ * Only for a syncable tenant, checked before the read and again inside every
+ * statement of the batch, so a fence that lands in between writes nothing.
  */
-export async function syncTenantIdentities(
+export function syncTenantIdentities(
   env: unknown,
   tenantId: string | undefined,
   tenantDb: D1Database,
   now = new Date(),
 ): Promise<{ synced: number; blocked: string[] }> {
+  return syncIdentitiesWhile(SYNCABLE_STATUSES, env, tenantId, tenantDb, now);
+}
+
+/**
+ * The explicit, operator-approved step that re-derives a fenced (`recovery`)
+ * store's names after a restore. The same batch and guards as a normal sync,
+ * for that one state only: it writes nothing once the store leaves it.
+ */
+export function reconcileFencedTenantIdentities(
+  env: unknown,
+  tenantId: string | undefined,
+  tenantDb: D1Database,
+  now = new Date(),
+): Promise<{ synced: number; blocked: string[] }> {
+  return syncIdentitiesWhile(RECONCILABLE_STATUSES, env, tenantId, tenantDb, now);
+}
+
+async function syncIdentitiesWhile(
+  statuses: readonly string[],
+  env: unknown,
+  tenantId: string | undefined,
+  tenantDb: D1Database,
+  now: Date,
+): Promise<{ synced: number; blocked: string[] }> {
   const db = platformDb(env);
   if (!db || !tenantId) return { synced: 0, blocked: [] };
-  const tenant = await db.prepare("SELECT owner_email FROM tenants WHERE id = ?").bind(tenantId).first<{ owner_email: string }>();
-  if (!tenant) return { synced: 0, blocked: [] };
+  const allowed = (status: string | undefined) => statuses.includes(status ?? "");
+  // Status names are module constants, never input: safe to inline.
+  const guard = `EXISTS (SELECT 1 FROM tenants WHERE id = ? AND status IN (${statuses.map((status) => `'${status}'`).join(", ")}))`;
+  const tenant = await db.prepare("SELECT owner_email, status FROM tenants WHERE id = ?").bind(tenantId).first<{ owner_email: string; status: string }>();
+  if (!tenant || !allowed(tenant.status)) return { synced: 0, blocked: [] };
   const credentials = (await tenantDb.prepare("SELECT id, username, email, role FROM admin_credentials").all<CredentialRow>()).results ?? [];
   const desired = desiredIdentities(tenant.owner_email, credentials);
   const keys = [...desired.keys()];
   const at = now.toISOString();
   await db.batch([
     db
-      .prepare(`DELETE FROM platform_identities WHERE tenant_id = ?${keys.length ? ` AND identifier NOT IN (${keys.map(() => "?").join(", ")})` : ""}`)
-      .bind(tenantId, ...keys),
+      .prepare(`DELETE FROM platform_identities WHERE tenant_id = ?${keys.length ? ` AND identifier NOT IN (${keys.map(() => "?").join(", ")})` : ""} AND ${guard}`)
+      .bind(tenantId, ...keys, tenantId),
     ...keys.map((key) => {
       const row = desired.get(key)!;
       return db
         .prepare(
-          `INSERT INTO platform_identities (identifier, tenant_id, kind, credential_id, created_at) VALUES (?, ?, ?, ?, ?)
+          `INSERT INTO platform_identities (identifier, tenant_id, kind, credential_id, created_at) SELECT ?, ?, ?, ?, ? WHERE ${guard}
            ON CONFLICT (identifier) DO UPDATE SET kind = excluded.kind, credential_id = excluded.credential_id
            WHERE platform_identities.tenant_id = excluded.tenant_id`,
         )
-        .bind(key, tenantId, row.kind, row.credentialId, at);
+        .bind(key, tenantId, row.kind, row.credentialId, at, tenantId);
     }),
   ]);
+  // Fenced while the batch was built: it wrote nothing, so report nothing rather than every name as blocked.
+  const after = await db.prepare("SELECT status FROM tenants WHERE id = ?").bind(tenantId).first<{ status: string }>();
+  if (!allowed(after?.status)) return { synced: 0, blocked: [] };
   const held = await db
     .prepare("SELECT identifier FROM platform_identities WHERE tenant_id = ?")
     .bind(tenantId)

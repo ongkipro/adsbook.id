@@ -10,7 +10,7 @@ import { splitMigrationStatements } from "../lib/schema-version.ts";
 import { redeemOwnerRecovery } from "./admin/recovery.ts";
 import { ensureControlPlane } from "./control-plane.ts";
 import { prepareHandoff } from "./handoff.ts";
-import { syncTenantIdentities } from "./identities.ts";
+import { reconcileFencedTenantIdentities, syncTenantIdentities } from "./identities.ts";
 import { checkPostSyncOwnerIdentity, checkRestoredOwnerIdentity, resolveBoundOwner, type BoundOwner, type OwnerCredentialRow } from "./owner-identity.ts";
 import { applyMigrationFile, TenantStoreEngine, type MigrationFile, type StoreKv } from "./store-core.ts";
 import { createTenantDb, restoreTenant, type TenantStoreStub } from "./tenant-db.ts";
@@ -277,7 +277,7 @@ type Restored = Awaited<ReturnType<typeof restoredAfterLiveSync>>;
 /** G3 as planned (hash and revision only; emulated), then the approved reconciliation (G4). */
 async function lockAndReconcile(w: Restored) {
   run(w.a, "UPDATE admin_credentials SET password_hash = '!restore-locked', must_change_password = 1, updated_at = '2026-11-20T23:00:00.000Z'");
-  return syncTenantIdentities(env(w.db), "t-a", w.a.db);
+  return reconcileFencedTenantIdentities(env(w.db), "t-a", w.a.db);
 }
 const bUnchanged = (w: Restored, name = "") =>
   assert.deepEqual({ registry: registryOf(w.db, "t-b"), row: tenantRow(w.db, "t-b"), store: w.b.dump() }, w.bBefore, `${name} tenant B unchanged`);

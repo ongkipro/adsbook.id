@@ -503,7 +503,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `platform/handoff` | 14 | — | `handoff_tokens` | 2 | `/api/handoff` |
 | `platform/host` | 16 | — | — | 3 | `/api/handoff` `/platform/site/robots.txt` |
 | `platform/hostnames` | 28 | — | `plans` `tenant_hosts` `tenants` | 5 | `/admin/settings/domains` `/api/admin/domains` `/api/admin/domains/[host]` `/api/admin/domains/[host]/primary` `/api/admin/domains/[host]/recheck` `/platform/masuk` `/platform/signup` `/platform/site` |
-| `platform/identities` | 7 | `admin_credentials` | `platform_identities` `tenant_hosts` `tenants` | 2 | `/api/admin/access` `/api/admin/profile` |
+| `platform/identities` | 8 | `admin_credentials` | `platform_identities` `tenant_hosts` `tenants` | 2 | `/api/admin/access` `/api/admin/profile` |
 | `platform/jobs` | 7 | — | `handoff_tokens` `tenant_events` `tenant_hosts` `tenant_usage_daily` `tenants` | 4 | — |
 | `platform/keys` | 13 | — | — | 1 | `/assets/[...key]` `/media/[...key]` `/api/form-config` `/api/admin/expeditions` `/api/admin/media` `/api/admin/upload-r2` |
 | `platform/legal-texts` | 3 | — | — | 1 | — |
