@@ -118,6 +118,23 @@ test("OrdersTable renders a real order row without throwing", async () => {
   assert.match(html, /ORD-TEST-1/);
 });
 
+test("OrdersTable labels the receiver's rate as delivery success, never a bare RTS percentage", async () => {
+  const order = {
+    id: "2", orderNumber: "ORD-TEST-2", customerName: "Sari", customerPhone: "081234567891", address: "Jl. Uji 2",
+    productName: "Produk Uji", variantName: "Default", productPrice: 100_000, shippingCost: 15_000,
+    district: "Kec. Uji", city: "Bandung", province: "Jawa Barat", totalAmount: 115_000,
+    paymentMethod: "cod", paymentStatus: "unpaid", shippingStatus: "pending", courierCode: "jne", cnoteNo: "",
+    sellerName: "", bankAccounts: "", epaymentLink: "",
+    receiverDeliveryRate: 16, receiverRiskLabel: "HIGH",
+    createdAt: new Date().toISOString(), dispatchEligible: false, dispatchReason: "", providerDispatchError: null, providerOrderId: null,
+  };
+  const html = (await renderIsland("OrdersTable.tsx", "OrdersTable", { initialOrders: [order] })).replace(/<!-- -->/g, "");
+  // Unlabelled, "RTS Tinggi" beside "16%" read as a 16% RTS rate (audit 2026-10-31 L3).
+  assert.match(html, /RTS Tinggi/, "the badge renders");
+  assert.match(html, /Sukses kirim (<[^>]+>)*16%/, "the rate is named as delivery success");
+  assert.doesNotMatch(html, /RTS Tinggi(<[^>]+>|\s)*16%/, "no bare percentage right after the RTS label");
+});
+
 test("OrderDetail renders for a given invoice without throwing", async () => {
   const html = await renderIsland("OrderDetail.tsx", "OrderDetail", {
     invoice: "INV-TEST-1",

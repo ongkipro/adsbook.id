@@ -241,4 +241,14 @@ test("the WhatsApp CRM chips read in full in the orders table", async ({ page })
     );
     expect(cut, `no CRM chip label is truncated at ${width}px`).toEqual([]);
   }
+  // At 1366 the whole table fits: nothing scrolls, and the pinned Aksi column covers no chip.
+  const fit = await page.evaluate(() => {
+    const table = document.querySelector('[aria-label="Tabel order desktop"] table') as HTMLElement;
+    const row = table.querySelector("tbody tr") as HTMLElement;
+    const chips = (row.querySelector('[aria-label="Tahap follow-up"]') as HTMLElement).getBoundingClientRect();
+    const aksi = (row.lastElementChild as HTMLElement).getBoundingClientRect();
+    return { scrolls: table.parentElement!.scrollWidth > table.parentElement!.clientWidth + 1, overlap: Math.round(chips.right - aksi.left) };
+  });
+  expect(fit.scrolls, "the orders table fits 1366 without scrolling").toBe(false);
+  expect(fit.overlap, "the Aksi column covers no CRM chip").toBeLessThanOrEqual(0);
 });
