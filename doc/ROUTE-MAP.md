@@ -148,7 +148,7 @@ under both headings wherever they are named; which database a statement meant is
 | Route | Methods | Auth | Roles | File | Modules | Store tables | Platform tables | Tests |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/api/webhooks/autolaris/[token]` | POST | webhook token | — | `src/pages/api/webhooks/autolaris/[token].ts` | `api` `env` `platform/webhook-secrets` `rate-limit` `tenant-database` | `autolaris_callbacks` `rate_limits` | `rate_limits` `tenant_hosts` `webhook_secrets` | `lib/api.test.ts` `lib/env.test.ts` `lib/mengantar-webhook.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/two-tenants.test.ts` |
-| `/api/webhooks/mengantar/[token]` | POST | webhook token | — | `src/pages/api/webhooks/mengantar/[token].ts` | `api` `env` `mengantar-webhook` `platform/webhook-secrets` `rate-limit` `tenant-database` | `mengantar_webhook_events` `orders` `rate_limits` `stores` | `rate_limits` `tenant_hosts` `webhook_secrets` | `lib/api.test.ts` `lib/env.test.ts` `lib/mengantar-webhook.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/two-tenants.test.ts` |
+| `/api/webhooks/mengantar/[token]` | POST | webhook token | — | `src/pages/api/webhooks/mengantar/[token].ts` | `api` `env` `mengantar-webhook` `platform/webhook-secrets` `rate-limit` `tenant-database` | `mengantar_webhook_events` `orders` `rate_limits` `stores` | `rate_limits` `tenant_hosts` `webhook_secrets` | `lib/api.test.ts` `lib/env.test.ts` `lib/mengantar-client.test.ts` `lib/mengantar-webhook.test.ts` `lib/meta-purchase-order.test.ts` `lib/rate-limit.test.ts` `platform/two-tenants.test.ts` |
 
 ## Admin page (55)
 
@@ -403,7 +403,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `mengantar-dispatch` | 5 | `courier_rules` `order_items` `orders` `pickup_schedules` `product_variants` `products` `provider_dispatch_locks` `warehouses` | — | 3 | `/api/admin/orders` `/api/admin/orders/[id]` |
 | `mengantar-order` | 24 | — | — | 2 | `/api/admin/orders` `/api/admin/orders/[id]` `/api/admin/shipping` |
 | `mengantar-shipping-sync` | 7 | `orders` | — | 1 | `/api/admin/shipping` |
-| `mengantar-webhook` | 18 | `mengantar_webhook_events` `orders` `stores` | — | 1 | `/api/webhooks/mengantar/[token]` `/api/admin/settings` `/api/admin/shipping` |
+| `mengantar-webhook` | 18 | `mengantar_webhook_events` `orders` `stores` | — | 2 | `/api/webhooks/mengantar/[token]` `/api/admin/settings` `/api/admin/shipping` |
 | `meta-capi` | 8 | — | — | 5 | `/api/meta-event` `/api/v1/tracking/events` `/admin/ads/meta` `/api/admin/ads` |
 | `meta-event-contract` | 4 | — | — | 1 | `/api/meta-event` `/api/v1/tracking/events` |
 | `meta-identity` | 7 | — | — | 5 | `/api/meta-event` `/api/v1/tracking/events` |

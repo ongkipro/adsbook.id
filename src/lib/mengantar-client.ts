@@ -204,14 +204,16 @@ export function mapMengantarStatusEvidence(
   );
   const flags = activeMengantarStatusFlags(tracking.status);
   let shippingStatus: ProviderShippingStatus = "processing";
+  // Exact names only, like the webhook mapper and like `delivered` below. A
+  // return is terminal and voids the order, so a status that merely starts
+  // with RTS (a return still in progress, a name not seen yet) stays
+  // `processing`: the next reconcile or webhook settles it, a void never undoes.
   if (
     flags.some(
       (flag) =>
         flag === "RTS" ||
         flag === "RETURNED" ||
-        flag === "RETURN_TO_SENDER" ||
-        flag.startsWith("RTS_") ||
-        flag.startsWith("RETURNED_"),
+        flag === "RETURN_TO_SENDER",
     )
   ) {
     shippingStatus = "returned";
