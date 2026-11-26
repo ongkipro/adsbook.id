@@ -9,6 +9,12 @@
 //    to 2,855 px. Forms render from the first paint, dimmed and `inert`.
 // 3. Shared buttons do not nudge 1 px on press (`translate-y-px`), which read
 //    as a twitch on clicks, and do not animate layout properties (`transition-all`).
+// 4. The admin layout holds its first paint until the shell's markup is parsed
+//    (`<link rel="expect" blocking="render">` + a marker after `</AdminShell>`).
+//    The page is streamed: painted half-parsed, the top bar, a settings row or
+//    the order table is laid out without the siblings still on the wire and
+//    moves when they arrive (measured 2026-11-26: /admin/payments 0.006,
+//    /admin/ads 0.003, /admin/orders 0.002–0.009 on a slow runner).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -56,4 +62,14 @@ test("shared Button does not nudge on press or animate layout properties", () =>
   const button = readFileSync("src/components/ui/button.tsx", "utf8");
   assert.doesNotMatch(button, /translate-[xy]-/);
   assert.doesNotMatch(button, /\btransition-all\b/);
+});
+
+test("the admin layout holds its first paint until the shell is parsed", () => {
+  const source = readFileSync("src/layouts/AdminLayout.astro", "utf8");
+  const head = source.slice(source.indexOf("<head>"), source.indexOf("</head>"));
+  const link = head.match(/<link\s+rel="expect"\s+href="#([\w-]+)"\s+blocking="render"\s*\/>/);
+  assert.ok(link, "a render-blocking rel=expect link in <head>");
+  const marker = source.indexOf(`id="${link[1]}"`);
+  assert.ok(marker > source.indexOf("</AdminShell>"), "its target comes after the whole shell, so nothing paints half-parsed");
+  assert.ok(marker < source.indexOf("</body>"), "and inside the body, or the paint would wait for the end of the document anyway");
 });

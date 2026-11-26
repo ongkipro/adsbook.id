@@ -60,6 +60,12 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
     {[inter400, inter500, inter600, inter700].map((href) => (
       <link rel="preload" as="font" type="font/woff2" href={href} crossorigin />
     ))}
+    {/* The page is streamed, and a browser that paints it half-parsed lays a
+        flex row or a table out without the siblings still on the wire, then
+        moves everything when they arrive. Hold the first paint until the
+        shell's markup is all here (the marker below); a browser without
+        `rel="expect"` ignores this and paints as before. */}
+    <link rel="expect" href="#admin-shell-parsed" blocking="render" />
   </head>
   <body
     class="admin-shell flex h-dvh overflow-clip bg-[#f6f7f9] text-slate-900 antialiased"
@@ -102,6 +108,7 @@ const browserUnsupported = lacksFetchMetadata(Astro.request.headers);
       )}
       <slot />
     </AdminShell>
+    <span id="admin-shell-parsed" hidden></span>
     <!-- Ctrl/Cmd+K from the first moment the page responds, not after React
          hydrates: a press before AdminShell subscribes is queued and replayed. -->
     <script is:inline>
