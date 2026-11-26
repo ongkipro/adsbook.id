@@ -10,6 +10,7 @@ import {
   selectMengantarPickupAddress,
   selectProviderShippingAdvance,
 } from "./mengantar-client.ts";
+import { mapMengantarWebhookStatusCategory } from "./mengantar-webhook.ts";
 
 test("uses the public courier price instead of Mengantar's discounted price", () => {
   assert.equal(
@@ -320,6 +321,28 @@ test("maps Mengantar Public API v2 plain-string status categories observed in sa
       occurredAt: "2026-09-12T04:02:00.000Z",
     },
   );
+});
+
+test("only an exact return status is a return: a prefixed or in-progress one never voids the order", () => {
+  for (const status of ["RTS", "rts", "RETURNED", "RETURN TO SENDER", "{\"RTS\":true}", "{\"RETURN_TO_SENDER\":true}"]) {
+    assert.equal(mapMengantarStatusEvidence({ status, history: [] }).shippingStatus, "returned", status);
+  }
+  for (const status of [
+    "RTS ON PROCESS",
+    "RTS PROCESS",
+    "RTS_PENDING",
+    "RETURNED PENDING",
+    "RETURN",
+    "{\"RTS_ON_PROCESS\":true}",
+    "{\"RTS\":false}",
+  ]) {
+    assert.equal(mapMengantarStatusEvidence({ status, history: [] }).shippingStatus, "processing", status);
+  }
+  // Both mappers agree on every plain string the provider documents.
+  for (const status of ["PICKED UP", "ON DELIVERY", "DELIVERED", "RTS", "RTS ON PROCESS", "UNDELIVERED", "CANCELED", "ERROR"]) {
+    const webhook = mapMengantarWebhookStatusCategory(status).shippingStatus;
+    assert.equal(mapMengantarStatusEvidence({ status, history: [] }).shippingStatus, webhook ?? "processing", status);
+  }
 });
 
 test("a status that is not a string is no evidence, never a throw", () => {
