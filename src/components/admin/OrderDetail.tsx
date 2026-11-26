@@ -4,21 +4,19 @@ import { acceptedShipmentId, isDispatchOutcomeUnknown } from "@/lib/payment-disp
 import { useConfirm } from "./useConfirm";
 import { calculateCodCustomerTotal, calculateCodFeeBreakdown, paymentFeeIsSellers } from "@/lib/payment-fee-policy";
 import { TrafficSourceBadge } from "./TrafficSourceBadge";
-import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildWaUrl, defaultCrmTemplates, renderCrmMessage } from "../../lib/crm-template";
 import { CrmActionGroup } from "./CrmActionGroup";
 import { PaymentSwitchDialog } from "./PaymentSwitchDialog";
 import { MengantarPushDialog } from "./MengantarPushDialog";
 import type { MengantarPickupChoice } from "@/lib/mengantar-order";
 import { CRM_STEPS } from "./CrmActionButton";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Badge } from "../ui/badge";
 import { Button, buttonVariants } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { toast } from "sonner";
-import { SHIPPING_STATUS_LABELS } from "@/lib/shipping-status";
+import { SHIPPING_STATUS_LABELS, fulfillmentSteps, storeRelativeHref } from "@/lib/shipping-status";
 import { courierServiceLabel } from "@/lib/courier-names";
 import { DistrictCombobox, type DistrictOption } from "@/components/admin/DistrictCombobox";
 import { FilterSelect } from "@/components/admin/filter-bar";
@@ -38,19 +36,13 @@ import {
   Copy,
   Check,
   Phone,
-  MapPin,
-  Package,
   Truck,
-  CreditCard,
-  ShieldAlert,
-  MessageSquare,
   Trash2,
   ExternalLink,
   RefreshCw,
   Edit3,
   Loader2,
   Lock as LockIcon,
-  Send,
 } from "lucide-react";
 
 type OrderItem = {
@@ -144,6 +136,9 @@ type Order = {
   public_status_token?: string | null;
   provider_order_id: string | null;
   provider_dispatch_error: string | null;
+  provider_status_text?: string | null;
+  provider_status_at?: string | null;
+  provider_synced_at?: string | null;
   dispatchEligible?: boolean;
   dispatchReason?: string | null;
   receiver_delivery_rate: number | null;
@@ -188,16 +183,6 @@ type ShippingRate = {
 
 const shippingLabels = SHIPPING_STATUS_LABELS;
 
-const shippingStatusBadges: Record<string, string> = {
-  abandoned: "bg-rose-50 text-rose-900 border-rose-200",
-  pending: "bg-amber-50 text-amber-900 border-amber-200",
-  processing: "bg-sky-50 text-sky-900 border-sky-200",
-  shipped: "bg-blue-50 text-blue-900 border-blue-200",
-  delivered: "bg-emerald-50 text-emerald-900 border-emerald-200",
-  returned: "bg-rose-100 text-rose-950 border-rose-300",
-  cancelled: "bg-slate-100 text-slate-700 border-slate-200",
-};
-
 const shippingStatusDots: Record<string, string> = {
   abandoned: "bg-rose-500",
   pending: "bg-amber-500",
@@ -238,6 +223,13 @@ const formatDate = (value: string | null) => {
     timeStyle: "short",
     timeZone: "Asia/Jakarta",
   }).format(date)} WIB`;
+};
+
+// "27 Nov, 03.49 WIB": the journey row has a fifth of the width for each step.
+const formatShortDate = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).format(date)} WIB`;
 };
 
 function EditCustomerDialog({
@@ -512,12 +504,7 @@ function EditCustomerDialog({
   };
 
   return (
-    <div className="flex items-center gap-2">
-    {!customerEditable && (
-      <span className="hidden items-center gap-1 text-xs text-slate-500 lg:inline-flex">
-        <LockIcon className="size-3.5" aria-hidden="true" /> Terkunci, shipment sudah dibuat
-      </span>
-    )}
+    <div className="flex items-center">
     <Dialog open={open} onOpenChange={(nextOpen) => {
       if (!loading) {
         setSubmitError("");
@@ -534,8 +521,8 @@ function EditCustomerDialog({
           />
         }
       >
-        <Edit3 aria-hidden="true" />
-        Edit pembeli & alamat
+        {customerEditable ? <Edit3 aria-hidden="true" /> : <LockIcon aria-hidden="true" />}
+        Edit<span className="sr-only"> pembeli & alamat</span>
       </DialogTrigger>
       <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-y-auto p-0 sm:max-w-4xl rounded-xl">
         <DialogHeader className="border-b border-slate-100 px-6 py-4 text-left">
@@ -1281,17 +1268,23 @@ export function OrderDetail({
   };
 
   if (loading) {
+    // Shaped like the page below (header, journey, two columns), so nothing moves when it lands.
     return (
-      <div className="space-y-6">
-        <div className="h-24 animate-pulse rounded-xl bg-slate-200/70" />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="h-48 animate-pulse rounded-xl bg-slate-200/70" />
-            <div className="h-64 animate-pulse rounded-xl bg-slate-200/70" />
+      <div className="space-y-5 pb-16" aria-busy="true" aria-label="Memuat order">
+        <div className="space-y-4">
+          <div className="h-5 w-24 animate-pulse rounded bg-slate-200/70" />
+          <div className="h-8 w-48 animate-pulse rounded bg-slate-200/70" />
+          <div className="h-5 w-80 max-w-full animate-pulse rounded bg-slate-200/70" />
+          <div className="h-[4.5rem] animate-pulse border-y border-slate-200 bg-slate-100/70" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="space-y-4">
+            <div className="h-80 animate-pulse rounded-lg bg-slate-200/70" />
+            <div className="h-56 animate-pulse rounded-lg bg-slate-200/70" />
           </div>
-          <div className="space-y-6">
-            <div className="h-40 animate-pulse rounded-xl bg-slate-200/70" />
-            <div className="h-64 animate-pulse rounded-xl bg-slate-200/70" />
+          <div className="space-y-4">
+            <div className="h-64 animate-pulse rounded-lg bg-slate-200/70" />
+            <div className="h-44 animate-pulse rounded-lg bg-slate-200/70" />
           </div>
         </div>
       </div>
@@ -1300,13 +1293,12 @@ export function OrderDetail({
 
   if (error || !order) {
     return (
-      <section className="rounded-xl border border-rose-200 bg-white p-8 text-center shadow-sm max-w-xl mx-auto my-12" role="alert">
-        <ShieldAlert className="size-12 text-rose-500 mx-auto mb-3" />
-        <h2 className="text-xl font-semibold text-slate-950">Detail Order Tidak Ditemukan</h2>
-        <p className="mt-2 text-xs font-semibold text-slate-600">{error || "Sistem tidak dapat menemukan record invoice ini."}</p>
-        <a href="/admin/orders" className={buttonVariants({ className: "mt-6" })}>
-          <ArrowLeft className="size-4" />
-          Kembali ke Daftar Order
+      <section className="mx-auto my-12 max-w-xl rounded-lg border border-slate-200 bg-white p-6 text-center" role="alert">
+        <h2 className="text-lg font-semibold text-slate-950">Order tidak ditemukan</h2>
+        <p className="mt-2 text-sm text-slate-600">{error || "Nomor invoice ini tidak ada di toko ini."}</p>
+        <a href="/admin/orders" className={buttonVariants({ variant: "outline", className: "mt-5" })}>
+          <ArrowLeft aria-hidden="true" />
+          Kembali ke Pesanan
         </a>
       </section>
     );
@@ -1316,12 +1308,12 @@ export function OrderDetail({
   const waNumber = safePhone.replace(/\D/g, "").replace(/^0/, "62");
   const riskValue = String(order.receiver_risk_label || "").toUpperCase();
   const risk = riskValue.includes("HIGH")
-    ? { label: "Risiko tinggi", style: "bg-rose-50 text-rose-800 border-rose-200", dot: "bg-rose-500" }
+    ? { label: "Risiko tinggi", short: "Tinggi", dot: "bg-rose-500" }
     : riskValue.includes("MEDIUM")
-    ? { label: "Risiko sedang", style: "bg-amber-50 text-amber-900 border-amber-200", dot: "bg-amber-500" }
+    ? { label: "Risiko sedang", short: "Sedang", dot: "bg-amber-500" }
     : riskValue.includes("LOW")
-    ? { label: "Risiko rendah", style: "bg-emerald-50 text-emerald-800 border-emerald-200", dot: "bg-emerald-500" }
-    : { label: "Belum dinilai", style: "bg-slate-50 text-slate-700 border-slate-200", dot: "bg-slate-400" };
+    ? { label: "Risiko rendah", short: "Rendah", dot: "bg-emerald-500" }
+    : { label: "Belum dinilai", short: "Belum dinilai", dot: "bg-slate-400" };
 
   const paymentStatus = String(order.payment_status || "unpaid").toLowerCase();
   const paymentPaid = ["paid", "settled", "success"].includes(paymentStatus);
@@ -1347,16 +1339,6 @@ export function OrderDetail({
         : isCodPending
           ? "bg-slate-400"
           : "bg-amber-500";
-
-  const paymentStatusStyle = paymentPaid
-    ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-    : paymentFailed
-      ? "bg-rose-50 text-rose-900 border-rose-200"
-      : paymentRefunded
-        ? "bg-purple-50 text-purple-900 border-purple-200"
-        : isCodPending
-          ? "bg-slate-50 text-slate-700 border-slate-200"
-          : "bg-amber-50 text-amber-900 border-amber-200";
 
   const paymentStatusText = isCodPending
     ? "Bayar di tempat (COD)"
@@ -1388,6 +1370,8 @@ export function OrderDetail({
     !order.provider_order_id &&
     !isExternalShipping;
 
+  const journey = fulfillmentSteps(order);
+  const sourceHref = storeRelativeHref(order.source_page_path);
   const statusOptions =
     order.shipping_status === "pending"
       ? isExternalShipping
@@ -1411,7 +1395,7 @@ export function OrderDetail({
   const deliveryTotals = order.receiver_performance?.totals;
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-5 pb-16">
       {confirmDialog}
       <MengantarPushDialog
         open={pushOpen}
@@ -1419,20 +1403,59 @@ export function OrderDetail({
         orderLabels={[{ id: order.id, label: order.order_number }]}
         submit={submitPush}
       />
-      {/* Top Navigation & Action Header */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <a
-            href="/admin/orders"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition-colors hover:text-slate-950"
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            <span>Kembali ke daftar order</span>
-          </a>
+      {/* Header: identity, the three status axes as text, and the order's actions. */}
+      <div className="space-y-4">
+        <a
+          href="/admin/orders"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Pesanan
+        </a>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="font-mono text-2xl font-semibold tracking-tight text-slate-950">{order.order_number}</h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => void copyToClipboard(order.order_number, "invoice", "Nomor order")}
+                aria-label="Salin nomor order"
+                title="Salin nomor order"
+              >
+                {copiedTarget === "invoice" ? <Check className="text-emerald-600" aria-hidden="true" /> : <Copy aria-hidden="true" />}
+              </Button>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              {formatDate(order.created_at)} · ID {order.id}
+            </p>
+          </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
+            <div className="w-full sm:w-52">
+              <FilterSelect
+                id="order-shipping-status"
+                ariaLabel="Status pengiriman"
+                icon={Truck}
+                value={order.shipping_status}
+                onValueChange={(value) => void updateStatus(value)}
+                disabled={saving}
+                options={statusOptions.map((value) => ({ value, label: shippingLabels[value] || value }))}
+              />
+            </div>
+            {safePhone && (
+              <a
+                href={`https://wa.me/${waNumber}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ variant: "outline" })}
+              >
+                <Phone aria-hidden="true" />
+                WhatsApp
+              </a>
+            )}
             <EditCustomerDialog order={order} onUpdated={setOrder} />
-
             <Button
               type="button"
               variant="destructive"
@@ -1445,247 +1468,213 @@ export function OrderDetail({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className={`gap-1.5 text-xs font-medium ${paymentStatusStyle}`}>
-                <span className={`size-1.5 shrink-0 rounded-full ${paymentDotColor}`} aria-hidden="true" />
-                {paymentStatusText}
-              </Badge>
-              <Badge variant="outline" className={`gap-1.5 text-xs font-medium ${shippingStatusBadges[order.shipping_status] || "bg-slate-100 text-slate-800"}`}>
-                <span className={`size-1.5 shrink-0 rounded-full ${shippingStatusDots[order.shipping_status] || "bg-slate-400"}`} aria-hidden="true" />
-                {shippingLabels[order.shipping_status] || order.shipping_status}
-              </Badge>
-              <Badge variant="outline" className={`gap-1.5 text-xs font-medium ${risk.style}`}>
-                <span className={`size-1.5 shrink-0 rounded-full ${risk.dot}`} aria-hidden="true" />
-                {risk.label}
-              </Badge>
-              <TrafficSourceBadge adClickIds={order.ad_click_ids} />
-              {order.source_page_path && (
-                <Badge variant="outline" className="max-w-full gap-1.5 truncate border-violet-200 bg-violet-50 text-xs font-medium text-violet-700" title={order.source_page_path}>
-                  <span className="size-1.5 shrink-0 rounded-full bg-current opacity-80" aria-hidden="true" />
-                  {order.source_page_path}
-                </Badge>
-              )}
-            </div>
-
-            <div className="mt-2 flex items-center gap-3">
-              <h2 className="font-mono text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">
-                {order.order_number}
-              </h2>
-              <button
-                type="button"
-                onClick={() =>
-                  void copyToClipboard(
-                    order.order_number,
-                    "invoice",
-                    "Nomor order",
-                  )
-                }
-                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition-colors"
-                title="Salin nomor order"
-              >
-                {copiedTarget === "invoice" ? (
-                  <Check className="size-3.5 text-emerald-600" />
-                ) : (
-                  <Copy className="size-3.5" />
-                )}
-                <span>{copiedTarget === "invoice" ? "Tersalin" : "Salin"}</span>
-              </button>
-            </div>
-
-            <p className="mt-1 text-xs text-slate-500">
-              Dibuat pada {formatDate(order.created_at)} · ID Internal <span className="font-mono font-semibold">{order.id}</span>
-            </p>
+    {/* One line per axis; colour is a dot, the word carries the meaning. */}
+        <dl className="flex flex-wrap gap-x-6 gap-y-1.5 text-sm" data-order-status-axes>
+          <div className="flex items-center gap-2">
+            <dt className="text-slate-500">Pembayaran</dt>
+            <dd className="flex items-center gap-1.5 font-medium text-slate-900">
+              <span className={`size-2 rounded-full ${paymentDotColor}`} aria-hidden="true" />
+              {paymentStatusText}
+            </dd>
           </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <dt className="text-slate-500">Pengiriman</dt>
+            <dd className="flex items-center gap-1.5 font-medium text-slate-900">
+              <span className={`size-2 rounded-full ${shippingStatusDots[order.shipping_status] || "bg-slate-400"}`} aria-hidden="true" />
+              {digital ? "Produk digital" : shippingLabels[order.shipping_status] || order.shipping_status}
+            </dd>
+          </div>
+          {!digital && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-600">Status</span>
-              <div className="w-52">
-                <FilterSelect
-                  id="order-shipping-status"
-                  ariaLabel="Status pengiriman"
-                  icon={Truck}
-                  value={order.shipping_status}
-                  onValueChange={(value) => void updateStatus(value)}
-                  disabled={saving}
-                  options={statusOptions.map((value) => ({ value, label: shippingLabels[value] || value }))}
-                />
-              </div>
+              <dt className="text-slate-500">Risiko RTS</dt>
+              <dd className="flex items-center gap-1.5 font-medium text-slate-900">
+                <span className={`size-2 rounded-full ${risk.dot}`} aria-hidden="true" />
+                {risk.short}
+              </dd>
             </div>
-
-            {safePhone && (
-              <a
-                href={`https://wa.me/${waNumber}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-9.5 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition-colors"
-              >
-                <Phone className="size-3.5" />
-                <span>Chat WhatsApp</span>
-              </a>
-            )}
-          </div>
-        </div>
+          )}
+        </dl>
 
         {notice && (
-          <div className="mt-3 rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-semibold text-slate-700 flex items-center justify-between">
+          <p role="status" className="flex items-center justify-between gap-3 rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-700">
             <span>{notice}</span>
-            {saving && <RefreshCw className="size-3.5 animate-spin text-slate-500" />}
-          </div>
+            {saving && <RefreshCw className="size-4 animate-spin text-slate-500" aria-hidden="true" />}
+          </p>
         )}
-      </section>
 
-      {/* Main Grid: Left Column (Details) + Right Column (Summary & Actions) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left Column: Customer, Address & Products */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Customer & Address Card */}
-          <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <MapPin className="size-4 text-slate-600" />
-                <span>Pembeli & alamat</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 sm:p-6 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <span className="block text-xs text-slate-500">Nama Lengkap</span>
-                  <p className="mt-1 text-base font-semibold text-slate-950">{order.customer_name || "—"}</p>
-                </div>
-                <div>
-                  <span className="block text-xs text-slate-500">Nomor HP / WhatsApp</span>
-                  <p className="mt-1 font-mono text-sm font-semibold text-slate-950">{safePhone || "—"}</p>
-                </div>
-              </div>
+        {journey && (
+          <ol
+            className="grid grid-cols-1 gap-y-2 border-y border-slate-200 py-3 sm:grid-cols-[repeat(var(--steps),minmax(0,1fr))] sm:gap-y-0"
+            style={{ "--steps": journey.length } as CSSProperties}
+            aria-label="Alur pengiriman"
+            data-order-journey
+          >
+            {journey.map((step, index) => (
+              <li key={step.key} className="relative flex min-w-0 items-center gap-2.5 sm:block sm:pr-2" aria-current={step.state === "current" ? "step" : undefined}>
+                {index > 0 && (
+                  <span
+                    className={`absolute top-[5px] right-[calc(100%-5px)] hidden h-px w-[calc(100%-10px)] sm:block ${step.state === "upcoming" ? "bg-slate-200" : "bg-slate-400"}`}
+                    aria-hidden="true"
+                  />
+                )}
+                <span
+                  className={cn(
+                    "relative block size-2.5 shrink-0 rounded-full border-2",
+                    step.state === "done" && "border-slate-700 bg-slate-700",
+                    step.state === "current" && "border-[var(--admin-accent)] bg-white",
+                    step.state === "upcoming" && "border-slate-300 bg-white",
+                    step.state === "stopped" && (step.key === "returned" ? "border-rose-600 bg-rose-600" : "border-slate-400 bg-slate-400"),
+                  )}
+                  aria-hidden="true"
+                />
+                <p className={cn(
+                  "min-w-0 truncate text-sm sm:mt-2",
+                  step.state === "upcoming" ? "text-slate-400" : "font-medium text-slate-900",
+                  step.state === "stopped" && step.key === "returned" && "text-rose-700",
+                )}>
+                  {step.label}
+                  <span className="sr-only">{step.state === "done" ? " (selesai)" : step.state === "current" ? " (sekarang)" : step.state === "stopped" ? " (berhenti)" : " (belum)"}</span>
+                </p>
+                <p className="ml-auto shrink-0 text-xs text-slate-500 sm:ml-0 sm:truncate">{step.at ? formatShortDate(step.at) : <span className="hidden sm:inline">{"\u00a0"}</span>}</p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
 
-              <div className="border-t border-slate-100 pt-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="block text-xs text-slate-500">
-                    Alamat Jalan
-                  </span>
-                  <button
-                    type="button"
-                    disabled={!formattedAddress}
-                    onClick={() =>
-                      void copyToClipboard(
-                        formattedAddress,
-                        "address",
-                        "Alamat pelanggan",
-                      )
-                    }
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    title="Salin alamat lengkap pelanggan"
-                  >
-                    {copiedTarget === "address" ? (
-                      <Check className="size-3.5 text-emerald-600" />
-                    ) : (
-                      <Copy className="size-3.5" />
-                    )}
-                    {copiedTarget === "address" ? "Tersalin" : "Salin alamat"}
-                  </button>
-                </div>
-                <p className="mt-1 text-sm font-semibold text-slate-800 leading-relaxed">
-                  {order.address || "Alamat jalan belum diisi"}
-                </p>
-                <p className="mt-1 text-xs text-slate-500 font-medium">
-                  {[order.district, order.city, order.province].filter(Boolean).join(", ")} {order.postal_code || ""}
-                </p>
-                {order.destination_area_id && (
-                  <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
-                    <span>ID Area Mengantar:</span>
-                    <strong className="font-semibold text-slate-800">{order.destination_area_id}</strong>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0 space-y-4">
+          {/* Buyer, address, source and items: one panel, sections divided by a rule. */}
+          <section className="rounded-lg border border-slate-200 bg-white" aria-label="Pembeli dan produk">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 p-4 sm:grid-cols-2 sm:p-5">
+              <div className="min-w-0">
+                <h3 className="text-xs font-medium text-slate-500">Pembeli</h3>
+                <p className="mt-1 text-base font-semibold text-slate-950">{order.customer_name || "—"}</p>
+                <p className="mt-0.5 font-mono text-sm text-slate-700">{safePhone || "—"}</p>
+                {/* Why Edit is disabled, in words: a disabled button cannot take focus, so a title alone is never read. */}
+                {order.provider_order_id && (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500" data-customer-locked>
+                    <LockIcon className="size-3.5" aria-hidden="true" />
+                    Data terkunci, shipment Mengantar sudah dibuat.
                   </p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Ordered Products Card */}
-          <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6 flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <Package className="size-4 text-slate-600" />
-                <span>Produk</span>
-              </CardTitle>
-              <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                {items.length} item
-              </span>
-            </CardHeader>
-            <CardContent className="p-0 divide-y divide-slate-100">
-              {items.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-500 font-semibold">
-                  Rincian item produk belum tersedia.
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-medium text-slate-500">Alamat kirim</h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    disabled={!formattedAddress}
+                    onClick={() => void copyToClipboard(formattedAddress, "address", "Alamat pelanggan")}
+                    className="-my-1 -mr-2"
+                  >
+                    {copiedTarget === "address" ? <Check className="text-emerald-600" aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                    {copiedTarget === "address" ? "Tersalin" : "Salin"}
+                  </Button>
                 </div>
+                <address className="mt-1 text-sm not-italic leading-relaxed text-slate-900">
+                  {order.address || <span className="text-slate-500">Alamat jalan belum diisi</span>}
+                  <br />
+                  <span className="text-slate-600">
+                    {[order.district, order.city, order.province].filter(Boolean).join(", ")}
+                    {order.postal_code ? ` ${order.postal_code}` : ""}
+                  </span>
+                </address>
+                {order.destination_area_id && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Area Mengantar <span className="font-mono text-slate-700">{order.destination_area_id}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Where the order came from: plain text, the landing path a link to the live page. */}
+            <dl className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-slate-100 px-4 py-3 sm:px-5">
+              <dt className="text-xs font-medium text-slate-500">Sumber</dt>
+              <dd className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                <TrafficSourceBadge adClickIds={order.ad_click_ids} plain />
+                {order.source_page_path && (
+                  <>
+                    <span className="text-slate-300" aria-hidden="true">·</span>
+                    {sourceHref ? (
+                      <a
+                        href={sourceHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="min-w-0 truncate font-mono text-xs text-slate-700 underline-offset-2 hover:underline"
+                        title={order.source_page_path}
+                      >
+                        {order.source_page_path}
+                      </a>
+                    ) : (
+                      <span className="min-w-0 truncate font-mono text-xs text-slate-700" title={order.source_page_path}>{order.source_page_path}</span>
+                    )}
+                  </>
+                )}
+              </dd>
+            </dl>
+
+            <div className="border-t border-slate-200">
+              <div className="flex items-baseline justify-between px-4 pt-3 sm:px-5">
+                <h3 className="text-xs font-medium text-slate-500">Produk</h3>
+                <span className="text-xs text-slate-500">{items.length} item</span>
+              </div>
+              {items.length === 0 ? (
+                <p className="px-4 py-4 text-sm text-slate-500 sm:px-5">Rincian item produk belum tersedia.</p>
               ) : (
-                items.map((item, index) => {
-                  const itemWeight = weight.items[index];
-                  return (
-                  <div key={item.id} className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-sm text-slate-950 truncate">
-                        {item.product_title || "Produk"}
-                      </h3>
-                      <p className="mt-0.5 text-xs text-slate-500 font-medium">
-                        {item.variant_title || "Standard"}
-                        {item.variant_sku ? ` · SKU: ${item.variant_sku}` : ""}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        Berat:{" "}
-                        {itemWeight?.unit != null && itemWeight.line != null ? (
-                          <>
-                            {item.quantity > 1 ? `${item.quantity} x ${formatGrams(itemWeight.unit)} = ` : ""}
-                            <span className="font-semibold text-slate-700">
-                              {formatWeight(itemWeight.line)}
-                            </span>
-                            {` · ${itemWeight.recorded ? RECORDED_WEIGHT_LABEL : CURRENT_WEIGHT_LABEL}`}
-                          </>
-                        ) : (
-                          "tidak diketahui (varian sudah dihapus)"
-                        )}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-semibold text-sm text-slate-950">
-                        {currency(item.unit_price * item.quantity)}
-                      </p>
-                      <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                        {item.quantity} x {currency(item.unit_price)}
-                      </p>
-                    </div>
-                  </div>
-                  );
-                })
+                <ul className="divide-y divide-slate-100">
+                  {items.map((item, index) => {
+                    const itemWeight = weight.items[index];
+                    return (
+                      <li key={item.id} className="flex items-start justify-between gap-4 px-4 py-3 sm:px-5">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-slate-950">{item.product_title || "Produk"}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {item.variant_title || "Standard"}
+                            {item.variant_sku ? ` · SKU ${item.variant_sku}` : ""}
+                            {" · "}
+                            {itemWeight?.unit != null && itemWeight.line != null ? (
+                              <>
+                                {item.quantity > 1 ? `${item.quantity} × ${formatGrams(itemWeight.unit)} = ` : ""}
+                                {formatWeight(itemWeight.line)}
+                                {weight.items.some((line) => line?.recorded !== itemWeight.recorded)
+                                  ? ` (${itemWeight.recorded ? RECORDED_WEIGHT_LABEL : CURRENT_WEIGHT_LABEL})`
+                                  : ""}
+                              </>
+                            ) : (
+                              "berat tidak diketahui (varian dihapus)"
+                            )}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right tabular-nums">
+                          <p className="text-sm font-medium text-slate-950">{currency(item.unit_price * item.quantity)}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">{item.quantity} × {currency(item.unit_price)}</p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
               {items.length > 0 && (
-                <div className="p-4 sm:px-5 bg-slate-50/50">
-                  <p className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-                    <span className="font-medium text-slate-600">Total berat</span>
-                    <span className="font-semibold text-slate-950">
-                      {weight.total != null ? formatWeight(weight.total) : "Tidak diketahui"}
-                    </span>
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {weight.recorded
-                      ? "Berat saat order, dipakai saat kirim ke Mengantar."
-                      : "Berat varian saat ini, dipakai saat kirim ke Mengantar."}
-                  </p>
-                </div>
+                <p className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-t border-slate-100 px-4 py-3 text-sm sm:px-5">
+                  <span className="text-slate-500">
+                    Total berat
+                    <span className="ml-1 text-xs">· {weight.recorded ? RECORDED_WEIGHT_LABEL : CURRENT_WEIGHT_LABEL}, dipakai saat kirim ke Mengantar</span>
+                  </span>
+                  <span className="font-medium tabular-nums text-slate-950">
+                    {weight.total != null ? formatWeight(weight.total) : "Tidak diketahui"}
+                  </span>
+                </p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {digital && (
-            <Card className="rounded-xl border border-blue-200 shadow-xs overflow-hidden" data-digital-access-panel>
-              <CardHeader className="border-b border-blue-100 bg-blue-50/60 p-4 sm:px-6">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <Badge className="bg-blue-600 text-white hover:bg-blue-600">Digital</Badge>
-                  <span>Akses produk digital</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 p-5 sm:p-6 text-sm">
+            <section className="rounded-lg border border-slate-200 bg-white" aria-labelledby="order-digital-title" data-digital-access-panel>
+              <h3 id="order-digital-title" className="px-4 pt-4 text-sm font-semibold text-slate-950 sm:px-5">Akses produk digital</h3>
+              <div className="space-y-4 p-4 text-sm sm:p-5">
                 <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <dt className="text-xs text-slate-500">Status akses</dt>
@@ -1708,85 +1697,66 @@ export function OrderDetail({
                     Kirim Akses via WhatsApp
                   </a>
                 ) : null}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
-          {/* Mengantar / External Expedition & Tracking Card */}
+          {/* Shipping: the facts as one list, then the next action for this status. */}
           {!digital && (
-          <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <Truck className="size-4 text-slate-600" />
-                <span>Pengiriman</span>
-              </CardTitle>
-              <Badge
-                variant="outline"
-                className={
-                  isExternalShipping
-                    ? "border-amber-200 bg-amber-50 text-xs font-medium text-amber-800"
-                    : "border-blue-200 bg-blue-50 text-xs font-medium text-blue-700"
-                }
-              >
-                {isExternalShipping ? "Luar Mengantar" : "Mengantar"}
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-5 sm:p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="block text-xs text-slate-500">Kurir & Layanan</span>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {order.courier_code ? courierServiceLabel(order.courier_code, order.courier_service) : "Belum dipilih"}
-                  </p>
-                </div>
-                <div>
-                  <span className="block text-xs text-slate-500">Nomor Resi</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <p className={`min-w-0 break-all font-mono text-sm font-semibold ${order.cnote_no ? "text-emerald-700" : "text-amber-700"}`}>
-                      {order.cnote_no || "Belum diterbitkan"}
-                    </p>
-                    {order.cnote_no && (
-                      <button
+          <section className="rounded-lg border border-slate-200 bg-white" aria-labelledby="order-shipping-title">
+            <div className="flex items-center justify-between gap-2 px-4 pt-4 sm:px-5">
+              <h3 id="order-shipping-title" className="text-sm font-semibold text-slate-950">Pengiriman</h3>
+              <span className="text-xs text-slate-500">{isExternalShipping ? "Luar Mengantar" : "Mengantar"}</span>
+            </div>
+            <div className="space-y-4 p-4 sm:p-5">
+              <dl className="grid grid-cols-[minmax(7rem,auto)_1fr] gap-x-4 gap-y-2 text-sm">
+                <dt className="text-slate-500">Kurir</dt>
+                <dd className="text-slate-900">
+                  {order.courier_code ? courierServiceLabel(order.courier_code, order.courier_service) : <span className="text-slate-500">Belum dipilih</span>}
+                </dd>
+                <dt className="text-slate-500">Nomor resi</dt>
+                <dd className="flex min-w-0 items-center gap-1">
+                  {order.cnote_no ? (
+                    <>
+                      <span className="min-w-0 break-all font-mono font-medium text-slate-950">{order.cnote_no}</span>
+                      <Button
                         type="button"
-                        onClick={() =>
-                          void copyToClipboard(
-                            order.cnote_no || "",
-                            "tracking",
-                            "Nomor resi",
-                          )
-                        }
-                        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                        title="Salin resi"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void copyToClipboard(order.cnote_no || "", "tracking", "Nomor resi")}
+                        aria-label="Salin nomor resi"
+                        title="Salin nomor resi"
+                        className="-my-1.5 shrink-0"
                       >
-                        {copiedTarget === "tracking" ? (
-                          <Check className="size-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="size-3.5" />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
-                <div>
-                  <span className="block text-xs text-slate-500">Gudang Pengirim</span>
-                  <p className="mt-1 text-xs font-semibold text-slate-800">
-                    {order.warehouse_name || "Default Warehouse"}
-                  </p>
-                </div>
-                <div>
-                  <span className="block text-xs text-slate-500">ID Provider Order</span>
-                  <p className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">
-                    {order.provider_order_id || "—"}
-                  </p>
-                </div>
-              </div>
+                        {copiedTarget === "tracking" ? <Check className="text-emerald-600" aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-slate-500">Belum terbit</span>
+                  )}
+                </dd>
+                {order.provider_status_text && (
+                  <>
+                    <dt className="text-slate-500">Status kurir</dt>
+                    <dd className="min-w-0 text-slate-900" data-provider-status>
+                      {order.provider_status_text}
+                      {order.provider_status_at && <span className="ml-1.5 text-xs text-slate-500">{formatDate(order.provider_status_at)}</span>}
+                    </dd>
+                  </>
+                )}
+                <dt className="text-slate-500">Gudang</dt>
+                <dd className="text-slate-900">{order.warehouse_name || "Default Warehouse"}</dd>
+                {order.provider_order_id && (
+                  <>
+                    <dt className="text-slate-500">ID Mengantar</dt>
+                    <dd className="min-w-0 break-all font-mono text-xs leading-5 text-slate-700">{order.provider_order_id}</dd>
+                  </>
+                )}
+              </dl>
 
               {order.provider_dispatch_error && isDispatchOutcomeUnknown(order.provider_dispatch_error) ? (
                 // Audit 2026-10-31 M-1: Mengantar may have created the shipment.
-                <div role="status" className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                <div role="status" className="flex flex-col gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">Hasil push ke Mengantar belum pasti</p>
                   {acceptedShipmentId(order.provider_dispatch_error) ? (
                     <>
@@ -1807,37 +1777,36 @@ export function OrderDetail({
                   )}
                 </div>
               ) : order.provider_dispatch_error ? (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
-                  <p className="font-semibold text-rose-900">Gagal Push ke Mengantar:</p>
-                  <p className="mt-0.5 font-normal leading-relaxed">{order.provider_dispatch_error}</p>
+                <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+                  <p className="font-medium">Gagal push ke Mengantar</p>
+                  <p className="mt-0.5 leading-relaxed text-rose-800">{order.provider_dispatch_error}</p>
                 </div>
               ) : null}
 
               {order.shipping_status === "pending" && !order.provider_order_id ? (
-                <div className="space-y-4 border-t border-slate-100 pt-4">
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Jalur pengiriman">
-                    <Button
-                      type="button"
-                      role="radio"
-                      aria-checked={channelChoice === "mengantar"}
-                      variant={channelChoice === "mengantar" ? "default" : "outline"}
-                      disabled={saving}
-                      onClick={() => void selectChannelChoice("mengantar")}
-                      className="w-full"
-                    >
-                      Push ke Mengantar
-                    </Button>
-                    <Button
-                      type="button"
-                      role="radio"
-                      aria-checked={channelChoice === "external"}
-                      variant={channelChoice === "external" ? "default" : "outline"}
-                      disabled={saving}
-                      onClick={() => void selectChannelChoice("external")}
-                      className="w-full"
-                    >
-                      Kirim di luar Mengantar
-                    </Button>
+                <div className="space-y-3 border-t border-slate-100 pt-4">
+                  {/* The channel is a choice, not an action: one segmented control, so the push below is the only primary button. */}
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                  <span id="order-channel-label" className="text-sm text-slate-500">Kirim lewat</span>
+                  <div role="radiogroup" aria-labelledby="order-channel-label" className="inline-flex w-full rounded-lg bg-muted p-[3px] sm:w-auto">
+                    {([
+                      ["mengantar", "Mengantar", "Push ke Mengantar"],
+                      ["external", "Di luar Mengantar", "Kirim di luar Mengantar"],
+                    ] as const).map(([value, label, name]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-label={name}
+                        aria-checked={channelChoice === value}
+                        disabled={saving}
+                        onClick={() => void selectChannelChoice(value)}
+                        className="flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm sm:flex-none"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                   </div>
 
                   {channelChoice === "mengantar" ? (
@@ -1856,13 +1825,13 @@ export function OrderDetail({
                         : "Push Order ke Mengantar"}
                     </Button>
                   ) : (
-                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                      <p className="text-xs leading-5 text-slate-600">
-                        Untuk paket yang dikirim lewat agregator lain atau langsung ke kurir. Status pengiriman diperbarui manual (tidak tersinkron otomatis dari Mengantar).
+                    <div className="space-y-3">
+                      <p className="text-sm text-slate-600">
+                        Untuk paket lewat agregator lain atau langsung ke kurir. Statusnya diperbarui manual, tidak tersinkron dari Mengantar.
                       </p>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
-                          <label htmlFor="external-courier-code" className="block text-xs font-semibold text-slate-700">
+                          <label htmlFor="external-courier-code" className="block text-sm font-medium text-slate-700">
                             Kurir
                           </label>
                           <Input
@@ -1875,7 +1844,7 @@ export function OrderDetail({
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label htmlFor="external-courier-service" className="block text-xs font-semibold text-slate-700">
+                          <label htmlFor="external-courier-service" className="block text-sm font-medium text-slate-700">
                             Layanan (opsional)
                           </label>
                           <Input
@@ -1889,7 +1858,7 @@ export function OrderDetail({
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <label htmlFor="external-cnote-no" className="block text-xs font-semibold text-slate-700">
+                        <label htmlFor="external-cnote-no" className="block text-sm font-medium text-slate-700">
                           Nomor resi
                         </label>
                         <Input
@@ -1927,13 +1896,13 @@ export function OrderDetail({
               ) : (
                 <div className="space-y-3">
                   {isExternalShipping && (order.shipping_status === "processing" || order.shipping_status === "shipped") && (
-                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                      <p className="text-xs leading-5 text-slate-600">
-                        Order dikirim di luar Mengantar. Perbarui kurir/resi di sini atau majukan status (Terkirim / Sampai / Retur) di menu Status di atas.
+                    <div className="space-y-3 border-t border-slate-100 pt-4">
+                      <p className="text-sm text-slate-600">
+                        Dikirim di luar Mengantar. Perbarui kurir dan resi di sini; majukan status lewat menu Status di atas.
                       </p>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
-                          <label htmlFor="external-courier-code-edit" className="block text-xs font-semibold text-slate-700">
+                          <label htmlFor="external-courier-code-edit" className="block text-sm font-medium text-slate-700">
                             Kurir
                           </label>
                           <Input
@@ -1946,7 +1915,7 @@ export function OrderDetail({
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label htmlFor="external-cnote-no-edit" className="block text-xs font-semibold text-slate-700">
+                          <label htmlFor="external-cnote-no-edit" className="block text-sm font-medium text-slate-700">
                             Nomor resi
                           </label>
                           <Input
@@ -1983,38 +1952,30 @@ export function OrderDetail({
                   )}
                   <a
                     href={`/admin/shipping?order=${encodeURIComponent(order.order_number)}`}
-                    className={buttonVariants({ variant: "outline", className: "mt-2 w-full" })}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--admin-accent)] hover:underline"
                   >
-                    <ExternalLink className="mr-1.5 size-3.5" />
-                    Lihat Manajemen Resi &amp; Tracking
+                    Buka di Pengiriman
+                    <ExternalLink className="size-3.5" aria-hidden="true" />
                   </a>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
           )}
         </div>
 
-        {/* Right Column: Financials, Risk & CRM */}
-        <div className="space-y-6">
-          {/* Payment Summary Card */}
-          <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <CreditCard className="size-4 text-slate-600" />
-                <span>Pembayaran</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 sm:p-6 space-y-3 text-xs">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 font-medium">Metode Pembayaran</span>
-                <span className="font-semibold text-slate-900">
-                  {paymentMethodLabels[order.payment_method] || String(order.payment_method || "COD").toUpperCase()}
-                </span>
-              </div>
-
+        <div className="min-w-0 space-y-4">
+          {/* Payment: method and status once, then the bill as a ledger. */}
+          <section className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="order-payment-title">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 id="order-payment-title" className="text-sm font-semibold text-slate-950">Pembayaran</h3>
+              <span className="text-sm text-slate-600">
+                {paymentMethodLabels[order.payment_method] || String(order.payment_method || "COD").toUpperCase()}
+              </span>
+            </div>
+            <div className="mt-3 space-y-3 text-sm">
               {order.payment_switched_at && (
-                <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-600">
+                <p className="text-slate-600">
                   Diganti dari {String(order.payment_switched_from || "cod").toUpperCase()} pada {formatDate(order.payment_switched_at)}
                   {order.payment_switched_by ? ` oleh ${order.payment_switched_by}` : ""}.
                 </p>
@@ -2026,7 +1987,7 @@ export function OrderDetail({
                   onSwitched={() => setReloadKey((value) => value + 1)}
                 />
               ) : order.payment_switch?.reason && !isVoidOrder(order) ? (
-                <p className="text-slate-500">Ganti ke transfer/VA tidak tersedia: {order.payment_switch.reason}</p>
+                <p className="text-xs text-slate-500">Ganti ke transfer/VA tidak tersedia: {order.payment_switch.reason}</p>
               ) : null}
               {order.payment_link && (
                 <Button
@@ -2043,15 +2004,6 @@ export function OrderDetail({
                   Salin link pembayaran
                 </Button>
               )}
-
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 font-medium">Status Pembayaran</span>
-                <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium ${paymentStatusStyle}`}>
-                  <span className={`size-1.5 shrink-0 rounded-full ${paymentDotColor}`} aria-hidden="true" />
-                  {paymentStatusText}
-                </span>
-              </div>
-
               {order.payment_method === "manual_transfer" &&
                 !paymentPaid &&
                 !paymentFailed &&
@@ -2066,43 +2018,36 @@ export function OrderDetail({
                   </Button>
                 )}
 
-              <div className="border-t border-slate-100 pt-3 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium">Subtotal Produk</span>
-                  <span className="font-semibold text-slate-900">
-                    {currency(items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0))}
-                  </span>
+              <dl className="space-y-1.5 border-t border-slate-100 pt-3 tabular-nums">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">Subtotal produk</dt>
+                  <dd className="text-slate-900">{currency(items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0))}</dd>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium">Biaya Ongkir</span>
-                  <span className="font-semibold text-slate-900">{currency(order.shipping_cost || 0)}</span>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-slate-500">Ongkir</dt>
+                  <dd className="text-slate-900">{currency(order.shipping_cost || 0)}</dd>
                 </div>
-
                 {order.payment_method === "cod" && (
                   <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 font-medium">Biaya COD (3%)</span>
-                      <span className="font-semibold text-slate-900">{currency(order.cod_service_fee || 0)}</span>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-500">Biaya COD 3%</dt>
+                      <dd className="text-slate-900">{currency(order.cod_service_fee || 0)}</dd>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 font-medium">PPN 11% (dari Fee COD)</span>
-                      <span className="font-semibold text-slate-900">{currency(order.cod_service_fee_vat || 0)}</span>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-500">PPN 11% biaya COD</dt>
+                      <dd className="text-slate-900">{currency(order.cod_service_fee_vat || 0)}</dd>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 font-medium">Penanggung Fee COD</span>
-                      <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${order.cod_fee_bearer === "buyer" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}`}>
-                        {order.cod_fee_bearer === "buyer" ? "Pembeli" : "Seller"}
-                      </span>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-500">Biaya COD ditanggung</dt>
+                      <dd className="text-slate-900">{order.cod_fee_bearer === "buyer" ? "Pembeli" : "Seller"}</dd>
                     </div>
                   </>
                 )}
-              </div>
+              </dl>
 
-              <div className="border-t-2 border-slate-900 pt-3 flex justify-between items-center">
-                <span className="font-semibold text-slate-950 text-sm">Total Tagihan</span>
-                <span className="font-semibold text-emerald-700 text-lg">
-                  {currency(order.total_amount || 0)}
-                </span>
+              <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-3">
+                <span className="font-medium text-slate-950">Total tagihan</span>
+                <span className="text-lg font-semibold tabular-nums text-slate-950">{currency(order.total_amount || 0)}</span>
               </div>
 
               {/* The QRIS/VA admin fee (Paduka, 2026-11-02). Seller-borne: not
@@ -2112,7 +2057,7 @@ export function OrderDetail({
                 const payment = order.payment;
                 const sellers = paymentFeeIsSellers(payment);
                 return (
-                  <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+                  <div className="space-y-1.5 rounded-md bg-slate-50 p-3 tabular-nums">
                     {!sellers && (
                       <>
                         <div className="flex justify-between items-center gap-3">
@@ -2134,71 +2079,66 @@ export function OrderDetail({
                   </div>
                 );
               })()}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {/* Receiver Risk Card: a digital order has no receiver to score. */}
           {!digital && (
-          <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <ShieldAlert className="size-4 text-slate-600" />
-                <span>Riwayat penerima (RTS)</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 sm:p-6 space-y-3 text-xs">
-              <div className="flex items-baseline justify-between">
-                <span className="font-mono text-2xl font-semibold text-slate-950">
-                  {order.receiver_delivery_rate == null ? "—" : `${order.receiver_delivery_rate}%`}
-                </span>
-                <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${risk.style}`}>
-                  {risk.label}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                {order.receiver_performance?.grade && order.receiver_performance.grade !== "-"
-                  ? `Skor Mengantar ${order.receiver_performance.grade} dari seluruh riwayat nomor ini.`
-                  : "Paket terkirim dari seluruh riwayat nomor ini."}
+          <section className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="order-receiver-title">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 id="order-receiver-title" className="text-sm font-semibold text-slate-950">Riwayat penerima (RTS)</h3>
+              <span className="flex items-center gap-1.5 text-sm text-slate-700">
+                <span className={`size-2 rounded-full ${risk.dot}`} aria-hidden="true" />
+                {risk.label}
+              </span>
+            </div>
+            {order.receiver_delivery_rate == null ? (
+              <p className="mt-3 text-sm text-slate-600">Belum ada skor untuk nomor ini.</p>
+            ) : (
+              <p className="mt-3 text-sm text-slate-600">
+                <span className="text-2xl font-semibold tabular-nums text-slate-950">{order.receiver_delivery_rate}%</span>
+                <span className="ml-2">sukses kirim</span>
               </p>
+            )}
+            <p className="mt-1 text-xs text-slate-500">
+              {order.receiver_performance?.grade && order.receiver_performance.grade !== "-"
+                ? `Skor Mengantar ${order.receiver_performance.grade}, dari seluruh riwayat nomor ini.`
+                : "Dari seluruh riwayat paket nomor ini."}
+            </p>
 
-              {order.receiver_performance_unavailable === "not-whitelisted" && !order.receiver_risk_label && (
-                <p role="status" className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                  Akses skor penerima Mengantar belum aktif untuk akun ini. Minta whitelist
-                  Receiver Score ke CS Mengantar; order akan dinilai otomatis setelah akses dibuka.
-                </p>
-              )}
+            {order.receiver_performance_unavailable === "not-whitelisted" && !order.receiver_risk_label && (
+              <p role="status" className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+                Akses skor penerima Mengantar belum aktif untuk akun ini. Minta whitelist
+                Receiver Score ke CS Mengantar; order akan dinilai otomatis setelah akses dibuka.
+              </p>
+            )}
 
-              {deliveryTotals && typeof deliveryTotals === "object" && (
-                <dl className="grid grid-cols-3 gap-2 border-y py-2 text-center">
-                  <div><dt className="text-xs text-slate-500">Terkirim</dt><dd className="font-mono text-base font-semibold text-emerald-700">{deliveryTotals.delivered ?? 0}</dd></div>
-                  <div><dt className="text-xs text-slate-500">RTS</dt><dd className="font-mono text-base font-semibold text-rose-700">{deliveryTotals.rts ?? 0}</dd></div>
-                  <div><dt className="text-xs text-slate-500">Diproses</dt><dd className="font-mono text-base font-semibold text-sky-700">{deliveryTotals.inProgress ?? 0}</dd></div>
-                </dl>
-              )}
+            {deliveryTotals && typeof deliveryTotals === "object" && (
+              <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-sm tabular-nums">
+                <div><dt className="text-xs text-slate-500">Terkirim</dt><dd className="font-semibold text-slate-950">{deliveryTotals.delivered ?? 0}</dd></div>
+                <div><dt className="text-xs text-slate-500">RTS</dt><dd className="font-semibold text-rose-700">{deliveryTotals.rts ?? 0}</dd></div>
+                <div><dt className="text-xs text-slate-500">Diproses</dt><dd className="font-semibold text-slate-950">{deliveryTotals.inProgress ?? 0}</dd></div>
+              </dl>
+            )}
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void refreshRtsScoring()}
-                disabled={saving}
-                className="w-full"
-              >
-                <RefreshCw className={cn(saving && "animate-spin")} aria-hidden="true" />
-                {saving ? "Memeriksa…" : "Perbarui riwayat"}
-              </Button>
-            </CardContent>
-          </Card>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => void refreshRtsScoring()}
+              disabled={saving}
+              className="mt-2 -ml-2"
+            >
+              <RefreshCw className={cn(saving && "animate-spin")} aria-hidden="true" />
+              {saving ? "Memeriksa…" : "Perbarui riwayat"}
+            </Button>
+          </section>
           )}
 
           {order.kelola?.configured && (
-            <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-              <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <Send className="size-4 text-slate-600" />
-                  <span>Kelola CRM</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-5 sm:p-6 space-y-3 text-xs">
+            <section className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="order-kelola-title">
+              <h3 id="order-kelola-title" className="text-sm font-semibold text-slate-950">Kelola CRM</h3>
+              <div className="mt-3 space-y-3 text-sm">
                 {order.kelola.synced_at ? (
                   <>
                     <p className="flex items-center gap-2 font-medium text-emerald-700">
@@ -2237,28 +2177,22 @@ export function OrderDetail({
                     </Button>
                   </>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
-          {/* CRM WhatsApp Quick Actions */}
-          <Card className="rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6 flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <MessageSquare className="size-4 text-slate-600" />
-                <span>Follow-up WhatsApp</span>
-              </CardTitle>
-              <a href="/admin/settings/crm" className="text-xs font-semibold text-emerald-700 hover:underline">
-                Pengaturan
+          {/* Follow-up WhatsApp */}
+          <section className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="order-followup-title">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 id="order-followup-title" className="text-sm font-semibold text-slate-950">Follow-up WhatsApp</h3>
+              <a href="/admin/settings/crm" className="text-xs font-medium text-slate-500 hover:text-slate-900 hover:underline">
+                Template
               </a>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-5">
-              <CrmActionGroup
-                crmUrls={allCrmUrls}
-                orderId={order.id}
-              />
-            </CardContent>
-          </Card>
+            </div>
+            <div className="mt-3">
+              <CrmActionGroup crmUrls={allCrmUrls} orderId={order.id} />
+            </div>
+          </section>
         </div>
       </div>
     </div>
