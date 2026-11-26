@@ -433,6 +433,8 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
         processing: statusCounts.processing || 0,
         shipped: statusCounts.shipped || 0,
         delivered: statusCounts.delivered || 0,
+        // The RTS chip (PR #108) read 0 while "Semua" counted the returns.
+        returned: statusCounts.returned || 0,
         cancelled: statusCounts.cancelled || 0,
       },
     });
