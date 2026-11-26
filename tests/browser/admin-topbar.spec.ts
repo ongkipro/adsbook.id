@@ -155,4 +155,122 @@ test("dropdown click-away leaves no lingering focus border and #admin-main stays
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expectNoFocusBorder(orderAction, "Orders row action trigger");
   await expectNoFocusBorder(page.locator("#admin-main"), "#admin-main on orders");
+
+  // 5. A dialog closed in code (useConfirm's Batal) by keyboard returns focus to the row menu, never <body>.
+  const dialog = page.getByRole("dialog");
+  const openDeleteByKeyboard = async () => {
+    await orderAction.focus();
+    await page.keyboard.press("Enter");
+    const item = page.getByRole("menuitem", { name: /Hapus pesanan/ });
+    await expect(item).toBeVisible();
+    await item.focus();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+  };
+  await openDeleteByKeyboard();
+  await dialog.getByRole("button", { name: "Batal" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(orderAction, "keyboard Batal returns focus to the row menu").toBeFocused();
+
+  // 6. The same Batal by mouse leaves no focus ring on the trigger (a pointer user has no focus to lose).
+  await orderAction.click();
+  await page.getByRole("menuitem", { name: /Hapus pesanan/ }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Batal" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expectNoFocusBorder(orderAction, "Orders row action trigger after a mouse Batal");
+
+  // 7. Then a keyboard user who tabs into the page again and uses Batal still gets focus back.
+  await openDeleteByKeyboard();
+  await dialog.getByRole("button", { name: "Batal" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(orderAction, "keyboard after mouse: focus still returns").toBeFocused();
+});
+
+test("keyboard focus is visible in the accent on primitives, ads tabs and plain links; a click into a field adds no second frame", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await signIn(page);
+  // What the browser actually paints once the ring's transition has settled.
+  const indicator = (locator: ReturnType<Page["locator"]>) =>
+    locator.evaluate(async (el) => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const cs = getComputedStyle(el);
+      const accent = /rgb\(37, 99, 235\)/;
+      const rings = cs.boxShadow.split(/,(?![^(]*\))/).filter((part) => accent.test(part) && !/ 0px 0px 0px 0px/.test(part));
+      return {
+        focusVisible: el.matches(":focus-visible"),
+        outline: cs.outlineStyle === "none" ? 0 : parseFloat(cs.outlineWidth),
+        accentRing: rings.length > 0,
+      };
+    });
+  const tabIn = async (locator: ReturnType<Page["locator"]>) => {
+    await locator.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+  };
+
+  for (const path of ["/admin/ads/google", "/admin/ads/meta", "/admin/ads/tiktok"]) {
+    await page.goto(`${STORE}${path}`);
+    // The active tab: its 2px underline stays, and the inset ring draws the other three sides.
+    const active = page.locator(".tab-btn").first();
+    await tabIn(page.locator(".tab-btn").nth(1));
+    await page.keyboard.press("Shift+Tab");
+    const state = await indicator(active);
+    expect(state.focusVisible, `${path} active tab is keyboard-focused`).toBe(true);
+    expect(state.accentRing, `${path} tab shows an accent focus ring`).toBe(true);
+    expect(state.outline, `${path} tab draws no outline over its underline`).toBe(0);
+  }
+
+  await page.goto(`${STORE}/admin/orders`);
+  await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+  // A shadcn Button and a Base UI checkbox (a <span>): their own 2px accent ring.
+  const exportCsv = page.getByRole("button", { name: /Export CSV/ });
+  await tabIn(exportCsv);
+  const button = await indicator(exportCsv);
+  expect(button.focusVisible).toBe(true);
+  expect(button.accentRing, "a shadcn Button shows an accent focus ring").toBe(true);
+  expect(button.outline, "and no second outline around it").toBe(0);
+  const checkbox = page.locator('[aria-label="Tabel order desktop"] [role="checkbox"]').first();
+  await tabIn(checkbox);
+  expect((await indicator(checkbox)).accentRing, "a Base UI checkbox shows an accent focus ring").toBe(true);
+
+  // A mouse click into a text field: its own focus frame only, no outline on top.
+  const search = page.getByPlaceholder(/Invoice, nama/);
+  await search.click();
+  expect((await indicator(search)).outline, "no outline over a clicked field").toBe(0);
+
+  // A mouse click on a button leaves no ring behind.
+  await page.mouse.click(5, 300);
+  await exportCsv.click();
+  await page.keyboard.press("Escape").catch(() => undefined);
+  const afterPointer = await indicator(exportCsv);
+  expect(afterPointer.focusVisible, "no lingering focus ring after a pointer press").toBe(false);
+});
+
+test("the WhatsApp CRM chips read in full in the orders table", async ({ page }) => {
+  await signIn(page);
+  for (const width of [1280, 1366]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`${STORE}/admin/orders`);
+    await page.waitForFunction(() => [...document.querySelectorAll("astro-island")].every((el) => !el.hasAttribute("ssr")));
+    const group = page.locator('[aria-label="Tabel order desktop"] [aria-label="Tahap follow-up"]').first();
+    await expect(group.locator("a, button")).toHaveCount(10);
+    // Equal fifths of the 244px column cut "Welcome" and "Process" to "Welc…" (PR #108).
+    const cut = await group.locator("span.truncate").evaluateAll((spans) =>
+      spans.filter((span) => (span as HTMLElement).scrollWidth > (span as HTMLElement).clientWidth + 0.5).map((span) => span.textContent),
+    );
+    expect(cut, `no CRM chip label is truncated at ${width}px`).toEqual([]);
+  }
+  // At 1366 the whole table fits: nothing scrolls, and the pinned Aksi column covers no chip.
+  const fit = await page.evaluate(() => {
+    const table = document.querySelector('[aria-label="Tabel order desktop"] table') as HTMLElement;
+    const row = table.querySelector("tbody tr") as HTMLElement;
+    const chips = (row.querySelector('[aria-label="Tahap follow-up"]') as HTMLElement).getBoundingClientRect();
+    const aksi = (row.lastElementChild as HTMLElement).getBoundingClientRect();
+    return { scrolls: table.parentElement!.scrollWidth > table.parentElement!.clientWidth + 1, overlap: Math.round(chips.right - aksi.left) };
+  });
+  expect(fit.scrolls, "the orders table fits 1366 without scrolling").toBe(false);
+  expect(fit.overlap, "the Aksi column covers no CRM chip").toBeLessThanOrEqual(0);
 });

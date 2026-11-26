@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { cn } from "@/lib/utils"
+import { returnFocusUnlessPointer } from "./final-focus"
 
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
@@ -20,10 +21,6 @@ function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
 function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
-
-const keyboardOnlyDialogFinalFocus: NonNullable<DialogPrimitive.Popup.Props["finalFocus"]> = (
-  closeType
-) => closeType === "keyboard"
 
 function DialogOverlay({
   className,
@@ -49,7 +46,7 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
-  finalFocus = keyboardOnlyDialogFinalFocus,
+  finalFocus = returnFocusUnlessPointer,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean

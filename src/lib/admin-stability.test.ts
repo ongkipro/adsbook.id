@@ -84,7 +84,8 @@ test("admin popups and containers avoid lingering click-away borders and decorat
     "src/components/ui/dialog.tsx",
   ]) {
     const src = readFileSync(popupFile, "utf8");
-    assert.match(src, /closeType === "keyboard"/, `${popupFile} restores focus only on keyboard close`);
+    // One shared rule (final-focus.ts): a close made in code must not drop a keyboard user on <body>.
+    assert.match(src, /finalFocus = returnFocusUnlessPointer/, `${popupFile} uses the shared final-focus rule`);
     assert.doesNotMatch(src, /zoom-in-95|zoom-out-95|slide-in-from-/, `${popupFile} uses instant open without decorative zoom/slide`);
   }
 
@@ -95,4 +96,28 @@ test("admin popups and containers avoid lingering click-away borders and decorat
   ]) {
     assert.doesNotMatch(readFileSync(controlFile, "utf8"), /\btransition-all\b/, `${controlFile} avoids transition-all`);
   }
+});
+
+test("keyboard focus: every primitive draws a 2px accent ring, plain links and buttons an accent outline, text fields no second frame", () => {
+  const css = readFileSync("src/styles/admin.css", "utf8");
+  // The ring token is the accent (5.2:1 on white), not a tint or a grey (slate-300 is 1.5:1).
+  assert.match(css, /\.admin-shell \{[^}]*--ring: var\(--admin-accent\);/, "admin --ring is the accent");
+  assert.match(css, /\.admin-shell \{[^}]*--sidebar-ring: var\(--admin-accent\);/, "admin --sidebar-ring is the accent");
+  for (const primitive of ["button", "input", "textarea", "checkbox", "switch", "select", "tabs", "badge"]) {
+    const src = readFileSync(`src/components/ui/${primitive}.tsx`, "utf8");
+    assert.match(src, /focus-visible:ring-2 focus-visible:ring-ring/, `${primitive} draws a 2px ring in the ring token`);
+    assert.doesNotMatch(src, /ring-slate-300/, `${primitive} no longer draws a 1.5:1 grey ring`);
+  }
+  // The fallback outline: unlayered (inside a layer, a utility's outline-none wins), and never on a primitive or a text field.
+  const rule = ".admin-shell :where(a, button):not([data-slot]):focus-visible";
+  const at = css.indexOf(rule);
+  assert.ok(at > 0, "the fallback rule covers plain links and buttons only");
+  const open: boolean[] = [];
+  for (let i = 0; i < at; i += 1) {
+    if (css[i] === "{") open.push(/@layer\b/.test(css.slice(Math.max(css.lastIndexOf("}", i - 1), css.lastIndexOf(";", i - 1)) + 1, i)));
+    else if (css[i] === "}") open.pop();
+  }
+  assert.equal(open.some(Boolean), false, "the fallback rule is not inside an @layer");
+  assert.match(css.slice(at, css.indexOf("}", at)), /outline:\s*2px solid var\(--admin-accent\)/);
+  assert.doesNotMatch(css, /:where\([^)]*\binput\b[^)]*\):focus-visible\s*\{\s*outline:\s*2px/, "a mouse click into a field must not add an outline over its own focus frame");
 });

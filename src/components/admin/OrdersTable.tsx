@@ -503,17 +503,11 @@ function RiskBadge({
           : `Risiko RTS ${styles.label}`
       }
     >
-      <div className="flex items-center justify-between gap-1.5">
-        <span
-          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${styles.badge}`}
-        >
-          RTS {styles.label}
-        </span>
-        {/* The rate is delivery success, not RTS; unlabelled it read as "RTS 16%" (audit 2026-10-31 L3). */}
-        <span className="text-xs text-slate-500">
-          {hasValidRate ? <span className="font-mono font-semibold text-slate-900">{deliveryRate}%</span> : "—"}
-        </span>
-      </div>
+      <span
+        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${styles.badge}`}
+      >
+        RTS {styles.label}
+      </span>
       <div
         className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"
         aria-hidden="true"
@@ -525,7 +519,13 @@ function RiskBadge({
           }}
         ></div>
       </div>
-      <p className="mt-1 truncate text-xs font-medium text-slate-500">
+      {/* The rate is delivery success, not RTS: a bare "16%" beside "RTS Tinggi"
+          read as a 16% RTS rate (audit 2026-10-31 L3), so it never sits there.
+          `w-0 min-w-full`: these lines take the column's width and never set it. */}
+      <p className="mt-1 w-0 min-w-full truncate text-xs text-slate-500">
+        {hasValidRate ? <>Sukses kirim <span className="font-mono font-semibold text-slate-900">{deliveryRate}%</span></> : "Belum ada riwayat"}
+      </p>
+      <p className="w-0 min-w-full truncate text-xs font-medium text-slate-500" title={styles.guidance}>
         {styles.guidance}
       </p>
     </div>

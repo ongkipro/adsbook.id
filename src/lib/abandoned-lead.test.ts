@@ -371,6 +371,36 @@ test("normal orders GET excludes abandoned leads from rows, summary, and status 
   assert.equal(payload.status_counts.abandoned, undefined);
 });
 
+test("every status chip carries its count, so the chips add up to Semua (RTS included)", async () => {
+  const database = {
+    prepare(sql: string) {
+      const api = { bind() { return api; }, sql };
+      return api;
+    },
+    async batch(raw: Array<{ sql: string }>) {
+      return raw.map(({ sql }, index) => {
+        if (index === 0) return { results: [{ total_items: 6 }] };
+        if (index === 2) return { results: [{ total_orders: 6, unpaid_count: 0, high_risk_count: 0, total_value: 0 }] };
+        if (/GROUP BY 1/.test(sql)) {
+          return { results: ["pending", "processing", "shipped", "delivered", "returned", "cancelled"].map((shipping_status) => ({ shipping_status, count: 1 })) };
+        }
+        return { results: [] };
+      });
+    },
+  } as unknown as D1Database;
+
+  const response = await getOrders({
+    url: new URL("https://example.test/api/admin/orders"),
+    locals: { tenantDb: database, runtimeEnv: { OMS_DB: database } },
+  } as never);
+  const counts = ((await response.json()) as { status_counts: Record<string, number> }).status_counts;
+
+  assert.equal(response.status, 200);
+  assert.equal(counts.returned, 1, "the RTS chip has its own count");
+  const { all, ...chips } = counts;
+  assert.equal(Object.values(chips).reduce((sum, count) => sum + count, 0), all, "the chips add up to Semua");
+});
+
 test("the order summary follows every filter, and the chips follow all but status", async () => {
   // Captures the SQL and bindings each statement in the batch actually used.
   const captured: Statement[] = [];
