@@ -14,7 +14,8 @@
 //      sheet so "Akses Pengguna" is in view.
 //   3. Cold-loading the pages that used to shift (domains, developer, profile,
 //      landing-pages, settings, ads/utm, ads, ads/tiktok, payments, orders)
-//      produces CLS <= 0.005.
+//      produces CLS <= 0.005, and the first frame of each already holds the
+//      whole shell (the layout's render-blocking marker).
 import { expect, test, type Page } from "@playwright/test";
 import { origin, owner, TENANTS } from "./tenants.ts";
 
@@ -38,6 +39,10 @@ test("the sidebar stays where the operator clicked, and admin pages load without
         if (!entry.hadRecentInput) (window as unknown as { __cls: number }).__cls += entry.value;
       }
     }).observe({ type: "layout-shift", buffered: true });
+    // What the first frame had to lay out: the whole shell, or a half-parsed page.
+    requestAnimationFrame(() => {
+      (window as unknown as { __firstFrameParsed: boolean }).__firstFrameParsed = Boolean(document.getElementById("admin-shell-parsed"));
+    });
   });
   const page = await desktop.newPage();
   await signIn(page);
@@ -171,6 +176,9 @@ test("the sidebar stays where the operator clicked, and admin pages load without
     await page.waitForTimeout(400);
     const cls = await page.evaluate(() => (window as unknown as { __cls: number }).__cls);
     expect(cls, `${path} cumulative layout shift`).toBeLessThanOrEqual(0.005);
+    // A zero above can be a fast machine. This cannot: the first frame waited for the shell's markup.
+    const whole = await page.evaluate(() => (window as unknown as { __firstFrameParsed?: boolean }).__firstFrameParsed);
+    expect(whole, `${path} paints only once the shell is parsed`).toBe(true);
   }
   await desktop.close();
 
