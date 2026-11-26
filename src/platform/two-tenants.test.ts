@@ -1285,6 +1285,93 @@ test("AUTH §1.2 (review finding 2): the registry follows the store's credential
   );
 });
 
+test("AUTH §1.2 / G3 fence: a normal identity sync writes only for provisioning, active or suspended stores — never a fenced, purging, purged or missing one; the explicit reconciliation only for recovery; other stores untouched", async () => {
+  const { syncTenantIdentities } = await import("./identities.ts");
+  const { hashAdminPassword } = await import("../lib/admin-credentials.ts");
+  const { platformDb, stores, env, run } = await signupHarness();
+  const a = await run("toko-pagar-a", {}, "pa@contoh.example");
+  const b = await run("toko-pagar-b", {}, "pb@contoh.example");
+  if (a.status !== 201 || b.status !== 201) return assert.fail("signup");
+  const hash = await hashAdminPassword("staf-password-1");
+  let next = 0;
+  const addStaff = () => {
+    const username = `staf_${(next += 1)}`;
+    stores.get(a.tenantId).storage.db.prepare(
+      "INSERT INTO admin_credentials (username, display_name, email, role, password_hash, must_change_password, updated_at) VALUES (?, 'Staf', NULL, 'customer_service', ?, 0, '2026-11-20')",
+    ).run(username, hash);
+    return username;
+  };
+  const setStatus = (status: string) => platformDb.sqlite.prepare("UPDATE tenants SET status = ? WHERE id = ?").run(status, a.tenantId);
+  const writes = () => platformDb.queries.filter((sql) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql) && /platform_identities/.test(sql)).length;
+  const bBefore = identityRows(platformDb, b.tenantId);
+
+  for (const status of ["recovery", "purging", "purged"]) {
+    setStatus(status);
+    const before = identityRows(platformDb, a.tenantId);
+    const staff = addStaff();
+    platformDb.queries.length = 0;
+    assert.deepEqual(await syncTenantIdentities(env, a.tenantId, createTenantDb(stores.get(a.tenantId).stub)), { synced: 0, blocked: [] }, status);
+    assert.equal(writes(), 0, `${status}: no registry statement is even issued`);
+    assert.deepEqual(identityRows(platformDb, a.tenantId), before, `${status}: registry unchanged`);
+    assert.ok(!identityRows(platformDb).some((row) => (row as { identifier: string }).identifier === staff), `${status}: the new name is not taken`);
+  }
+  platformDb.queries.length = 0;
+  assert.deepEqual(await syncTenantIdentities(env, "t_tidak_ada", createTenantDb(stores.get(a.tenantId).stub)), { synced: 0, blocked: [] }, "missing tenant");
+  assert.equal(writes(), 0, "missing tenant: nothing written");
+
+  // Unchanged behaviour for the allowed states: the new names join.
+  for (const status of ["provisioning", "active", "suspended"]) {
+    setStatus(status);
+    const staff = addStaff();
+    const synced = await syncTenantIdentities(env, a.tenantId, createTenantDb(stores.get(a.tenantId).stub));
+    assert.deepEqual(synced.blocked, [], status);
+    assert.ok(identityRows(platformDb, a.tenantId).some((row) => (row as { identifier: string }).identifier === staff), `${status}: synced`);
+  }
+
+  // Commit time: the fence lands after the status read and the credential read, before the batch.
+  setStatus("active");
+  const before = identityRows(platformDb, a.tenantId);
+  const staff = addStaff();
+  const real = createTenantDb(stores.get(a.tenantId).stub);
+  const fencing = {
+    prepare(sql: string) {
+      const statement = real.prepare(sql);
+      if (!/FROM admin_credentials/.test(sql)) return statement;
+      return {
+        ...statement,
+        all: async <T>() => {
+          const result = await statement.all<T>();
+          setStatus("recovery"); // the restore fence commits while this request is in flight
+          return result;
+        },
+      };
+    },
+  } as unknown as D1Database;
+  platformDb.queries.length = 0;
+  assert.deepEqual(await syncTenantIdentities(env, a.tenantId, fencing), { synced: 0, blocked: [] });
+  assert.ok(writes() > 0, "the batch was issued: the guard inside its statements is what held");
+  assert.deepEqual(identityRows(platformDb, a.tenantId), before, "nothing written once fenced");
+  assert.ok(!identityRows(platformDb).some((row) => (row as { identifier: string }).identifier === staff));
+  assert.deepEqual(identityRows(platformDb, b.tenantId), bBefore, "the other store's registry is unchanged throughout");
+
+  // The explicit reconciliation is the mirror image: `recovery` only, never a live or purging store.
+  const { reconcileFencedTenantIdentities } = await import("./identities.ts");
+  for (const status of ["provisioning", "active", "suspended", "purging", "purged"]) {
+    setStatus(status);
+    const kept = identityRows(platformDb, a.tenantId);
+    addStaff();
+    platformDb.queries.length = 0;
+    assert.deepEqual(await reconcileFencedTenantIdentities(env, a.tenantId, createTenantDb(stores.get(a.tenantId).stub)), { synced: 0, blocked: [] }, `reconcile ${status}`);
+    assert.equal(writes(), 0, `reconcile ${status}: nothing issued`);
+    assert.deepEqual(identityRows(platformDb, a.tenantId), kept, `reconcile ${status}: registry unchanged`);
+  }
+  setStatus("recovery");
+  const fencedStaff = addStaff();
+  assert.deepEqual((await reconcileFencedTenantIdentities(env, a.tenantId, createTenantDb(stores.get(a.tenantId).stub))).blocked, []);
+  assert.ok(identityRows(platformDb, a.tenantId).some((row) => (row as { identifier: string }).identifier === fencedStaff), "recovery: reconciled");
+  assert.deepEqual(identityRows(platformDb, b.tenantId), bBefore, "still B untouched");
+});
+
 test("T-26/IAM-10: a provisioning whose claim updates no seeded row ends in purging, never active", async () => {
   const { stores, run, tenant } = await signupHarness();
   const original = { error: console.error };
