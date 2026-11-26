@@ -234,14 +234,14 @@ function summarySelectSql(whereClause: string) {
       COUNT(*) AS total_orders,
       COALESCE(SUM(CASE WHEN ${RELEASED_ORDER} THEN 0 ELSE total_amount END), 0) AS total_revenue,
       COALESCE(SUM(CASE
-        WHEN payment_status IN ('paid', 'settled', 'success')
+        WHEN payment_method <> 'cod' AND payment_status IN ('paid', 'settled', 'success')
         THEN total_amount
           - COALESCE(shipping_cost, 0)
           - COALESCE(cod_service_fee, 0)
           - COALESCE(cod_service_fee_vat, 0)
         ELSE 0 END), 0) AS collected_revenue,
       COALESCE(SUM(CASE
-        WHEN payment_method = 'cod' AND shipping_status = 'delivered'
+        WHEN payment_method = 'cod' AND shipping_status = 'delivered' AND NOT (${RELEASED_ORDER})
         THEN total_amount
           - COALESCE(shipping_cost, 0)
           - COALESCE(cod_service_fee, 0)
