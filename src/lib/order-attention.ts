@@ -19,9 +19,16 @@ import { matchesShippingQueue } from "./shipping-queue.ts";
  *   also its Meta Purchase (TRACKING_SPECS §13); 55 sat unconfirmed on
  *   agritani.shop on 2026-11-10 (audit F-2). Kept out of awaiting_payment so
  *   that one counts what the buyer still owes a provider;
+ * - digital_unpaid — a hybrid store's digital orders inside "Belum dibayar",
+ *   on the Produk Digital list. There awaiting_payment and
+ *   transfer_unconfirmed count physical orders only, as Produk Fisik lists;
  * - leads_new — the lead list's follow-up status `new`;
  * - needs_waybill / needs_pickup / needs_drop_off — `matchesShippingQueue`
  *   over the rows `/admin/shipping` lists (`shippingListFilter`).
+ *
+ * A digital order is never "confirmed" or pushed: it is delivered the moment
+ * it is paid (DIGITAL-PRODUCTS-SPEC §2.3), so confirm, ready_push and
+ * push_problem count physical orders only, in every catalog mode.
  *
  * Not dated: these are open work, whenever it came in.
  */
@@ -32,6 +39,7 @@ export type AttentionKey =
   | "push_problem"
   | "awaiting_payment"
   | "transfer_unconfirmed"
+  | "digital_unpaid"
   | "leads_new"
   | "needs_waybill"
   | "needs_pickup"
@@ -83,8 +91,11 @@ type ShipmentRow = {
  */
 export async function readOrderAttention(
   database: D1Database,
-  options: { fallbackPickupAddressId?: string; now?: number } = {},
+  options: { fallbackPickupAddressId?: string; now?: number; catalogMode?: "physical" | "digital" | "hybrid" } = {},
 ) {
+  const hybrid = (options.catalogMode ?? "hybrid") === "hybrid";
+  // A hybrid store's Pesanan is two lists; each card counts the one it opens.
+  const physicalOnly = hybrid ? " AND fulfillment_type = 'physical'" : "";
   const now = options.now ?? Date.now();
   const fallbackPickupAddressId = (options.fallbackPickupAddressId || "").trim();
   const shipping = shippingListFilter(new URLSearchParams());
@@ -99,6 +110,7 @@ export async function readOrderAttention(
          FROM orders o
          LEFT JOIN warehouses w ON w.id = o.warehouse_id
          WHERE ${orderRowSql("o.")} AND o.shipping_status = 'pending' AND o.stock_restored_at IS NULL
+           AND o.fulfillment_type = 'physical'
          ORDER BY o.id DESC
          LIMIT ?`,
       )
@@ -113,15 +125,17 @@ export async function readOrderAttention(
       .bind(...shipping.params, ATTENTION_ROW_LIMIT + 1),
     database.prepare(
       `SELECT
-         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND payment_method <> 'manual_transfer' THEN 1 ELSE 0 END) AS awaiting_payment,
-         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND payment_method <> 'manual_transfer' AND created_at < ?1 THEN 1 ELSE 0 END) AS awaiting_payment_stale,
-         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND payment_method = 'manual_transfer' THEN 1 ELSE 0 END) AS transfer_unconfirmed,
-         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND payment_method = 'manual_transfer' AND created_at < ?1 THEN 1 ELSE 0 END) AS transfer_unconfirmed_stale,
+         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND payment_method <> 'manual_transfer'${physicalOnly} THEN 1 ELSE 0 END) AS awaiting_payment,
+         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND payment_method <> 'manual_transfer'${physicalOnly} AND created_at < ?1 THEN 1 ELSE 0 END) AS awaiting_payment_stale,
+         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND payment_method = 'manual_transfer'${physicalOnly} THEN 1 ELSE 0 END) AS transfer_unconfirmed,
+         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND payment_method = 'manual_transfer'${physicalOnly} AND created_at < ?1 THEN 1 ELSE 0 END) AS transfer_unconfirmed_stale,
+         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND fulfillment_type = 'digital' THEN 1 ELSE 0 END) AS digital_unpaid,
+         SUM(CASE WHEN ${orderRowSql()} AND ${AWAITING_PAYMENT_SQL} AND fulfillment_type = 'digital' AND created_at < ?1 THEN 1 ELSE 0 END) AS digital_unpaid_stale,
          SUM(CASE WHEN ${leadRowSql()} AND lead_follow_up_status = 'new' THEN 1 ELSE 0 END) AS leads_new,
          SUM(CASE WHEN ${leadRowSql()} AND lead_follow_up_status = 'new' AND created_at < ?1 THEN 1 ELSE 0 END) AS leads_new_stale
        FROM orders`,
     ).bind(new Date(now - STALE_AFTER_MS).toISOString()),
-  ])) as [D1Result<PendingRow>, D1Result<ShipmentRow>, D1Result<{ awaiting_payment: number | null; awaiting_payment_stale: number | null; transfer_unconfirmed: number | null; transfer_unconfirmed_stale: number | null; leads_new: number | null; leads_new_stale: number | null }>];
+  ])) as [D1Result<PendingRow>, D1Result<ShipmentRow>, D1Result<{ awaiting_payment: number | null; awaiting_payment_stale: number | null; transfer_unconfirmed: number | null; transfer_unconfirmed_stale: number | null; digital_unpaid: number | null; digital_unpaid_stale: number | null; leads_new: number | null; leads_new_stale: number | null }>];
 
   const pendingRows = (pending.results ?? []).slice(0, ATTENTION_ROW_LIMIT);
   const shipmentRows = (shipments.results ?? []).slice(0, ATTENTION_ROW_LIMIT);
@@ -174,7 +188,7 @@ export async function readOrderAttention(
       ),
     ).length;
 
-  const totals = counts.results?.[0] ?? { awaiting_payment: 0, awaiting_payment_stale: 0, transfer_unconfirmed: 0, transfer_unconfirmed_stale: 0, leads_new: 0, leads_new_stale: 0 };
+  const totals = counts.results?.[0] ?? { awaiting_payment: 0, awaiting_payment_stale: 0, transfer_unconfirmed: 0, transfer_unconfirmed_stale: 0, digital_unpaid: 0, digital_unpaid_stale: 0, leads_new: 0, leads_new_stale: 0 };
   // lazy: transfer_unconfirmed opens the "Belum dibayar" list, which also holds
   // unpaid QRIS/VA. Upgrade path: a payment-method filter on the order list.
   const items: AttentionItem[] = [
@@ -183,6 +197,9 @@ export async function readOrderAttention(
     { key: "push_problem", label: "Push Mengantar bermasalah", hint: "Ditolak atau hasil belum pasti. Yang ditolak tetap bisa dipush ulang setelah dibetulkan", count: pushProblem, href: "/admin/orders?status=pending", tone: "bad" },
     { key: "awaiting_payment", label: "Menunggu pembayaran online", hint: "QRIS atau VA yang belum dibayar pembeli", count: Number(totals.awaiting_payment) || 0, stale: Number(totals.awaiting_payment_stale) || 0, href: "/admin/orders?payment_status=unpaid", tone: "warn" },
     { key: "transfer_unconfirmed", label: "Transfer belum dikonfirmasi", hint: "Cek mutasi rekening lalu tekan Transfer Diterima di detail order. Purchase baru terkirim ke Meta setelah dikonfirmasi", count: Number(totals.transfer_unconfirmed) || 0, stale: Number(totals.transfer_unconfirmed_stale) || 0, href: "/admin/orders?payment_status=unpaid", tone: "warn" },
+    ...(hybrid
+      ? [{ key: "digital_unpaid" as const, label: "Pesanan digital belum dibayar", hint: "Akses terbuka otomatis setelah lunas. Transfer manual perlu Transfer Diterima di detail order", count: Number(totals.digital_unpaid) || 0, stale: Number(totals.digital_unpaid_stale) || 0, href: "/admin/orders/digital?payment_status=unpaid", tone: "warn" as const }]
+      : []),
     { key: "leads_new", label: "Lead belum dihubungi", hint: "Pesanan tertinggal yang belum di-follow up", count: Number(totals.leads_new) || 0, stale: Number(totals.leads_new_stale) || 0, href: "/admin/orders/abandoned?follow_up_status=new", tone: "warn" },
     { key: "needs_waybill", label: "Perlu dibuatkan resi", hint: "Sudah di Mengantar, resi belum terbit", count: queueCount("needs_waybill"), href: "/admin/shipping?queue=needs_waybill", tone: "warn" },
     { key: "needs_pickup", label: "Perlu jadwal pickup", hint: "Berresi, belum dijadwalkan pickup kurir", count: queueCount("needs_pickup"), href: "/admin/shipping?queue=needs_pickup", tone: "warn" },

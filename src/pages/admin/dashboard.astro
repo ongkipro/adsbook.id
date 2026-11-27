@@ -52,7 +52,7 @@ const [setupFacts, initialAnalytics, initialAttentionRaw] = await Promise.all([
       })
     : Promise.resolve(null),
   db && mayManageOrders
-    ? readOrderAttention(db).catch((error): Awaited<ReturnType<typeof readOrderAttention>> | null => {
+    ? readOrderAttention(db, { catalogMode: Astro.locals.tenant.catalogMode }).catch((error): Awaited<ReturnType<typeof readOrderAttention>> | null => {
         console.error('admin-dashboard-ssr-attention', error instanceof Error ? error.message : 'unknown');
         return null;
       })

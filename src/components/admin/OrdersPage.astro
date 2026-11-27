@@ -1,0 +1,72 @@
+---
+/**
+ * The order list page, once for every kind. A hybrid store splits Pesanan into
+ * Produk Fisik (`/admin/orders`) and Produk Digital (`/admin/orders/digital`);
+ * a single-mode store keeps one list, drawn for the kind it sells.
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminPageHeader from './AdminPageHeader.astro';
+import { OrdersTable, mapOrder, type OrderItem } from './OrdersTable';
+import { initialOrderListFilters, orderListQuery } from '../../lib/admin-orders-initial';
+import type { OrderListKind } from '../../lib/order-list-filter';
+import { GET as listOrders, ORDER_LIST_PREFETCH_HEADER } from '../../pages/api/admin/orders/index';
+
+interface Props {
+  kind: OrderListKind;
+  view: 'physical' | 'digital';
+  title: string;
+  description: string;
+}
+
+const { kind, view, title, description } = Astro.props;
+
+let initialOrders: OrderItem[] | undefined;
+// The status chips' counts come from the same answer, so the chips render with
+// their numbers instead of widening when a second request brings them.
+let initialStatusCounts: Record<string, number> | undefined;
+let initialOtherKindCount: number | undefined;
+let initialSummary: Record<string, number> | undefined;
+let initialTotalItems: number | undefined;
+try {
+  // The first rows are the list API's own answer to the request the island
+  // makes from this link, so the two cannot disagree on a status, a date
+  // range or a buyer link. A failure leaves the island to fetch them.
+  const url = new URL(`/api/admin/orders?${orderListQuery(initialOrderListFilters(Astro.url.searchParams, kind), 1, false)}`, Astro.url);
+  const request = new Request(url, { headers: { [ORDER_LIST_PREFETCH_HEADER]: '1' } });
+  const response = await listOrders({ url, request, locals: Astro.locals } as Parameters<typeof listOrders>[0]);
+  const payload = (await response.json()) as { success?: boolean; data?: Parameters<typeof mapOrder>[0][]; status_counts?: Record<string, number>; other_kind_count?: number; summary?: Record<string, number>; pagination?: { total_items?: number } };
+  if (response.ok && payload.success && Array.isArray(payload.data)) {
+    initialOrders = payload.data.map(mapOrder);
+    initialStatusCounts = payload.status_counts;
+    initialOtherKindCount = payload.other_kind_count;
+    initialSummary = payload.summary;
+    initialTotalItems = payload.pagination?.total_items;
+  }
+} catch (error) {
+  console.error('admin-orders-initial-load', error);
+}
+---
+
+<AdminLayout title={title} activeMenu="orders">
+  <div class="space-y-5">
+    <AdminPageHeader title={title} description={description}>
+      {view === 'physical' && (
+        <div slot="actions" class="grid grid-cols-2 gap-2 sm:flex">
+          <a href="/admin/check" class="btn-secondary">Cek risiko</a>
+          <a href="/admin/shipping" class="btn-primary">Pengiriman</a>
+        </div>
+      )}
+    </AdminPageHeader>
+    <OrdersTable
+      kind={kind}
+      view={view}
+      initialOrders={initialOrders}
+      initialStatusCounts={initialStatusCounts}
+      initialOtherKindCount={initialOtherKindCount}
+      initialSummary={initialSummary}
+      initialTotalItems={initialTotalItems}
+      initialQuery={Astro.url.search}
+      client:load
+    />
+  </div>
+</AdminLayout>

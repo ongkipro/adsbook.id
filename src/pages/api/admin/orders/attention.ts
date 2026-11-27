@@ -15,7 +15,7 @@ export const GET: APIRoute = async ({ locals }) => {
   try {
     // No env pickup fallback (T-45): a warehouse without its own pickup
     // address is reported as such, not filled from a Worker-wide value.
-    const data = await readOrderAttention(database);
+    const data = await readOrderAttention(database, { catalogMode: locals.tenant?.catalogMode });
     return jsonOk({ data }, 200, { 'cache-control': 'no-store' });
   } catch (error) {
     console.error('admin-orders-attention', error);

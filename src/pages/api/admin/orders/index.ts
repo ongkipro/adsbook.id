@@ -100,6 +100,7 @@ type OrderSummaryRow = {
   unpaid_count: number | string;
   high_risk_count: number | string;
   total_value: number | string;
+  unopened_count: number | string;
 };
 
 type OrderStatusCountRow = {
@@ -183,6 +184,15 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
     const chipParts = whereParts.filter((_, index) => index !== filter.statusPart);
     const chipParams = params.filter((_, index) => index !== filter.statusParam);
     const chipWhereClause = ` WHERE ${chipParts.join(' AND ')}`;
+    // The other kind under the same search, payment, period and source (status
+    // left out: the two kinds name their states differently), so a phone
+    // searched on Produk Fisik can say it also matched a digital order.
+    const otherKindClause = filter.kindPart >= 0
+      ? ` WHERE ${whereParts
+          .map((part, index) => (index === filter.kindPart ? `NOT ${part}` : part))
+          .filter((_, index) => index !== filter.statusPart)
+          .join(' AND ')}`
+      : null;
     const offset = (page - 1) * limit;
     const db = database as D1Database;
 
@@ -279,7 +289,7 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
         LIMIT ? OFFSET ?
       `).bind(...params, limit, offset);
     const withSourceOptions = url.searchParams.get('source_options') === '1';
-    const [countResult, rowResult, summaryResult, crmResult, bankResult, statusCountResult, labelResult, facetResult] = await db.batch([
+    const [countResult, rowResult, summaryResult, crmResult, bankResult, statusCountResult, labelResult, facetResult, otherKindResult] = await db.batch([
       countStmt,
       ordersStmt,
       // Scoped to the active filters. These cards used to answer for the whole
@@ -291,6 +301,9 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
           COUNT(*) AS total_orders,
           SUM(CASE WHEN ${AWAITING_PAYMENT_SQL} THEN 1 ELSE 0 END) AS unpaid_count,
           SUM(CASE WHEN UPPER(COALESCE(rts_risk_label, '')) LIKE '%HIGH%' THEN 1 ELSE 0 END) AS high_risk_count,
+          -- Paid digital orders whose buyer has not opened the access yet: the CS follow-up.
+          SUM(CASE WHEN fulfillment_type = 'digital' AND payment_status IN ('paid', 'settled', 'success')
+            AND stock_restored_at IS NULL AND shipping_status <> 'cancelled' AND digital_accessed_at IS NULL THEN 1 ELSE 0 END) AS unopened_count,
           COALESCE(SUM(total_amount), 0) AS total_value
         FROM orders${whereClause}
       `).bind(...params),
@@ -307,6 +320,9 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
       withSourceOptions
         ? sourceFacetStatement(db, 'orders')
         : db.prepare('SELECT NULL AS slug, 0 AS count WHERE 0'),
+      otherKindClause
+        ? db.prepare(`SELECT COUNT(*) AS count FROM orders${otherKindClause}`).bind(...chipParams)
+        : db.prepare('SELECT 0 AS count'),
     ]);
     const facets = (facetResult?.results ?? []) as Array<{ slug: string; count: number }>;
     const sourceLabels = sourceLabelsFromRows(
@@ -418,8 +434,13 @@ export const GET: APIRoute = async ({ url, locals, request }) => {
         total_orders: Number(summary.total_orders ?? 0),
         unpaid_count: Number(summary.unpaid_count ?? 0),
         high_risk_count: Number(summary.high_risk_count ?? 0),
+        unopened_count: Number(summary.unopened_count ?? 0),
         total_value: Number(summary.total_value ?? 0),
       },
+      // Only on a kind-scoped list (Produk Fisik / Produk Digital).
+      ...(otherKindClause
+        ? { other_kind_count: Number((otherKindResult?.results?.[0] as { count?: number } | undefined)?.count ?? 0) }
+        : {}),
       status_counts: {
         // The "Semua" chip means "what you would see if you cleared the status
         // filter", so it follows the chip scope — not the summary, which is

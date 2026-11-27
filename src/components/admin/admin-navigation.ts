@@ -6,6 +6,7 @@ import {
   ChartNoAxesCombined,
   Boxes,
   CircleUserRound,
+  Download,
   ClipboardCheck,
   CreditCard,
   FilePenLine,
@@ -69,6 +70,8 @@ export const adminNavGroups: AdminNavGroup[] = [
         description: "Validasi dan proses pesanan",
         icon: ShoppingBag,
         keywords: "orders pesanan transaksi pelanggan terbengkalai abandoned leads",
+        // A hybrid store splits the list by kind (`ordersForCatalog`); a lead
+        // of either kind waits under Pesanan tertinggal until it is converted.
         children: [
           { href: "/admin/orders/abandoned", label: "Pesanan tertinggal", icon: UserX },
         ],
@@ -253,8 +256,27 @@ const SHIPPING_CHILD_HREFS = new Set(["/admin/settings/warehouse"]);
 
 export type CatalogMode = "physical" | "digital" | "hybrid";
 
+/**
+ * Pesanan's submenu per catalog mode. Hybrid: Produk Fisik (`/admin/orders`),
+ * Produk Digital and Pesanan tertinggal, so a digital order never sits among
+ * parcels waiting on a courier. A single-mode store has one list, the item itself.
+ */
+const HYBRID_ORDER_CHILDREN: NonNullable<AdminNavItem["children"]> = [
+  { href: "/admin/orders", label: "Produk fisik", icon: Package },
+  { href: "/admin/orders/digital", label: "Produk digital", icon: Download },
+  { href: "/admin/orders/abandoned", label: "Pesanan tertinggal", icon: UserX },
+];
+
+function ordersForCatalog(groups: AdminNavGroup[], catalogMode: CatalogMode): AdminNavGroup[] {
+  if (catalogMode !== "hybrid") return groups;
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => (item.id === "orders" ? { ...item, children: HYBRID_ORDER_CHILDREN } : item)),
+  }));
+}
+
 function forCatalog(groups: AdminNavGroup[], catalogMode: CatalogMode): AdminNavGroup[] {
-  if (catalogMode !== "digital") return groups;
+  if (catalogMode !== "digital") return ordersForCatalog(groups, catalogMode);
   return groups
     .map((group) => ({
       ...group,

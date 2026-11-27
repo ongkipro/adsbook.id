@@ -14,6 +14,7 @@ import {
   type CrmOrderItem,
 } from "../../lib/crm-template";
 import { initialOrderListFilters, orderListQuery } from "../../lib/admin-orders-initial";
+import type { OrderListKind } from "../../lib/order-list-filter";
 import { providerDispatchErrorText } from "../../lib/payment-dispatch-policy";
 import { SOURCE_SLUG_NONE_FILTER, SOURCE_SLUG_NONE_LABEL } from "../../lib/source-slug";
 import { buyerAreaLines } from "../../lib/province";
@@ -72,6 +73,7 @@ import {
   Megaphone,
   PanelsTopLeft,
   RotateCcw,
+  Send,
 } from "lucide-react";
 
 type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
@@ -179,6 +181,7 @@ type OrdersSummary = {
   totalOrders: number;
   unpaidCount: number;
   highRiskCount: number;
+  unopenedCount: number;
   totalValue: number;
 };
 
@@ -249,6 +252,46 @@ function DigitalOrderBadge({ accessedAt }: { accessedAt?: string | null }) {
   );
 }
 
+const PAID_STATUSES = new Set(["paid", "settled", "success"]);
+
+/** The access message CS sends: the buyer's own order page, which carries the link once paid (as OrderDetail). */
+function digitalAccessMessage(order: OrderItem) {
+  const product = order.items?.[0]?.productName || order.productName || "produk digital";
+  return `Halo ${order.customerName || "Kak"}, terima kasih sudah membeli ${product} (${order.orderNumber}). Pembayaran sudah kami terima. Buka produk digital Anda di sini:\n${order.orderDetailsLink}\n\nSimpan link ini untuk membukanya lagi kapan saja.`;
+}
+
+/**
+ * The digital list's one status: where the buyer's access stands. Read from
+ * the same fields `digitalAccessOpen` gates on, so "Akses terbuka" is shown
+ * exactly when the buyer's link works.
+ */
+function digitalAccessState(order: OrderItem): { label: string; detail: string; dot: string; text: string } {
+  if (order.shippingStatus === "cancelled" || ["refunded", "failed", "cancelled"].includes(order.paymentStatus)) {
+    return { label: order.paymentStatus === "refunded" ? "Dikembalikan" : "Batal", detail: "Akses ditutup", dot: "bg-slate-400", text: "text-slate-600" };
+  }
+  if (PAID_STATUSES.has(order.paymentStatus)) {
+    return order.digitalAccessedAt
+      ? { label: "Akses terbuka", detail: `Dibuka pembeli ${formatDateTime(order.digitalAccessedAt)}`, dot: "bg-emerald-500", text: "text-emerald-700" }
+      : { label: "Akses terbuka", detail: "Belum dibuka pembeli", dot: "bg-emerald-500", text: "text-emerald-700" };
+  }
+  const payment = prepaidPaymentState(order);
+  if (payment && !payment.paid) return { label: payment.label, detail: "Terbuka otomatis saat lunas", dot: payment.dot, text: payment.text };
+  return { label: "Menunggu pembayaran", detail: "Terbuka otomatis saat lunas", dot: "bg-amber-500", text: "text-amber-700" };
+}
+
+function DigitalAccessCell({ order }: { order: OrderItem }) {
+  const state = digitalAccessState(order);
+  return (
+    <div className="min-w-0" data-digital-access={state.label}>
+      <p className={`flex items-center gap-1.5 truncate font-semibold ${state.text}`}>
+        <span className={`size-2 shrink-0 rounded-full ${state.dot}`} aria-hidden="true" />
+        {state.label}
+      </p>
+      <p className="mt-0.5 truncate text-xs text-slate-500" title={state.detail}>{state.detail}</p>
+    </div>
+  );
+}
+
 const shippingLabels = SHIPPING_STATUS_LABELS;
 
 const shippingStatusStyles: Record<string, string> = {
@@ -268,6 +311,19 @@ const quickStatusFilters = [
   { value: "shipped", label: "Dalam pengiriman" },
   { value: "delivered", label: "Terkirim" },
   { value: "returned", label: "Retur (RTS)" },
+  { value: "cancelled", label: "Batal" },
+] as const;
+
+/**
+ * A digital order has no shipment (DIGITAL-PRODUCTS-SPEC §2.3): it waits for
+ * payment, then its access is open (`markDigitalOrderDelivered` moves it to
+ * `delivered`), or it is void. The chips filter the same status column, in
+ * the words of that journey; processing, shipped and returned never occur.
+ */
+const digitalStatusFilters = [
+  { value: "all", label: "Semua" },
+  { value: "pending", label: "Menunggu pembayaran" },
+  { value: "delivered", label: "Akses terbuka" },
   { value: "cancelled", label: "Batal" },
 ] as const;
 
@@ -345,16 +401,27 @@ function OrderActionMenu({
           <span>Lihat Detail Order</span>
         </DropdownMenuItem>
 
-        <DropdownMenuItem
-          onClick={() => onRefreshScoring(order.id)}
-          disabled={isUpdating}
-        >
-          <ShieldAlert className="text-slate-500" aria-hidden="true" />
-          <span>Cek risiko RTS</span>
-        </DropdownMenuItem>
+        {order.fulfillmentType === "digital" ? (
+          digitalAccessState(order).label === "Akses terbuka" && order.orderDetailsLink ? (
+            <DropdownMenuItem
+              render={<a href={buildWaUrl(order.customerPhone, digitalAccessMessage(order))} target="_blank" rel="noopener noreferrer" />}
+            >
+              <Send className="text-slate-500" aria-hidden="true" />
+              <span>Kirim link akses via WA</span>
+            </DropdownMenuItem>
+          ) : null
+        ) : (
+          <DropdownMenuItem
+            onClick={() => onRefreshScoring(order.id)}
+            disabled={isUpdating}
+          >
+            <ShieldAlert className="text-slate-500" aria-hidden="true" />
+            <span>Cek risiko RTS</span>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
 
-        {order.providerOrderId ? (
+        {order.fulfillmentType === "digital" ? null : order.providerOrderId ? (
           <>
             <DropdownMenuLabel className="px-2 py-1 text-xs font-medium uppercase tracking-wider text-slate-500">
               Status ekspedisi
@@ -392,7 +459,7 @@ function OrderActionMenu({
           </DropdownMenuItem>
         )}
 
-        <DropdownMenuSeparator />
+        {order.fulfillmentType !== "digital" && <DropdownMenuSeparator />}
 
         <DropdownMenuItem
           variant="destructive"
@@ -620,10 +687,24 @@ function BuyerArea({ order, className = "" }: { order: OrderItem; className?: st
 }
 
 export function OrdersTable({
+  kind = "all",
+  view = "physical",
   initialOrders,
   initialStatusCounts,
+  initialOtherKindCount,
+  initialSummary,
+  initialTotalItems,
   initialQuery = "",
 }: {
+  /** The list API's `summary` and `pagination.total_items` for the same first request, so the cards and the count paint right. */
+  initialSummary?: { total_orders?: number; unpaid_count?: number; high_risk_count?: number; unopened_count?: number; total_value?: number };
+  initialTotalItems?: number;
+  /** Which orders the list holds; fixed by the page (`OrdersPage.astro`). */
+  kind?: OrderListKind;
+  /** Physical: shipping, RTS risk and the Mengantar push. Digital: payment and buyer access only. */
+  view?: "physical" | "digital";
+  /** On a kind-scoped list: how many orders of the other kind match the same filters. */
+  initialOtherKindCount?: number;
   initialOrders?: OrderItem[];
   /** The list API's `status_counts` for the same first request (server-rendered chips). */
   initialStatusCounts?: Partial<Record<QuickStatus, number>>;
@@ -632,7 +713,10 @@ export function OrdersTable({
   // the hydrating client agree (a mismatch is React error #418).
   initialQuery?: string;
 }) {
-  const [initialFilters] = useState(() => initialOrderListFilters(new URLSearchParams(initialQuery)));
+  const [initialFilters] = useState(() => initialOrderListFilters(new URLSearchParams(initialQuery), kind));
+  const digitalView = view === "digital";
+  const statusFilters = digitalView ? digitalStatusFilters : quickStatusFilters;
+  const [otherKindCount, setOtherKindCount] = useState(initialOtherKindCount ?? 0);
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [orders, setOrders] = useState<OrderItem[]>(initialOrders || []);
   const [searchTerm, setSearchTerm] = useState(initialFilters.search);
@@ -648,14 +732,15 @@ export function OrdersTable({
   const [pagination, setPagination] = useState<OrdersPagination>({
     page: 1,
     limit: 20,
-    totalItems: 0,
-    totalPages: 0,
+    totalItems: Number(initialTotalItems) || 0,
+    totalPages: Math.ceil((Number(initialTotalItems) || 0) / 20),
   });
   const [summary, setSummary] = useState<OrdersSummary>({
-    totalOrders: 0,
-    unpaidCount: 0,
-    highRiskCount: 0,
-    totalValue: 0,
+    totalOrders: Number(initialSummary?.total_orders) || 0,
+    unpaidCount: Number(initialSummary?.unpaid_count) || 0,
+    highRiskCount: Number(initialSummary?.high_risk_count) || 0,
+    unopenedCount: Number(initialSummary?.unopened_count) || 0,
+    totalValue: Number(initialSummary?.total_value) || 0,
   });
   const [crmTemplates, setCrmTemplates] = useState({ ...defaultCrmTemplates });
   const [updatingOrderId, setUpdatingOrderId] = useState("");
@@ -693,7 +778,7 @@ export function OrdersTable({
       setLoadError("");
       try {
         const query = orderListQuery(
-          { search: searchTerm, shippingFilter, paymentFilter, dateSelection, sourceFilter, sourceSlugFilter },
+          { search: searchTerm, shippingFilter, paymentFilter, dateSelection, sourceFilter, sourceSlugFilter, kind },
           page,
           !sourceSlugOptions,
         );
@@ -737,8 +822,10 @@ export function OrdersTable({
           totalOrders: Number(payload.summary?.total_orders) || 0,
           unpaidCount: Number(payload.summary?.unpaid_count) || 0,
           highRiskCount: Number(payload.summary?.high_risk_count) || 0,
+          unopenedCount: Number(payload.summary?.unopened_count) || 0,
           totalValue: Number(payload.summary?.total_value) || 0,
         });
+        setOtherKindCount(Number(payload.other_kind_count) || 0);
         setStatusCounts({
           all: Number(payload.status_counts?.all) || 0,
           pending: Number(payload.status_counts?.pending) || 0,
@@ -1177,10 +1264,21 @@ export function OrdersTable({
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:px-3.5 sm:py-3">
-          <p className="text-xs font-medium text-slate-500">Risiko RTS tinggi</p>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-rose-700 sm:mt-1 sm:text-2xl">
-            {summary.highRiskCount}
-          </p>
+          {digitalView ? (
+            <>
+              <p className="text-xs font-medium text-slate-500">Lunas, belum dibuka</p>
+              <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-blue-700 sm:mt-1 sm:text-2xl">
+                {summary.unopenedCount}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-medium text-slate-500">Risiko RTS tinggi</p>
+              <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-rose-700 sm:mt-1 sm:text-2xl">
+                {summary.highRiskCount}
+              </p>
+            </>
+          )}
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:px-3.5 sm:py-3">
           <p className="text-xs font-medium text-slate-500">Nilai bruto</p>
@@ -1194,7 +1292,7 @@ export function OrdersTable({
         className="flex gap-2 overflow-x-auto pb-1"
         aria-label="Filter cepat status order"
       >
-        {quickStatusFilters.map((filter) => {
+        {statusFilters.map((filter) => {
           const active = shippingFilter === filter.value;
           return (
             <button
@@ -1250,6 +1348,7 @@ export function OrdersTable({
             </button>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {!digitalView && (
             <Select
               value={bulkStatusTarget}
               disabled={bulkUpdating || dispatching}
@@ -1277,6 +1376,7 @@ export function OrdersTable({
                 ))}
               </SelectContent>
             </Select>
+            )}
             {selectedDispatchIds.length > 0 && (
               <Button
                 type="button"
@@ -1412,7 +1512,7 @@ export function OrdersTable({
               <ExportCsvButton
                 kind="orders"
                 query={new URLSearchParams(
-                  orderListQuery({ search: searchTerm, shippingFilter, paymentFilter, dateSelection, sourceFilter, sourceSlugFilter }, 1, false),
+                  orderListQuery({ search: searchTerm, shippingFilter, paymentFilter, dateSelection, sourceFilter, sourceSlugFilter, kind }, 1, false),
                 )}
                 title="Semua order dengan filter ini, satu baris per produk"
               />
@@ -1522,7 +1622,9 @@ export function OrdersTable({
                     </a>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-xs text-slate-500">{formatDateTime(order.createdAt)}</span>
-                      <RiskBadge level={order.receiverRiskLabel} deliveryRate={order.receiverDeliveryRate} compact />
+                      {order.fulfillmentType !== "digital" && (
+                        <RiskBadge level={order.receiverRiskLabel} deliveryRate={order.receiverDeliveryRate} compact />
+                      )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                       <OrderPaymentLine order={order} />
@@ -1547,23 +1649,30 @@ export function OrdersTable({
                     </a>
                     <span className="shrink-0 font-mono text-xs text-slate-500">{order.customerPhone}</span>
                   </p>
-                  <BuyerArea order={order} className="mt-0.5" />
+                  {order.fulfillmentType !== "digital" && <BuyerArea order={order} className="mt-0.5" />}
                   <p className="mt-2 flex min-w-0 items-baseline justify-between gap-2">
                     <span className="min-w-0 truncate text-xs text-slate-700">
                       {[order.productName, order.variantName].filter(Boolean).join(" · ") || "Produk"}
                     </span>
                     <span className="shrink-0 font-semibold tabular-nums text-slate-950">{formatCurrency(order.totalAmount)}</span>
                   </p>
-                  <p className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 text-xs">
-                    <span className={`min-w-0 truncate font-semibold ${deliveryStatus(order).tone}`}>{deliveryStatus(order).label}</span>
-                    {order.fulfillmentType === "digital" ? (
-                      <DigitalOrderBadge accessedAt={order.digitalAccessedAt} />
+                  {order.fulfillmentType === "digital" ? (
+                    digitalView ? (
+                      <div className="mt-1.5 text-xs"><DigitalAccessCell order={order} /></div>
                     ) : (
+                      <p className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 text-xs">
+                        <span className={`min-w-0 truncate font-semibold ${deliveryStatus(order).tone}`}>{deliveryStatus(order).label}</span>
+                        <DigitalOrderBadge accessedAt={order.digitalAccessedAt} />
+                      </p>
+                    )
+                  ) : (
+                    <p className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 text-xs">
+                      <span className={`min-w-0 truncate font-semibold ${deliveryStatus(order).tone}`}>{deliveryStatus(order).label}</span>
                       <span className="shrink-0 font-mono text-slate-500">
                         {order.courierCode || "—"}{order.cnoteNo ? ` · ${order.cnoteNo}` : ""}
                       </span>
-                    )}
-                  </p>
+                    </p>
+                  )}
                 </div>
 
                 {order.providerDispatchError && (
@@ -1609,8 +1718,8 @@ export function OrdersTable({
                     Invoice
                   </TableHead>
                   <TableHead className="w-36 px-2">Pemesan</TableHead>
-                  <TableHead className="w-32 px-2">Risiko RTS</TableHead>
-                  <TableHead className="w-40 px-2">Pengiriman</TableHead>
+                  {!digitalView && <TableHead className="w-32 px-2">Risiko RTS</TableHead>}
+                  <TableHead className="w-40 px-2">{digitalView ? "Akses produk" : "Pengiriman"}</TableHead>
                   <TableHead className="w-32 px-2 text-right">
                     Produk & Total
                   </TableHead>
@@ -1671,18 +1780,23 @@ export function OrdersTable({
                       <p className="mt-0.5 font-mono text-xs text-slate-500">
                         {order.customerPhone}
                       </p>
-                      <BuyerArea order={order} className="mt-0.5" />
+                      {order.fulfillmentType !== "digital" && <BuyerArea order={order} className="mt-0.5" />}
                     </TableCell>
-                    <TableCell className="px-2 py-3">
-                      {order.fulfillmentType === "digital" ? (
-                        <span className="text-xs text-slate-500">—</span>
-                      ) : (
-                        <RiskBadge
-                          level={order.receiverRiskLabel}
-                          deliveryRate={order.receiverDeliveryRate}
-                        />
-                      )}
-                    </TableCell>
+                    {!digitalView && (
+                      <TableCell className="px-2 py-3">
+                        {order.fulfillmentType === "digital" ? (
+                          <span className="text-xs text-slate-500">—</span>
+                        ) : (
+                          <RiskBadge
+                            level={order.receiverRiskLabel}
+                            deliveryRate={order.receiverDeliveryRate}
+                          />
+                        )}
+                      </TableCell>
+                    )}
+                    {digitalView && order.fulfillmentType === "digital" ? (
+                      <TableCell className="max-w-[200px] px-2 py-3"><DigitalAccessCell order={order} /></TableCell>
+                    ) : (
                     <TableCell className="max-w-[156px] px-2 py-3">
                       <p className={`truncate font-semibold ${deliveryStatus(order).tone}`}>
                         {deliveryStatus(order).label}
@@ -1703,6 +1817,7 @@ export function OrdersTable({
                         </p>
                       )}
                     </TableCell>
+                    )}
                     <TableCell className="px-2 py-3 text-right">
                       {order.productName && (
                         <p className="ml-auto max-w-[126px] truncate text-xs font-semibold text-slate-900">
@@ -1738,6 +1853,17 @@ export function OrdersTable({
             </Table>
           </div>
 
+        {kind !== "all" && otherKindCount > 0 && hasFilters && (
+          <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-600" role="status">
+            {otherKindCount} pesanan {kind === "physical" ? "produk digital" : "produk fisik"} juga cocok dengan filter ini.{" "}
+            <a
+              className="font-semibold text-blue-700 hover:underline"
+              href={`${kind === "physical" ? "/admin/orders/digital" : "/admin/orders"}${searchTerm.trim() ? `?search=${encodeURIComponent(searchTerm.trim())}` : ""}`}
+            >
+              Lihat di {kind === "physical" ? "Produk Digital" : "Produk Fisik"}
+            </a>
+          </p>
+        )}
         {filteredOrders.length === 0 && (
           <div className="border-t border-slate-100 p-10 text-center">
             {hasFilters ? (
@@ -1760,7 +1886,7 @@ export function OrdersTable({
             ) : (
               <>
                 <p className="text-sm font-semibold text-slate-950">
-                  Belum ada pesanan masuk
+                  {kind === "digital" ? "Belum ada pesanan produk digital" : kind === "physical" ? "Belum ada pesanan produk fisik" : "Belum ada pesanan masuk"}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   Pesanan baru dari storefront atau landing page Anda akan muncul otomatis di sini.

@@ -202,3 +202,19 @@ test("Section rails stay aligned with navigation and role rules, while Pesanan a
   assert.equal(ownerItems.find((item) => item.id === "orders")?.sectionRail, undefined);
   assert.equal(ownerItems.find((item) => item.id === "products")?.sectionRail, undefined);
 });
+
+test("Pesanan's submenu follows the catalog mode: hybrid splits by kind, a single-mode store keeps one list", () => {
+  const orderChildren = (mode: "physical" | "digital" | "hybrid", role: "owner" | "customer_service" = "owner") =>
+    getVisibleNavGroups(role, mode).flatMap((group) => group.items).find((item) => item.id === "orders")?.children?.map((child) => child.href);
+  for (const role of ["owner", "customer_service"] as const) {
+    assert.deepEqual(orderChildren("hybrid", role), ["/admin/orders", "/admin/orders/digital", "/admin/orders/abandoned"], `${role} hybrid`);
+    assert.deepEqual(orderChildren("physical", role), ["/admin/orders/abandoned"], `${role} physical`);
+    assert.deepEqual(orderChildren("digital", role), ["/admin/orders/abandoned"], `${role} digital`);
+  }
+  // The submenu does not leak into the shared definition another mode reads.
+  assert.deepEqual(orderChildren("physical"), ["/admin/orders/abandoned"]);
+  assert.ok(getSearchableNavItems("owner", "hybrid").some((item) => item.href === "/admin/orders/digital"));
+  assert.ok(!getSearchableNavItems("owner", "physical").some((item) => item.href === "/admin/orders/digital"));
+  assert.equal(canAccessAdminRoute("customer_service", "/admin/orders/digital"), true);
+  assert.equal(canAccessAdminRoute("advertiser", "/admin/orders/digital"), false);
+});

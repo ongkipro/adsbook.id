@@ -816,8 +816,11 @@ function EditCustomerDialog({
 export function OrderDetail({
   invoice,
   mayReleaseDispatch = false,
+  splitByKind = false,
 }: {
   invoice: string;
+  /** A hybrid store lists digital orders on their own page; the back link returns there. */
+  splitByKind?: boolean;
   // Owner and admin only; the API refuses anyone else (403).
   mayReleaseDispatch?: boolean;
 }) {
@@ -1406,11 +1409,11 @@ export function OrderDetail({
       {/* Header: identity, the three status axes as text, and the order's actions. */}
       <div className="space-y-4">
         <a
-          href="/admin/orders"
+          href={splitByKind && digital ? "/admin/orders/digital" : "/admin/orders"}
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          Pesanan
+          {splitByKind ? (digital ? "Pesanan produk digital" : "Pesanan produk fisik") : "Pesanan"}
         </a>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">

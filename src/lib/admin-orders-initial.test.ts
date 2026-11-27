@@ -166,3 +166,35 @@ test("a link sent to a buyer starts with the store's site, not the host the admi
   const [unconfigured] = await firstRows(d1, "?search=Siti", { siteUrl: "https://example.com" });
   assert.match(String(unconfigured.order_details_link), /^https:\/\/admin\.preview\.test\/thanks#/, "an unset site URL falls back to the request");
 });
+
+test("Produk Fisik and Produk Digital each list their own kind and count the other under the same search", async () => {
+  const { sqlite, d1 } = await seed();
+  sqlite.prepare("UPDATE orders SET fulfillment_type = 'digital' WHERE customer_name IN ('Budi Hartono', 'Rina Wati')").run();
+  const list = async (kind: "physical" | "digital", link = "") => {
+    const pageQuery = new URL(`https://admin.preview.test/admin/orders${link}`).searchParams;
+    const url = new URL(`https://admin.preview.test/api/admin/orders?${orderListQuery(initialOrderListFilters(pageQuery, kind), 1, false)}`);
+    const response = await listRoute({ url, request: new Request(url, { headers: { [ORDER_LIST_PREFETCH_HEADER]: "1" } }), locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1 } } } as never);
+    return (await response.json()) as { data: Array<{ customer_name: string }>; other_kind_count?: number; status_counts: { all: number } };
+  };
+  const physical = await list("physical");
+  assert.deepEqual(physical.data.map((row) => row.customer_name), ["Siti Rahayu", "Budi Santoso"]);
+  assert.equal(physical.status_counts.all, 2, "the chips count this kind only");
+  assert.equal(physical.other_kind_count, 2);
+  const digital = await list("digital", "?search=Budi");
+  assert.deepEqual(digital.data.map((row) => row.customer_name), ["Budi Hartono"]);
+  assert.equal(digital.other_kind_count, 1, "Budi Santoso is the physical order under the same search");
+  // The status filter scopes the list, never the other kind's hint.
+  assert.equal((await list("physical", "?search=Budi&status=processing")).other_kind_count, 1);
+  // The unscoped list keeps answering for both kinds and carries no hint.
+  const all = await firstRows(d1, "");
+  assert.equal(all.length, 4);
+  const pageQuery = new URLSearchParams("fulfillment=digital");
+  assert.equal(initialOrderListFilters(pageQuery).kind, "all", "the query string never picks the kind");
+});
+
+test("an unknown order kind is refused, not answered as every order", async () => {
+  const { d1 } = await seed();
+  const url = new URL("https://admin.preview.test/api/admin/orders?fulfillment=services");
+  const response = await listRoute({ url, request: new Request(url), locals: { tenantDb: d1, runtimeEnv: { OMS_DB: d1 } } } as never);
+  assert.equal(response.status, 400);
+});
