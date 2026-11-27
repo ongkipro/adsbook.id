@@ -7,30 +7,34 @@ import {
 } from "react";
 import {
   AlertCircle,
-  BadgeCheck,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleDashed,
-  CircleOff,
-  ExternalLink,
   Loader2,
   MessageCircle,
   PackageSearch,
   RefreshCw,
   UserRoundPlus,
-  ListChecks,
   PanelsTopLeft,
 } from "lucide-react";
 import { SOURCE_SLUG_NONE_FILTER, SOURCE_SLUG_NONE_LABEL } from "@/lib/source-slug";
 import { ADMIN_CUSTOM_DATE_FILTER, adminDateSelectionFromQuery } from "@/lib/admin-date-filter";
 import { AdminDateRangeFilter, type AdminDateSelection } from "@/components/admin/AdminDateRangeFilter";
-import { SourceSlugChip } from "@/components/admin/SourceSlugChip";
+import { LEAD_FOLLOW_UP_LABELS, LEAD_FOLLOW_UP_STATUSES, LEAD_FOLLOW_UP_TONE, isLeadFollowUpStatus, leadAge, leadDaysLeft } from "@/lib/lead-follow-up";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { buildWaUrl } from "@/lib/crm-template";
 import { formatIdr } from "@/lib/format-idr";
 import { courierServiceLabel } from "@/lib/courier-names";
 import { etaLabel } from "@/lib/rate-check";
 import { groupLocationResults } from "@/lib/location-search";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExportCsvButton } from "@/components/admin/ExportCsvButton";
 import { FilterBar, FilterField, FilterSelect, SearchInput } from "@/components/admin/filter-bar";
@@ -62,6 +66,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DistrictCombobox, type DistrictOption } from "@/components/admin/DistrictCombobox";
 
 type FollowUpStatus = "new" | "contacted" | "qualified" | "not_interested";
+type StatusCounts = Record<FollowUpStatus | "all", number>;
 
 type Lead = {
   id: number;
@@ -110,29 +115,7 @@ type ShippingRate = {
   estimated_days?: string;
 };
 
-const followUpLabels: Record<FollowUpStatus, string> = {
-  new: "Belum dihubungi",
-  contacted: "Sudah dihubungi",
-  qualified: "Berminat",
-  not_interested: "Tidak berminat",
-};
-
-const followUpVariants: Record<
-  FollowUpStatus,
-  "secondary" | "outline" | "default" | "destructive"
-> = {
-  new: "secondary",
-  contacted: "outline",
-  qualified: "default",
-  not_interested: "destructive",
-};
-
-const followUpIcons = {
-  new: CircleDashed,
-  contacted: MessageCircle,
-  qualified: BadgeCheck,
-  not_interested: CircleOff,
-};
+const followUpLabels: Record<FollowUpStatus, string> = LEAD_FOLLOW_UP_LABELS;
 
 const formatDate = (value: string | null) => {
   if (!value) return "—";
@@ -156,9 +139,7 @@ function normalizeLead(row: Record<string, unknown>): Lead {
     variantName: String(row.variant_title ?? row.variant_name ?? row.variantName ?? ""),
     variantId: Number(row.variant_id ?? row.variantId) || null,
     quantity: Math.max(1, Number(row.quantity) || 1),
-    followUpStatus: Object.hasOwn(followUpLabels, status)
-      ? (status as FollowUpStatus)
-      : "new",
+    followUpStatus: isLeadFollowUpStatus(status) ? status : "new",
     followUpNote: String(row.follow_up_note ?? row.lead_follow_up_note ?? ""),
     followedUpAt:
       String(row.followed_up_at ?? row.lead_followed_up_at ?? "") || null,
@@ -255,6 +236,9 @@ const leadRequest = {
         totalItems: Number(payload.pagination?.total_items) || 0,
         totalPages: Number(payload.pagination?.total_pages) || 0,
       },
+      statusCounts: Object.fromEntries(
+        ["all", ...LEAD_FOLLOW_UP_STATUSES].map((key) => [key, Number(payload.status_counts?.[key]) || 0]),
+      ) as StatusCounts,
     };
   },
   async followUp(lead: Lead, status: FollowUpStatus, note: string) {
@@ -599,6 +583,7 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
   const [pagination, setPagination] = useState({ page: 1, totalItems: 0, totalPages: 0 });
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [statusCounts, setStatusCounts] = useState<StatusCounts | null>(null);
 
   const hasLoadedRef = useRef(false);
   const load = async (signal?: AbortSignal) => {
@@ -618,6 +603,7 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
       setLeads(result.leads);
       setProducts(result.products);
       setPagination(result.pagination);
+      setStatusCounts(result.statusCounts);
       hasLoadedRef.current = true;
     } catch (reason) {
       if (!(reason instanceof Error && reason.name === "AbortError")) {
@@ -640,34 +626,53 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
     };
   }, [page, search, status, sourceSlug, dateSelection]);
 
-  const followUp = async (lead: Lead) => {
+  // One path for every status change: the label menu and the WhatsApp auto-mark.
+  // The row and the chip counts move at once; a failure puts both back.
+  const setFollowUp = async (lead: Lead, next: FollowUpStatus, options: { quiet?: boolean } = {}) => {
+    if (lead.followUpStatus === next) return;
+    const before = lead;
+    const followedUpAt = new Date().toISOString();
     setUpdatingId(lead.id);
-    setNotice("");
+    if (!options.quiet) setNotice("");
+    setLeads((current) => current.map((item) => item.id === lead.id ? { ...item, followUpStatus: next, followedUpAt } : item));
+    setStatusCounts((counts) => counts && { ...counts, [before.followUpStatus]: Math.max(0, counts[before.followUpStatus] - 1), [next]: counts[next] + 1 });
     try {
-      await leadRequest.followUp(lead, "contacted", lead.followUpNote);
-      const followedUpAt = new Date().toISOString();
-      setLeads((current) => current.map((item) => item.id === lead.id ? { ...item, followUpStatus: "contacted", followedUpAt } : item));
-      setNotice(`Follow-up ${lead.orderNumber} dicatat. Status ini tidak menyatakan pesan sudah terkirim.`);
+      await leadRequest.followUp(lead, next, lead.followUpNote);
+      if (!options.quiet) setNotice(`${lead.orderNumber}: ${followUpLabels[next]}.`);
     } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : "Follow-up gagal dicatat.");
+      setLeads((current) => current.map((item) => item.id === lead.id ? before : item));
+      setStatusCounts((counts) => counts && { ...counts, [before.followUpStatus]: counts[before.followUpStatus] + 1, [next]: Math.max(0, counts[next] - 1) });
+      setNotice(reason instanceof Error ? reason.message : "Status follow-up gagal dicatat.");
     } finally {
       setUpdatingId(null);
     }
   };
 
+  // Opening the chat is the contact (owner, 2026-11-27): a lead not yet contacted becomes "Sudah dihubungi".
+  // The record says the chat was opened, not that a message was sent.
+  const openWhatsApp = (lead: Lead) => {
+    const phone = lead.customerPhone.replace(/\D/g, "").replace(/^0/, "62");
+    const message = `Halo Kak ${lead.customerName || "Pelanggan"}, kami ingin membantu melanjutkan pesanan ${lead.productName || "produk pilihan Kakak"}. Apakah ada yang bisa kami bantu?`;
+    window.open(buildWaUrl(phone, message), "_blank", "noopener,noreferrer");
+    if (lead.followUpStatus === "new") void setFollowUp(lead, "contacted", { quiet: true });
+  };
+
   if (loading) return (
-    <Card size="sm" className="py-0" aria-label="Memuat pesanan tertinggal" aria-busy="true">
-      <CardContent className="divide-y divide-border p-0">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="grid grid-cols-1 gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_11rem_12rem_auto] lg:items-center lg:gap-4">
-          <div className="space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-3 w-1/2" /></div>
-          <div className="space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-3 w-1/2" /></div>
-          <div className="space-y-2"><Skeleton className="h-5 w-28" /><Skeleton className="h-3 w-2/3" /></div>
-          <Skeleton className="h-9 w-full lg:w-56" />
-        </div>
-      ))}
-      </CardContent>
-    </Card>
+    // Shaped like the page below: filters, status chips, then rows with the same four columns.
+    <div className="space-y-4" aria-label="Memuat pesanan tertinggal" aria-busy="true">
+      <Skeleton className="h-[5.5rem] w-full rounded-lg" />
+      <div className="flex gap-2">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-10 w-28 rounded-lg" />)}</div>
+      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="grid grid-cols-1 gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_11rem_auto] lg:items-center lg:gap-5">
+            <div className="space-y-2"><Skeleton className="h-4 w-1/2" /><Skeleton className="h-3 w-1/3" /></div>
+            <div className="space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-3 w-1/2" /></div>
+            <div className="space-y-2"><Skeleton className="h-8 w-36" /><Skeleton className="h-3 w-24" /></div>
+            <Skeleton className="h-10 w-full lg:w-64" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 
   if (error) return (
@@ -693,15 +698,6 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
           <FilterBar>
             <FilterField label="Cari lead" htmlFor="abandoned-search" size="lg">
               <SearchInput id="abandoned-search" value={search} onValueChange={(value) => { setSearch(value); setPage(1); }} placeholder="Produk, nama, WhatsApp, atau ABN" />
-            </FilterField>
-            <FilterField label="Status follow-up" htmlFor="follow-up-filter" size="md">
-              <FilterSelect
-                id="follow-up-filter"
-                icon={ListChecks}
-                value={status}
-                onValueChange={(value) => { setStatus(value as FollowUpStatus | "all"); setPage(1); }}
-                options={[{ value: "all", label: "Semua status" }, ...Object.entries(followUpLabels).map(([value, label]) => ({ value, label }))]}
-              />
             </FilterField>
             <FilterField label="Halaman sumber" htmlFor="source-page-filter" size="md">
               <FilterSelect
@@ -752,10 +748,34 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
           </FilterBar>
         </CardContent>
       </Card>
+      {/* The queue by follow-up status: one chip per status with its count and colour. */}
+      <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Filter status follow-up" data-lead-status-chips>
+        {(["all", ...LEAD_FOLLOW_UP_STATUSES] as const).map((value) => {
+          const active = status === value;
+          const count = statusCounts?.[value];
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => { setStatus(value); setPage(1); }}
+              className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                active
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              {value !== "all" && <span className={`size-2 shrink-0 rounded-full ${LEAD_FOLLOW_UP_TONE[value].dot}`} aria-hidden="true" />}
+              {value === "all" ? "Semua" : followUpLabels[value]}
+              {count !== undefined && (
+                <span className={`tabular-nums ${active ? "text-white/70" : "text-slate-500"}`}>{count}</span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
       {notice && (
-        <Card size="sm" role="status" aria-live="polite" className="bg-muted/40">
-          <CardContent className="text-muted-foreground">{notice}</CardContent>
-        </Card>
+        <p role="status" aria-live="polite" className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-700">{notice}</p>
       )}
       {leads.length === 0 ? (
         <Card className="border-dashed">
@@ -771,56 +791,98 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
            240px per lead, most of it padding and a footer holding two buttons.
            The row keeps every field and both actions, and stacks on small
            screens. */
-        <Card size="sm" className="py-0">
-          <CardContent className="divide-y divide-border p-0">
-            {leads.map((lead) => {
-              const phone = lead.customerPhone.replace(/\D/g, "").replace(/^0/, "62");
-              const message = `Halo Kak ${lead.customerName || "Pelanggan"}, kami ingin membantu melanjutkan pesanan ${lead.productName || "produk pilihan Kakak"}. Apakah ada yang bisa kami bantu?`;
-              const FollowUpIcon = followUpIcons[lead.followUpStatus];
-              return (
-                <div
-                  key={lead.id}
-                  role="article"
-                  aria-labelledby={`lead-${lead.id}-title`}
-                  className="grid grid-cols-1 gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_11rem_12rem_auto] lg:items-center lg:gap-4"
-                >
-                  <div className="min-w-0">
-                    <h3 id={`lead-${lead.id}-title`} className="truncate font-medium">{lead.productName || "Produk belum dipilih"}</h3>
-                    <p className="truncate text-xs text-muted-foreground">{lead.variantName || "Varian belum dipilih"} · {lead.orderNumber}</p>
-                    {!lead.variantId && (
-                      <Badge variant="destructive" className="mt-1"><AlertCircle aria-hidden="true" />Pilih produk sebelum konversi</Badge>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{lead.customerName}</p>
-                    <p className="truncate font-mono text-xs text-muted-foreground">{lead.customerPhone}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex min-w-0 flex-wrap items-center gap-1">
-                      <Badge variant={followUpVariants[lead.followUpStatus]} className="shrink-0"><FollowUpIcon aria-hidden="true" />{followUpLabels[lead.followUpStatus]}</Badge>
-                      <SourceSlugChip label={lead.sourceLabel} path={lead.sourcePath} />
-                    </div>
-                    {/* Only when there is something to report. "Belum ada follow-up
-                        tercatat" repeated on every untouched lead, restating the
-                        badge beside it. */}
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
-                      {lead.followedUpAt
-                        ? `Dicatat ${formatDate(lead.followedUpAt)}${lead.followedUpBy ? ` oleh ${lead.followedUpBy}` : ""}`
-                        : `Masuk ${formatDate(lead.createdAt)}`}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
-                    <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={() => {
-                      window.open(buildWaUrl(phone, message), "_blank", "noopener,noreferrer");
-                    }}><ExternalLink />Buka WhatsApp</Button>
-                    {lead.followUpStatus === 'new' && <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" disabled={updatingId === lead.id} onClick={() => void followUp(lead)}>{updatingId === lead.id ? 'Mencatat…' : 'Tandai sudah dihubungi'}</Button>}
-                    <Button type="button" size="lg" className="w-full sm:w-auto" onClick={() => setSelectedLead(lead)}><UserRoundPlus />Jadikan order</Button>
-                  </div>
+        <section className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white" aria-label="Daftar pesanan tertinggal">
+          {leads.map((lead) => {
+            const tone = LEAD_FOLLOW_UP_TONE[lead.followUpStatus];
+            const age = leadAge(lead.createdAt);
+            const daysLeft = leadDaysLeft(lead.createdAt);
+            const busy = updatingId === lead.id;
+            return (
+              <div
+                key={lead.id}
+                role="article"
+                aria-labelledby={`lead-${lead.id}-title`}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 px-4 py-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_11rem_auto] lg:items-center lg:gap-5"
+                data-lead-status={lead.followUpStatus}
+              >
+                {/* Buyer first: the queue is worked by person, the product is context.
+                    On a phone the status sits beside the buyer (order-2), the product
+                    and actions span the row below; from lg the four columns read left to right. */}
+                <div className="order-1 min-w-0 lg:order-none">
+                  <p id={`lead-${lead.id}-title`} className="truncate font-medium text-slate-950">{lead.customerName || "Tanpa nama"}</p>
+                  <p className="truncate font-mono text-xs text-slate-500">{lead.customerPhone}</p>
                 </div>
-              );
-            })}
-          </CardContent>
-        </Card>
+                <div className="order-3 col-span-2 min-w-0 lg:order-none lg:col-span-1">
+                  <p className="truncate text-sm text-slate-900">{lead.productName || "Produk belum dipilih"}</p>
+                  <p className="truncate text-xs text-slate-500">
+                    {lead.variantName || "Varian belum dipilih"} · {lead.orderNumber}
+                    {lead.sourceLabel && <span title={lead.sourcePath ?? lead.sourceLabel}> · {lead.sourceLabel}</span>}
+                  </p>
+                  {!lead.variantId && (
+                    <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-rose-700">
+                      <AlertCircle className="size-3.5" aria-hidden="true" />Pilih produk sebelum konversi
+                    </p>
+                  )}
+                </div>
+
+                {/* The status is the one coloured thing on the row, and it is the control that changes it. */}
+                <div className="order-2 min-w-0 text-right lg:order-none lg:text-left">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      disabled={busy}
+                      aria-label={`Status follow-up ${lead.orderNumber}: ${followUpLabels[lead.followUpStatus]}. Ubah status`}
+                      className={`inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition-colors hover:brightness-95 disabled:opacity-60 ${tone.label}`}
+                      data-lead-status-trigger
+                    >
+                      {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <span className={`size-2 shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />}
+                      <span className="truncate">{followUpLabels[lead.followUpStatus]}</span>
+                      <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-52">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>Status follow-up</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={lead.followUpStatus}
+                          onValueChange={(value) => { if (isLeadFollowUpStatus(value)) void setFollowUp(lead, value); }}
+                        >
+                          {LEAD_FOLLOW_UP_STATUSES.map((value) => (
+                            <DropdownMenuRadioItem key={value} value={value} className="gap-2">
+                              <span className={`size-2 shrink-0 rounded-full ${LEAD_FOLLOW_UP_TONE[value].dot}`} aria-hidden="true" />
+                              {followUpLabels[value]}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <p className="mt-1 truncate text-xs text-slate-500" title={lead.followedUpAt ? `Dicatat ${formatDate(lead.followedUpAt)}${lead.followedUpBy ? ` oleh ${lead.followedUpBy}` : ""}` : `Masuk ${formatDate(lead.createdAt)}`}>
+                    {lead.followedUpAt ? `Dicatat ${leadAge(lead.followedUpAt) ?? formatDate(lead.followedUpAt)}` : `Masuk ${age ?? formatDate(lead.createdAt)}`}
+                    {daysLeft !== null && (
+                      <span className="text-rose-700"> · {daysLeft === 0 ? "dihapus hari ini" : `dihapus ${daysLeft} hari lagi`}</span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="order-4 col-span-2 flex gap-2 lg:order-none lg:col-span-1 lg:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 lg:flex-none"
+                    onClick={() => openWhatsApp(lead)}
+                    title={lead.followUpStatus === "new" ? "Buka WhatsApp dan tandai sudah dihubungi" : "Buka WhatsApp"}
+                  >
+                    <MessageCircle aria-hidden="true" />
+                    WhatsApp
+                  </Button>
+                  <Button type="button" className="flex-1 lg:flex-none" onClick={() => setSelectedLead(lead)}>
+                    <UserRoundPlus aria-hidden="true" />
+                    Jadikan order
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </section>
       )}
       {pagination.totalPages > 1 && (
         <Pagination aria-label="Halaman pesanan tertinggal" className="justify-between">
