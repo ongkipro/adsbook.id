@@ -96,13 +96,27 @@ export async function syncSingleMengantarOrder(
     const tracking = await client.getOrderByTrackingId(row.cnote_no);
     const evidence = mapMengantarStatusEvidence(tracking);
     providerStatus = evidence.description;
+    // The category too, so a synced order reads the same as one a webhook updated, but never over
+    // something newer or more specific: GET /order's generic "active" does not replace a webhook's
+    // "PENDING PICKUP", and a category older than the webhook's last event (provider_event_at) is
+    // kept out. A legacy flag response carries no category and leaves the stored one alone.
     const observation = await db
       .prepare(
         `UPDATE orders
-         SET provider_status_text = ?, provider_status_at = ?, provider_synced_at = ?
+         SET provider_status_text = ?, provider_status_at = ?, provider_synced_at = ?,
+             provider_status_category = CASE
+               WHEN ? IS NULL THEN provider_status_category
+               WHEN ? IN ('ACTIVE', 'ACTIVE/WAITING NEXT PROCESS') AND provider_status_category IS NOT NULL THEN provider_status_category
+               WHEN provider_event_at IS NOT NULL AND ? IS NOT NULL AND unixepoch(?) < unixepoch(provider_event_at) THEN provider_status_category
+               ELSE ?
+             END
          WHERE id = ?`,
       )
-      .bind(evidence.description, evidence.occurredAt, syncedAt, row.id)
+      .bind(
+        evidence.description, evidence.occurredAt, syncedAt,
+        evidence.category, evidence.category, evidence.occurredAt, evidence.occurredAt, evidence.category,
+        row.id,
+      )
       .run();
     if (!observation.meta?.changes) {
       throw new Error("Observasi status provider gagal disimpan.");

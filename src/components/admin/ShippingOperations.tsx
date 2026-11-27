@@ -19,7 +19,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../ui/button";
 import { DataTableShell } from "./DataTableShell";
 import { ExportCsvButton } from "./ExportCsvButton";
-import { SHIPPING_STATUS_LABELS } from "@/lib/shipping-status";
+import { SHIPPING_STATUS_LABELS, mengantarBlock, type MengantarStatusTone } from "@/lib/shipping-status";
+import { leadAge } from "@/lib/lead-follow-up";
 import { MengantarPickupFields } from "./MengantarPickupFields";
 import { defaultPickupSlot, mengantarPickupSlot } from "@/lib/mengantar-order";
 import { Input } from "../ui/input";
@@ -64,6 +65,7 @@ type Shipment = {
   providerStatusText: string | null;
   providerStatusAt: string | null;
   providerSyncedAt: string | null;
+  providerStatusCategory?: string | null;
   providerDispatchError: string | null;
   receiverDeliveryRate: number | null;
   receiverRiskLabel: string | null;
@@ -198,6 +200,65 @@ const dateTime = (value: string) =>
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+const MENGANTAR_TONE: Record<MengantarStatusTone, string> = {
+  idle: "border-slate-200 bg-slate-50 text-slate-700",
+  moving: "border-sky-200 bg-sky-50 text-sky-900",
+  done: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  returned: "border-rose-200 bg-rose-50 text-rose-900",
+  attention: "border-amber-300 bg-amber-50 text-amber-900",
+};
+const MENGANTAR_DOT: Record<MengantarStatusTone, string> = {
+  idle: "bg-slate-400",
+  moving: "bg-sky-500",
+  done: "bg-emerald-500",
+  returned: "bg-rose-500",
+  attention: "bg-amber-500",
+};
+
+/**
+ * What Mengantar says about the parcel, in its own category: one label in a
+ * seller's words with Mengantar's name beside it, the courier's last line, and
+ * when we last asked. A category that needs a look (failed delivery or pickup,
+ * courier cancel, Mengantar error) says so. Same block on the phone card and
+ * the desktop row, so the two never read differently.
+ */
+function MengantarStatus({ shipment }: { shipment: Shipment }) {
+  // What to show is decided in mengantarBlock (shipping-status.ts, tested); this only renders it.
+  const block = mengantarBlock({
+    category: shipment.providerStatusCategory,
+    text: shipment.providerStatusText,
+    orderStatusLabel: statusLabels[shipment.shippingStatus] ?? shipment.shippingStatus,
+  });
+  const { view } = block;
+  const checked = shipment.providerSyncedAt ? leadAge(shipment.providerSyncedAt) : null;
+  return (
+    <div className="min-w-0 text-xs leading-snug text-slate-600" data-mengantar-status={view?.category ?? "none"}>
+      {view ? (
+        <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          {block.showLabel && (
+            <span className={`inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 font-medium ${MENGANTAR_TONE[view.tone]}`}>
+              <span className={`size-1.5 shrink-0 rounded-full ${MENGANTAR_DOT[view.tone]}`} aria-hidden="true" />
+              {view.label}
+              {view.tone === "attention" && <span className="font-semibold">· perlu cek</span>}
+            </span>
+          )}
+          {block.reference && <span className="font-mono text-xs text-slate-500" title="Status Mengantar">Mengantar: {block.reference}</span>}
+        </p>
+      ) : (
+        <p className="line-clamp-1 font-medium text-slate-700" title={block.headline}>{block.headline}</p>
+      )}
+      {block.courierLine && (
+        <p className="mt-1 line-clamp-1 text-slate-700" title={block.courierLine}>{block.courierLine}</p>
+      )}
+      <p className="mt-0.5 text-slate-500">
+        {shipment.providerStatusAt ? `Update ${dateTime(shipment.providerStatusAt)}` : "Belum ada waktu update"}
+        {" · "}
+        {checked ? `dicek ${checked}` : "belum dicek"}
+      </p>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const style = statusStyles[status] ?? statusStyles.cancelled;
   return (
@@ -986,23 +1047,8 @@ export function ShippingOperations({
                         Status manual (luar Mengantar)
                       </div>
                     ) : shipment.providerOrderId ? (
-                      <div className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-tight text-slate-600 min-h-11 flex flex-col justify-center">
-                        <p className="font-semibold text-slate-900 line-clamp-1">
-                          {shipment.providerStatusText ||
-                            "Menunggu update provider"}
-                        </p>
-                        <p className="mt-0.5 opacity-80">
-                          Event{" "}
-                          {shipment.providerStatusAt
-                            ? dateTime(shipment.providerStatusAt)
-                            : "belum tersedia"}
-                        </p>
-                        <p className="mt-0.5 opacity-80">
-                          Sinkron{" "}
-                          {shipment.providerSyncedAt
-                            ? dateTime(shipment.providerSyncedAt)
-                            : "belum pernah"}
-                        </p>
+                      <div className="flex min-h-11 flex-col justify-center rounded-md border border-slate-200 bg-white p-2">
+                        <MengantarStatus shipment={shipment} />
                       </div>
                     ) : (
                       <div className="flex min-h-11 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-semibold leading-4 text-slate-500">
@@ -1142,23 +1188,8 @@ export function ShippingOperations({
                         {external ? (
                           <p className="mt-2 text-xs text-slate-500">Status manual</p>
                         ) : shipment.providerOrderId && (
-                          <div className="mt-2 text-xs leading-tight text-slate-500">
-                            <p className="font-semibold text-slate-700 line-clamp-1">
-                              {shipment.providerStatusText ||
-                                "Menunggu update provider"}
-                            </p>
-                            <p className="mt-0.5">
-                              Event{" "}
-                              {shipment.providerStatusAt
-                                ? dateTime(shipment.providerStatusAt)
-                                : "belum tersedia"}
-                            </p>
-                            <p className="mt-0.5">
-                              Sinkron{" "}
-                              {shipment.providerSyncedAt
-                                ? dateTime(shipment.providerSyncedAt)
-                                : "belum pernah"}
-                            </p>
+                          <div className="mt-2">
+                            <MengantarStatus shipment={shipment} />
                           </div>
                         )}
                       </TableCell>

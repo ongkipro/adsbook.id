@@ -84,6 +84,12 @@ export type MengantarStatusEvidence = {
   shippingStatus: ProviderShippingStatus;
   description: string | null;
   occurredAt: string | null;
+  /**
+   * Mengantar's own status category when `status` is the v2 plain string
+   * ("ON DELIVERY", "PENDING PICKUP", "active"), stored beside the webhook's so
+   * a sync and a webhook read the same. Null for the legacy JSON-flag form.
+   */
+  category: string | null;
 };
 
 
@@ -246,10 +252,12 @@ export function mapMengantarStatusEvidence(
     shippingStatus = "shipped";
   }
 
+  const raw = typeof tracking.status === "string" ? tracking.status.trim() : "";
   return {
     shippingStatus,
     description: latest?.description || null,
     occurredAt: latest?.occurredAt || null,
+    category: raw && !raw.startsWith("{") ? raw.replace(/\s+/g, " ").toUpperCase() : null,
   };
 }
 

@@ -94,7 +94,10 @@ class ShippingSyncDatabase {
         stock_restored_at TEXT,
         provider_status_text TEXT,
         provider_status_at TEXT,
-        provider_synced_at TEXT
+        provider_synced_at TEXT,
+        -- migration 0089: Mengantar's own category, written by the webhook and (since 2026-11-28) the sync
+        provider_status_category TEXT,
+        provider_event_at TEXT
       );
       CREATE TABLE order_items (
         id INTEGER PRIMARY KEY,
@@ -288,7 +291,8 @@ test("RTS synchronization releases the order exactly once", async () => {
     itemQuantity: 2,
   });
   const originalFetch = globalThis.fetch;
-  let providerStatus = "{\"RTS\":true}";
+  // Mengantar Public API v2 sends the status as a plain category string.
+  let providerStatus = "RTS";
   let providerDescription = "Return to sender";
   globalThis.fetch = (async () =>
     new Response(
@@ -328,7 +332,7 @@ test("RTS synchronization releases the order exactly once", async () => {
       {
         ...database.row<Record<string, unknown>>(
           `SELECT shipping_status, stock_restored_at IS NOT NULL AS restored,
-            provider_status_text
+            provider_status_text, provider_status_category
           FROM orders WHERE id = 3`,
         ),
       },
@@ -336,6 +340,8 @@ test("RTS synchronization releases the order exactly once", async () => {
         shipping_status: "returned",
         restored: 1,
         provider_status_text: "Return to sender",
+        // The sync keeps Mengantar's category, like the webhook, so both read the same on the shipping page.
+        provider_status_category: "RTS",
       },
     );
     // The release marker is the property; the stock figure is not touched at
@@ -374,6 +380,16 @@ test("RTS synchronization releases the order exactly once", async () => {
       ).shipping_status,
       "returned",
     );
+    // A legacy flag response has no category and keeps the stored one.
+    const categoryOf = () =>
+      database.row<{ provider_status_category: string }>(
+        "SELECT provider_status_category FROM orders WHERE id = 3",
+      ).provider_status_category;
+    assert.equal(categoryOf(), "RTS");
+    // GET /order's generic "active" never replaces a specific category.
+    providerStatus = "active";
+    await invokeSync(database, [3]);
+    assert.equal(categoryOf(), "RTS");
   } finally {
     globalThis.fetch = originalFetch;
   }

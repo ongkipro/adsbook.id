@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DistrictCombobox, type DistrictOption } from "@/components/admin/DistrictCombobox";
 import { formatIdr } from "@/lib/format-idr";
 import { courierDisplayName } from "@/lib/courier-names";
+import { mengantarStatusView, type MengantarStatusTone } from "@/lib/shipping-status";
 import {
   RISK_COPY,
   etaLabel,
@@ -525,15 +526,27 @@ type ResiCheckResult = {
     courier: string | null;
     shippingStatus: string;
     statusLabel: string;
+    statusCategory?: string | null;
     latestEvent: string | null;
     history: ResiHistoryEvent[];
   } | null;
 };
 
-function resiStatusTone(status: string): (typeof RISK_COPY)[RiskLevel]["tone"] {
+// The Mengantar category is the more precise signal ("Gagal kirim" is still "shipped" to the order).
+const MENGANTAR_BADGE_TONE: Record<MengantarStatusTone, (typeof RISK_COPY)[RiskLevel]["tone"]> = {
+  idle: "none",
+  moving: "warn",
+  done: "good",
+  returned: "bad",
+  attention: "bad",
+};
+
+function resiStatusTone(status: string, category?: string | null): (typeof RISK_COPY)[RiskLevel]["tone"] {
+  const view = mengantarStatusView(category);
+  if (view) return MENGANTAR_BADGE_TONE[view.tone];
   if (status === "delivered") return "good";
-  if (status === "returned" || status === "rts" || status === "failed" || status === "cancelled") return "bad";
-  if (status === "in_transit" || status === "out_for_delivery" || status === "picked_up" || status === "dispatched" || status === "pickup_scheduled") return "warn";
+  if (status === "returned" || status === "cancelled") return "bad";
+  if (status === "processing" || status === "shipped" || status === "in_transit") return "warn";
   return "none";
 }
 
@@ -587,7 +600,7 @@ function ResiCheck({ initialQuery = "" }: { initialQuery?: string }) {
 
   const activeStatus = result?.tracking?.shippingStatus || result?.order?.shippingStatus || "";
   const activeStatusLabel = result?.tracking?.statusLabel || result?.order?.shippingStatusLabel || "Tidak diketahui";
-  const tone = resiStatusTone(activeStatus);
+  const tone = resiStatusTone(activeStatus, result?.tracking?.statusCategory);
   const courierCode = result?.tracking?.courier || result?.order?.courierCode || "";
 
   return (
@@ -685,6 +698,9 @@ function ResiCheck({ initialQuery = "" }: { initialQuery?: string }) {
                       <Badge variant="outline" className={TONE_CLASS[tone]}>
                         {activeStatusLabel}
                       </Badge>
+                      {result.tracking?.statusCategory && result.tracking.statusCategory !== activeStatusLabel && (
+                        <span className="font-mono text-xs text-slate-500" title="Status Mengantar">{result.tracking.statusCategory}</span>
+                      )}
                       {courierCode && (
                         <Badge variant="secondary">{courierDisplayName(courierCode)}</Badge>
                       )}

@@ -281,7 +281,8 @@ test("maps Mengantar status flags while preserving latest raw history", () => {
     shippingStatus: "shipped",
     description: "Paket telah dijemput kurir",
     occurredAt: "2026-08-17T02:00:00.000Z",
-  });
+    category: null,
+  }, "the legacy JSON-flag form carries no Mengantar category");
 });
 
 test("maps Mengantar Public API v2 plain-string status categories observed in sandbox", () => {
@@ -319,8 +320,12 @@ test("maps Mengantar Public API v2 plain-string status categories observed in sa
       shippingStatus: "delivered",
       description: "Paket telah diterima",
       occurredAt: "2026-09-12T04:02:00.000Z",
+      category: "DELIVERED",
     },
   );
+  // GET /order's own spelling is kept as Mengantar's category, normalised.
+  assert.equal(mapMengantarStatusEvidence({ status: " pending  pickup ", history: [] }).category, "PENDING PICKUP");
+  assert.equal(mapMengantarStatusEvidence({ status: "active", history: [] }).category, "ACTIVE");
 });
 
 test("only an exact return status is a return: a prefixed or in-progress one never voids the order", () => {

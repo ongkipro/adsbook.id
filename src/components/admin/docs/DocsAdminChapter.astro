@@ -63,7 +63,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
       <li>Pembeli mengisi form checkout. Pesanan masuk sebagai <strong>Menunggu konfirmasi</strong>. Checkout tidak pernah mengirim ke kurir.</li>
       <li>Untuk QRIS, VA, atau transfer manual, pesanan menunggu lunas. COD bisa langsung diproses.</li>
       <li>Operator memeriksa pesanan (alamat, kurir, riwayat RTS pembeli), lalu <strong>Push ke Mengantar</strong> dengan pilihan drop-off atau pickup.</li>
-      <li>Mengantar menerbitkan resi. Status bergerak: Diproses Mengantar → Dikirim → Selesai, atau RTS bila paket kembali.</li>
+      <li>Mengantar menerbitkan resi. Status bergerak: Diproses Mengantar → Dalam pengiriman → Terkirim, atau Retur (RTS) bila paket kembali. Di menu Pengiriman, tiap paket juga menampilkan status Mengantar apa adanya (mis. Menunggu pickup, Sudah dipickup, Gagal kirim) beserta update terakhir dari kurir.</li>
     </ol>
     <p>Tiga aturan yang selalu berlaku: lunas hanya membuat pesanan boleh dikirim, tidak mengirimnya; stok tidak pernah menahan penjualan; dan satu pesanan hanya bisa dirilis sekali.</p>
   </>
@@ -80,9 +80,9 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
         <tbody>
           <tr><td class={td}>Menunggu konfirmasi</td><td class={td}>Pesanan baru, belum dikirim ke Mengantar.</td></tr>
           <tr><td class={td}>Diproses Mengantar</td><td class={td}>Sudah di Mengantar, menunggu resi atau penjemputan.</td></tr>
-          <tr><td class={td}>Dikirim</td><td class={td}>Paket dalam perjalanan.</td></tr>
-          <tr><td class={td}>Selesai</td><td class={td}>Paket diterima pembeli.</td></tr>
-          <tr><td class={td}>RTS</td><td class={td}>Paket kembali ke pengirim.</td></tr>
+          <tr><td class={td}>Dalam pengiriman</td><td class={td}>Paket sudah dijemput dan dalam perjalanan.</td></tr>
+          <tr><td class={td}>Terkirim</td><td class={td}>Paket diterima pembeli.</td></tr>
+          <tr><td class={td}>Retur (RTS)</td><td class={td}>Paket kembali ke pengirim.</td></tr>
           <tr><td class={td}>Batal</td><td class={td}>Pesanan dibatalkan.</td></tr>
         </tbody>
       </table>
@@ -90,7 +90,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
     <p>Status pembayaran: Belum dibayar, Menunggu pembayaran, Lunas, Kedaluwarsa, Gagal, dan Dikembalikan. Metode: COD, Transfer bank manual, Virtual Account, atau QRIS.</p>
 
     <h3>Mencari dan menyaring</h3>
-    <p>Chip cepat (Semua, Menunggu, Diproses, Dikirim, Selesai, Batal) dan filter: "Cari order" (invoice, nama, WA, atau resi), Periode order, Status pengiriman, Status pembayaran, Sumber lead (Meta Ads, Google Ads, Organic / Direct), dan Halaman sumber. "Export CSV" mengunduh hasil filter yang sedang tampil (satu baris per produk, maksimal 10.000 baris; nominal hanya di baris pertama tiap pesanan).</p>
+    <p>Chip cepat (Semua, Menunggu, Diproses, Dalam pengiriman, Terkirim, Retur (RTS), Batal) dan filter: "Cari order" (invoice, nama, WA, atau resi), Periode order, Status pengiriman, Status pembayaran, Sumber lead (Meta Ads, Google Ads, Organic / Direct), dan Halaman sumber. "Export CSV" mengunduh hasil filter yang sedang tampil (satu baris per produk, maksimal 10.000 baris; nominal hanya di baris pertama tiap pesanan).</p>
 
     <h3>Merilis pesanan ke kurir</h3>
     <ol>
@@ -114,8 +114,8 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
     <h3>Mengubah status dan menghapus</h3>
     <ul>
       <li>Pilih beberapa pesanan lalu "Ubah status ke…" atau "Hapus N Order" (1–100 sekaligus).</li>
-      <li>Pesanan yang menunggu hanya bisa dibatalkan sebelum di-push. Tidak ada status yang kembali ke Menunggu. Batal dan RTS tidak bisa dibuka lagi.</li>
-      <li>Dikirim, Selesai, dan RTS untuk jalur <strong>Mengantar</strong> memakai pengiriman Mengantar dengan resi resmi; untuk jalur <strong>Kirim di luar Mengantar</strong> (eksternal per order), operator cukup mengisi kurir dan nomor resi manual. Pesanan non-COD baru bisa Selesai bila sudah lunas. QRIS/VA hanya bisa ditandai lunas lewat rekonsiliasi AutoLaris.</li>
+      <li>Pesanan yang menunggu hanya bisa dibatalkan sebelum di-push. Tidak ada status yang kembali ke Menunggu. Batal dan Retur (RTS) tidak bisa dibuka lagi.</li>
+      <li>Dalam pengiriman, Terkirim, dan Retur (RTS) untuk jalur <strong>Mengantar</strong> memakai pengiriman Mengantar dengan resi resmi; untuk jalur <strong>Kirim di luar Mengantar</strong> (eksternal per order), operator cukup mengisi kurir dan nomor resi manual. Pesanan non-COD baru bisa Terkirim bila sudah lunas. QRIS/VA hanya bisa ditandai lunas lewat rekonsiliasi AutoLaris.</li>
       <li>Pesanan yang sudah lunas atau sudah di Mengantar tidak bisa dihapus; batalkan atau refund. Hapus bersifat permanen.</li>
     </ul>
 
