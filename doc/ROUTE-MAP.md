@@ -184,7 +184,7 @@ under both headings wherever they are named; which database a statement meant is
 | `/admin/landing-pages/new` | GET | admin session | owner, admin, advertiser | `src/pages/admin/landing-pages/new.astro` | — | — | — | — |
 | `/admin/orders` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/index.astro` | `admin-orders-initial` | — | — | `lib/admin-orders-initial.test.ts` |
 | `/admin/orders/[invoice]` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/[invoice].astro` | — | — | — | — |
-| `/admin/orders/abandoned` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/abandoned.astro` | — | — | — | — |
+| `/admin/orders/abandoned` | GET | admin session | owner, admin, customer_service | `src/pages/admin/orders/abandoned.astro` | `lead-follow-up` | — | — | `lib/lead-follow-up.test.ts` |
 | `/admin/payments` | GET | admin session | owner, admin | `src/pages/admin/payments.astro` | `payment-settings-initial` | — | — | — |
 | `/admin/payments/banks` | GET | admin session | owner, admin | `src/pages/admin/payments/banks.astro` | `payment-settings-initial` | — | — | — |
 | `/admin/payments/channels` | GET | admin session | owner, admin | `src/pages/admin/payments/channels.astro` | `payment-settings-initial` | — | — | — |
@@ -394,7 +394,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `json-ld` | 14 | — | — | 2 | `/produk/[slug]` `/[slug]` |
 | `json-script` | 1 | — | — | 1 | — |
 | `landing-pages` | 35 | `landing_pages` `landing_sections` `products` | — | 2 | `/produk/[slug]` `/sitemap` `/[slug]` `/landing-page` `/sitemap.xml` `/admin/ads/utm` `/admin/landing-pages` `/api/admin/landing-pages` `/api/admin/landing-pages/[id]` |
-| `lead-follow-up` | 6 | — | — | 1 | — |
+| `lead-follow-up` | 6 | — | — | 1 | `/admin/orders/abandoned` |
 | `legal-links` | 2 | — | — | 1 | — |
 | `llms-txt` | 2 | — | — | 1 | `/llms.txt` |
 | `location-search` | 19 | — | — | 3 | `/api/locations` `/api/v1/geo/districts` |

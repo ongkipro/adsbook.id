@@ -36,7 +36,7 @@ export function isLeadFollowUpStatus(value: unknown): value is LeadFollowUpStatu
 }
 
 /** Same number as ABANDONED_RETENTION_DAYS in order-persistence.ts; lead-follow-up.test.ts pins the two together. */
-export const LEAD_RETENTION_DAYS = 14;
+export const LEAD_RETENTION_DAYS = 30;
 const DAY_MS = 86_400_000;
 
 /**
@@ -55,7 +55,7 @@ export function leadAge(createdAt: string | null | undefined, now = new Date()):
 }
 
 /**
- * Whole days left before the 14-day purge deletes the lead, shown only when
+ * Whole days left before the 30-day purge (ADR-042) deletes the lead, shown only when
  * fewer than three remain (2, 1, then 0 = today) so an operator sees which
  * leads are about to disappear. Null earlier, and for an unreadable time.
  */
