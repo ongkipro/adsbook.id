@@ -116,3 +116,15 @@ export async function markDigitalAccessed(
     .run();
   return true;
 }
+
+/**
+ * Where a digital order's access stands, for the admin list: `void` (closed
+ * for good), `open` (the buyer's link works now) or `unpaid` (opens when paid).
+ * `open` is exactly `digitalAccessOpen`, so the list never says "Akses terbuka"
+ * about a link the buyer cannot open — a returned order is void too.
+ */
+export function digitalAccessStage(order: { payment_status?: string | null; shipping_status?: string | null; stock_restored_at?: string | null }): "void" | "open" | "unpaid" {
+  const payment = String(order.payment_status ?? "").toLowerCase();
+  if (isVoidOrder({ payment_status: payment, shipping_status: String(order.shipping_status ?? ""), stock_restored_at: order.stock_restored_at ?? null })) return "void";
+  return digitalAccessOpen({ ...order, fulfillment_type: "digital" }) ? "open" : "unpaid";
+}

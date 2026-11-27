@@ -1199,7 +1199,7 @@ export function OrderDetail({
         throw new Error(payload.error || "Gagal menghapus order.");
       }
       toast.success(`Order ${order.order_number} berhasil dihapus.`);
-      window.location.assign("/admin/orders");
+      window.location.assign(splitByKind && order.fulfillment_type === "digital" ? "/admin/orders/digital" : "/admin/orders");
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Gagal menghapus order.";
       setNotice(message);

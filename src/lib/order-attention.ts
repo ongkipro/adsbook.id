@@ -27,8 +27,10 @@ import { matchesShippingQueue } from "./shipping-queue.ts";
  *   over the rows `/admin/shipping` lists (`shippingListFilter`).
  *
  * A digital order is never "confirmed" or pushed: it is delivered the moment
- * it is paid (DIGITAL-PRODUCTS-SPEC §2.3), so confirm, ready_push and
- * push_problem count physical orders only, in every catalog mode.
+ * it is paid (DIGITAL-PRODUCTS-SPEC §2.3). On a hybrid store confirm,
+ * ready_push and push_problem count physical orders only, as Produk Fisik
+ * lists; a single-mode store's one list holds every kind, and so does its
+ * count (the push gate already refuses a digital order).
  *
  * Not dated: these are open work, whenever it came in.
  */
@@ -110,7 +112,7 @@ export async function readOrderAttention(
          FROM orders o
          LEFT JOIN warehouses w ON w.id = o.warehouse_id
          WHERE ${orderRowSql("o.")} AND o.shipping_status = 'pending' AND o.stock_restored_at IS NULL
-           AND o.fulfillment_type = 'physical'
+           ${hybrid ? "AND o.fulfillment_type = 'physical'" : ""}
          ORDER BY o.id DESC
          LIMIT ?`,
       )

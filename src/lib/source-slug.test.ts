@@ -656,6 +656,7 @@ test("Perlu tindakan splits by kind on a hybrid store: digital orders are never 
   // A single-mode store has one list: no digital card, the unpaid cards count every kind.
   const digital = await counts("digital");
   assert.equal(digital.digital_unpaid, undefined);
-  assert.equal(digital.confirm.count, 2, "a digital order never reads as waiting for confirmation");
+  assert.equal(digital.confirm.count, 4, "a single-mode store's one list holds every pending order, and so does its count");
+  assert.equal(await list("shipping_status=pending"), digital.confirm.count);
   assert.deepEqual([digital.awaiting_payment.count, digital.transfer_unconfirmed.count], [2, 1]);
 });

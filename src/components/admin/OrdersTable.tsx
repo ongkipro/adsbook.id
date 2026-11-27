@@ -15,6 +15,7 @@ import {
 } from "../../lib/crm-template";
 import { initialOrderListFilters, orderListQuery } from "../../lib/admin-orders-initial";
 import type { OrderListKind } from "../../lib/order-list-filter";
+import { digitalAccessStage } from "../../lib/digital-access";
 import { providerDispatchErrorText } from "../../lib/payment-dispatch-policy";
 import { SOURCE_SLUG_NONE_FILTER, SOURCE_SLUG_NONE_LABEL } from "../../lib/source-slug";
 import { buyerAreaLines } from "../../lib/province";
@@ -252,7 +253,6 @@ function DigitalOrderBadge({ accessedAt }: { accessedAt?: string | null }) {
   );
 }
 
-const PAID_STATUSES = new Set(["paid", "settled", "success"]);
 
 /** The access message CS sends: the buyer's own order page, which carries the link once paid (as OrderDetail). */
 function digitalAccessMessage(order: OrderItem) {
@@ -266,10 +266,11 @@ function digitalAccessMessage(order: OrderItem) {
  * exactly when the buyer's link works.
  */
 function digitalAccessState(order: OrderItem): { label: string; detail: string; dot: string; text: string } {
-  if (order.shippingStatus === "cancelled" || ["refunded", "failed", "cancelled"].includes(order.paymentStatus)) {
+  const stage = digitalAccessStage({ payment_status: order.paymentStatus, shipping_status: order.shippingStatus });
+  if (stage === "void") {
     return { label: order.paymentStatus === "refunded" ? "Dikembalikan" : "Batal", detail: "Akses ditutup", dot: "bg-slate-400", text: "text-slate-600" };
   }
-  if (PAID_STATUSES.has(order.paymentStatus)) {
+  if (stage === "open") {
     return order.digitalAccessedAt
       ? { label: "Akses terbuka", detail: `Dibuka pembeli ${formatDateTime(order.digitalAccessedAt)}`, dot: "bg-emerald-500", text: "text-emerald-700" }
       : { label: "Akses terbuka", detail: "Belum dibuka pembeli", dot: "bg-emerald-500", text: "text-emerald-700" };
@@ -723,7 +724,7 @@ export function OrdersTable({
   const [shippingFilter, setShippingFilter] = useState(initialFilters.shippingFilter);
   const [paymentFilter, setPaymentFilter] = useState(initialFilters.paymentFilter);
   const [dateSelection, setDateSelection] = useState<AdminDateSelection>(initialFilters.dateSelection);
-  const [sourceFilter, setSourceFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState(initialFilters.sourceFilter);
   // The landing page filter (PRD A36). Opened from Analitik with
   // `?source_slug=`, so it starts from the URL.
   const [sourceSlugFilter, setSourceSlugFilter] = useState(initialFilters.sourceSlugFilter);
@@ -880,6 +881,14 @@ export function OrdersTable({
     sourceFilter !== "all",
     sourceSlugFilter !== "all",
   ].filter(Boolean).length;
+  // The other list under the filters its count used: everything but the status
+  // (the two kinds name their states differently) and the page.
+  const otherKindQuery = (() => {
+    const query = orderListQuery({ search: searchTerm, shippingFilter: "all", paymentFilter, dateSelection, sourceFilter, sourceSlugFilter, kind: "all" }, 1, false);
+    query.delete("page");
+    query.delete("limit");
+    return query.toString();
+  })();
   const hasFilters =
     searchTerm.trim() !== "" ||
     dateSelection.filter !== "all" ||
@@ -1855,10 +1864,10 @@ export function OrdersTable({
 
         {kind !== "all" && otherKindCount > 0 && hasFilters && (
           <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-600" role="status">
-            {otherKindCount} pesanan {kind === "physical" ? "produk digital" : "produk fisik"} juga cocok dengan filter ini.{" "}
+            {otherKindCount} pesanan {kind === "physical" ? "produk digital" : "produk fisik"} juga cocok dengan pencarian dan filter ini (semua status).{" "}
             <a
               className="font-semibold text-blue-700 hover:underline"
-              href={`${kind === "physical" ? "/admin/orders/digital" : "/admin/orders"}${searchTerm.trim() ? `?search=${encodeURIComponent(searchTerm.trim())}` : ""}`}
+              href={`${kind === "physical" ? "/admin/orders/digital" : "/admin/orders"}?${otherKindQuery}`}
             >
               Lihat di {kind === "physical" ? "Produk Digital" : "Produk Fisik"}
             </a>

@@ -28,7 +28,7 @@ export function initialOrderListFilters(pageQuery: URLSearchParams, kind: OrderL
     shippingFilter: pageQuery.get("status") || pageQuery.get("shipping_status") || "all",
     paymentFilter: pageQuery.get("payment_status") || "all",
     dateSelection: adminDateSelectionFromQuery(pageQuery),
-    sourceFilter: "all",
+    sourceFilter: pageQuery.get("source") || "all",
     sourceSlugFilter: pageQuery.get("source_slug") || "all",
     kind,
   };
