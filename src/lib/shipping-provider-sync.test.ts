@@ -96,7 +96,8 @@ class ShippingSyncDatabase {
         provider_status_at TEXT,
         provider_synced_at TEXT,
         -- migration 0089: Mengantar's own category, written by the webhook and (since 2026-11-28) the sync
-        provider_status_category TEXT
+        provider_status_category TEXT,
+        provider_event_at TEXT
       );
       CREATE TABLE order_items (
         id INTEGER PRIMARY KEY,
@@ -379,6 +380,16 @@ test("RTS synchronization releases the order exactly once", async () => {
       ).shipping_status,
       "returned",
     );
+    // A legacy flag response has no category and keeps the stored one.
+    const categoryOf = () =>
+      database.row<{ provider_status_category: string }>(
+        "SELECT provider_status_category FROM orders WHERE id = 3",
+      ).provider_status_category;
+    assert.equal(categoryOf(), "RTS");
+    // GET /order's generic "active" never replaces a specific category.
+    providerStatus = "active";
+    await invokeSync(database, [3]);
+    assert.equal(categoryOf(), "RTS");
   } finally {
     globalThis.fetch = originalFetch;
   }

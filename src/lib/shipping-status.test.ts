@@ -62,3 +62,31 @@ test("Mengantar's categories read in a seller's words, with the ones needing a l
   assert.equal(mengantarStatusView("  "), null);
   for (const key of Object.keys(MENGANTAR_STATUS_LABELS)) assert.equal(key, key.trim().replace(/\s+/g, " ").toUpperCase(), `${key} is stored normalised`);
 });
+
+test("the Mengantar block never says 'no update' beside an update, and never shows a word twice", async () => {
+  const { mengantarBlock } = await import("./shipping-status.ts");
+  // Synced before categories were kept: the courier line is the headline.
+  const legacy = mengantarBlock({ category: null, text: "Paket telah diterima", orderStatusLabel: "Terkirim" });
+  assert.equal(legacy.headline, "Paket telah diterima");
+  assert.equal(legacy.view, null);
+  assert.equal(mengantarBlock({ category: null, text: null, orderStatusLabel: "Diproses Mengantar" }).headline, "Belum ada update dari kurir");
+
+  // A label repeating the order's own badge is left out; a state needing a look always shows.
+  assert.equal(mengantarBlock({ category: "ON DELIVERY", text: null, orderStatusLabel: "Dalam pengiriman" }).showLabel, false);
+  assert.equal(mengantarBlock({ category: "PENDING PICKUP", text: null, orderStatusLabel: "Diproses Mengantar" }).showLabel, true);
+  assert.equal(mengantarBlock({ category: "UNDELIVERED", text: null, orderStatusLabel: "Gagal kirim" }).showLabel, true);
+
+  // An unknown category is not repeated as its own reference.
+  const unknown = mengantarBlock({ category: "HELD AT HUB", text: null, orderStatusLabel: "Dalam pengiriman" });
+  assert.equal(unknown.headline, "HELD AT HUB");
+  assert.equal(unknown.reference, null);
+  assert.equal(mengantarBlock({ category: "PENDING PICKUP", text: null, orderStatusLabel: "x" }).reference, "PENDING PICKUP");
+
+  // What the webhook writes is hidden; a courier line that merely contains the word is kept.
+  for (const written of ["UNDELIVERED", "Perlu perhatian kurir (UNDELIVERED)"]) {
+    assert.equal(mengantarBlock({ category: "UNDELIVERED", text: written, orderStatusLabel: "x" }).courierLine, null, written);
+  }
+  assert.equal(mengantarBlock({ category: "CANCELED", text: "Pembatalan dari kurir — perlu cek operator (CANCELED)", orderStatusLabel: "x" }).courierLine, null);
+  assert.equal(mengantarBlock({ category: "DELIVERED", text: "DELIVERED TO [BUDI | RUMAH]", orderStatusLabel: "Terkirim" }).courierLine, "DELIVERED TO [BUDI | RUMAH]");
+  assert.equal(mengantarBlock({ category: "RTS", text: "Paket diretur, REPORTS dikirim", orderStatusLabel: "x" }).courierLine, "Paket diretur, REPORTS dikirim");
+});

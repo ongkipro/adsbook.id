@@ -454,7 +454,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `shipping-fallback` | 2 | — | — | 1 | — |
 | `shipping-queue` | 3 | — | — | 2 | `/api/admin/shipping` |
 | `shipping-quote` | 6 | `courier_rules` `product_variants` `products` `warehouses` | — | 3 | `/api/shipping-rates` `/api/submit-order` `/api/v1/checkout` `/api/v1/geo/shipping-rates` `/api/admin/abandoned-orders` `/api/admin/orders/[id]` |
-| `shipping-status` | 11 | — | — | 1 | `/api/admin/check/resi` `/api/admin/orders` |
+| `shipping-status` | 12 | — | — | 1 | `/api/admin/check/resi` `/api/admin/orders` |
 | `sidebar-scroll` | 5 | — | — | 1 | — |
 | `sitemap` | 2 | — | — | 1 | `/sitemap.xml` |
 | `social-proof-visibility` | 2 | — | — | 1 | — |

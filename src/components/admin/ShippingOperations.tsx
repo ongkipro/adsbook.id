@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../ui/button";
 import { DataTableShell } from "./DataTableShell";
 import { ExportCsvButton } from "./ExportCsvButton";
-import { SHIPPING_STATUS_LABELS, mengantarStatusView, type MengantarStatusTone } from "@/lib/shipping-status";
+import { SHIPPING_STATUS_LABELS, mengantarBlock, type MengantarStatusTone } from "@/lib/shipping-status";
 import { leadAge } from "@/lib/lead-follow-up";
 import { MengantarPickupFields } from "./MengantarPickupFields";
 import { defaultPickupSlot, mengantarPickupSlot } from "@/lib/mengantar-order";
@@ -223,35 +223,32 @@ const MENGANTAR_DOT: Record<MengantarStatusTone, string> = {
  * the desktop row, so the two never read differently.
  */
 function MengantarStatus({ shipment }: { shipment: Shipment }) {
-  const view = mengantarStatusView(shipment.providerStatusCategory);
+  // What to show is decided in mengantarBlock (shipping-status.ts, tested); this only renders it.
+  const block = mengantarBlock({
+    category: shipment.providerStatusCategory,
+    text: shipment.providerStatusText,
+    orderStatusLabel: statusLabels[shipment.shippingStatus] ?? shipment.shippingStatus,
+  });
+  const { view } = block;
   const checked = shipment.providerSyncedAt ? leadAge(shipment.providerSyncedAt) : null;
-  // The order's own badge above already says "Dalam pengiriman"; Mengantar's words are
-  // repeated only when they add something (a different stage, or a state needing a look).
-  const sameAsOrder = view && view.label === (statusLabels[shipment.shippingStatus] ?? "") && view.tone !== "attention";
-  // A webhook stores Mengantar's category as the text too; show the courier's own line only when it differs.
-  // A webhook stores its own mapped label as the text ("Perlu perhatian kurir (UNDELIVERED)"), which only
-  // restates the category; the courier's own tracking line (from the hourly sync) never names it.
-  const line = shipment.providerStatusText?.trim();
-  const restates = (text: string) => Boolean(view) && (text === view!.label || text.toUpperCase().includes(view!.category));
-  const courierLine = line && !restates(line) ? line : null;
   return (
     <div className="min-w-0 text-xs leading-snug text-slate-600" data-mengantar-status={view?.category ?? "none"}>
       {view ? (
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          {!sameAsOrder && (
+          {block.showLabel && (
             <span className={`inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 font-medium ${MENGANTAR_TONE[view.tone]}`}>
               <span className={`size-1.5 shrink-0 rounded-full ${MENGANTAR_DOT[view.tone]}`} aria-hidden="true" />
               {view.label}
               {view.tone === "attention" && <span className="font-semibold">· perlu cek</span>}
             </span>
           )}
-          <span className="font-mono text-xs text-slate-500" title="Status Mengantar">Mengantar: {view.category}</span>
+          {block.reference && <span className="font-mono text-xs text-slate-500" title="Status Mengantar">Mengantar: {block.reference}</span>}
         </p>
       ) : (
-        <p className="font-medium text-slate-700">Belum ada update dari kurir</p>
+        <p className="line-clamp-1 font-medium text-slate-700" title={block.headline}>{block.headline}</p>
       )}
-      {courierLine && (
-        <p className="mt-1 line-clamp-1 text-slate-700" title={courierLine}>{courierLine}</p>
+      {block.courierLine && (
+        <p className="mt-1 line-clamp-1 text-slate-700" title={block.courierLine}>{block.courierLine}</p>
       )}
       <p className="mt-0.5 text-slate-500">
         {shipment.providerStatusAt ? `Update ${dateTime(shipment.providerStatusAt)}` : "Belum ada waktu update"}

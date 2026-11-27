@@ -133,3 +133,52 @@ export function mengantarStatusView(raw: string | null | undefined): MengantarSt
   const known = MENGANTAR_STATUS_LABELS[category];
   return known ? { category, ...known } : { category, label: category, tone: "idle" };
 }
+
+/**
+ * What the shipping page's Mengantar block shows for one shipment, decided here
+ * so it can be tested (the component only renders it).
+ *
+ * - `headline`: Mengantar's category in a seller's words; when no category is
+ *   stored yet but a courier line is (an order synced before categories were
+ *   kept, or a legacy flag response), that line is the headline, never
+ *   "Belum ada update dari kurir" beside an actual update.
+ * - `showLabel`: the coloured label is left out when it only repeats the
+ *   order's own badge ("Dalam pengiriman" twice); a state needing a look always
+ *   shows.
+ * - `reference`: "Mengantar: <CATEGORY>" only when it says more than the label
+ *   (an unknown category already reads as received).
+ * - `courierLine`: the stored text, hidden only when it is exactly what the
+ *   webhook writes for that category, so a courier line that happens to
+ *   contain the word ("DELIVERED TO BUDI") stays visible.
+ */
+export function mengantarBlock(input: {
+  category: string | null | undefined;
+  text: string | null | undefined;
+  orderStatusLabel: string;
+}): {
+  view: MengantarStatusView | null;
+  headline: string;
+  showLabel: boolean;
+  reference: string | null;
+  courierLine: string | null;
+} {
+  const view = mengantarStatusView(input.category);
+  const text = input.text?.trim() || null;
+  if (!view) {
+    return { view: null, headline: text ?? "Belum ada update dari kurir", showLabel: false, reference: null, courierLine: null };
+  }
+  const webhookText = new Set([
+    view.category,
+    view.label,
+    `Perlu perhatian kurir (${view.category})`,
+    `Pembatalan dari kurir — perlu cek operator (${view.category})`,
+    "Status Mengantar ERROR — perlu cek",
+  ].map((value) => value.toUpperCase()));
+  return {
+    view,
+    headline: view.label,
+    showLabel: view.tone === "attention" || view.label !== input.orderStatusLabel,
+    reference: view.label === view.category ? null : view.category,
+    courierLine: text && !webhookText.has(text.toUpperCase()) ? text : null,
+  };
+}
