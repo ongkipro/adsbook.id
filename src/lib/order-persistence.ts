@@ -198,12 +198,14 @@ function completedNumberFromAbandoned(orderNumber: string): string {
 }
 
 /**
- * A lead is kept 14 days from capture, then deleted with its items and payment
- * rows (owner 2026-11-10, ADR-035; was 7). The hourly cron and
+ * A lead is kept 30 days from capture, then deleted with its items and payment
+ * rows (owner 2026-11-28, ADR-042, superseding ADR-035's 14; was 7 before
+ * that). 30 days is the longest report period sellers judge ads by, so a
+ * 30-day closing rate counts every lead. The hourly cron and
  * `POST /api/admin/orders/retention` are the only paths that delete a lead:
  * the order delete route refuses one, so a lead is never removed early by hand.
  */
-export const ABANDONED_RETENTION_DAYS = 14;
+export const ABANDONED_RETENTION_DAYS = 30;
 
 export async function purgeExpiredAbandonedOrders(
   database: D1Database,

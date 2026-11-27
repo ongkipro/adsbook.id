@@ -184,7 +184,7 @@ test("authenticated retention POST executes the write-side purge", async () => {
   assert.deepEqual(await response.json(), {
     success: true,
     deleted_count: 2,
-    retention_days: 14,
+    retention_days: 30,
   });
   assert.equal(statements.length, 3);
   assert.ok(statements.every((sql) => sql.startsWith("DELETE FROM")));

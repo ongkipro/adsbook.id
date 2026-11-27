@@ -4,6 +4,7 @@
 // changes, change it here too. Text only (see chapters.ts).
 import type { DocsChapterSlug } from './chapters';
 import { ADMIN_DATE_FILTER_OPTIONS } from '../../../lib/admin-date-filter';
+import { LEAD_RETENTION_DAYS } from '../../../lib/lead-follow-up';
 
 interface Props {
   slug: DocsChapterSlug;
@@ -34,7 +35,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
 
     <h3>Dashboard</h3>
     <ul>
-      <li>Enam angka utama: Revenue (nilai pesanan aktif; tooltip memisahkan <em>Pembayaran online lunas</em> dan <em>COD terkirim</em> di luar ongkir &amp; biaya COD), Orders, AOV, Lead conversion (lead tertinggal disimpan 14 hari), Online payment rate (tanpa COD), dan RTS rate (retur ÷ terkirim dan retur).</li>
+      <li>Enam angka utama: Revenue (nilai pesanan aktif; tooltip memisahkan <em>Pembayaran online lunas</em> dan <em>COD terkirim</em> di luar ongkir &amp; biaya COD), Orders, AOV, Lead conversion (lead tertinggal disimpan {LEAD_RETENTION_DAYS} hari), Online payment rate (tanpa COD), dan RTS rate (retur ÷ terkirim dan retur).</li>
       <li>Rentang tanggal maksimal 31 hari (berdasarkan tanggal masuk pertama, zona waktu WIB), dengan pembanding "vs same day last week", "vs same dates last month", atau "vs previous period".</li>
       <li>Panel <strong>Action needed</strong> memperbarui diri tiap menit dan hanya menampilkan pekerjaan yang ada: Menunggu konfirmasi, Siap push ke Mengantar, Push Mengantar bermasalah, Menunggu pembayaran online, Lead belum dihubungi, Perlu dibuatkan resi, Perlu jadwal pickup, Perlu drop-off. Lencana merah "&gt;24j" berarti sudah menunggu lebih dari sehari. Angkanya selalu sama dengan daftar yang dibukanya.</li>
       <li>Owner dan admin melihat kartu "Siapkan toko untuk jualan" selama masih ada langkah wajib yang belum selesai; "Lihat semua langkah" membuka <a href="/admin/setup">Siapkan toko</a>. Setelah toko siap, kartu menjadi satu baris "Toko siap jualan", dan hilang setelah langkah opsional juga selesai.</li>
@@ -119,7 +120,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
     </ul>
 
     <h3>Pesanan tertinggal</h3>
-    <p>Checkout yang ditinggalkan pembeli. Setiap lead punya satu label status berwarna: Belum dihubungi (kuning), Sudah dihubungi (biru), Berminat (hijau), Tidak berminat (abu-abu). Klik label untuk mengganti status; chip di atas daftar memfilter per status dan menampilkan jumlah semua lead. "WhatsApp" membuka chat dan, untuk lead yang belum dihubungi, langsung menandainya Sudah dihubungi: status ini mencatat chat dibuka, bukan bukti pesan terkirim. Lead dihapus otomatis 14 hari setelah masuk; tiga hari terakhir ditandai "dihapus N hari lagi". "Jadikan order" membuat pesanan COD yang menunggu, tetap tunduk pada larangan COD per provinsi, dan tetap harus di-push.</p>
+    <p>Checkout yang ditinggalkan pembeli. Setiap lead punya satu label status berwarna: Belum dihubungi (kuning), Sudah dihubungi (biru), Berminat (hijau), Tidak berminat (abu-abu). Klik label untuk mengganti status; chip di atas daftar memfilter per status dan menampilkan jumlah semua lead. "WhatsApp" membuka chat dan, untuk lead yang belum dihubungi, langsung menandainya Sudah dihubungi: status ini mencatat chat dibuka, bukan bukti pesan terkirim. Lead dihapus otomatis {LEAD_RETENTION_DAYS} hari setelah masuk; dua hari terakhir ditandai "dihapus N hari lagi", lalu "dihapus hari ini". "Jadikan order" membuat pesanan COD yang menunggu, tetap tunduk pada larangan COD per provinsi, dan tetap harus di-push.</p>
   </>
 )}
 
@@ -215,7 +216,7 @@ const dateFilters = ADMIN_DATE_FILTER_OPTIONS.map((option) => option.label).join
         </tbody>
       </table>
     </div>
-    <p>Pilihan periode di sistem: {dateFilters}, ditambah rentang tanggal sendiri. Semua laporan dikelompokkan berdasarkan <strong>tanggal masuk pertama</strong> (lead/pesanan dibuat, WIB) agar konsisten dengan atribusi iklan; data lead tertinggal disimpan 14 hari dan log Purchase ke Meta 30 hari. Di Analitik, rentang sendiri maksimal 90 hari dan dibandingkan dengan periode sama panjang tepat sebelumnya. Di Dashboard maksimal 31 hari dengan tiga pilihan pembanding.</p>
+    <p>Pilihan periode di sistem: {dateFilters}, ditambah rentang tanggal sendiri. Semua laporan dikelompokkan berdasarkan <strong>tanggal masuk pertama</strong> (lead/pesanan dibuat, WIB) agar konsisten dengan atribusi iklan; data lead tertinggal disimpan {LEAD_RETENTION_DAYS} hari dan log Purchase ke Meta 30 hari. Di Analitik, rentang sendiri maksimal 90 hari dan dibandingkan dengan periode sama panjang tepat sebelumnya. Di Dashboard maksimal 31 hari dengan tiga pilihan pembanding.</p>
   </>
 )}
 

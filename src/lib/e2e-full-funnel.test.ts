@@ -650,7 +650,7 @@ test("the D1 counter allocates unique suffixes across concurrent INV and ABN req
   assert.ok(numbers.every((number) => /^(?:INV|ABN)-\d{5}$/.test(number)));
 });
 
-test("abandoned retention deletes only unpaid abandoned orders older than fourteen days", async () => {
+test("abandoned retention deletes only unpaid abandoned orders older than thirty days (ADR-042)", async () => {
   const database = new SqliteD1Database();
   const d1 = asD1(database);
   const now = new Date("2026-08-17T12:00:00.000Z");
@@ -673,17 +673,25 @@ test("abandoned retention deletes only unpaid abandoned orders older than fourte
     return result.meta.last_row_id;
   };
 
+  // ADR-042: kept 30 days from capture. 30 days before `now` is 2026-07-18T12:00:00Z.
   const expiredId = await insertOrder(
     "ABN-20001",
     "unpaid",
     "abandoned",
-    "2026-08-03T11:59:59.000Z",
+    "2026-07-18T11:59:59.000Z",
   );
   const boundaryId = await insertOrder(
     "ABN-20002",
     "unpaid",
     "abandoned",
-    "2026-08-03T12:00:00.000Z",
+    "2026-07-18T12:00:00.000Z",
+  );
+  // 20 days old: deleted under the old 14-day rule (ADR-035), kept now.
+  const twentyDayId = await insertOrder(
+    "ABN-20005",
+    "unpaid",
+    "abandoned",
+    "2026-07-28T12:00:00.000Z",
   );
   const paidId = await insertOrder(
     "ABN-20003",
@@ -723,7 +731,7 @@ test("abandoned retention deletes only unpaid abandoned orders older than fourte
     await database.prepare("SELECT id FROM payment_transactions WHERE order_id = ?").bind(expiredId).first(),
     null,
   );
-  for (const id of [boundaryId, paidId, pendingId]) {
+  for (const id of [boundaryId, twentyDayId, paidId, pendingId]) {
     assert.ok(
       await database.prepare("SELECT id FROM orders WHERE id = ?").bind(id).first(),
     );

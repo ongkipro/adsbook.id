@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { LEAD_RETENTION_DAYS } from "../../lib/lead-follow-up";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
@@ -407,8 +408,8 @@ export function AnalyticsDashboard({
     {
       label: "Lead conversion",
       value: data.lead_base > 0 ? percentage(data.lead_conversion_rate) : "–",
-      note: `Dari ${data.lead_base} lead + order · lead maks. 14 hari`,
-      title: "Order dibagi (lead belum checkout + order) menurut tanggal masuk pertama agar cocok dengan atribusi iklan. Lead tertinggal dihapus otomatis setelah 14 hari, sehingga periode lebih panjang dapat membuat rasio tampak lebih tinggi.",
+      note: `Dari ${data.lead_base} lead + order · lead maks. ${LEAD_RETENTION_DAYS} hari`,
+      title: `Order dibagi (lead belum checkout + order) menurut tanggal masuk pertama agar cocok dengan atribusi iklan. Lead tertinggal dihapus otomatis setelah ${LEAD_RETENTION_DAYS} hari, sehingga periode lebih panjang dapat membuat rasio tampak lebih tinggi.`,
       delta: <Delta current={data.lead_conversion_rate} previous={prev && prev.lead_base > 0 && data.lead_base > 0 ? prev.lead_conversion_rate : undefined} kind="points" />,
       tone: "text-slate-950",
     },
@@ -461,7 +462,7 @@ export function AnalyticsDashboard({
     {
       label: "Leads",
       value: funnel.leads,
-      note: "Belum checkout · simpan 14 hari",
+      note: `Belum checkout · simpan ${LEAD_RETENTION_DAYS} hari`,
       ratio: funnel.leads / funnelMax,
       href: showAttention ? `/admin/orders/abandoned${periodSuffix}` : undefined,
     },

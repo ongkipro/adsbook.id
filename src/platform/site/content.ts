@@ -10,6 +10,8 @@
  * store from a phone, and a phone screen stays readable at any page width
  * (desktop captures shrank to unreadable text in a half-width column).
  */
+import { LEAD_RETENTION_DAYS } from "../../lib/lead-follow-up.ts";
+
 export type Shot = { src: string; alt: string; width: number; height: number; kind: "phone" };
 
 export const SHOTS = {
@@ -61,7 +63,7 @@ export const STEPS: Step[] = [
     text: [
       // AGENTS §3: checkout never dispatches; orders land as pending.
       "Pesanan masuk dengan status menunggu. Tidak ada yang langsung dikirim: Anda atau tim CS memeriksa alamat dan risiko penerima, lalu memutuskan.",
-      "Form yang tidak selesai tersimpan sebagai lead untuk ditindaklanjuti CS, lalu terhapus sendiri setelah 14 hari.",
+      `Form yang tidak selesai tersimpan sebagai lead untuk ditindaklanjuti CS, lalu terhapus sendiri setelah ${LEAD_RETENTION_DAYS} hari.`,
     ],
     shot: SHOTS.orders,
     buyer: "Menunggu konfirmasi dari CS Anda lewat WhatsApp.",
