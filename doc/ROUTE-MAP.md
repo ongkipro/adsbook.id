@@ -394,7 +394,7 @@ is either transitive (imported by another lib) or dead, and only reading tells w
 | `json-ld` | 14 | — | — | 2 | `/produk/[slug]` `/[slug]` |
 | `json-script` | 1 | — | — | 1 | — |
 | `landing-pages` | 35 | `landing_pages` `landing_sections` `products` | — | 2 | `/produk/[slug]` `/sitemap` `/[slug]` `/landing-page` `/sitemap.xml` `/admin/ads/utm` `/admin/landing-pages` `/api/admin/landing-pages` `/api/admin/landing-pages/[id]` |
-| `lead-follow-up` | 5 | — | — | 1 | — |
+| `lead-follow-up` | 6 | — | — | 1 | — |
 | `legal-links` | 2 | — | — | 1 | — |
 | `llms-txt` | 2 | — | — | 1 | `/llms.txt` |
 | `location-search` | 19 | — | — | 3 | `/api/locations` `/api/v1/geo/districts` |

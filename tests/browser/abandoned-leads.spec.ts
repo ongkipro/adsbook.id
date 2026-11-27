@@ -56,13 +56,27 @@ test("a lead's status is a coloured label that changes it, chips count the queue
   const newBefore = await count("Belum dihubungi");
   const qualifiedBefore = await count("Berminat");
 
-  // The label is the control: pick "Berminat" from its menu.
+  // The label is the control: pick "Berminat" from its menu, which closes on the pick.
   await trigger.click();
   await page.getByRole("menuitemradio", { name: "Berminat", exact: true }).click();
+  await expect(page.getByRole("menu"), "the menu closes on a pick, so no second change can race the first").toHaveCount(0);
   await expect(row).toHaveAttribute("data-lead-status", "qualified");
   await expect(trigger).toContainText("Berminat");
   expect(await count("Belum dihubungi")).toBe(newBefore - 1);
   expect(await count("Berminat")).toBe(qualifiedBefore + 1);
+  // Who recorded it is on the row, not only in a tooltip.
+  await expect(row).toContainText(/Dicatat .* oleh /);
+
+  // A failed save puts the row and the counts back.
+  await page.route("**/api/admin/abandoned-orders", (route) =>
+    route.request().method() === "PATCH" ? route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ success: false, error: "Simpan gagal (uji)." }) }) : route.fallback(),
+  );
+  await trigger.click();
+  await page.getByRole("menuitemradio", { name: "Tidak berminat", exact: true }).click();
+  await expect(page.getByText("Simpan gagal (uji).")).toBeVisible();
+  await expect(row).toHaveAttribute("data-lead-status", "qualified");
+  expect(await count("Berminat")).toBe(qualifiedBefore + 1);
+  await page.unroute("**/api/admin/abandoned-orders");
 
   // Stored: a reload shows the same status.
   await page.reload();
@@ -88,6 +102,8 @@ test("a lead's status is a coloured label that changes it, chips count the queue
   const [popup] = await Promise.all([page.waitForEvent("popup"), waRow.getByRole("button", { name: "WhatsApp" }).click()]);
   await popup.close();
   await expect(waRow).toHaveAttribute("data-lead-status", "contacted");
+  // The notice says what the record means.
+  await expect(page.getByRole("status").filter({ hasText: "tidak memastikan pesan terkirim" })).toBeVisible();
   await page.reload();
   await ready(page);
   await expect(page.getByRole("article", { name: second })).toHaveAttribute("data-lead-status", "contacted");

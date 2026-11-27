@@ -20,7 +20,7 @@ import {
 import { SOURCE_SLUG_NONE_FILTER, SOURCE_SLUG_NONE_LABEL } from "@/lib/source-slug";
 import { ADMIN_CUSTOM_DATE_FILTER, adminDateSelectionFromQuery } from "@/lib/admin-date-filter";
 import { AdminDateRangeFilter, type AdminDateSelection } from "@/components/admin/AdminDateRangeFilter";
-import { LEAD_FOLLOW_UP_LABELS, LEAD_FOLLOW_UP_STATUSES, LEAD_FOLLOW_UP_TONE, isLeadFollowUpStatus, leadAge, leadDaysLeft } from "@/lib/lead-follow-up";
+import { LEAD_FOLLOW_UP_LABELS, LEAD_FOLLOW_UP_STATUSES, LEAD_FOLLOW_UP_TONE, LEAD_STATUS_TRIGGER_CLASS, isLeadFollowUpStatus, leadAge, leadDaysLeft } from "@/lib/lead-follow-up";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -241,16 +241,14 @@ const leadRequest = {
       ) as StatusCounts,
     };
   },
-  async followUp(lead: Lead, status: FollowUpStatus, note: string) {
+  // Status only: the server leaves the note alone when the field is absent, so a
+  // status change never writes back a note loaded before another operator edited it.
+  async followUp(lead: Lead, status: FollowUpStatus) {
     return readJson(
       await fetch("/api/admin/abandoned-orders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id: lead.id,
-          follow_up_status: status,
-          follow_up_note: note,
-        }),
+        body: JSON.stringify({ order_id: lead.id, follow_up_status: status }),
       }),
     );
   },
@@ -560,7 +558,8 @@ function ConversionDialog({
 // `initialQuery` is the page's own query string, from `Astro.url.search`:
 // filters start from it rather than `window.location`, so the server-rendered
 // first paint and the hydrating client agree (a mismatch is React error #418).
-export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string } = {}) {
+// `operator` is the signed-in username: the server records it on every status change, and the row shows it at once.
+export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQuery?: string; operator?: string } = {}) {
   const [initialParams] = useState(() => new URLSearchParams(initialQuery));
   const [leads, setLeads] = useState<Lead[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -581,7 +580,8 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
   const [sourceOptions, setSourceOptions] = useState<Array<{ value: string; label: string }> | null>(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, totalItems: 0, totalPages: 0 });
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  // Rows with a save in flight. Per row: one shared id let a finished save re-enable another row mid-save.
+  const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(() => new Set());
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [statusCounts, setStatusCounts] = useState<StatusCounts | null>(null);
 
@@ -627,34 +627,47 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
   }, [page, search, status, sourceSlug, dateSelection]);
 
   // One path for every status change: the label menu and the WhatsApp auto-mark.
-  // The row and the chip counts move at once; a failure puts both back.
-  const setFollowUp = async (lead: Lead, next: FollowUpStatus, options: { quiet?: boolean } = {}) => {
-    if (lead.followUpStatus === next) return;
+  // The row and the chip counts move at once; a failure puts both back. A row
+  // with a save in flight takes no second change, so two saves never race.
+  const setFollowUp = async (lead: Lead, next: FollowUpStatus, announce: string) => {
+    if (lead.followUpStatus === next || busyIds.has(lead.id)) return;
     const before = lead;
     const followedUpAt = new Date().toISOString();
-    setUpdatingId(lead.id);
-    if (!options.quiet) setNotice("");
-    setLeads((current) => current.map((item) => item.id === lead.id ? { ...item, followUpStatus: next, followedUpAt } : item));
+    setBusyIds((ids) => new Set(ids).add(lead.id));
+    setLeads((current) => current.map((item) => item.id === lead.id ? { ...item, followUpStatus: next, followedUpAt, followedUpBy: operator } : item));
     setStatusCounts((counts) => counts && { ...counts, [before.followUpStatus]: Math.max(0, counts[before.followUpStatus] - 1), [next]: counts[next] + 1 });
     try {
-      await leadRequest.followUp(lead, next, lead.followUpNote);
-      if (!options.quiet) setNotice(`${lead.orderNumber}: ${followUpLabels[next]}.`);
+      await leadRequest.followUp(lead, next);
+      setNotice(announce);
     } catch (reason) {
       setLeads((current) => current.map((item) => item.id === lead.id ? before : item));
       setStatusCounts((counts) => counts && { ...counts, [before.followUpStatus]: counts[before.followUpStatus] + 1, [next]: Math.max(0, counts[next] - 1) });
       setNotice(reason instanceof Error ? reason.message : "Status follow-up gagal dicatat.");
     } finally {
-      setUpdatingId(null);
+      setBusyIds((ids) => {
+        const rest = new Set(ids);
+        rest.delete(lead.id);
+        return rest;
+      });
     }
   };
 
-  // Opening the chat is the contact (owner, 2026-11-27): a lead not yet contacted becomes "Sudah dihubungi".
-  // The record says the chat was opened, not that a message was sent.
+  // Opening the chat is the contact (owner, 2026-11-27): a lead not yet contacted becomes
+  // "Sudah dihubungi". The record says the chat was opened, not that a message was sent,
+  // and a blocked pop-up records nothing.
   const openWhatsApp = (lead: Lead) => {
     const phone = lead.customerPhone.replace(/\D/g, "").replace(/^0/, "62");
     const message = `Halo Kak ${lead.customerName || "Pelanggan"}, kami ingin membantu melanjutkan pesanan ${lead.productName || "produk pilihan Kakak"}. Apakah ada yang bisa kami bantu?`;
-    window.open(buildWaUrl(phone, message), "_blank", "noopener,noreferrer");
-    if (lead.followUpStatus === "new") void setFollowUp(lead, "contacted", { quiet: true });
+    // Opened without "noopener" in the features so a blocked window is detectable (null); the opener is cut right after.
+    const opened = window.open(buildWaUrl(phone, message), "_blank");
+    if (!opened) {
+      setNotice("WhatsApp tidak terbuka: izinkan pop-up untuk halaman ini, lalu coba lagi.");
+      return;
+    }
+    opened.opener = null;
+    if (lead.followUpStatus === "new") {
+      void setFollowUp(lead, "contacted", `${lead.orderNumber} ditandai Sudah dihubungi karena chat WhatsApp dibuka. Status ini tidak memastikan pesan terkirim.`);
+    }
   };
 
   if (loading) return (
@@ -748,8 +761,9 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
           </FilterBar>
         </CardContent>
       </Card>
-      {/* The queue by follow-up status: one chip per status with its count and colour. */}
-      <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Filter status follow-up" data-lead-status-chips>
+      {/* The queue by follow-up status: one chip per status with its count and colour.
+          Counts are the whole queue (the API ignores search, source and date for them). */}
+      <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Filter status follow-up (jumlah dari semua lead)" data-lead-status-chips>
         {(["all", ...LEAD_FOLLOW_UP_STATUSES] as const).map((value) => {
           const active = status === value;
           const count = statusCounts?.[value];
@@ -796,7 +810,7 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
             const tone = LEAD_FOLLOW_UP_TONE[lead.followUpStatus];
             const age = leadAge(lead.createdAt);
             const daysLeft = leadDaysLeft(lead.createdAt);
-            const busy = updatingId === lead.id;
+            const busy = busyIds.has(lead.id);
             return (
               <div
                 key={lead.id}
@@ -831,7 +845,7 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
                     <DropdownMenuTrigger
                       disabled={busy}
                       aria-label={`Status follow-up ${lead.orderNumber}: ${followUpLabels[lead.followUpStatus]}. Ubah status`}
-                      className={`inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition-colors hover:brightness-95 disabled:opacity-60 ${tone.label}`}
+                      className={`${LEAD_STATUS_TRIGGER_CLASS} ${tone.label}`}
                       data-lead-status-trigger
                     >
                       {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <span className={`size-2 shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />}
@@ -843,10 +857,11 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
                         <DropdownMenuLabel>Status follow-up</DropdownMenuLabel>
                         <DropdownMenuRadioGroup
                           value={lead.followUpStatus}
-                          onValueChange={(value) => { if (isLeadFollowUpStatus(value)) void setFollowUp(lead, value); }}
+                          onValueChange={(value) => { if (isLeadFollowUpStatus(value)) void setFollowUp(lead, value, `${lead.orderNumber}: ${followUpLabels[value]}.`); }}
                         >
                           {LEAD_FOLLOW_UP_STATUSES.map((value) => (
-                            <DropdownMenuRadioItem key={value} value={value} className="gap-2">
+                            // A pick closes the menu, as a select does: Base UI radio items stay open by default.
+                            <DropdownMenuRadioItem key={value} value={value} closeOnClick className="gap-2">
                               <span className={`size-2 shrink-0 rounded-full ${LEAD_FOLLOW_UP_TONE[value].dot}`} aria-hidden="true" />
                               {followUpLabels[value]}
                             </DropdownMenuRadioItem>
@@ -855,8 +870,15 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
                       </DropdownMenuGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <p className="mt-1 truncate text-xs text-slate-500" title={lead.followedUpAt ? `Dicatat ${formatDate(lead.followedUpAt)}${lead.followedUpBy ? ` oleh ${lead.followedUpBy}` : ""}` : `Masuk ${formatDate(lead.createdAt)}`}>
-                    {lead.followedUpAt ? `Dicatat ${leadAge(lead.followedUpAt) ?? formatDate(lead.followedUpAt)}` : `Masuk ${age ?? formatDate(lead.createdAt)}`}
+                  <p className="mt-1 text-xs text-slate-500">
+                    {lead.followedUpAt ? (
+                      <time dateTime={lead.followedUpAt} title={formatDate(lead.followedUpAt)}>
+                        Dicatat {leadAge(lead.followedUpAt) ?? formatDate(lead.followedUpAt)}
+                        {lead.followedUpBy ? ` oleh ${lead.followedUpBy}` : ""}
+                      </time>
+                    ) : (
+                      <time dateTime={lead.createdAt} title={formatDate(lead.createdAt)}>Masuk {age ?? formatDate(lead.createdAt)}</time>
+                    )}
                     {daysLeft !== null && (
                       <span className="text-rose-700"> · {daysLeft === 0 ? "dihapus hari ini" : `dihapus ${daysLeft} hari lagi`}</span>
                     )}
@@ -873,6 +895,7 @@ export function AbandonedOrders({ initialQuery = "" }: { initialQuery?: string }
                   >
                     <MessageCircle aria-hidden="true" />
                     WhatsApp
+                    {lead.followUpStatus === "new" && <span className="sr-only">, lalu tandai sudah dihubungi</span>}
                   </Button>
                   <Button type="button" className="flex-1 lg:flex-none" onClick={() => setSelectedLead(lead)}>
                     <UserRoundPlus aria-hidden="true" />

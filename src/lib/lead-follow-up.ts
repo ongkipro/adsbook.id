@@ -22,6 +22,15 @@ export const LEAD_FOLLOW_UP_TONE: Record<LeadFollowUpStatus, { label: string; do
   not_interested: { label: "border-slate-200 bg-slate-100 text-slate-700", dot: "bg-slate-400" },
 };
 
+/**
+ * The status label's own shape, owned here like FILTER_TRIGGER_CLASS owns the
+ * filter triggers' (DESIGN-SYSTEM §7.1): callers add only a tone from
+ * LEAD_FOLLOW_UP_TONE. It carries the 2px accent focus ring every admin
+ * control draws (a data-slot element gets no fallback outline).
+ */
+export const LEAD_STATUS_TRIGGER_CLASS =
+  "inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition-colors outline-none hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
+
 export function isLeadFollowUpStatus(value: unknown): value is LeadFollowUpStatus {
   return typeof value === "string" && (LEAD_FOLLOW_UP_STATUSES as readonly string[]).includes(value);
 }
@@ -46,13 +55,14 @@ export function leadAge(createdAt: string | null | undefined, now = new Date()):
 }
 
 /**
- * Days left before the 14-day purge deletes the lead, shown only in its last
- * three days so an operator sees which leads are about to disappear. Null
- * earlier, and for an unreadable time.
+ * Whole days left before the 14-day purge deletes the lead, shown only when
+ * fewer than three remain (2, 1, then 0 = today) so an operator sees which
+ * leads are about to disappear. Null earlier, and for an unreadable time.
  */
 export function leadDaysLeft(createdAt: string | null | undefined, now = new Date()): number | null {
   const at = createdAt ? new Date(createdAt).getTime() : NaN;
   if (!Number.isFinite(at)) return null;
-  const left = Math.ceil((at + LEAD_RETENTION_DAYS * DAY_MS - now.getTime()) / DAY_MS);
-  return left <= 3 ? Math.max(0, left) : null;
+  // Whole days still ahead: under a day reads as 0 ("today"), never "1 day" for a few minutes.
+  const left = Math.floor((at + LEAD_RETENTION_DAYS * DAY_MS - now.getTime()) / DAY_MS);
+  return left < 3 ? Math.max(0, left) : null;
 }

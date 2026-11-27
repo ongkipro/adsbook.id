@@ -36,8 +36,10 @@ test("a lead's age reads in the unit an operator works by", () => {
 test("the purge countdown shows only in a lead's last three days, and matches the purge", () => {
   assert.equal(LEAD_RETENTION_DAYS, ABANDONED_RETENTION_DAYS, "the countdown uses the purge's own number");
   assert.equal(leadDaysLeft(ago(2 * D), now), null, "12 days left: not shown");
-  assert.equal(leadDaysLeft(ago(11 * D + H), now), 3);
-  assert.equal(leadDaysLeft(ago(13 * D + H), now), 1);
+  assert.equal(leadDaysLeft(ago(11 * D), now), null, "exactly 3 days left: not shown yet");
+  assert.equal(leadDaysLeft(ago(11 * D + H), now), 2, "2 days and 23 hours: 2 whole days");
+  assert.equal(leadDaysLeft(ago(12 * D + H), now), 1);
+  assert.equal(leadDaysLeft(ago(14 * D - 5 * 60_000), now), 0, "minutes left read as today, not one day");
   assert.equal(leadDaysLeft(ago(14 * D + H), now), 0, "past due: removed at the next hourly purge");
   assert.equal(leadDaysLeft(null, now), null);
 });
