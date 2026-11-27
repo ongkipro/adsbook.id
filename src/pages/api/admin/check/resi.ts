@@ -7,6 +7,7 @@ import {
 } from '../../../../lib/mengantar-client';
 import { getProviderConfig } from '../../../../lib/provider-config';
 import { tenantDatabase } from '../../../../lib/tenant-database.ts';
+import { mengantarStatusView, shippingStatusLabel } from '../../../../lib/shipping-status.ts';
 
 export const prerender = false;
 
@@ -19,23 +20,6 @@ type LocalOrderRow = {
   payment_method: string | null;
   total_amount: number | null;
   created_at: string | null;
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Menunggu proses',
-  confirmed: 'Siap dikirim',
-  processing: 'Sedang diproses kurir',
-  dispatched: 'Menunggu pickup',
-  pickup_scheduled: 'Pickup terjadwal',
-  picked_up: 'Sudah di-pickup',
-  shipped: 'Dalam pengiriman',
-  in_transit: 'Dalam pengiriman',
-  out_for_delivery: 'Sedang diantar kurir',
-  delivered: 'Terkirim',
-  returned: 'Retur (RTS)',
-  rts: 'Retur (RTS)',
-  cancelled: 'Dibatalkan',
-  failed: 'Gagal kirim',
 };
 
 function normalizeHistory(history: readonly MengantarTrackingHistory[] | undefined) {
@@ -89,6 +73,8 @@ export const GET: APIRoute = async ({ url, locals }) => {
     courier: string | null;
     shippingStatus: string;
     statusLabel: string;
+    /** Mengantar's own category ("PENDING PICKUP"), shown beside the label; null for the legacy flag form. */
+    statusCategory: string | null;
     latestEvent: string | null;
     history: ReturnType<typeof normalizeHistory>;
   } | null = null;
@@ -106,7 +92,9 @@ export const GET: APIRoute = async ({ url, locals }) => {
         providerOrderId: rawTracking.ORDER_ID ? String(rawTracking.ORDER_ID) : null,
         courier: localOrder?.courier_code || (rawTracking.courier ? String(rawTracking.courier) : null),
         shippingStatus: status,
-        statusLabel: STATUS_LABELS[status] || status,
+        // Mengantar's own category when it gave one ("Menunggu pickup"), else the order status it maps to.
+        statusLabel: mengantarStatusView(mapped.category)?.label ?? shippingStatusLabel(status),
+        statusCategory: mapped.category,
         latestEvent: mapped.description || history[0]?.desc || null,
         history,
       };
@@ -140,7 +128,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
           courierCode: localOrder.courier_code || '',
           cnoteNo: localOrder.cnote_no || '',
           shippingStatus: localOrder.shipping_status || 'pending',
-          shippingStatusLabel: STATUS_LABELS[localOrder.shipping_status || 'pending'] || localOrder.shipping_status || 'Menunggu',
+          shippingStatusLabel: shippingStatusLabel(localOrder.shipping_status || 'pending'),
           paymentMethod: localOrder.payment_method || '',
           totalAmount: Number(localOrder.total_amount || 0),
           createdAt: localOrder.created_at || '',

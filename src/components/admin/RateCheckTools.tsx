@@ -525,6 +525,7 @@ type ResiCheckResult = {
     courier: string | null;
     shippingStatus: string;
     statusLabel: string;
+    statusCategory?: string | null;
     latestEvent: string | null;
     history: ResiHistoryEvent[];
   } | null;
@@ -685,6 +686,9 @@ function ResiCheck({ initialQuery = "" }: { initialQuery?: string }) {
                       <Badge variant="outline" className={TONE_CLASS[tone]}>
                         {activeStatusLabel}
                       </Badge>
+                      {result.tracking?.statusCategory && result.tracking.statusCategory !== activeStatusLabel && (
+                        <span className="font-mono text-xs text-slate-500" title="Status Mengantar">{result.tracking.statusCategory}</span>
+                      )}
                       {courierCode && (
                         <Badge variant="secondary">{courierDisplayName(courierCode)}</Badge>
                       )}

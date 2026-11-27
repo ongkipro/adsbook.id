@@ -96,13 +96,15 @@ export async function syncSingleMengantarOrder(
     const tracking = await client.getOrderByTrackingId(row.cnote_no);
     const evidence = mapMengantarStatusEvidence(tracking);
     providerStatus = evidence.description;
+    // The category too (when GET /order gives one), so a synced order reads the same as one a webhook updated.
     const observation = await db
       .prepare(
         `UPDATE orders
-         SET provider_status_text = ?, provider_status_at = ?, provider_synced_at = ?
+         SET provider_status_text = ?, provider_status_at = ?, provider_synced_at = ?,
+             provider_status_category = COALESCE(?, provider_status_category)
          WHERE id = ?`,
       )
-      .bind(evidence.description, evidence.occurredAt, syncedAt, row.id)
+      .bind(evidence.description, evidence.occurredAt, syncedAt, evidence.category, row.id)
       .run();
     if (!observation.meta?.changes) {
       throw new Error("Observasi status provider gagal disimpan.");

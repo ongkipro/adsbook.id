@@ -265,9 +265,9 @@ const quickStatusFilters = [
   { value: "all", label: "Semua" },
   { value: "pending", label: "Menunggu" },
   { value: "processing", label: "Diproses" },
-  { value: "shipped", label: "Dikirim" },
-  { value: "delivered", label: "Selesai" },
-  { value: "returned", label: "RTS" },
+  { value: "shipped", label: "Dalam pengiriman" },
+  { value: "delivered", label: "Terkirim" },
+  { value: "returned", label: "Retur (RTS)" },
   { value: "cancelled", label: "Batal" },
 ] as const;
 

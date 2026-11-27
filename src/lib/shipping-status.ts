@@ -8,9 +8,12 @@
 export const SHIPPING_STATUS_LABELS: Record<string, string> = {
   pending: "Menunggu konfirmasi",
   processing: "Diproses Mengantar",
-  shipped: "Dikirim",
-  delivered: "Selesai",
-  returned: "RTS",
+  // Mengantar's words (2026-11-28): ON DELIVERY, DELIVERED, RTS. The resi
+  // check page already said these; the list, the order page and the shipping
+  // queue said "Dikirim", "Selesai" and a bare "RTS".
+  shipped: "Dalam pengiriman",
+  delivered: "Terkirim",
+  returned: "Retur (RTS)",
   cancelled: "Batal",
 };
 
@@ -24,8 +27,8 @@ const JOURNEY = [
   { key: "created", label: "Dibuat" },
   { key: "confirmed", label: "Dikonfirmasi" },
   { key: "processing", label: "Diproses" },
-  { key: "shipped", label: "Dikirim" },
-  { key: "delivered", label: "Selesai" },
+  { key: "shipped", label: "Dalam pengiriman" },
+  { key: "delivered", label: "Terkirim" },
 ] as const;
 
 /** How far each shipping status has come along JOURNEY (the index of its last finished step). */
@@ -33,7 +36,7 @@ const REACHED: Record<string, number> = { pending: 0, processing: 1, shipped: 2,
 
 /**
  * The order's physical journey as one row of steps, for the order page:
- * Dibuat → Dikonfirmasi → Diproses → Dikirim → Selesai. A returned or
+ * Dibuat → Dikonfirmasi → Diproses → Dalam pengiriman → Terkirim. A returned or
  * cancelled order ends the row at the step it reached, with the outcome as
  * its last, "stopped" step. A digital order has no shipping journey (null).
  *
@@ -89,4 +92,44 @@ export function storeRelativeHref(path: string | null | undefined): string | nul
   if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
   if (/[\u0000-\u001f\s]/.test(value)) return null;
   return value;
+}
+
+export type MengantarStatusTone = "idle" | "moving" | "done" | "returned" | "attention";
+export type MengantarStatusView = { category: string; label: string; tone: MengantarStatusTone };
+
+/**
+ * Mengantar's own status categories (Public API docs, webhook and Get orders,
+ * read 2026-11-28) in the words a seller reads. The key is the category as
+ * Mengantar sends it, upper-cased with single spaces; the courier values are
+ * "the most frequent", not a closed list, so `mengantarStatusView` shows an
+ * unknown one as received. "attention" marks what needs the seller to look:
+ * a failed delivery or pickup, a courier cancel, a Mengantar error.
+ */
+export const MENGANTAR_STATUS_LABELS: Record<string, { label: string; tone: MengantarStatusTone }> = {
+  "ACTIVE/WAITING NEXT PROCESS": { label: "Menunggu update kurir", tone: "idle" },
+  ACTIVE: { label: "Menunggu update kurir", tone: "idle" },
+  "PENDING PICKUP": { label: "Menunggu pickup", tone: "idle" },
+  "PICKED UP": { label: "Sudah dipickup", tone: "moving" },
+  "ON DELIVERY": { label: "Dalam pengiriman", tone: "moving" },
+  DELIVERED: { label: "Terkirim", tone: "done" },
+  UNDELIVERED: { label: "Gagal kirim", tone: "attention" },
+  "PICKUP FAILED": { label: "Gagal pickup", tone: "attention" },
+  RTS: { label: "Retur (RTS)", tone: "returned" },
+  CANCELED: { label: "Dibatalkan kurir", tone: "attention" },
+  CANCELLED: { label: "Dibatalkan kurir", tone: "attention" },
+  ERROR: { label: "Error Mengantar", tone: "attention" },
+};
+
+/** Mengantar's category, normalised the way the webhook mapper compares it: trimmed, single-spaced, upper case. */
+export function normalizeMengantarCategory(raw: string | null | undefined): string | null {
+  const value = String(raw ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+  return value || null;
+}
+
+/** How a stored Mengantar category reads on the shipping page; null when the order has none yet. */
+export function mengantarStatusView(raw: string | null | undefined): MengantarStatusView | null {
+  const category = normalizeMengantarCategory(raw);
+  if (!category) return null;
+  const known = MENGANTAR_STATUS_LABELS[category];
+  return known ? { category, ...known } : { category, label: category, tone: "idle" };
 }

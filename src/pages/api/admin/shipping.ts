@@ -53,6 +53,8 @@ type ShippingOrderRow = {
   providerStatusText: string | null;
   providerStatusAt: string | null;
   providerSyncedAt: string | null;
+  /** Mengantar's own status category (webhook or hourly sync), e.g. "ON DELIVERY". */
+  providerStatusCategory: string | null;
   destinationAreaId: string | null;
   pickupAddressId: string | null;
   receiverDeliveryRate: number | null;
@@ -138,6 +140,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
           o.provider_status_text AS providerStatusText,
           o.provider_status_at AS providerStatusAt,
           o.provider_synced_at AS providerSyncedAt,
+          o.provider_status_category AS providerStatusCategory,
           o.destination_area_id AS destinationAreaId,
           o.receiver_rts_score AS receiverDeliveryRate,
           o.rts_risk_label AS receiverRiskLabel,
