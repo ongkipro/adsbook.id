@@ -78,7 +78,9 @@ test("platform console: every menu at 390 and 1366 px, team add, support refused
       await page.locator('[data-sidebar="content"] a[href="/platform/activity"]').click();
       await page.waitForURL(`${PLATFORM}/platform/activity`);
       expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--sidebar-restore-pad").trim())).toBe("");
-      await expect(page.locator('[data-sidebar="content"]')).toHaveCSS("padding-bottom", "80px");
+      // The footer is in flow (REVIEW-2026-11-28 F-4): the menu needs no room under a floating card.
+      await expect(page.locator('[data-sidebar="content"]')).toHaveCSS("padding-bottom", "12px");
+      await expect(page.locator('[data-sidebar="footer"]')).not.toHaveCSS("position", "absolute");
     }
     // The current page is marked in the navigation (sidebar on desktop, bottom bar on a phone).
     await page.goto(`${PLATFORM}/platform/billing`);

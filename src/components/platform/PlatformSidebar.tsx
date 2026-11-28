@@ -40,7 +40,7 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="px-2">
+      <SidebarContent className="px-2 pb-3">
         {groups.map((group) => (
           <SidebarGroup key={group.label} className="py-1">
             <SidebarGroupLabel className="mb-0.5 h-6 px-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">{group.label}</SidebarGroupLabel>
