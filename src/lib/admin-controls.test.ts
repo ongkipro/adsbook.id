@@ -168,3 +168,12 @@ test("admin React islands use shadcn Table, never raw HTML <table>", () => {
   const offenders = islands.filter((file) => /<table\b/.test(readFileSync(file, "utf8")));
   assert.deepEqual(offenders, []);
 });
+
+test("a single choice is the RadioGroup primitive, never a hand-rolled role=\"radio\" button", () => {
+  // Thirteen hand-rolled radio groups set aria-checked but had no arrow keys
+  // and a tab stop per option (REVIEW-2026-11-28 follow-up). RadioGroup and
+  // RadioGroupOption (src/components/ui/radio-group.tsx) bring both.
+  const files = [...globSync("src/components/admin/*.tsx"), ...globSync("src/components/platform/*.tsx")];
+  const offenders = files.filter((file) => /role=["'](?:radio|radiogroup)["']/.test(readFileSync(file, "utf8")));
+  assert.deepEqual(offenders, []);
+});

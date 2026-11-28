@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Megaphone } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Combobox,
@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { buildUtmLink, normalizeUtmTag, UTM_MEDIUMS, UTM_SOURCES } from "@/lib/utm-link";
 import { FilterSelect } from "./filter-bar";
+import { RadioGroup, RadioGroupOption } from "@/components/ui/radio-group";
 
 export type UtmLinkPage = { url: string; label: string; kind: "landing" | "product" };
 
@@ -98,21 +99,26 @@ export function UtmLinkBuilder({ pages }: { pages: UtmLinkPage[] }) {
 
       <div className="flex min-w-0 flex-col gap-1.5">
         <span id="utm-source-label" className={labelClass}>Sumber</span>
-        <div role="radiogroup" aria-labelledby="utm-source-label" className="flex flex-wrap gap-2">
+        <RadioGroup
+          aria-labelledby="utm-source-label"
+          value={source}
+          onValueChange={(value) => {
+            const item = UTM_SOURCES.find((candidate) => candidate.value === value);
+            if (item) { setSource(item.value); setMedium(item.medium); }
+          }}
+          className="flex w-auto flex-wrap gap-2"
+        >
           {UTM_SOURCES.map((item) => (
-            <Button
+            <RadioGroupOption
               key={item.value}
-              type="button"
-              size="sm"
-              variant={source === item.value ? "default" : "outline"}
-              role="radio"
-              aria-checked={source === item.value}
-              onClick={() => { setSource(item.value); setMedium(item.medium); }}
+              value={item.value}
+              variant="bare"
+              className={buttonVariants({ variant: source === item.value ? "default" : "outline", size: "sm" })}
             >
               {item.label}
-            </Button>
+            </RadioGroupOption>
           ))}
-        </div>
+        </RadioGroup>
       </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">

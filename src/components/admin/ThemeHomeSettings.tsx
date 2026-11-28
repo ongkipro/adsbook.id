@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { type CatalogSort, type HomeSectionId, type StoreThemeSettings } from "../../lib/storefront-theme";
+import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from "@/components/ui/radio-group";
 
 type ThemeData = { active: string; accent: string; settings: StoreThemeSettings };
 type ProductOption = { id: string; title: string; image: string | null; active: boolean };
@@ -210,21 +211,25 @@ export function ThemeHomeSettings() {
             <CardDescription>Tombol, tautan, dan pilihan di toko. Warna yang terlalu terang untuk tulisan putih ditolak supaya tombol tetap terbaca.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Pilihan warna">
+            {/* A typed custom colour matches no swatch, so none is checked (value null). */}
+            <RadioGroup
+              aria-label="Pilihan warna"
+              value={SWATCHES.find((swatch) => swatch === accent.toUpperCase()) ?? null}
+              onValueChange={(value) => setAccent(String(value))}
+              className="flex w-auto flex-wrap gap-2"
+            >
               {SWATCHES.map((swatch) => (
-                <button
+                <RadioGroupOption
                   key={swatch}
-                  type="button"
-                  role="radio"
-                  aria-checked={accent.toUpperCase() === swatch}
+                  value={swatch}
+                  variant="bare"
                   aria-label={swatch}
-                  onClick={() => setAccent(swatch)}
-                  className="grid size-10 place-items-center rounded-lg border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-checked:border-foreground aria-checked:ring-2 aria-checked:ring-foreground/15"
+                  className="grid size-10 place-items-center rounded-lg border data-checked:border-foreground data-checked:ring-2 data-checked:ring-foreground/15"
                 >
                   <span className="size-6 rounded-md" style={{ background: swatch }} />
-                </button>
+                </RadioGroupOption>
               ))}
-            </div>
+            </RadioGroup>
             <label className="flex w-40 flex-col gap-1.5">
               <span className="text-sm font-medium">Kode warna</span>
               <Input value={accent} maxLength={7} spellCheck={false} className="font-mono" onChange={(event) => setAccent(event.target.value.trim())} />
@@ -300,20 +305,13 @@ function SectionFields({
     return (
       <>
         <Field label="Isi hero" hint={source.hint}>
-          <div role="radiogroup" aria-label="Isi hero" className="inline-flex w-full rounded-lg bg-muted p-[3px] sm:w-auto">
+          <RadioGroup aria-label="Isi hero" value={s.hero.source} onValueChange={(value) => set("hero", { source: value as typeof s.hero.source })} className={`${RADIO_SEGMENT_TRACK} sm:w-auto`}>
             {HERO_SOURCES.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={s.hero.source === option.value}
-                onClick={() => set("hero", { source: option.value })}
-                className="flex-1 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm"
-              >
+              <RadioGroupOption key={option.value} value={option.value} variant="segment">
                 {option.label}
-              </button>
+              </RadioGroupOption>
             ))}
-          </div>
+          </RadioGroup>
         </Field>
         {s.hero.source === "products" && <ProductPicker label="Produk hero" max={5} value={s.hero.productIds} products={products} onChange={(productIds) => set("hero", { productIds })} />}
         {s.hero.source === "banner" && <BannerFields banner={s.hero.banner} onChange={(patch) => set("hero", { banner: { ...s.hero.banner, ...patch } })} />}

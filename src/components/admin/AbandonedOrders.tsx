@@ -66,6 +66,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { DistrictCombobox, type DistrictOption } from "@/components/admin/DistrictCombobox";
 import { AdminRequestError, isSubscriptionError, SubscriptionLink } from "@/components/admin/subscription-error";
+import { RadioGroup, RadioGroupOption } from "@/components/ui/radio-group";
 
 type FollowUpStatus = "new" | "contacted" | "qualified" | "not_interested";
 type LeadKind = "all" | "physical" | "digital";
@@ -580,19 +581,24 @@ function ConversionDialog({
                 Belum ada metode non-COD yang aktif. <a className="font-medium text-foreground underline underline-offset-4" href="/admin/payments#rekening-bank-section">Tambahkan rekening toko</a> atau aktifkan AutoLaris.
               </div>
             ) : (
-              <div id="lead-payment" tabIndex={-1} className="grid grid-cols-2 gap-2 outline-none" role="radiogroup" aria-label="Metode pembayaran" aria-invalid={fieldError?.id === "lead-payment"} aria-describedby={fieldError?.id === "lead-payment" ? "lead-payment-error" : undefined}>
-                {paymentMethods.map((method) => {
-                  const selected = method.code === paymentCode;
-                  return (
-                    <Button key={method.code} type="button" variant={selected ? "secondary" : "outline"} role="radio" aria-checked={selected} className="h-auto items-start justify-start whitespace-normal p-3 text-left" onClick={() => setPaymentCode(method.code)}>
-                      <span>
-                        <span className="block font-semibold">{method.name}</span>
-                        {method.fee_description && <span className="mt-0.5 block text-xs text-muted-foreground">{method.fee_description}</span>}
-                      </span>
-                    </Button>
-                  );
-                })}
-              </div>
+              <RadioGroup
+                id="lead-payment"
+                aria-label="Metode pembayaran"
+                aria-invalid={fieldError?.id === "lead-payment"}
+                aria-describedby={fieldError?.id === "lead-payment" ? "lead-payment-error" : undefined}
+                value={paymentCode || null}
+                onValueChange={(value) => setPaymentCode(String(value))}
+                className="grid grid-cols-2 gap-2"
+              >
+                {paymentMethods.map((method) => (
+                  <RadioGroupOption key={method.code} value={method.code} variant="card">
+                    <span>
+                      <span className="block font-semibold">{method.name}</span>
+                      {method.fee_description && <span className="mt-0.5 block text-xs text-muted-foreground">{method.fee_description}</span>}
+                    </span>
+                  </RadioGroupOption>
+                ))}
+              </RadioGroup>
             )}
             {fieldError?.id === "lead-payment" && <p id="lead-payment-error" className="text-xs text-destructive">{fieldError.message}</p>}
             {selectedVariant && (
@@ -644,17 +650,21 @@ function ConversionDialog({
             <div className="space-y-2">
               <p className="text-sm font-medium">Kurir & ongkir</p>
               {ratesLoading ? <Skeleton className="h-14 w-full" /> : rates.length > 0 ? (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Pilihan kurir dan ongkir">
-                  {rates.map((rate) => {
-                    const selected = form.courierServiceId === String(rate.courier_service_id);
-                    return <Button key={rate.courier_service_id} type="button" variant={selected ? "secondary" : "outline"} role="radio" aria-checked={selected} className="h-auto items-start justify-start whitespace-normal p-3 text-left" onClick={() => setForm({ ...form, courierServiceId: String(rate.courier_service_id) })}>
+                <RadioGroup
+                  aria-label="Pilihan kurir dan ongkir"
+                  value={form.courierServiceId || null}
+                  onValueChange={(value) => setForm({ ...form, courierServiceId: String(value) })}
+                  className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                >
+                  {rates.map((rate) => (
+                    <RadioGroupOption key={rate.courier_service_id} value={String(rate.courier_service_id)} variant="card">
                       <span>
                         <span className="block font-semibold">{courierServiceLabel(rate.courier_code, rate.courier_service)}</span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">{formatIdr(rate.shipping_cost)}{etaLabel(rate.estimated_days ?? "") ? ` · ${etaLabel(rate.estimated_days ?? "")}` : ""}</span>
                       </span>
-                    </Button>;
-                  })}
-                </div>
+                    </RadioGroupOption>
+                  ))}
+                </RadioGroup>
               ) : <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">Pilih produk dan kecamatan untuk melihat kurir.</div>}
             </div>
           </section>
