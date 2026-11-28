@@ -431,6 +431,7 @@ test("Perlu tindakan counts what the linked lists show, under the Mengantar push
     push_problem: 2,
     awaiting_payment: 1,
     transfer_unconfirmed: 0,
+    digital_unpaid: 0,
     leads_new: 1,
     needs_waybill: 1,
     needs_pickup: 1,
@@ -616,4 +617,46 @@ test("Action needed marks what has waited more than a day", async () => {
   assert.deepEqual([item("awaiting_payment")?.count, item("awaiting_payment")?.stale], [1, 1]);
   assert.deepEqual([item("transfer_unconfirmed")?.count, item("transfer_unconfirmed")?.stale], [2, 1]);
   assert.deepEqual([item("leads_new")?.count, item("leads_new")?.stale], [1, 1]);
+});
+
+test("Perlu tindakan splits by kind on a hybrid store: digital orders are never confirmed or pushed, and their unpaid count opens Produk Digital", async () => {
+  const { readOrderAttention } = await import("./order-attention.ts");
+  const { GET: listOrders } = await import("../pages/api/admin/orders/index.ts");
+  const sqlite = migratedSqlite();
+  seedLeadStore(sqlite);
+  const insert = sqlite.prepare(`INSERT INTO orders (order_number, store_id, customer_name, customer_phone, address,
+    province, city, district, total_amount, created_at, payment_method, payment_status, shipping_status, fulfillment_type)
+    VALUES (?, 1, 'Budi', '6281200000000', 'Jl', 'Jawa Barat', 'Bandung', 'Coblong', 1000, '2026-10-01T00:00:00.000Z', ?, ?, 'pending', ?)`);
+  insert.run("INV-COD", "cod", "unpaid", "physical");
+  insert.run("INV-QRIS", "qris", "pending", "physical");
+  insert.run("DIG-QRIS", "qris", "pending", "digital");
+  insert.run("DIG-TF", "manual_transfer", "pending", "digital");
+  const database = d1(sqlite);
+  const counts = async (catalogMode?: "physical" | "digital" | "hybrid") =>
+    Object.fromEntries((await readOrderAttention(database, { catalogMode })).items.map((item) => [item.key, item]));
+
+  const hybrid = await counts("hybrid");
+  assert.equal(hybrid.confirm.count, 2, "only physical orders wait for a confirmation");
+  assert.equal(hybrid.awaiting_payment.count, 1);
+  assert.equal(hybrid.transfer_unconfirmed.count, 0);
+  assert.equal(hybrid.digital_unpaid.count, 2);
+  assert.equal(hybrid.digital_unpaid.href, "/admin/orders/digital?payment_status=unpaid");
+  // Each count equals the rows its link opens.
+  const list = async (query: string) => {
+    const response = await listOrders({
+      url: new URL(`https://toko.test/api/admin/orders?${query}`),
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database } },
+      request: new Request("https://toko.test/api/admin/orders"),
+    } as unknown as Parameters<typeof listOrders>[0]);
+    return ((await response.json()) as { data: unknown[] }).data.length;
+  };
+  assert.equal(await list("fulfillment=digital&payment_status=unpaid"), hybrid.digital_unpaid.count);
+  assert.equal(await list("fulfillment=physical&payment_status=unpaid"), hybrid.awaiting_payment.count + hybrid.transfer_unconfirmed.count);
+
+  // A single-mode store has one list: no digital card, the unpaid cards count every kind.
+  const digital = await counts("digital");
+  assert.equal(digital.digital_unpaid, undefined);
+  assert.equal(digital.confirm.count, 4, "a single-mode store's one list holds every pending order, and so does its count");
+  assert.equal(await list("shipping_status=pending"), digital.confirm.count);
+  assert.deepEqual([digital.awaiting_payment.count, digital.transfer_unconfirmed.count], [2, 1]);
 });

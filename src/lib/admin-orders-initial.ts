@@ -1,4 +1,5 @@
 import { ADMIN_CUSTOM_DATE_FILTER, adminDateSelectionFromQuery } from "./admin-date-filter.ts";
+import type { OrderListKind } from "./order-list-filter.ts";
 
 /**
  * One description of the `/admin/orders` list request, shared by the
@@ -16,17 +17,20 @@ export type OrderListFilters = {
   dateSelection: ReturnType<typeof adminDateSelectionFromQuery>;
   sourceFilter: string;
   sourceSlugFilter: string;
+  /** Fixed by the page (Produk Fisik / Produk Digital), never by the query string. */
+  kind: OrderListKind;
 };
 
 /** The filters a deep link opens the list under. */
-export function initialOrderListFilters(pageQuery: URLSearchParams): OrderListFilters {
+export function initialOrderListFilters(pageQuery: URLSearchParams, kind: OrderListKind = "all"): OrderListFilters {
   return {
     search: pageQuery.get("search") || "",
     shippingFilter: pageQuery.get("status") || pageQuery.get("shipping_status") || "all",
     paymentFilter: pageQuery.get("payment_status") || "all",
     dateSelection: adminDateSelectionFromQuery(pageQuery),
-    sourceFilter: "all",
+    sourceFilter: pageQuery.get("source") || "all",
     sourceSlugFilter: pageQuery.get("source_slug") || "all",
+    kind,
   };
 }
 
@@ -46,6 +50,7 @@ export function orderListQuery(filters: OrderListFilters, page: number, withSour
   }
   if (filters.sourceFilter !== "all") query.set("source", filters.sourceFilter);
   if (filters.sourceSlugFilter !== "all") query.set("source_slug", filters.sourceSlugFilter);
+  if (filters.kind !== "all") query.set("fulfillment", filters.kind);
   if (withSourceOptions) query.set("source_options", "1");
   return query;
 }

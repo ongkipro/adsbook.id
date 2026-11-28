@@ -48,6 +48,13 @@ export const AWAITING_PAYMENT_SQL = `(payment_method <> 'cod' AND payment_status
 export const ORDER_LIST_SHIPPING_FILTERS = ["all", ...ADMIN_SHIPPING_STATUSES] as const;
 export const ORDER_LIST_PAYMENT_FILTERS = ["all", "unpaid", "paid", "settled", "success", "failed", "refunded", "expired"] as const;
 export const LEAD_FOLLOW_UP_FILTERS = ["all", ...LEAD_FOLLOW_UP_STATUSES] as const;
+/**
+ * Which products an order list holds. A hybrid store splits Pesanan into Produk
+ * Fisik and Produk Digital, so each kind keeps its own statuses and actions;
+ * `all` is the single-mode list (and an order from before a mode switch).
+ */
+export const ORDER_LIST_KINDS = ["all", "physical", "digital"] as const;
+export type OrderListKind = (typeof ORDER_LIST_KINDS)[number];
 
 export type ListFilterError = { ok: false; status: number; error: string; code?: string };
 
@@ -77,7 +84,7 @@ function periodPredicate(searchParams: URLSearchParams, column: string):
  * a single clause, so the two indices differ.
  */
 export function orderListFilter(searchParams: URLSearchParams):
-  | { ok: true; parts: string[]; params: unknown[]; statusPart: number; statusParam: number }
+  | { ok: true; parts: string[]; params: unknown[]; statusPart: number; statusParam: number; kindPart: number }
   | ListFilterError {
   const search = String(searchParams.get("search") || "").trim().slice(0, 120);
   const shippingStatus = String(searchParams.get("shipping_status") || "all").trim().toLowerCase();
@@ -89,11 +96,19 @@ export function orderListFilter(searchParams: URLSearchParams):
   if (!includes(ORDER_LIST_PAYMENT_FILTERS, paymentStatus)) {
     return { ok: false, status: 400, error: "Filter status pembayaran tidak valid." };
   }
+  const kind = String(searchParams.get("fulfillment") || "all").trim().toLowerCase();
+  if (!includes(ORDER_LIST_KINDS, kind)) {
+    return { ok: false, status: 400, error: "Jenis pesanan tidak valid." };
+  }
   const period = periodPredicate(searchParams, "created_at");
   if (!period.ok) return period;
 
   const parts: string[] = ["shipping_status <> 'abandoned'"];
   const params: unknown[] = [];
+  // A literal from the allowlist above, so it binds no parameter and the
+  // kind counts can drop it by index alone.
+  const kindPart = kind !== "all" ? parts.length : -1;
+  if (kind !== "all") parts.push(`fulfillment_type = '${kind}'`);
   if (search) {
     const term = `%${search}%`;
     parts.push("(customer_name LIKE ? OR customer_phone LIKE ? OR order_number LIKE ? OR cnote_no LIKE ?)");
@@ -134,7 +149,7 @@ export function orderListFilter(searchParams: URLSearchParams):
     // TikTok filter option of its own yet.
     parts.push("(ad_click_ids IS NULL OR ad_click_ids = '' OR ad_click_ids = '{}' OR (ad_click_ids NOT LIKE '%fbclid%' AND ad_click_ids NOT LIKE '%gclid%' AND ad_click_ids NOT LIKE '%ttclid%' AND ad_click_ids NOT LIKE '%gbraid%' AND ad_click_ids NOT LIKE '%wbraid%'))");
   }
-  return { ok: true, parts, params, statusPart, statusParam };
+  return { ok: true, parts, params, statusPart, statusParam, kindPart };
 }
 
 /**

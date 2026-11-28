@@ -1,9 +1,5 @@
 ---
-import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { OrdersTable, mapOrder, type OrderItem } from '../../../components/admin/OrdersTable';
-import AdminPageHeader from '../../../components/admin/AdminPageHeader.astro';
-import { initialOrderListFilters, orderListQuery } from '../../../lib/admin-orders-initial';
-import { GET as listOrders, ORDER_LIST_PREFETCH_HEADER } from '../../api/admin/orders/index';
+import OrdersPage from '../../../components/admin/OrdersPage.astro';
 
 export const prerender = false;
 
@@ -15,38 +11,14 @@ if (legacyStatus === 'abandoned') {
   return Astro.redirect(`${target.pathname}${target.search}`, 302);
 }
 
-let initialOrders: OrderItem[] | undefined;
-// The status chips' counts come from the same answer, so the chips render with
-// their numbers instead of widening when a second request brings them.
-let initialStatusCounts: Record<string, number> | undefined;
-try {
-  // The first rows are the list API's own answer to the request the island
-  // makes from this link, so the two cannot disagree on a status, a date
-  // range or a buyer link. A failure leaves the island to fetch them.
-  const url = new URL(`/api/admin/orders?${orderListQuery(initialOrderListFilters(Astro.url.searchParams), 1, false)}`, Astro.url);
-  const request = new Request(url, { headers: { [ORDER_LIST_PREFETCH_HEADER]: '1' } });
-  const response = await listOrders({ url, request, locals: Astro.locals } as Parameters<typeof listOrders>[0]);
-  const payload = (await response.json()) as { success?: boolean; data?: Parameters<typeof mapOrder>[0][]; status_counts?: Record<string, number> };
-  if (response.ok && payload.success && Array.isArray(payload.data)) {
-    initialOrders = payload.data.map(mapOrder);
-    initialStatusCounts = payload.status_counts;
-  }
-} catch (error) {
-  console.error('admin-orders-initial-load', error);
-}
+// A hybrid store lists its physical orders here and its digital ones under
+// /admin/orders/digital; a single-mode store lists every order here.
+const mode = Astro.locals.tenant?.catalogMode ?? 'hybrid';
+const page = mode === 'hybrid'
+  ? { kind: 'physical', view: 'physical', title: 'Pesanan produk fisik', description: 'Validasi pembayaran, alamat, risiko RTS, kurir, dan gudang. Konfirmasi order yang siap agar masuk ke antrean Pengiriman.' }
+  : mode === 'digital'
+    ? { kind: 'all', view: 'digital', title: 'Pesanan', description: 'Pesanan produk digital: akses terbuka otomatis saat pembayaran lunas. Pantau pembayaran, akses pembeli, dan follow up lewat WhatsApp.' }
+    : { kind: 'all', view: 'physical', title: 'Pesanan', description: 'Validasi pembayaran, alamat, risiko RTS, kurir, dan gudang. Konfirmasi order yang siap agar masuk ke antrean Pengiriman.' };
 ---
 
-<AdminLayout title="Pesanan" activeMenu="orders">
-  <div class="space-y-5">
-    <AdminPageHeader
-      title="Pesanan"
-      description="Validasi pembayaran, alamat, risiko RTS, kurir, dan gudang. Konfirmasi order yang siap agar masuk ke antrean Pengiriman."
-    >
-      <div slot="actions" class="grid grid-cols-2 gap-2 sm:flex">
-        <a href="/admin/check" class="btn-secondary">Cek risiko</a>
-        <a href="/admin/shipping" class="btn-primary">Pengiriman</a>
-      </div>
-    </AdminPageHeader>
-    <OrdersTable initialOrders={initialOrders} initialStatusCounts={initialStatusCounts} initialQuery={Astro.url.search} client:load />
-  </div>
-</AdminLayout>
+<OrdersPage {...(page as { kind: 'all' | 'physical'; view: 'physical' | 'digital'; title: string; description: string })} />

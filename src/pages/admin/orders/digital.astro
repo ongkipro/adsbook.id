@@ -1,0 +1,19 @@
+---
+import OrdersPage from '../../../components/admin/OrdersPage.astro';
+
+export const prerender = false;
+
+// A digital-only store has one list, at /admin/orders. Every other store keeps
+// this page answering (a physical store may hold digital orders from before a
+// mode switch), as the digital menu hides pages rather than removing them.
+if (Astro.locals.tenant?.catalogMode === 'digital') {
+  return Astro.redirect(`/admin/orders${Astro.url.search}`, 302);
+}
+---
+
+<OrdersPage
+  kind="digital"
+  view="digital"
+  title="Pesanan produk digital"
+  description="Akses terbuka otomatis saat pembayaran lunas, tanpa alamat dan kurir. Pantau pembayaran, akses pembeli, dan follow up lewat WhatsApp."
+/>
