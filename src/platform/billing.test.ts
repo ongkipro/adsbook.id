@@ -101,12 +101,12 @@ test("BILL-5 states: preview with no end, subscribed before it, 48 hours of grac
 
 test("a preview or expired store refuses buyer orders, quotes and domain claims; sign-in, admin and billing stay open", async () => {
   for (const [state, code] of [["preview", "SUBSCRIPTION_REQUIRED"], ["expired", "SUBSCRIPTION_EXPIRED"]] as const) {
-    for (const [path, method] of [["/api/submit-order", "POST"], ["/api/submit-middle-order", "POST"], ["/api/record-abandoned-order", "POST"], ["/api/v1/checkout", "POST"], ["/api/shipping-rates", "GET"], ["/api/shipping-options", "POST"], ["/api/admin/domains", "POST"], ["/api/submit-order/", "POST"]]) {
+    for (const [path, method] of [["/api/submit-order", "POST"], ["/api/submit-middle-order", "POST"], ["/api/record-abandoned-order", "POST"], ["/api/v1/checkout", "POST"], ["/api/shipping-rates", "GET"], ["/api/shipping-options", "POST"], ["/api/admin/domains", "POST"], ["/api/admin/abandoned-orders", "POST"], ["/api/submit-order/", "POST"]]) {
       const refused = subscriptionRefusal(path, method, state);
       assert.equal(refused?.status, 402, `${state} ${method} ${path}`);
       assert.equal((await refused!.json()).code, code);
     }
-    for (const [path, method] of [["/", "GET"], ["/produk/x", "GET"], ["/hello", "POST"], ["/admin", "GET"], ["/admin/billing", "GET"], ["/api/admin/billing", "POST"], ["/api/admin/domains", "GET"], ["/api/admin/domains/x.com", "DELETE"], ["/api/admin/products", "POST"]]) {
+    for (const [path, method] of [["/", "GET"], ["/produk/x", "GET"], ["/hello", "POST"], ["/admin", "GET"], ["/admin/billing", "GET"], ["/api/admin/billing", "POST"], ["/api/admin/domains", "GET"], ["/api/admin/domains/x.com", "DELETE"], ["/api/admin/products", "POST"], ["/api/admin/abandoned-orders", "PATCH"], ["/api/admin/abandoned-orders", "GET"]]) {
       assert.equal(subscriptionRefusal(path, method, state), null, `${state} ${method} ${path}`);
     }
   }

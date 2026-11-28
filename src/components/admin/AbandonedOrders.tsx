@@ -286,7 +286,8 @@ function ConversionDialog({
 }: {
   lead: Lead | null;
   products: Product[];
-  onClose: (convertedOrderNumber?: string, message?: string) => void;
+  /** `warning`: the order was made but its payment instruction was not. */
+  onClose: (convertedOrderNumber?: string, warning?: string) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -327,6 +328,9 @@ function ConversionDialog({
     setFieldError(null);
     setRates([]);
     setPaymentCode("");
+    // Read fresh per lead: a bank account added in another tab shows up, and one failed load does not stick.
+    setPaymentMethods(null);
+    setPaymentLoadError("");
     setForm({
       customerName: lead.customerName,
       customerPhone: lead.customerPhone,
@@ -449,7 +453,7 @@ function ConversionDialog({
             ? { payment_method: "manual_transfer", seller_bank_account_id: chosenPayment.seller_bank_account_id }
             : { payment_method: chosenPayment.payment_method, payment_channel: chosenPayment.channel_code },
         });
-        onClose(String(response.data?.order_number || ""), response.message ? String(response.message) : undefined);
+        onClose(String(response.data?.order_number || ""), response.data?.payment_error ? String(response.message || "") : undefined);
         return;
       }
       if (!selectedRate) return;
@@ -1036,10 +1040,18 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
           </PaginationContent>
         </Pagination>
       )}
-      <ConversionDialog lead={selectedLead} products={products} onClose={(orderNumber) => {
+      <ConversionDialog lead={selectedLead} products={products} onClose={(orderNumber, warning) => {
         setSelectedLead(null);
-        // The order page is where a digital order's payment link is sent from.
-        if (orderNumber) window.location.assign(`/admin/orders/${encodeURIComponent(orderNumber)}`);
+        if (!orderNumber) return;
+        // A converted order whose payment instruction failed stays here with the
+        // warning in view (a navigation would drop it); every other conversion
+        // opens the order page, where a digital order's payment link is sent from.
+        if (warning) {
+          setNotice(warning);
+          void load();
+          return;
+        }
+        window.location.assign(`/admin/orders/${encodeURIComponent(orderNumber)}`);
       }} />
     </div>
   );

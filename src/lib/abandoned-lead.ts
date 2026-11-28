@@ -9,7 +9,7 @@ import type { PaymentSwitchTarget } from "./payment-switch.ts";
 
 // Restated, not imported: this module also feeds the lead list island (through
 // lead-follow-up.ts), and catalog.ts / order-persistence.ts pull server code
-// into that bundle. `abandoned-lead.test.ts` pins both to their owners.
+// into that bundle. `lead-conversion-kind.test.ts` pins both to their owners.
 /** `CATALOG_MODE_FILTER_SQL` (catalog.ts): what the store sells in its mode. */
 export const LEAD_CATALOG_MODE_SQL = `COALESCE((SELECT catalog_mode FROM stores ORDER BY id LIMIT 1), 'hybrid') IN ('hybrid', p.product_type)`;
 /** `DIGITAL_ORDER_ADDRESS` (order-persistence.ts): '-', never a made-up place. */

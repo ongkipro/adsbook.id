@@ -80,9 +80,14 @@ const LIVE_ONLY_PUBLIC = new Set([
   "/api/shipping-options",
 ]);
 
-/** Admin writes that need a live subscription: claiming a custom domain. */
+/**
+ * Admin writes that need a live subscription: claiming a custom domain, and
+ * converting a lead into an order (a COD order, or a prepaid one that opens a
+ * live VA/QRIS) — a store that is not live "takes no buyer order" (§3.2).
+ * Editing a lead's follow-up (PATCH) stays open.
+ */
 function liveOnlyAdmin(path: string, method: string): boolean {
-  return method === "POST" && path === "/api/admin/domains";
+  return method === "POST" && (path === "/api/admin/domains" || path === "/api/admin/abandoned-orders");
 }
 
 export function subscriptionRefusalBody(state: BillingState) {

@@ -445,6 +445,7 @@ async function convertDigitalRequest(
         order_number: converted.orderNumber,
         shipping_status: "pending",
         fulfillment_type: "digital",
+        payment_error: Boolean(paymentError),
       },
     });
   } catch (error) {
