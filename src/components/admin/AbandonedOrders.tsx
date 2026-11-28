@@ -579,7 +579,7 @@ function ConversionDialog({
             {fieldError?.id === "lead-payment" && <p id="lead-payment-error" className="text-xs text-destructive">{fieldError.message}</p>}
             {selectedVariant && (
               <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Total</span>
+                <span className="text-muted-foreground">Harga produk<span className="sr-only">,</span> <span className="text-xs">(biaya admin mengikuti metode)</span></span>
                 <strong>{formatIdr(selectedVariant.variant.price * Math.max(1, Number(form.quantity) || 1))}</strong>
               </div>
             )}

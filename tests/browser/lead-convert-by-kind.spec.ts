@@ -95,7 +95,7 @@ test("a digital lead converts into a prepaid digital order without address or co
     const methods = dialog.getByRole("radiogroup", { name: "Metode pembayaran" });
     await expect(methods.getByRole("radio").first()).toBeVisible();
     await expect(methods.getByRole("radio", { name: /COD/ })).toHaveCount(0);
-    await expect(dialog.getByText("Rp99.000")).toBeVisible();
+    await expect(dialog.getByText("Rp99.000", { exact: true })).toBeVisible();
     // Submitting with no method points at the payment group.
     await dialog.getByRole("button", { name: "Jadikan order digital" }).click();
     await expect(dialog.getByText("Pilih metode pembayaran.")).toBeVisible();
