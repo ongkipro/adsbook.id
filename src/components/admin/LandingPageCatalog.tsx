@@ -544,7 +544,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                           onClick={() => handleCopyLink(page)}
                           title="Salin URL lengkap"
                           aria-label={`Salin URL /${page.slug}`}
-                          className={buttonVariants({ variant: "outline", size: "icon-lg", className: "shrink-0 text-slate-500" })}
+                          className={buttonVariants({ variant: "outline", size: "icon-lg", className: "size-11 shrink-0 text-slate-500" })}
                         >
                           {copiedSlug === page.slug ? (
                             <Check className="text-emerald-600" aria-hidden="true" />

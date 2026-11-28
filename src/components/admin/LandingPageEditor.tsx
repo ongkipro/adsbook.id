@@ -766,7 +766,7 @@ export default function LandingPageEditor({ landingPageId }: Props) {
                             type="button"
                             size="icon-sm"
                             onClick={() => setEditingSectionId(isEditing ? null : section.id)}
-                            variant={isEditing ? "secondary" : "ghost"}
+                            variant={isEditing ? "default" : "ghost"}
                             aria-label="Edit section"
                             title="Edit section"
                             aria-pressed={isEditing}

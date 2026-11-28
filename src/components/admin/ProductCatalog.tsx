@@ -1090,7 +1090,7 @@ export function ProductCatalog({
                   rows={embedFormat === "link" ? 2 : 6}
                   aria-label={EMBED_FORMATS[embedFormat].label}
                   onFocus={(event) => event.currentTarget.select()}
-                  className="mt-2 max-h-40 resize-none overflow-y-auto break-all font-mono text-xs leading-5 [field-sizing:fixed]"
+                  className="mt-2 max-h-40 resize-none overflow-y-auto break-all font-mono text-xs leading-5 field-sizing-fixed"
                 />
                 <p className="mt-1.5 text-xs text-muted-foreground">{EMBED_FORMATS[embedFormat].hint}</p>
               </Tabs>

@@ -773,7 +773,7 @@ export function AccessManager() {
                     <InputGroupButton
                       size="icon-xs"
                       onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                      aria-label="Tampilkan password"
                       aria-pressed={showPassword}
                     >
                       {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}

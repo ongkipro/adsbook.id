@@ -1342,7 +1342,7 @@ export function OrderDetail({
           <Skeleton className="h-5 w-24 rounded" />
           <Skeleton className="h-8 w-48 rounded" />
           <Skeleton className="h-5 w-80 max-w-full rounded" />
-          <Skeleton className="h-[4.5rem] border-y border-slate-200" />
+          <Skeleton className="h-[4.5rem] rounded-none border-y border-slate-200" />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="space-y-4">

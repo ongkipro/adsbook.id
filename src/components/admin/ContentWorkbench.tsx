@@ -284,7 +284,7 @@ export function ContentWorkbench() {
               value={editor}
               onChange={(event) => setEditor(event.target.value)}
               spellCheck={false}
-              className="min-h-[30rem] resize-y bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100"
+              className="h-[30rem] min-h-[30rem] resize-y overflow-y-auto bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 field-sizing-fixed md:text-xs"
             />
           </label>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -367,7 +367,7 @@ export function ContentWorkbench() {
                 rows={8}
                 placeholder="Tambahkan tone, istilah, dan batas klaim khusus tenant..."
                 aria-label="Instruksi konten tambahan"
-                className="resize-y"
+                className="resize-y field-sizing-fixed"
               />
               <Button
                 type="button"
