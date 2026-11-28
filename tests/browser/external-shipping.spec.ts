@@ -69,6 +69,10 @@ test("external shipping channel: operator enters manual courier & waybill on Ord
   await expect(page.getByRole("radio", { name: "Push ke Mengantar" })).toHaveAttribute("aria-checked", "true");
 
   await page.getByRole("radio", { name: "Kirim di luar Mengantar" }).click();
+  // The channel is a radio group: an arrow key selects. Leaving external with a
+  // courier already saved would clear it, so that move asks first (the order
+  // has no saved courier yet here, so the switch itself is free).
+  await expect(page.getByRole("radio", { name: "Kirim di luar Mengantar" })).toHaveAttribute("aria-checked", "true");
   await page.locator("#external-courier-code").fill("SiCepat");
   await page.locator("#external-courier-service").fill("REG");
   await page.locator("#external-cnote-no").fill("EXT-BROWSER-001");

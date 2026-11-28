@@ -54,6 +54,7 @@ import { Separator } from "../ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from "@/components/ui/radio-group";
 
 
 export type ProductVariant = {
@@ -1043,20 +1044,13 @@ export function ProductCatalog({
                   </p>
                 ) : (
                   <div className="flex min-w-0 flex-col gap-1.5">
-                    <div role="radiogroup" aria-label="Mode form" className="inline-flex w-full rounded-lg bg-muted p-[3px]">
+                    <RadioGroup aria-label="Mode form" value={embedMode} onValueChange={(value) => setEmbedMode(value as typeof embedMode)} className={RADIO_SEGMENT_TRACK}>
                       {PHYSICAL_FORM_MODES.map((mode) => (
-                        <button
-                          key={mode.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={embedMode === mode.value}
-                          onClick={() => setEmbedMode(mode.value)}
-                          className="flex-1 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm"
-                        >
+                        <RadioGroupOption key={mode.value} value={mode.value} variant="segment" className="px-2">
                           {mode.label.replace(/ \(.*\)$/, "")}
-                        </button>
+                        </RadioGroupOption>
                       ))}
-                    </div>
+                    </RadioGroup>
                     <p className="text-xs text-muted-foreground">{physicalFormMode(embedMode).hint}</p>
                   </div>
                 )}

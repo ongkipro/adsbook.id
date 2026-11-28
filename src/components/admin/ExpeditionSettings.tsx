@@ -22,6 +22,7 @@ import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import { courierDisplayName } from '../../lib/courier-names';
 import { INDONESIAN_PROVINCES } from '../../lib/province';
+import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from '@/components/ui/radio-group';
 
 const PROVINCE_NAMES = new Map(INDONESIAN_PROVINCES.map((province) => [province.code, province.name]));
 const provinceLabel = (code: string) => PROVINCE_NAMES.get(code) ?? code;
@@ -361,11 +362,12 @@ export function ExpeditionSettings({
             </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex bg-slate-100 p-1 rounded-lg">
-              <button type="button" onClick={() => setCourierFilter('all')} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${courierFilter === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
-              <button type="button" onClick={() => setCourierFilter('active')} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${courierFilter === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Aktif</button>
-              <button type="button" onClick={() => setCourierFilter('non_cod')} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${courierFilter === 'non_cod' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Non-COD</button>
-            </div>
+            {/* One filter chosen at a time: a radio group, so the active one is announced and arrows move it. */}
+            <RadioGroup aria-label="Saring ekspedisi" value={courierFilter} onValueChange={(value) => setCourierFilter(value as typeof courierFilter)} className={`${RADIO_SEGMENT_TRACK} w-auto`}>
+              <RadioGroupOption value="all" variant="segment" className="px-4">Semua</RadioGroupOption>
+              <RadioGroupOption value="active" variant="segment" className="px-4">Aktif</RadioGroupOption>
+              <RadioGroupOption value="non_cod" variant="segment" className="px-4">Non-COD</RadioGroupOption>
+            </RadioGroup>
             <SearchInput className="w-full max-w-xs" aria-label="Cari ekspedisi" placeholder="Cari ekspedisi" value={courierSearch} onValueChange={setCourierSearch} />
           </div>
         </div>

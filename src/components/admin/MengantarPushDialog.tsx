@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Bike, Car, Container, PackageCheck, Truck } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { defaultPickupSlot, type MengantarPickupChoice, type MengantarPickupVolume } from "@/lib/mengantar-order";
 import { MengantarPickupFields } from "./MengantarPickupFields";
+import { RadioGroup, RadioGroupOption } from "@/components/ui/radio-group";
 
 export type MengantarPushResult = {
   orderId: string | number;
@@ -81,8 +82,9 @@ export function MengantarPushDialog({
     }
   };
 
+  // The outline button's look on a radio (Radio.Root brings the role, one tab stop and arrow keys).
   const option = (active: boolean) =>
-    cn("h-auto w-full flex-col items-start gap-1 whitespace-normal py-2.5 text-left", active && "border-primary bg-primary/5 text-foreground hover:bg-primary/10");
+    cn(buttonVariants({ variant: "outline" }), "h-auto w-full flex-col items-start gap-1 whitespace-normal py-2.5 text-left", active && "border-primary bg-primary/5 text-foreground hover:bg-primary/10");
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!sending) onOpenChange(next); }}>
@@ -112,29 +114,29 @@ export function MengantarPushDialog({
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
-            <div role="radiogroup" aria-label="Cara serah paket" className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="outline" role="radio" aria-checked={mode === "dropOff"} className={option(mode === "dropOff")} onClick={() => setMode("dropOff")}>
+            <RadioGroup aria-label="Cara serah paket" value={mode} onValueChange={(value) => setMode(value as typeof mode)} className="grid grid-cols-2 gap-2">
+              <RadioGroupOption value="dropOff" variant="bare" className={option(mode === "dropOff")}>
                 <span className="flex items-center gap-1.5 font-medium"><PackageCheck aria-hidden="true" />Drop-off</span>
                 <span className="text-xs font-normal text-muted-foreground">Antar sendiri ke counter kurir</span>
-              </Button>
-              <Button type="button" variant="outline" role="radio" aria-checked={mode === "scheduledPickup"} className={option(mode === "scheduledPickup")} onClick={() => setMode("scheduledPickup")}>
+              </RadioGroupOption>
+              <RadioGroupOption value="scheduledPickup" variant="bare" className={option(mode === "scheduledPickup")}>
                 <span className="flex items-center gap-1.5 font-medium"><Truck aria-hidden="true" />Pickup</span>
                 <span className="text-xs font-normal text-muted-foreground">Kurir menjemput ke gudang</span>
-              </Button>
-            </div>
+              </RadioGroupOption>
+            </RadioGroup>
 
             {mode === "scheduledPickup" && (
               <>
                 <MengantarPickupFields idPrefix="push-pickup" date={slot.date} hour={slot.hour} onChange={setSlot} />
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <span id="push-pickup-volume" className="text-sm font-medium">Kendaraan</span>
-                  <div role="radiogroup" aria-labelledby="push-pickup-volume" className="grid grid-cols-3 gap-2">
+                  <RadioGroup aria-labelledby="push-pickup-volume" value={volume} onValueChange={(value) => setVolume(value as typeof volume)} className="grid grid-cols-3 gap-2">
                     {VEHICLES.map((vehicle) => (
-                      <Button key={vehicle.value} type="button" variant="outline" role="radio" aria-checked={volume === vehicle.value} className={option(volume === vehicle.value)} onClick={() => setVolume(vehicle.value)}>
+                      <RadioGroupOption key={vehicle.value} value={vehicle.value} variant="bare" className={option(volume === vehicle.value)}>
                         <span className="flex items-center gap-1.5 font-medium"><vehicle.icon aria-hidden="true" />{vehicle.label}</span>
-                      </Button>
+                      </RadioGroupOption>
                     ))}
-                  </div>
+                  </RadioGroup>
                 </div>
                 <p className="text-xs text-muted-foreground">Satu jadwal pickup per gudang untuk semua order ini.</p>
               </>

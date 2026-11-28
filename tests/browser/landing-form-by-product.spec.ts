@@ -67,6 +67,12 @@ test("a physical product picks hybrid, middle or full, in the landing editor and
   const modes = dialog.getByRole("radiogroup", { name: "Mode form" }).getByRole("radio");
   await expect(modes).toHaveText(["Hybrid", "Middle", "Full"]);
   await expect(modes.first()).toHaveAttribute("aria-checked", "true");
+  // A radio group, not three buttons: one tab stop, and the arrow keys move the choice.
+  await modes.first().focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(modes.nth(1)).toHaveAttribute("aria-checked", "true");
+  await expect(modes.nth(1)).toBeFocused();
+  expect(await modes.evaluateAll((items) => items.filter((item) => (item as HTMLElement).tabIndex === 0).length)).toBe(1);
   await dialog.getByRole("radio", { name: "Full" }).click();
   await expect(dialog.getByText("Alamat lengkap sampai kecamatan dan pilihan kurir.")).toBeVisible();
   const full = await frameMode(await dialog.getByLabel("Snippet widget").inputValue());

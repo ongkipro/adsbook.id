@@ -10,6 +10,7 @@ import { searchTaxonomy, suggestGoogleCategories, taxonomyLeaf, type TaxonomyRow
 import { catalogProductIdOrNull } from "../../lib/catalog-feed";
 import { formatKg } from "../../lib/weight";
 import { processImageUpload, uploadProcessedImage } from "../../lib/client-image";
+import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from "@/components/ui/radio-group";
 type Variant = {
   key: string;
   id?: number | string;
@@ -443,21 +444,13 @@ export function ProductForm({
               </p>
             </div>
             {catalogMode === "hybrid" ? (
-              <div role="radiogroup" aria-labelledby="product-type-title" className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
+              <RadioGroup aria-labelledby="product-type-title" value={productType} onValueChange={(value) => setProductType(value as "physical" | "digital")} className={RADIO_SEGMENT_TRACK}>
                 {([["physical", "Barang Fisik"], ["digital", "Produk Digital"]] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={productType === value}
-                    data-product-type={value}
-                    onClick={() => setProductType(value)}
-                    className={`min-h-11 rounded-md px-4 text-sm font-semibold transition-colors ${productType === value ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-                  >
+                  <RadioGroupOption key={value} value={value} variant="segment" data-product-type={value} className="px-4">
                     {label}
-                  </button>
+                  </RadioGroupOption>
                 ))}
-              </div>
+              </RadioGroup>
             ) : (
               <Badge variant="secondary" data-product-type-locked={productType}>{digital ? "Produk Digital" : "Barang Fisik"}</Badge>
             )}

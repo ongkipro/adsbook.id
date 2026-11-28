@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
+import { RadioGroup, RadioGroupOption } from "@/components/ui/radio-group";
 
 type FeeBearer = "buyer" | "seller";
 
@@ -144,23 +145,17 @@ function FeeChoice({
     <fieldset className="space-y-2">
       <legend className="px-1 text-sm font-semibold text-card-foreground">{legend}</legend>
       <p className="text-xs leading-5 text-muted-foreground">{description}</p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label={`Penanggung fee ${legend}`}>
+      <RadioGroup
+        aria-label={`Penanggung fee ${legend}`}
+        value={value}
+        disabled={disabled}
+        onValueChange={(next) => onChange(next as typeof value)}
+        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+      >
         {options.map((option) => {
           const selected = value === option.value;
           return (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange(option.value)}
-              disabled={disabled}
-              className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                selected
-                  ? "border-primary bg-primary/10 text-foreground"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted"
-              } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
-            >
+            <RadioGroupOption key={option.value} value={option.value} variant="card" className="gap-3 px-3 py-2.5">
               <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`} aria-hidden="true">
                 {selected && <CheckCircle2 className="size-3.5" />}
               </span>
@@ -168,10 +163,10 @@ function FeeChoice({
                 <span className="block text-sm font-semibold text-foreground">{option.label}</span>
                 <span className="mt-1 block text-xs leading-4 text-muted-foreground">{option.detail}</span>
               </span>
-            </button>
+            </RadioGroupOption>
           );
         })}
-      </div>
+      </RadioGroup>
     </fieldset>
   );
 }

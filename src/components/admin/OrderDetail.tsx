@@ -44,6 +44,7 @@ import {
   Loader2,
   Lock as LockIcon,
 } from "lucide-react";
+import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from "@/components/ui/radio-group";
 
 type OrderItem = {
   id: number | string;
@@ -661,28 +662,26 @@ function EditCustomerDialog({
                 <div className="h-12 w-full rounded-xl bg-slate-100 animate-pulse border border-slate-200" />
               </div>
             ) : shippingRates.length > 0 ? (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Pilihan kurir dan ongkir">
+              <RadioGroup
+                aria-label="Pilihan kurir dan ongkir"
+                value={selectedCourierServiceId || null}
+                onValueChange={(value) => setSelectedCourierServiceId(String(value))}
+                className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+              >
                 {shippingRates.map((rate) => {
                   const isSelected = String(rate.courier_service_id) === selectedCourierServiceId;
                   return (
-                    <button
+                    <RadioGroupOption
                       key={rate.courier_service_id}
-                      type="button"
-                      onClick={() => setSelectedCourierServiceId(String(rate.courier_service_id))}
-                      role="radio"
-                      aria-checked={isSelected}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-lg border p-2.5 text-left transition-colors",
-                        isSelected
-                          ? "border-emerald-600 bg-emerald-50/60 ring-1 ring-emerald-600/30 shadow-xs"
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                      )}
+                      value={String(rate.courier_service_id)}
+                      variant="card"
+                      className="w-full items-center justify-between p-2.5"
                     >
                       <div className="flex items-center gap-3">
                         <div
                           className={cn(
                             "size-4 rounded-full border flex items-center justify-center transition-colors shrink-0",
-                            isSelected ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                            isSelected ? "border-primary bg-primary" : "border-slate-300 bg-white"
                           )}
                         >
                           {isSelected && <Check className="size-2.5 text-white stroke-[3]" />}
@@ -699,14 +698,14 @@ function EditCustomerDialog({
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <span className="font-semibold text-xs text-emerald-700">
+                        <span className="font-semibold text-xs text-slate-900">
                           {currency(rate.shipping_cost)}
                         </span>
                       </div>
-                    </button>
+                    </RadioGroupOption>
                   );
                 })}
-              </div>
+              </RadioGroup>
             ) : !courierEditable ? (
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
                 <span className="font-semibold block text-slate-800">Biaya Ongkir Terkunci</span>
@@ -1081,9 +1080,26 @@ export function OrderDetail({
   };
 
   const selectChannelChoice = async (next: "mengantar" | "external") => {
-    setChannelChoice(next);
-    if (!order || order.provider_order_id || order.shipping_status !== "pending") return;
+    if (!order || order.provider_order_id || order.shipping_status !== "pending") {
+      setChannelChoice(next);
+      return;
+    }
     if (next === "mengantar" && order.shipping_channel === "external") {
+      // The server clears the manual courier and waybill on this switch. In a
+      // radio group an arrow key selects, so it is confirmed rather than saved
+      // as the keyboard moves past it.
+      const hasWaybill = Boolean(order.cnote_no?.trim() || order.courier_code?.trim());
+      if (
+        hasWaybill &&
+        !(await confirm({
+          title: "Kembali ke Mengantar?",
+          description: "Kurir dan nomor resi manual pada pesanan ini akan dihapus.",
+          confirmLabel: "Kembali ke Mengantar",
+        }))
+      ) {
+        return;
+      }
+      setChannelChoice(next);
       setSaving(true);
       try {
         const response = await fetch(`/api/admin/orders/${encodeURIComponent(String(order.id))}`, {
@@ -1104,7 +1120,9 @@ export function OrderDetail({
       } finally {
         setSaving(false);
       }
+      return;
     }
+    setChannelChoice(next);
   };
 
   // The push opens the dialog first: drop-off or a scheduled pickup (PRD A46).
@@ -1857,25 +1875,22 @@ export function OrderDetail({
                   {/* The channel is a choice, not an action: one segmented control, so the push below is the only primary button. */}
                   <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
                   <span id="order-channel-label" className="text-sm text-slate-500">Kirim lewat</span>
-                  <div role="radiogroup" aria-labelledby="order-channel-label" className="inline-flex w-full rounded-lg bg-muted p-[3px] sm:w-auto">
+                  <RadioGroup
+                    aria-labelledby="order-channel-label"
+                    value={channelChoice}
+                    disabled={saving}
+                    onValueChange={(value) => void selectChannelChoice(value as "mengantar" | "external")}
+                    className={`${RADIO_SEGMENT_TRACK} sm:w-auto`}
+                  >
                     {([
                       ["mengantar", "Mengantar", "Push ke Mengantar"],
                       ["external", "Di luar Mengantar", "Kirim di luar Mengantar"],
                     ] as const).map(([value, label, name]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        role="radio"
-                        aria-label={name}
-                        aria-checked={channelChoice === value}
-                        disabled={saving}
-                        onClick={() => void selectChannelChoice(value)}
-                        className="flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm sm:flex-none"
-                      >
+                      <RadioGroupOption key={value} value={value} variant="segment" aria-label={name} className="sm:flex-none">
                         {label}
-                      </button>
+                      </RadioGroupOption>
                     ))}
-                  </div>
+                  </RadioGroup>
                   </div>
 
                   {channelChoice === "mengantar" ? (
