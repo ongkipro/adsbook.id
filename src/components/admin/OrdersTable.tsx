@@ -268,7 +268,8 @@ function DigitalWaActions({ order }: { order: OrderItem }) {
       : order.epaymentLink && stage !== "Batal" && stage !== "Dikembalikan"
         ? {
             label: "Kirim link bayar",
-            text: `Halo ${order.customerName || "Kak"}, pesanan ${product} (${order.orderNumber}) sebesar ${formatCurrency(order.totalAmount)} menunggu pembayaran. Bayar di sini:\n${order.epaymentLink}\n\nAkses produk terbuka otomatis setelah pembayaran diterima.`,
+            // No amount: a QRIS/VA admin fee lives on the payment, and /payment shows the exact total.
+            text: `Halo ${order.customerName || "Kak"}, pesanan ${product} (${order.orderNumber}) menunggu pembayaran. Total dan cara bayar ada di sini:\n${order.epaymentLink}\n\nAkses produk terbuka otomatis setelah pembayaran diterima.`,
           }
         : null;
   return (
