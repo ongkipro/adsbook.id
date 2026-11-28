@@ -1186,6 +1186,48 @@ export function OrderDetail({
     }
   };
 
+  /**
+   * A digital order is closed from its own page: cancelled while unpaid, refunded
+   * once paid. Either one voids it, which closes the buyer's access on the next
+   * request (digitalAccessOpen). The money itself is returned outside the app.
+   */
+  const closeDigitalOrder = async () => {
+    if (!order) return;
+    const paid = ["paid", "settled", "success"].includes(String(order.payment_status || "").toLowerCase());
+    const confirmed = await confirm(
+      paid
+        ? {
+            title: `Refund pesanan ${order.order_number}?`,
+            description: "Order ditandai dikembalikan dan link akses pembeli langsung tertutup. Kembalikan dananya ke pembeli di luar aplikasi.",
+            confirmLabel: "Refund & tutup akses",
+          }
+        : {
+            title: `Batalkan pesanan ${order.order_number}?`,
+            description: "Pesanan dibatalkan dan link pembayarannya tidak bisa dipakai lagi.",
+            confirmLabel: "Batalkan pesanan",
+          },
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${encodeURIComponent(String(order.id))}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(paid ? { payment_status: "refunded", shipping_status: "cancelled" } : { shipping_status: "cancelled" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) throw new Error(payload.error || "Pesanan gagal ditutup.");
+      toast.success(paid ? "Pesanan direfund. Akses pembeli tertutup." : "Pesanan dibatalkan.");
+      setReloadKey((value) => value + 1);
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "Pesanan gagal ditutup.";
+      setNotice(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const deleteOrder = async () => {
     if (!order) return;
     if (!(await confirm({ title: `Hapus pesanan ${order.order_number}?`, description: "Pesanan terhapus permanen dan tidak dapat dikembalikan.", confirmLabel: "Hapus pesanan" }))) {
@@ -1444,7 +1486,7 @@ export function OrderDetail({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
-            {/* A digital order moves with its payment (delivered when paid, void when refunded), never by a shipping status. */}
+            {/* A digital order moves with its payment (delivered when paid); it is closed by Batalkan / Refund below, never by a shipping status. */}
             {!digital && (
             <div className="w-full sm:w-52">
               <FilterSelect
@@ -1470,6 +1512,11 @@ export function OrderDetail({
               </a>
             )}
             <EditCustomerDialog order={order} onUpdated={setOrder} />
+            {digital && !isVoidOrder(order) && (
+              <Button type="button" variant="outline" onClick={() => void closeDigitalOrder()} disabled={saving} data-close-digital-order>
+                {paymentPaid ? "Refund & tutup akses" : "Batalkan pesanan"}
+              </Button>
+            )}
             <Button
               type="button"
               variant="destructive"

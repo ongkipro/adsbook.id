@@ -65,16 +65,16 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
           </SidebarGroup>
         ))}
       </SidebarContent>
-      {/* Before the first paint: the menu stays where the operator left it (src/lib/sidebar-scroll.ts). */}
-      <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCROLL_RESTORE }} />
-
       {/* In flow, as the seller admin's (AppSidebar): it never covers the last menu item on a short screen. */}
-      <SidebarFooter className="shrink-0 border-t border-slate-200/70 p-2">
+      <SidebarFooter className="shrink-0 border-t border-slate-200/70 p-2 group-data-[collapsible=icon]:hidden">
         <div className="flex items-center justify-between gap-2.5 px-2.5 py-1.5 group-data-[collapsible=icon]:hidden">
           <img src={BRAND_WORDMARK} alt="adsbook.id" width="94" height="15" className="h-[15px] w-auto shrink-0" />
           <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-mono text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/15">v{CMS_VERSION.version}</span>
         </div>
       </SidebarFooter>
+      {/* Before the first paint, after the footer is in the DOM, so the menu's
+          clientHeight is the clear height above it (as AppSidebar; src/lib/sidebar-scroll.ts). */}
+      <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCROLL_RESTORE }} />
     </Sidebar>
   );
 }

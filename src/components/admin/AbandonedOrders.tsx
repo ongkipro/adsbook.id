@@ -406,6 +406,8 @@ function ConversionDialog({
       .catch((reason) => {
         if (!(reason instanceof Error && reason.name === "AbortError")) {
           setRates([]);
+          // A store that is not live gets no shipping quote either (402): the link to Langganan belongs here too.
+          setNeedsSubscription(isSubscriptionError(reason));
           setError(reason instanceof Error ? reason.message : "Ongkir gagal dimuat.");
         }
       })

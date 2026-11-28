@@ -234,11 +234,30 @@ test("a digital order's page edits only the buyer: address, courier and waybill 
     { shipping_channel: "external" },
   ]) {
     const response = await patch(body);
-    // 422 from the digital guard; a courier id alone is already refused as "no change" (400).
-    assert.ok(response.status === 422 || response.status === 400, `${JSON.stringify(body)} → ${response.status}`);
+    // A courier id alone is already refused earlier as "no change" (400); everything else meets the digital guard.
+    assert.equal(response.status, "courier_service_id" in body ? 400 : 422, JSON.stringify(body));
   }
   const renamed = await patch({ customer_name: "Budi Pratama", customer_phone: "081299998888" });
   assert.equal(renamed.status, 200, await renamed.clone().text());
   const order = sqlite.prepare("SELECT customer_name, customer_phone, address, courier_code FROM orders WHERE id = 7").get() as Record<string, string | null>;
   assert.deepEqual({ ...order }, { customer_name: "Budi Pratama", customer_phone: "6281299998888", address: "-", courier_code: null });
+});
+
+test("a paid digital order is refunded from its page: the body the button sends voids it and closes the access", async () => {
+  const { sqlite, database } = seed();
+  await convertDigitalLead(database, 7, digitalInput);
+  // Paid and delivered, as the paid transition leaves a digital order.
+  sqlite.exec("UPDATE orders SET payment_status = 'paid', shipping_status = 'delivered' WHERE id = 7");
+  const opened = sqlite.prepare("SELECT * FROM orders WHERE id = 7").get() as Record<string, string>;
+  assert.equal(digitalAccessOpen(opened as never), true);
+  const { PATCH } = await import("../pages/api/admin/orders/[id].ts");
+  const response = await PATCH({
+    params: { id: "7" },
+    request: new Request("https://toko.test/api/admin/orders/7", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ payment_status: "refunded", shipping_status: "cancelled" }) }),
+    locals: { tenantDb: database, runtimeEnv: {}, admin: { username: "owner", role: "owner" } },
+  } as never);
+  assert.equal(response.status, 200, await response.clone().text());
+  const closed = sqlite.prepare("SELECT * FROM orders WHERE id = 7").get() as Record<string, string>;
+  assert.deepEqual([closed.payment_status, closed.shipping_status], ["refunded", "cancelled"]);
+  assert.equal(digitalAccessOpen(closed as never), false, "the buyer's link is closed");
 });

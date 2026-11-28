@@ -22,6 +22,7 @@ test("a digital order's page shows nothing that ships and edits only the buyer",
   await page.getByRole("button", { name: "Masuk" }).click();
   await page.waitForURL(/\/admin\//);
   const setMode = (mode: string) => page.request.put(`${STORE}/api/admin/settings`, { headers: HEADERS, data: { action: "save-catalog-mode", catalog_mode: mode } });
+  // The suite's stores are physical; this spec switches to hybrid and puts that back.
   await setMode("hybrid");
   try {
     const stamp = String(Date.now()).slice(-6);
@@ -67,6 +68,12 @@ test("a digital order's page shows nothing that ships and edits only the buyer",
     await dialog.getByRole("button", { name: "Simpan Perubahan" }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByText("Pembeli Digital Baru").first()).toBeVisible();
+
+    // Closing it: an unpaid digital order is cancelled from its page, and its access stays closed.
+    await page.locator("[data-close-digital-order]").click();
+    await page.getByRole("dialog").getByRole("button", { name: "Batalkan pesanan" }).click();
+    await expect(page.locator("[data-close-digital-order]")).toHaveCount(0);
+    await expect(page.locator("[data-order-status-axes]")).toContainText("Akses ditutup");
     expect(errors).toEqual([]);
   } finally {
     await setMode("physical");

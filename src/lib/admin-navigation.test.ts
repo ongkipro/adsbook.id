@@ -221,11 +221,15 @@ test("Pesanan's submenu follows the catalog mode: hybrid splits by kind, a singl
 });
 
 test("every role's phone bottom bar names four items its menu actually has", () => {
-  for (const role of ADMIN_ROLES) {
-    const ids = mobilePrimaryNavIds(role);
-    assert.equal(ids.length, 4, `${role}: four tabs before Menu`);
-    const visible = new Set(getVisibleNavGroups(role).flatMap((group) => group.items.map((item) => item.id)));
-    for (const id of ids) assert.ok(visible.has(id), `${role}: bottom bar item "${id}" is in the menu`);
+  for (const mode of ["physical", "digital", "hybrid"] as const) {
+    for (const role of ADMIN_ROLES) {
+      const ids = mobilePrimaryNavIds(role, mode);
+      const visible = new Set(getVisibleNavGroups(role, mode).flatMap((group) => group.items.map((item) => item.id)));
+      for (const id of ids) assert.ok(visible.has(id), `${mode} ${role}: bottom bar item "${id}" is in the menu`);
+      // Four tabs before Menu wherever the role's menu has four items to offer.
+      assert.equal(ids.length, Math.min(4, visible.size), `${mode} ${role}: ${ids.join(", ")}`);
+    }
   }
+  assert.deepEqual([...mobilePrimaryNavIds("owner", "digital")], ["dashboard", "orders", "products", "payments"]);
   assert.deepEqual([...mobilePrimaryNavIds("advertiser")], ["dashboard", "products", "analytics", "ads"]);
 });

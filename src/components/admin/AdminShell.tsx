@@ -128,7 +128,7 @@ export function AdminShell({
   const docsHref = !mustChangePassword && (adminRole === "owner" || adminRole === "admin") ? "/admin/docs" : undefined;
   const searchItems = mustChangePassword ? [] : getSearchableNavItems(adminRole, catalogMode);
   const allItems = groups.flatMap((group) => group.items);
-  const mobilePrimary = (mustChangePassword ? ["profile"] : mobilePrimaryNavIds(adminRole))
+  const mobilePrimary = (mustChangePassword ? ["profile"] : mobilePrimaryNavIds(adminRole, catalogMode))
     .map((id) => [...allItems, profileNavItem].find((item) => item.id === id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
   const menuIsActive = !mobilePrimary.some((item) => item.id === activeMenu);
