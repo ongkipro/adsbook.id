@@ -1080,9 +1080,26 @@ export function OrderDetail({
   };
 
   const selectChannelChoice = async (next: "mengantar" | "external") => {
-    setChannelChoice(next);
-    if (!order || order.provider_order_id || order.shipping_status !== "pending") return;
+    if (!order || order.provider_order_id || order.shipping_status !== "pending") {
+      setChannelChoice(next);
+      return;
+    }
     if (next === "mengantar" && order.shipping_channel === "external") {
+      // The server clears the manual courier and waybill on this switch. In a
+      // radio group an arrow key selects, so it is confirmed rather than saved
+      // as the keyboard moves past it.
+      const hasWaybill = Boolean(order.cnote_no?.trim() || order.courier_code?.trim());
+      if (
+        hasWaybill &&
+        !(await confirm({
+          title: "Kembali ke Mengantar?",
+          description: "Kurir dan nomor resi manual pada pesanan ini akan dihapus.",
+          confirmLabel: "Kembali ke Mengantar",
+        }))
+      ) {
+        return;
+      }
+      setChannelChoice(next);
       setSaving(true);
       try {
         const response = await fetch(`/api/admin/orders/${encodeURIComponent(String(order.id))}`, {
@@ -1103,7 +1120,9 @@ export function OrderDetail({
       } finally {
         setSaving(false);
       }
+      return;
     }
+    setChannelChoice(next);
   };
 
   // The push opens the dialog first: drop-off or a scheduled pickup (PRD A46).

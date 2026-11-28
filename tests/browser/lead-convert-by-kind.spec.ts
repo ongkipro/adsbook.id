@@ -107,6 +107,8 @@ test("a digital lead converts into a prepaid digital order without address or co
     // Submitting with no method points at the payment group.
     await dialog.getByRole("button", { name: "Jadikan order digital" }).click();
     await expect(dialog.getByText("Pilih metode pembayaran.")).toBeVisible();
+    // Focus lands on the payment group's tab stop, so a keyboard user is where the fix is.
+    await expect(dialog.getByRole("radiogroup", { name: "Metode pembayaran" }).getByRole("radio").first()).toBeFocused();
     await page.screenshot({ path: "test-results/lead-convert-digital-1366.png" });
     await methods.getByRole("radio", { name: /QRIS/ }).click();
     await dialog.getByRole("button", { name: "Jadikan order digital" }).click();

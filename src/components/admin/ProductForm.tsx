@@ -446,7 +446,7 @@ export function ProductForm({
             {catalogMode === "hybrid" ? (
               <RadioGroup aria-labelledby="product-type-title" value={productType} onValueChange={(value) => setProductType(value as "physical" | "digital")} className={RADIO_SEGMENT_TRACK}>
                 {([["physical", "Barang Fisik"], ["digital", "Produk Digital"]] as const).map(([value, label]) => (
-                  <RadioGroupOption key={value} value={value} variant="segment" data-product-type={value} className="min-h-10 px-4">
+                  <RadioGroupOption key={value} value={value} variant="segment" data-product-type={value} className="px-4">
                     {label}
                   </RadioGroupOption>
                 ))}

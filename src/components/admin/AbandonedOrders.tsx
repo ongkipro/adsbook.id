@@ -449,7 +449,11 @@ function ConversionDialog({
     if (firstInvalid) {
       setError("");
       setFieldError({ id: firstInvalid[0], message: firstInvalid[1] });
-      window.requestAnimationFrame(() => document.getElementById(firstInvalid[0])?.focus());
+      // A radio group's root takes no focus; its tab stop (the checked option, else the first) does.
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(firstInvalid[0]);
+        (target?.dataset.slot === "radio-group" ? target.querySelector<HTMLElement>('[data-slot="radio-group-option"][tabindex="0"]') ?? target.querySelector<HTMLElement>('[data-slot="radio-group-option"]') : target)?.focus();
+      });
       return;
     }
     setSaving(true);
