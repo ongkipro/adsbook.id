@@ -174,3 +174,30 @@ test("the route converts a digital lead with a payment and no courier, and refus
   } as never);
   assert.notEqual(physical.status, 200);
 });
+
+test("the lead list filters by product kind and counts each kind over the whole queue", async () => {
+  const { sqlite, database } = seed();
+  sqlite.exec(`
+    INSERT INTO orders (id, order_number, store_id, customer_name, customer_phone, address, province, city, district,
+      total_amount, created_at, payment_method, payment_status, shipping_status)
+      VALUES (8, 'ABN-10008', 1, 'Sari', '6281234567891', '', '', '', '', 50000, '2026-11-28T00:00:00.000Z', 'cod', 'unpaid', 'abandoned'),
+             (9, 'ABN-10009', 1, 'Tanpa Produk', '6281234567892', '', '', '', '', 0, '2026-11-28T00:00:00.000Z', 'cod', 'unpaid', 'abandoned');
+    INSERT INTO order_items (order_id, variant_id, quantity, unit_price) VALUES (8, 11, 1, 50000);
+  `);
+  const { GET: listLeads } = await import("../pages/api/admin/abandoned-orders.ts");
+  const list = async (query: string) => {
+    const response = await listLeads({
+      url: new URL(`https://toko.test/api/admin/abandoned-orders?${query}`),
+      locals: { tenantDb: database, runtimeEnv: { OMS_DB: database } },
+      request: new Request("https://toko.test/api/admin/abandoned-orders"),
+    } as never);
+    return { status: response.status, body: (await response.json()) as { data?: Array<{ order_number: string; product_type: string | null }>; kind_counts?: { physical: number; digital: number } } };
+  };
+  const all = await list("");
+  assert.deepEqual(all.body.data?.map((row) => [row.order_number, row.product_type]), [["ABN-10009", null], ["ABN-10008", "physical"], ["ABN-10007", "digital"]]);
+  assert.deepEqual(all.body.kind_counts, { physical: 1, digital: 1 });
+  assert.deepEqual((await list("fulfillment=digital")).body.data?.map((row) => row.order_number), ["ABN-10007"]);
+  assert.deepEqual((await list("fulfillment=physical")).body.data?.map((row) => row.order_number), ["ABN-10008"]);
+  assert.deepEqual((await list("fulfillment=physical")).body.kind_counts, { physical: 1, digital: 1 }, "the counts ignore the kind filter, like the status chips");
+  assert.equal((await list("fulfillment=services")).status, 400);
+});

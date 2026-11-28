@@ -23,7 +23,7 @@ import {
   AdminDateRangeFilter,
   type AdminDateSelection,
 } from "./AdminDateRangeFilter";
-import { Button } from "../ui/button";
+import { Button, buttonVariants } from "../ui/button";
 import { DataTableShell } from "./DataTableShell";
 import { ExportCsvButton } from "./ExportCsvButton";
 import { SHIPPING_STATUS_LABELS } from "@/lib/shipping-status";
@@ -253,6 +253,45 @@ function DigitalOrderBadge({ accessedAt }: { accessedAt?: string | null }) {
   );
 }
 
+
+/**
+ * The digital list's WhatsApp column. The ten CRM steps are written for a
+ * parcel (address, shipping cost, "sudah dikirim"); a digital order has two
+ * messages: the payment link while it waits, the access link once paid.
+ */
+function DigitalWaActions({ order }: { order: OrderItem }) {
+  const stage = digitalAccessState(order).label;
+  const product = order.items?.[0]?.productName || order.productName || "produk digital";
+  const action =
+    stage === "Akses terbuka" && order.orderDetailsLink
+      ? { label: "Kirim link akses", text: digitalAccessMessage(order) }
+      : order.epaymentLink && stage !== "Batal" && stage !== "Dikembalikan"
+        ? {
+            label: "Kirim link bayar",
+            text: `Halo ${order.customerName || "Kak"}, pesanan ${product} (${order.orderNumber}) sebesar ${formatCurrency(order.totalAmount)} menunggu pembayaran. Bayar di sini:\n${order.epaymentLink}\n\nAkses produk terbuka otomatis setelah pembayaran diterima.`,
+          }
+        : null;
+  return (
+    <div className="flex flex-col items-start gap-1" data-digital-wa={action?.label ?? "none"}>
+      {action ? (
+        <a
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+          href={buildWaUrl(order.customerPhone, action.text)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Send aria-hidden="true" />
+          {action.label}
+        </a>
+      ) : (
+        <span className="text-xs text-slate-500">Tidak ada pesan yang perlu dikirim</span>
+      )}
+      <a className="text-xs font-medium text-slate-600 hover:text-slate-950 hover:underline" href={buildWaUrl(order.customerPhone, `Halo ${order.customerName || "Kak"}`)} target="_blank" rel="noopener noreferrer">
+        Chat WhatsApp
+      </a>
+    </div>
+  );
+}
 
 /** The access message CS sends: the buyer's own order page, which carries the link once paid (as OrderDetail). */
 function digitalAccessMessage(order: OrderItem) {
@@ -1689,7 +1728,7 @@ export function OrdersTable({
                     <span className="font-semibold">Kendala push:</span> {providerDispatchErrorText(order.providerDispatchError)}
                   </p>
                 )}
-                <div className="mt-3">{renderCrmActions(order)}</div>
+                <div className="mt-3">{digitalView && order.fulfillmentType === "digital" ? <DigitalWaActions order={order} /> : renderCrmActions(order)}</div>
               </article>
             ); })}
           </div>
@@ -1732,7 +1771,7 @@ export function OrdersTable({
                   <TableHead className="w-32 px-2 text-right">
                     Produk & Total
                   </TableHead>
-                  <TableHead className="w-[244px] px-2">WhatsApp CRM</TableHead>
+                  <TableHead className="w-[244px] px-2">{digitalView ? "WhatsApp" : "WhatsApp CRM"}</TableHead>
                   <TableHead className="sticky right-0 z-10 w-12 bg-slate-50/95 pl-1.5 pr-3 text-right">
                     Aksi
                   </TableHead>
@@ -1843,7 +1882,7 @@ export function OrdersTable({
                       </p>
                     </TableCell>
                     <TableCell className="px-2 py-3">
-                      <div className="w-[244px] whitespace-normal">{renderCrmActions(order)}</div>
+                      <div className="w-[244px] whitespace-normal">{digitalView && order.fulfillmentType === "digital" ? <DigitalWaActions order={order} /> : renderCrmActions(order)}</div>
                     </TableCell>
                     <TableCell className="sticky right-0 z-10 bg-white pl-1.5 pr-3 py-3 text-right group-hover:bg-slate-50 group-data-[state=selected]:bg-blue-50">
                       <OrderActionMenu

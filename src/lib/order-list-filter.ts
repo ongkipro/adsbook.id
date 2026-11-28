@@ -56,6 +56,14 @@ export const LEAD_FOLLOW_UP_FILTERS = ["all", ...LEAD_FOLLOW_UP_STATUSES] as con
 export const ORDER_LIST_KINDS = ["all", "physical", "digital"] as const;
 export type OrderListKind = (typeof ORDER_LIST_KINDS)[number];
 
+/** A lead whose items are of this product kind. Correlated on `alias.id`; `kind` comes from ORDER_LIST_KINDS. */
+export function leadKindSql(kind: "physical" | "digital", alias: string) {
+  return `EXISTS (SELECT 1 FROM order_items lk_oi
+    INNER JOIN product_variants lk_pv ON lk_pv.id = lk_oi.variant_id
+    INNER JOIN products lk_p ON lk_p.id = lk_pv.product_id
+    WHERE lk_oi.order_id = ${alias}.id AND lk_p.product_type = '${kind}')`;
+}
+
 export type ListFilterError = { ok: false; status: number; error: string; code?: string };
 
 const includes = <T extends string>(list: readonly T[], value: string): value is T => (list as readonly string[]).includes(value);
@@ -165,6 +173,13 @@ export function abandonedListFilter(searchParams: URLSearchParams):
   if (!includes(LEAD_FOLLOW_UP_FILTERS, followUpStatus)) {
     return { ok: false, status: 400, error: "Filter follow-up tidak valid." };
   }
+  // The lead's product kind (a hybrid store works digital and physical leads
+  // differently). A literal from the allowlist; a lead with no product yet
+  // belongs to neither kind.
+  const kind = String(searchParams.get("fulfillment") || "all").trim().toLowerCase();
+  if (!includes(ORDER_LIST_KINDS, kind)) {
+    return { ok: false, status: 400, error: "Jenis produk tidak valid." };
+  }
   const period = periodPredicate(searchParams, "o.created_at");
   if (!period.ok) return period;
   const conditions = ["o.shipping_status = 'abandoned'"];
@@ -182,6 +197,7 @@ export function abandonedListFilter(searchParams: URLSearchParams):
     conditions.push("o.lead_follow_up_status = ?");
     params.push(followUpStatus);
   }
+  if (kind !== "all") conditions.push(leadKindSql(kind, "o"));
   // The page the lead was captured on (PRD A36). A read filter only.
   const sourceSlug = sourceSlugPredicate(searchParams.get("source_slug"), "o.source_slug");
   if (sourceSlug) {

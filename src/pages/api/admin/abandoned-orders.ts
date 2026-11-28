@@ -9,7 +9,7 @@ import {
   type LeadFollowUpStatus,
 } from "../../../lib/abandoned-lead.ts";
 import { jsonError, jsonOk } from "../../../lib/api.ts";
-import { abandonedListFilter } from "../../../lib/order-list-filter.ts";
+import { abandonedListFilter, leadKindSql } from "../../../lib/order-list-filter.ts";
 import { selectQuotedRate } from "../../../lib/courier-rules.ts";
 import { scheduleCodPurchase } from "../../../lib/paid-order-purchase.ts";
 import { autoLarisChannelUnavailable, parsePaymentSwitchTarget } from "../../../lib/payment-switch.ts";
@@ -105,7 +105,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
   const offset = (page - 1) * limit;
 
   try {
-    const [countResult, rowsResult, statusResult, productResult, warehouseResult, labelResult, facetResult] = await database.batch([
+    const [countResult, rowsResult, statusResult, productResult, warehouseResult, labelResult, facetResult, kindResult] = await database.batch([
       database.prepare(
         `SELECT COUNT(DISTINCT o.id) AS total_items
          FROM orders o
@@ -161,6 +161,14 @@ export const GET: APIRoute = async ({ url, locals }) => {
       withSourceOptions
         ? sourceFacetStatement(database, "leads")
         : database.prepare("SELECT NULL AS slug, 0 AS count WHERE 0"),
+      // The kind tabs' counts, over the whole queue like the status chips.
+      database.prepare(
+        `SELECT
+           SUM(CASE WHEN ${leadKindSql("physical", "o")} THEN 1 ELSE 0 END) AS physical,
+           SUM(CASE WHEN ${leadKindSql("digital", "o")} THEN 1 ELSE 0 END) AS digital
+         FROM orders o
+         WHERE o.shipping_status = 'abandoned'`,
+      ),
     ]);
     const facets = (facetResult?.results || []) as Array<{ slug: string; count: number }>;
     const sourceLabels = sourceLabelsFromRows(
@@ -211,6 +219,10 @@ export const GET: APIRoute = async ({ url, locals }) => {
         limit,
         total_items: totalItems,
         total_pages: totalItems ? Math.ceil(totalItems / limit) : 0,
+      },
+      kind_counts: {
+        physical: Number((kindResult?.results?.[0] as { physical?: number } | undefined)?.physical) || 0,
+        digital: Number((kindResult?.results?.[0] as { digital?: number } | undefined)?.digital) || 0,
       },
       status_counts: {
         all: Object.values(counts).reduce((sum, count) => sum + count, 0),
