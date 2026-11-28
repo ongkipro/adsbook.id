@@ -77,6 +77,14 @@ test("a digital lead converts into a prepaid digital order without address or co
     const physicalRow = page.getByRole("article", { name: physicalName });
     await expect(digitalRow.locator("[data-lead-kind]")).toHaveText("Digital");
     await expect(physicalRow.locator("[data-lead-kind]")).toHaveText("Fisik");
+    // A hybrid store filters the queue by kind.
+    await page.getByLabel("Jenis produk").click();
+    await page.getByRole("menuitemradio", { name: /^Produk digital/ }).click();
+    await expect(digitalRow).toBeVisible();
+    await expect(physicalRow).toHaveCount(0);
+    await page.getByLabel("Jenis produk").click();
+    await page.getByRole("menuitemradio", { name: "Semua jenis" }).click();
+    await expect(physicalRow).toBeVisible();
 
     // A physical lead: the shipping form, unchanged.
     await physicalRow.getByRole("button", { name: "Jadikan order" }).click();
@@ -115,6 +123,11 @@ test("a digital lead converts into a prepaid digital order without address or co
     await page.goto(`${STORE}/admin/orders/digital?search=${stamp}`);
     await ready(page);
     await expect(page.getByLabel("Tabel order desktop")).toContainText(orderNumber);
+    // Its WhatsApp column offers the payment link, not the parcel CRM steps.
+    const waCell = page.getByLabel("Tabel order desktop").locator("[data-digital-wa]").first();
+    await expect(waCell).toHaveAttribute("data-digital-wa", "Kirim link bayar");
+    await expect(waCell.getByRole("link", { name: "Kirim link bayar" })).toHaveAttribute("href", /wa\.me\/.*payment/);
+    await expect(page.getByLabel("Tabel order desktop").getByRole("button", { name: "Welcome" })).toHaveCount(0);
     await page.goto(`${STORE}/admin/orders?search=${stamp}`);
     await ready(page);
     await expect(page.getByLabel("Tabel order desktop")).not.toContainText(orderNumber);

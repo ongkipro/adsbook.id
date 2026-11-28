@@ -16,6 +16,7 @@ import {
   RefreshCw,
   UserRoundPlus,
   PanelsTopLeft,
+  Shapes,
 } from "lucide-react";
 import { SOURCE_SLUG_NONE_FILTER, SOURCE_SLUG_NONE_LABEL } from "@/lib/source-slug";
 import { ADMIN_CUSTOM_DATE_FILTER, adminDateSelectionFromQuery } from "@/lib/admin-date-filter";
@@ -66,6 +67,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DistrictCombobox, type DistrictOption } from "@/components/admin/DistrictCombobox";
 
 type FollowUpStatus = "new" | "contacted" | "qualified" | "not_interested";
+type LeadKind = "all" | "physical" | "digital";
 type StatusCounts = Record<FollowUpStatus | "all", number>;
 
 type Lead = {
@@ -177,6 +179,7 @@ const leadRequest = {
   async list(input: {
     search: string;
     status: FollowUpStatus | "all";
+    kind: LeadKind;
     sourceSlug: string;
     dateSelection: AdminDateSelection;
     withSourceOptions: boolean;
@@ -190,6 +193,7 @@ const leadRequest = {
     });
     if (input.search.trim()) query.set("search", input.search.trim());
     if (input.sourceSlug !== "all") query.set("source_slug", input.sourceSlug);
+    if (input.kind !== "all") query.set("fulfillment", input.kind);
     if (input.dateSelection.filter && input.dateSelection.filter !== "all") {
       query.set("date_filter", input.dateSelection.filter);
       if (input.dateSelection.filter === ADMIN_CUSTOM_DATE_FILTER) {
@@ -251,6 +255,10 @@ const leadRequest = {
         page: Number(payload.pagination?.page) || input.page,
         totalItems: Number(payload.pagination?.total_items) || 0,
         totalPages: Number(payload.pagination?.total_pages) || 0,
+      },
+      kindCounts: {
+        physical: Number(payload.kind_counts?.physical) || 0,
+        digital: Number(payload.kind_counts?.digital) || 0,
       },
       statusCounts: Object.fromEntries(
         ["all", ...LEAD_FOLLOW_UP_STATUSES].map((key) => [key, Number(payload.status_counts?.[key]) || 0]),
@@ -494,18 +502,17 @@ function ConversionDialog({
           </DialogDescription>
         </DialogHeader>
         <Separator />
-        <form onSubmit={submit} noValidate className="space-y-6 px-5 pb-5">
+        <form onSubmit={submit} noValidate className="space-y-5 px-5 pb-5">
           {error && (
             <div ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring">
               {error}
             </div>
           )}
-          <section aria-labelledby="lead-buyer-heading" className="space-y-4">
+          <section aria-labelledby="lead-buyer-heading" className="space-y-3">
             <div>
               <h3 id="lead-buyer-heading" className="font-medium">Data pembeli</h3>
-              <p className="text-sm text-muted-foreground">Pastikan nama dan nomor WhatsApp dapat dihubungi.</p>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <label className="space-y-1.5 text-sm font-medium" htmlFor="lead-customer-name">
                 <span>Nama pembeli</span>
                 <Input id="lead-customer-name" autoComplete="name" aria-invalid={fieldError?.id === "lead-customer-name"} aria-describedby={fieldError?.id === "lead-customer-name" ? "lead-customer-name-error" : undefined} value={form.customerName} onChange={(event) => setForm({ ...form, customerName: event.target.value })} required />
@@ -519,20 +526,20 @@ function ConversionDialog({
             </div>
           </section>
           <Separator />
-          <section aria-labelledby="lead-product-heading" className="space-y-4">
+          <section aria-labelledby="lead-product-heading" className="space-y-3">
             <div>
               <h3 id="lead-product-heading" className="font-medium">Produk</h3>
-              <p className="text-sm text-muted-foreground">Harga tetap diverifikasi dari data produk aktif.</p>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_7rem]">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-[1fr_5.5rem] gap-3 sm:grid-cols-[1fr_7rem] sm:gap-4">
+              {/* min-w-0: a long product name truncates in the trigger instead of pushing Jumlah off a phone. */}
+              <div className="min-w-0 space-y-1.5">
                 <label htmlFor="lead-variant" className="text-sm font-medium">Produk & varian</label>
                 <Select
                   items={Object.fromEntries(products.filter((product) => product.is_active).flatMap((product) => product.variants.map((variant) => [String(variant.id), `${product.title} · ${variant.title} (${formatIdr(variant.price)})${product.productType === "digital" ? " · Digital" : ""}`])))}
                   value={form.variantId}
                   onValueChange={(value) => { setForm({ ...form, variantId: value ?? "", courierServiceId: "" }); setPaymentCode(""); }}
                 >
-                  <SelectTrigger id="lead-variant" aria-invalid={fieldError?.id === "lead-variant"} aria-describedby={fieldError?.id === "lead-variant" ? "lead-variant-error" : undefined}><SelectValue placeholder="Pilih produk" /></SelectTrigger>
+                  <SelectTrigger id="lead-variant" className="w-full min-w-0" aria-invalid={fieldError?.id === "lead-variant"} aria-describedby={fieldError?.id === "lead-variant" ? "lead-variant-error" : undefined}><SelectValue placeholder="Pilih produk" className="truncate" /></SelectTrigger>
                   <SelectContent>
                     {products.filter((product) => product.is_active).flatMap((product) => product.variants.map((variant) => (
                       <SelectItem key={variant.id} value={String(variant.id)}>
@@ -555,7 +562,7 @@ function ConversionDialog({
           <section aria-labelledby="lead-payment-heading" className="space-y-4">
             <div>
               <h3 id="lead-payment-heading" className="font-medium">Pembayaran</h3>
-              <p className="text-sm text-muted-foreground">Tanpa ongkir dan tanpa COD. Setelah order dibuat, kirim link pembayaran ke pembeli dari halaman order.</p>
+              <p className="text-sm text-muted-foreground">Tanpa ongkir dan tanpa COD. Setelah order dibuat, kirim link bayar ke pembeli dari daftar Produk digital.</p>
             </div>
             {paymentLoadError ? (
               <p role="alert" className="text-sm text-destructive">{paymentLoadError}</p>
@@ -566,7 +573,7 @@ function ConversionDialog({
                 Belum ada metode non-COD yang aktif. <a className="font-medium text-foreground underline underline-offset-4" href="/admin/payments#rekening-bank-section">Tambahkan rekening toko</a> atau aktifkan AutoLaris.
               </div>
             ) : (
-              <div id="lead-payment" tabIndex={-1} className="grid grid-cols-1 gap-2 outline-none sm:grid-cols-2" role="radiogroup" aria-label="Metode pembayaran" aria-invalid={fieldError?.id === "lead-payment"} aria-describedby={fieldError?.id === "lead-payment" ? "lead-payment-error" : undefined}>
+              <div id="lead-payment" tabIndex={-1} className="grid grid-cols-2 gap-2 outline-none" role="radiogroup" aria-label="Metode pembayaran" aria-invalid={fieldError?.id === "lead-payment"} aria-describedby={fieldError?.id === "lead-payment" ? "lead-payment-error" : undefined}>
                 {paymentMethods.map((method) => {
                   const selected = method.code === paymentCode;
                   return (
@@ -662,7 +669,8 @@ function ConversionDialog({
 // filters start from it rather than `window.location`, so the server-rendered
 // first paint and the hydrating client agree (a mismatch is React error #418).
 // `operator` is the signed-in username: the server records it on every status change, and the row shows it at once.
-export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQuery?: string; operator?: string } = {}) {
+// `splitByKind`: a hybrid store, whose leads convert into two different kinds of order.
+export function AbandonedOrders({ initialQuery = "", operator = "", splitByKind = false }: { initialQuery?: string; operator?: string; splitByKind?: boolean } = {}) {
   const [initialParams] = useState(() => new URLSearchParams(initialQuery));
   const [leads, setLeads] = useState<Lead[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -677,6 +685,11 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
     return value && Object.hasOwn(followUpLabels, value) ? (value as FollowUpStatus) : "all";
   });
   const [sourceSlug, setSourceSlug] = useState(() => initialParams.get("source_slug") || "all");
+  const [kind, setKind] = useState<LeadKind>(() => {
+    const value = initialParams.get("fulfillment");
+    return splitByKind && (value === "physical" || value === "digital") ? value : "all";
+  });
+  const [kindCounts, setKindCounts] = useState<{ physical: number; digital: number } | null>(null);
   const [dateSelection, setDateSelection] = useState<AdminDateSelection>(() =>
     adminDateSelectionFromQuery(initialParams),
   );
@@ -696,6 +709,7 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
       const result = await leadRequest.list({
         search,
         status,
+        kind,
         sourceSlug,
         dateSelection,
         withSourceOptions: !sourceOptions,
@@ -707,6 +721,7 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
       setProducts(result.products);
       setPagination(result.pagination);
       setStatusCounts(result.statusCounts);
+      setKindCounts(result.kindCounts);
       hasLoadedRef.current = true;
     } catch (reason) {
       if (!(reason instanceof Error && reason.name === "AbortError")) {
@@ -727,7 +742,7 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [page, search, status, sourceSlug, dateSelection]);
+  }, [page, search, status, kind, sourceSlug, dateSelection]);
 
   // One path for every status change: the label menu and the WhatsApp auto-mark.
   // The row and the chip counts move at once; a failure puts both back. A row
@@ -815,6 +830,21 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
             <FilterField label="Cari lead" htmlFor="abandoned-search" size="lg">
               <SearchInput id="abandoned-search" value={search} onValueChange={(value) => { setSearch(value); setPage(1); }} placeholder="Produk, nama, WhatsApp, atau ABN" />
             </FilterField>
+            {splitByKind && (
+              <FilterField label="Jenis produk" htmlFor="lead-kind-filter" size="sm">
+                <FilterSelect<LeadKind>
+                  id="lead-kind-filter"
+                  icon={Shapes}
+                  value={kind}
+                  onValueChange={(value) => { setKind(value); setPage(1); }}
+                  options={[
+                    { value: "all", label: "Semua jenis" },
+                    { value: "physical", label: `Produk fisik${kindCounts ? ` (${kindCounts.physical})` : ""}` },
+                    { value: "digital", label: `Produk digital${kindCounts ? ` (${kindCounts.digital})` : ""}` },
+                  ]}
+                />
+              </FilterField>
+            )}
             <FilterField label="Halaman sumber" htmlFor="source-page-filter" size="md">
               <FilterSelect
                 id="source-page-filter"
@@ -844,6 +874,7 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
               kind="abandoned"
               query={new URLSearchParams({
                 follow_up_status: status,
+                ...(kind !== "all" ? { fulfillment: kind } : {}),
                 ...(search.trim() ? { search: search.trim() } : {}),
                 ...(sourceSlug !== "all" ? { source_slug: sourceSlug } : {}),
                 ...(dateSelection.filter && dateSelection.filter !== "all"
@@ -898,8 +929,8 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
         <Card className="border-dashed">
           <CardContent className="py-10 text-center">
             <PackageSearch className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-            <h2 className="mt-3 font-semibold">{search.trim() || status !== "all" || sourceSlug !== "all" ? "Tidak ada hasil yang cocok" : "Belum ada pesanan tertinggal"}</h2>
-            <p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">{search.trim() || status !== "all" || sourceSlug !== "all" ? "Ubah pencarian atau filter." : "Lead akan muncul ketika pembeli sudah mengisi nama dan WhatsApp tetapi belum menyelesaikan order."}</p>
+            <h2 className="mt-3 font-semibold">{search.trim() || status !== "all" || kind !== "all" || sourceSlug !== "all" ? "Tidak ada hasil yang cocok" : "Belum ada pesanan tertinggal"}</h2>
+            <p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">{search.trim() || status !== "all" || kind !== "all" || sourceSlug !== "all" ? "Ubah pencarian atau filter." : "Lead akan muncul ketika pembeli sudah mengisi nama dan WhatsApp tetapi belum menyelesaikan order."}</p>
           </CardContent>
         </Card>
       ) : (
@@ -937,6 +968,7 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
                       <span
                         className={`shrink-0 rounded px-1.5 py-px text-xs font-medium ${lead.productType === "digital" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}
                         data-lead-kind={lead.productType}
+                        title={lead.productType === "digital" ? "Jadi order digital: bayar di muka, tanpa alamat dan kurir" : "Jadi order COD dengan alamat dan kurir"}
                       >
                         {lead.productType === "digital" ? "Digital" : "Fisik"}
                       </span>
@@ -1014,6 +1046,7 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
                   <Button type="button" className="flex-1 lg:flex-none" onClick={() => setSelectedLead(lead)}>
                     <UserRoundPlus aria-hidden="true" />
                     Jadikan order
+                    {splitByKind && lead.productType && <span className="sr-only">{lead.productType === "digital" ? " digital" : " fisik"}</span>}
                   </Button>
                 </div>
               </div>
