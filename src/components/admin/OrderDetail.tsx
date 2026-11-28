@@ -284,7 +284,11 @@ function EditCustomerDialog({
   }, [submitError]);
 
   const customerEditable = !order.provider_order_id;
+  // A digital order has no address or courier (DIGITAL-PRODUCTS-SPEC §2.3):
+  // only the buyer's name and WhatsApp are edited, and the server refuses the rest.
+  const digital = order.fulfillment_type === "digital";
   const courierEditable =
+    !digital &&
     customerEditable &&
     order.payment_method === "cod" &&
     order.shipping_status === "pending";
@@ -385,16 +389,11 @@ function EditCustomerDialog({
   const selectedRate = shippingRates.find(
     (rate) => String(rate.courier_service_id) === selectedCourierServiceId
   );
-  const editableFields = [
-    "customer_name",
-    "customer_phone",
-    "address",
-    "district",
-    "city",
-    "province",
-    "postal_code",
-    "destination_area_id",
-  ] as const;
+  const editableFields = (digital
+    ? ["customer_name", "customer_phone"]
+    : ["customer_name", "customer_phone", "address", "district", "city", "province", "postal_code", "destination_area_id"]) as readonly (
+    "customer_name" | "customer_phone" | "address" | "district" | "city" | "province" | "postal_code" | "destination_area_id"
+  )[];
   const customerDirty = editableFields.some(
     (field) => formData[field].trim() !== String(order[field] || "").trim(),
   );
@@ -493,7 +492,7 @@ function EditCustomerDialog({
       }
       onUpdated({ ...order, ...payload.data });
       setOpen(false);
-      toast.success("Data pembeli dan pengiriman berhasil diperbarui.");
+      toast.success(digital ? "Data pembeli berhasil diperbarui." : "Data pembeli dan pengiriman berhasil diperbarui.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Terjadi kesalahan.";
       setSubmitError(message);
@@ -522,18 +521,20 @@ function EditCustomerDialog({
         }
       >
         {customerEditable ? <Edit3 aria-hidden="true" /> : <LockIcon aria-hidden="true" />}
-        Edit<span className="sr-only"> pembeli & alamat</span>
+        Edit<span className="sr-only">{digital ? " pembeli" : " pembeli & alamat"}</span>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-y-auto p-0 sm:max-w-4xl rounded-xl">
+      <DialogContent className={`max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-y-auto p-0 rounded-xl ${digital ? "sm:max-w-lg" : "sm:max-w-4xl"}`}>
         <DialogHeader className="border-b border-slate-100 px-6 py-4 text-left">
           <DialogTitle className="text-base font-semibold text-slate-900">
-            Edit Pembeli & Pengiriman
+            {digital ? "Edit Pembeli" : "Edit Pembeli & Pengiriman"}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Data pembeli dapat diperbarui sebelum shipment dibuat. Kurir hanya dapat diganti untuk order COD yang masih menunggu.
+            {digital
+              ? "Produk digital tidak memakai alamat atau kurir. Perbarui nama dan nomor WhatsApp pembeli."
+              : "Data pembeli dapat diperbarui sebelum shipment dibuat. Kurir hanya dapat diganti untuk order COD yang masih menunggu."}
           </DialogDescription>
         </DialogHeader>
-        <form ref={formRef} onSubmit={handleSubmit} noValidate className="grid grid-cols-1 gap-6 px-6 py-5 md:grid-cols-[minmax(0,1fr)_17rem]">
+        <form ref={formRef} onSubmit={handleSubmit} noValidate className={`grid grid-cols-1 gap-6 px-6 py-5 ${digital ? "" : "md:grid-cols-[minmax(0,1fr)_17rem]"}`}>
           {/* Two columns: what the operator edits on the left, what it costs
               and the save action on the right, where they stay in view. */}
           <div className="min-w-0 space-y-4">
@@ -585,6 +586,7 @@ function EditCustomerDialog({
             </label>
           </div>
 
+          {!digital && (<>
           <label className="block space-y-1 text-xs font-semibold text-slate-700">
             <span>Alamat Jalan / Rumah</span>
             <Textarea
@@ -736,11 +738,12 @@ function EditCustomerDialog({
               </p>
             )}
           </div>
+          </>)}
 
           </div>
           <aside className="space-y-3 md:sticky md:top-0 md:self-start md:max-h-[calc(100dvh-7rem)] md:overflow-y-auto">
-          {/* Ringkasan Real-Time Total Order (Preview) */}
-          {(() => {
+          {/* Ringkasan Real-Time Total Order (Preview); a digital order's total never changes here. */}
+          {!digital && (() => {
             const itemTotal =
               (order.items || []).reduce(
                 (acc, item) => acc + Number(item.unit_price || 0) * Number(item.quantity || 1),
@@ -1323,6 +1326,11 @@ export function OrderDetail({
   const digital = order.fulfillment_type === "digital";
   const digitalOpen = digital && paymentPaid && !isVoidOrder(order);
   // One tap for CS: the buyer's own order page carries the access once paid (/thanks locator).
+  const digitalPaymentWaUrl = () => {
+    const product = order.items?.[0]?.product_title || "produk digital";
+    const message = `Halo ${order.customer_name || "Kak"}, pesanan ${product} (${order.order_number}) menunggu pembayaran. Total dan cara bayar ada di sini:\n${order.crm?.epayment_link ?? ""}\n\nAkses produk terbuka otomatis setelah pembayaran diterima.`;
+    return `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+  };
   const digitalAccessWaUrl = () => {
     const page = `${window.location.origin}/thanks#o=${encodeURIComponent(String(order.id))}&t=${encodeURIComponent(order.public_status_token || "")}`;
     const product = order.items?.[0]?.product_title || "produk digital";
@@ -1436,6 +1444,8 @@ export function OrderDetail({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
+            {/* A digital order moves with its payment (delivered when paid, void when refunded), never by a shipping status. */}
+            {!digital && (
             <div className="w-full sm:w-52">
               <FilterSelect
                 id="order-shipping-status"
@@ -1447,6 +1457,7 @@ export function OrderDetail({
                 options={statusOptions.map((value) => ({ value, label: shippingLabels[value] || value }))}
               />
             </div>
+            )}
             {safePhone && (
               <a
                 href={`https://wa.me/${waNumber}`}
@@ -1480,11 +1491,12 @@ export function OrderDetail({
               {paymentStatusText}
             </dd>
           </div>
+          {/* A digital order's second axis is its access, not a shipment. */}
           <div className="flex items-center gap-2">
-            <dt className="text-slate-500">Pengiriman</dt>
+            <dt className="text-slate-500">{digital ? "Akses" : "Pengiriman"}</dt>
             <dd className="flex items-center gap-1.5 font-medium text-slate-900">
-              <span className={`size-2 rounded-full ${shippingStatusDots[order.shipping_status] || "bg-slate-400"}`} aria-hidden="true" />
-              {digital ? "Produk digital" : shippingLabels[order.shipping_status] || order.shipping_status}
+              <span className={`size-2 rounded-full ${digital ? (digitalOpen ? "bg-emerald-500" : isVoidOrder(order) ? "bg-slate-400" : "bg-amber-500") : shippingStatusDots[order.shipping_status] || "bg-slate-400"}`} aria-hidden="true" />
+              {digital ? (digitalOpen ? "Akses terbuka" : isVoidOrder(order) ? "Akses ditutup" : "Terbuka setelah lunas") : shippingLabels[order.shipping_status] || order.shipping_status}
             </dd>
           </div>
           {!digital && (
@@ -1549,7 +1561,7 @@ export function OrderDetail({
         <div className="min-w-0 space-y-4">
           {/* Buyer, address, source and items: one panel, sections divided by a rule. */}
           <section className="rounded-lg border border-slate-200 bg-white" aria-label="Pembeli dan produk">
-            <div className="grid grid-cols-1 gap-x-6 gap-y-4 p-4 sm:grid-cols-2 sm:p-5">
+            <div className={`grid grid-cols-1 gap-x-6 gap-y-4 p-4 sm:p-5 ${digital ? "" : "sm:grid-cols-2"}`}>
               <div className="min-w-0">
                 <h3 className="text-xs font-medium text-slate-500">Pembeli</h3>
                 <p className="mt-1 text-base font-semibold text-slate-950">{order.customer_name || "—"}</p>
@@ -1562,6 +1574,7 @@ export function OrderDetail({
                   </p>
                 )}
               </div>
+              {!digital && (
               <div className="min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-xs font-medium text-slate-500">Alamat kirim</h3>
@@ -1591,6 +1604,7 @@ export function OrderDetail({
                   </p>
                 )}
               </div>
+              )}
             </div>
 
             {/* Where the order came from: plain text, the landing path a link to the live page. */}
@@ -1637,8 +1651,8 @@ export function OrderDetail({
                           <p className="mt-0.5 text-xs text-slate-500">
                             {item.variant_title || "Standard"}
                             {item.variant_sku ? ` · SKU ${item.variant_sku}` : ""}
-                            {" · "}
-                            {itemWeight?.unit != null && itemWeight.line != null ? (
+                            {digital ? null : " · "}
+                            {digital ? null : itemWeight?.unit != null && itemWeight.line != null ? (
                               <>
                                 {item.quantity > 1 ? `${item.quantity} × ${formatGrams(itemWeight.unit)} = ` : ""}
                                 {formatWeight(itemWeight.line)}
@@ -1660,7 +1674,7 @@ export function OrderDetail({
                   })}
                 </ul>
               )}
-              {items.length > 0 && (
+              {!digital && items.length > 0 && (
                 <p className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-t border-slate-100 px-4 py-3 text-sm sm:px-5">
                   <span className="text-slate-500">
                     Total berat
@@ -1698,6 +1712,11 @@ export function OrderDetail({
                 {digitalOpen && waNumber && order.public_status_token ? (
                   <a href={digitalAccessWaUrl()} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "default" })} data-send-digital-access>
                     Kirim Akses via WhatsApp
+                  </a>
+                ) : !isVoidOrder(order) && waNumber && order.crm?.epayment_link ? (
+                  // Unpaid: the buyer's /payment page, which shows the total with any admin fee.
+                  <a href={digitalPaymentWaUrl()} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "outline" })} data-send-digital-payment>
+                    Kirim Link Bayar via WhatsApp
                   </a>
                 ) : null}
               </div>
@@ -2026,10 +2045,12 @@ export function OrderDetail({
                   <dt className="text-slate-500">Subtotal produk</dt>
                   <dd className="text-slate-900">{currency(items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0))}</dd>
                 </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Ongkir</dt>
-                  <dd className="text-slate-900">{currency(order.shipping_cost || 0)}</dd>
-                </div>
+                {!digital && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-slate-500">Ongkir</dt>
+                    <dd className="text-slate-900">{currency(order.shipping_cost || 0)}</dd>
+                  </div>
+                )}
                 {order.payment_method === "cod" && (
                   <>
                     <div className="flex justify-between gap-3">
@@ -2184,7 +2205,10 @@ export function OrderDetail({
             </section>
           )}
 
-          {/* Follow-up WhatsApp */}
+          {/* Follow-up WhatsApp: the parcel journey's ten steps (address, shipping,
+              "sudah dikirim"). A digital order sends its payment and access links
+              from the panel above instead. */}
+          {!digital && (
           <section className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="order-followup-title">
             <div className="flex items-baseline justify-between gap-2">
               <h3 id="order-followup-title" className="text-sm font-semibold text-slate-950">Follow-up WhatsApp</h3>
@@ -2196,6 +2220,7 @@ export function OrderDetail({
               <CrmActionGroup crmUrls={allCrmUrls} orderId={order.id} />
             </div>
           </section>
+          )}
         </div>
       </div>
     </div>

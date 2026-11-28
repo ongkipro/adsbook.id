@@ -287,6 +287,18 @@ function forCatalog(groups: AdminNavGroup[], catalogMode: CatalogMode): AdminNav
     .filter((group) => group.items.length > 0);
 }
 
+/**
+ * The phone's bottom bar per role: four menu ids, then "Menu". An id missing
+ * from the role's menu used to vanish without a trace (advertiser kept the
+ * removed "content" and showed three tabs); admin-navigation.test.ts pins each
+ * to the role's visible menu.
+ */
+export function mobilePrimaryNavIds(role: AdminRole): readonly string[] {
+  if (role === "advertiser") return ["dashboard", "products", "analytics", "ads"];
+  if (role === "customer_service") return ["dashboard", "orders", "shipping", "scoring"];
+  return ["dashboard", "orders", "shipping", "products"];
+}
+
 export function getVisibleNavGroups(role: AdminRole, catalogMode: CatalogMode = "hybrid") {
   return forCatalog(navGroupsForRole(role), catalogMode);
 }

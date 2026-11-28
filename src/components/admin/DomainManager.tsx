@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AdminRequestError, isSubscriptionError, SubscriptionLink } from "./subscription-error";
 import { Copy, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +36,7 @@ function stateOf(domain: Domain): { label: string; variant: "default" | "seconda
 async function call(url: string, init?: RequestInit) {
   const response = await fetch(url, { headers: { "Content-Type": "application/json", Accept: "application/json" }, ...init });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload.success) throw new Error(payload.error || "Permintaan gagal.");
+  if (!response.ok || !payload.success) throw new AdminRequestError(payload.error || "Permintaan gagal.", payload.code);
   return payload;
 }
 
@@ -58,6 +59,7 @@ export function DomainManager({ initial }: { initial?: { domains: Domain[]; enab
   const [host, setHost] = useState("");
   const [mode, setMode] = useState<Mode>("root");
   const [addError, setAddError] = useState("");
+  const [addNeedsSubscription, setAddNeedsSubscription] = useState(false);
   const hostInput = useRef<HTMLInputElement>(null);
   const { confirm, dialog } = useConfirm();
 
@@ -133,6 +135,7 @@ export function DomainManager({ initial }: { initial?: { domains: Domain[]; enab
   const add = async (event: { preventDefault(): void }) => {
     event.preventDefault();
     setAddError("");
+    setAddNeedsSubscription(false);
     const typed = host.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
     const sameDomain = current !== null && (typed === current || typed === `www.${current}`);
     const replace = current !== null && !sameDomain;
@@ -148,6 +151,7 @@ export function DomainManager({ initial }: { initial?: { domains: Domain[]; enab
       await load();
       toast.success(payload.message);
     } catch (error) {
+      setAddNeedsSubscription(isSubscriptionError(error));
       setAddError(error instanceof Error ? error.message : "Domain gagal ditambahkan.");
     } finally {
       setBusy(null);
@@ -295,7 +299,7 @@ export function DomainManager({ initial }: { initial?: { domains: Domain[]; enab
             </div>
           </fieldset>
           <div className="mt-5 flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className={`min-h-5 text-xs font-semibold ${addError ? "text-rose-700" : "text-slate-500"}`} role={addError ? "alert" : "status"}>{addError}</p>
+            <p className={`min-h-5 text-xs font-semibold ${addError ? "text-rose-700" : "text-slate-500"}`} role={addError ? "alert" : "status"}>{addError}{addError && addNeedsSubscription && <> <SubscriptionLink /></>}</p>
             <Button type="submit" disabled={!hydrated || busy !== null || !host.trim()}>{busy === "add" ? (current ? "Mengganti…" : "Menambahkan…") : current ? "Ganti domain" : "Tambah domain"}</Button>
           </div>
         </form>

@@ -4,6 +4,7 @@
 // with neither, never COD. Run against the real migrated schema.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
+import { registerHooks } from "node:module";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import {
@@ -17,6 +18,17 @@ import { CATALOG_MODE_FILTER_SQL } from "./catalog.ts";
 import { DIGITAL_ORDER_ADDRESS } from "./order-persistence.ts";
 import { digitalAccessOpen } from "./digital-access.ts";
 import { POST as convertRoute } from "../pages/api/admin/abandoned-orders.ts";
+
+// The order route imports its libs without an extension (Astro resolves them);
+// node --test needs one. Same hook as external-shipping.test.ts.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if ((specifier.startsWith("./") || specifier.startsWith("../")) && !/\.[a-z]+$/i.test(specifier)) {
+      return nextResolve(`${specifier}.ts`, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
 
 type SqlValue = null | number | string;
 const MIGRATIONS_DIR = new URL("../db/migrations/", import.meta.url);
@@ -200,4 +212,33 @@ test("the lead list filters by product kind and counts each kind over the whole 
   assert.deepEqual((await list("fulfillment=physical")).body.data?.map((row) => row.order_number), ["ABN-10008"]);
   assert.deepEqual((await list("fulfillment=physical")).body.kind_counts, { physical: 1, digital: 1 }, "the counts ignore the kind filter, like the status chips");
   assert.equal((await list("fulfillment=services")).status, 400);
+});
+
+test("a digital order's page edits only the buyer: address, courier and waybill are refused", async () => {
+  const { sqlite, database } = seed();
+  await convertDigitalLead(database, 7, digitalInput);
+  const { PATCH } = await import("../pages/api/admin/orders/[id].ts");
+  const patch = (body: Record<string, unknown>) =>
+    PATCH({
+      params: { id: "7" },
+      request: new Request("https://toko.test/api/admin/orders/7", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+      locals: { tenantDb: database, runtimeEnv: {}, admin: { username: "owner", role: "owner" } },
+    } as never);
+  for (const body of [
+    { address: "Jalan Merdeka Nomor 10" },
+    { district: "Coblong", city: "Bandung", province: "Jawa Barat" },
+    { destination_area_id: "area-1" },
+    { courier_code: "jne" },
+    { courier_service_id: 1 },
+    { cnote_no: "AWB-1" },
+    { shipping_channel: "external" },
+  ]) {
+    const response = await patch(body);
+    // 422 from the digital guard; a courier id alone is already refused as "no change" (400).
+    assert.ok(response.status === 422 || response.status === 400, `${JSON.stringify(body)} → ${response.status}`);
+  }
+  const renamed = await patch({ customer_name: "Budi Pratama", customer_phone: "081299998888" });
+  assert.equal(renamed.status, 200, await renamed.clone().text());
+  const order = sqlite.prepare("SELECT customer_name, customer_phone, address, courier_code FROM orders WHERE id = 7").get() as Record<string, string | null>;
+  assert.deepEqual({ ...order }, { customer_name: "Budi Pratama", customer_phone: "6281299998888", address: "-", courier_code: null });
 });

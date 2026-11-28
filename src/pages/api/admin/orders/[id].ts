@@ -625,6 +625,16 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
     if (current.provider_order_id && (hasCustomerChanges || hasShippingSelection)) {
       return jsonError('Data tujuan tidak dapat diubah setelah shipment Mengantar dibuat.', 409);
     }
+    // A digital order ships nothing (DIGITAL-PRODUCTS-SPEC §2.3): its address
+    // columns hold '-' and it has no destination, courier, channel or waybill.
+    // Only the buyer's name and WhatsApp can change.
+    if (
+      current.fulfillment_type === 'digital' &&
+      ([nextAddress, nextDistrict, nextCity, nextProvince, nextPostalCode, nextDestinationAreaId, nextCourierCode, nextCourierService, nextCnoteNo, nextShippingChannel].some((value) => value !== undefined) ||
+        hasCourierServiceId)
+    ) {
+      return jsonError('Order produk digital tidak memakai alamat, kurir, atau resi.', 422);
+    }
     const cnoteChanged = nextCnoteNo !== undefined && (nextCnoteNo || null) !== current.cnote_no;
     if (cnoteChanged && !isExternalOrder) {
       return jsonError('Nomor resi hanya dapat diisi dari respons Mengantar.', 409);
