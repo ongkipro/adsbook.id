@@ -33,6 +33,8 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 
 const ROLE_FILTER_LABELS: Record<string, string> = {
   all: "Semua Role",
@@ -513,9 +515,9 @@ export function AccessManager() {
           <CardContent className="p-4">
             {loading ? (
               <div className="space-y-3 p-2">
-                <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
-                <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
-                <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+                <Skeleton className="h-16 rounded-xl" />
+                <Skeleton className="h-16 rounded-xl" />
+                <Skeleton className="h-16 rounded-xl" />
               </div>
             ) : filteredUsers.length === 0 ? (
               <div className="p-8 text-center">
@@ -749,18 +751,13 @@ export function AccessManager() {
                   <label htmlFor="access-password" className="text-xs font-semibold text-slate-900">
                     Password Sementara <span className="text-rose-500">*</span>
                   </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setForm({ ...form, password: generateRandomPassword() })
-                    }
-                    className="text-xs font-semibold text-emerald-700 hover:underline"
-                  >
+                  <Button type="button" variant="link" size="xs" className="px-0" onClick={() => setForm({ ...form, password: generateRandomPassword() })}>
                     Acak Password
-                  </button>
+                  </Button>
                 </div>
-                <div className="relative mt-1">
-                  <Input
+                {/* InputGroup, not an icon positioned over the input (DESIGN-SYSTEM §7.1, as SearchInput). */}
+                <InputGroup className="mt-1">
+                  <InputGroupInput
                     id="access-password"
                     required
                     type={showPassword ? "text" : "password"}
@@ -770,22 +767,19 @@ export function AccessManager() {
                     placeholder="Minimal 10 karakter"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    className="pr-9 font-mono"
+                    className="font-mono"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
-                    aria-pressed={showPassword}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="size-4" />
-                    ) : (
-                      <Eye className="size-4" />
-                    )}
-                  </button>
-                </div>
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      size="icon-xs"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label="Tampilkan password"
+                      aria-pressed={showPassword}
+                    >
+                      {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
               </div>
 
               <Button

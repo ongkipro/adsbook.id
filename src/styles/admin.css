@@ -363,7 +363,9 @@
 .admin-shell .admin-main :where(h2, h3) { letter-spacing: -0.025em; }
 /* An InputGroup (combobox, search with addon) draws its own frame; the input
    inside it is borderless on purpose and must not get a second frame here. */
-.admin-shell .admin-main :where(input:not([type="checkbox"]):not([type="radio"]):not([data-slot="input-group-control"]), select, textarea, [data-slot="input-group"], [data-slot="select-trigger"]) {
+/* A dark code editor (data-code-editor) keeps its own colours: this rule is
+   unlayered, so it beat the editor's bg-slate-950 and drew near-white text on white. */
+.admin-shell .admin-main :where(input:not([type="checkbox"]):not([type="radio"]):not([data-slot="input-group-control"]), select, textarea:not([data-code-editor]), [data-slot="input-group"], [data-slot="select-trigger"]) {
   border-color: #dbe1e8;
   background-color: #fff;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);

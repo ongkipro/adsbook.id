@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { type CatalogSort, type HomeSectionId, type StoreThemeSettings } from "../../lib/storefront-theme";
 import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type ThemeData = { active: string; accent: string; settings: StoreThemeSettings };
 type ProductOption = { id: string; title: string; image: string | null; active: boolean };
@@ -105,9 +106,9 @@ export function ThemeHomeSettings() {
   if (error) return <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">{error}</div>;
   if (!data || !settings) {
     return (
-      <div className="h-96 animate-pulse rounded-xl bg-muted" role="status" aria-busy="true">
+      <Skeleton className="h-96 rounded-xl" role="status" aria-busy="true">
         <span className="sr-only">Memuat pengaturan beranda.</span>
-      </div>
+      </Skeleton>
     );
   }
 

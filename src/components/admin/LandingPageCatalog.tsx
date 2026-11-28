@@ -416,7 +416,7 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
         <CardContent className="p-0">
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-500">
-              <div className="w-6 h-6 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
+              <Loader2 className="size-6 animate-spin text-slate-500" aria-hidden="true" />
               <span className="text-xs font-medium">Memuat katalog landing page...</span>
             </div>
           ) : filtered.length === 0 ? (
@@ -544,12 +544,12 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                           onClick={() => handleCopyLink(page)}
                           title="Salin URL lengkap"
                           aria-label={`Salin URL /${page.slug}`}
-                          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                          className={buttonVariants({ variant: "outline", size: "icon-lg", className: "size-11 shrink-0 text-slate-500" })}
                         >
                           {copiedSlug === page.slug ? (
-                            <Check className="size-4 text-emerald-600" />
+                            <Check className="text-emerald-600" aria-hidden="true" />
                           ) : (
-                            <Copy className="size-4" />
+                            <Copy aria-hidden="true" />
                           )}
                         </button>
                       </div>
@@ -751,12 +751,12 @@ export default function LandingPageCatalog({ initialPages }: { initialPages?: La
                                   onClick={() => handleCopyLink(page)}
                                   title="Salin URL lengkap"
                                   aria-label={`Salin URL ${page.slug}`}
-                                  className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:text-slate-700"
+                                  className={buttonVariants({ variant: "ghost", size: "icon-xs", className: "shrink-0 text-slate-400" })}
                                 >
                                   {copiedSlug === page.slug ? (
-                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <Check className="text-emerald-600" aria-hidden="true" />
                                   ) : (
-                                    <Copy className="w-3 h-3" />
+                                    <Copy aria-hidden="true" />
                                   )}
                                 </button>
                                 <span className={`shrink-0 whitespace-nowrap rounded border px-1.5 py-px text-xs font-semibold ${srcBadge.color}`}>

@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { courierDisplayName } from '../../lib/courier-names';
 import { INDONESIAN_PROVINCES } from '../../lib/province';
 import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from '@/components/ui/radio-group';
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PROVINCE_NAMES = new Map(INDONESIAN_PROVINCES.map((province) => [province.code, province.name]));
 const provinceLabel = (code: string) => PROVINCE_NAMES.get(code) ?? code;
@@ -269,11 +270,11 @@ export function ExpeditionSettings({
   };
 
   if (loading) {
-    return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-label="Memuat pengaturan ekspedisi" aria-busy="true">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-36 animate-pulse rounded-xl bg-slate-100" />)}</div>;
+    return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-label="Memuat pengaturan ekspedisi" role="status" aria-busy="true">{Array.from({ length: 6 }).map((_, index) => <Skeleton className="h-36 rounded-xl" key={index} />)}</div>;
   }
 
   if (loadError) {
-    return <section className="rounded-xl border border-rose-200 bg-white p-8 text-center shadow-sm" role="alert"><AlertTriangleIcon className="mx-auto size-8 text-rose-600" aria-hidden="true" /><h2 className="mt-4 text-base font-semibold text-slate-950">Ekspedisi gagal dimuat</h2><p className="mt-2 text-sm text-slate-600">{loadError}</p><button type="button" onClick={() => void load()} className="btn-primary mt-5"><RefreshCwIcon className="size-4" aria-hidden="true" /> Coba lagi</button></section>;
+    return <section className="rounded-xl border border-rose-200 bg-white p-8 text-center shadow-sm" role="alert"><AlertTriangleIcon className="mx-auto size-8 text-rose-600" aria-hidden="true" /><h2 className="mt-4 text-base font-semibold text-slate-950">Ekspedisi gagal dimuat</h2><p className="mt-2 text-sm text-slate-600">{loadError}</p><Button type="button" onClick={() => void load()} className="mt-5"><RefreshCwIcon className="size-4" aria-hidden="true" /> Coba lagi</Button></section>;
   }
 
   const showCodPolicy = view === 'all' || view === 'cod-policy';
@@ -307,15 +308,10 @@ export function ExpeditionSettings({
               Pilih provinsi yang tidak boleh menggunakan COD. Kebijakan toko ini terpisah dari pembatasan provinsi milik masing-masing ekspedisi.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void savePolicy()}
-            disabled={!policyChanged || policyPending}
-            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {policyPending ? <LoaderCircleIcon className="size-4 animate-spin" aria-hidden="true" /> : <SaveIcon className="size-4" aria-hidden="true" />}
+          <Button type="button" onClick={() => void savePolicy()} disabled={!policyChanged || policyPending}>
+            {policyPending ? <LoaderCircleIcon className="animate-spin" aria-hidden="true" /> : <SaveIcon aria-hidden="true" />}
             Simpan kebijakan
-          </button>
+          </Button>
         </div>
         
         <div className="mt-5 space-y-5">

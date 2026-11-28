@@ -45,6 +45,7 @@ import {
   Lock as LockIcon,
 } from "lucide-react";
 import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type OrderItem = {
   id: number | string;
@@ -658,8 +659,8 @@ function EditCustomerDialog({
 
             {ratesLoading ? (
               <div className="space-y-2">
-                <div className="h-12 w-full rounded-xl bg-slate-100 animate-pulse border border-slate-200" />
-                <div className="h-12 w-full rounded-xl bg-slate-100 animate-pulse border border-slate-200" />
+                <Skeleton className="h-12 w-full rounded-xl border border-slate-200" />
+                <Skeleton className="h-12 w-full rounded-xl border border-slate-200" />
               </div>
             ) : shippingRates.length > 0 ? (
               <RadioGroup
@@ -1336,21 +1337,21 @@ export function OrderDetail({
   if (loading) {
     // Shaped like the page below (header, journey, two columns), so nothing moves when it lands.
     return (
-      <div className="space-y-5 pb-16" aria-busy="true" aria-label="Memuat order">
+      <div className="space-y-5 pb-16" role="status" aria-busy="true" aria-label="Memuat order">
         <div className="space-y-4">
-          <div className="h-5 w-24 animate-pulse rounded bg-slate-200/70" />
-          <div className="h-8 w-48 animate-pulse rounded bg-slate-200/70" />
-          <div className="h-5 w-80 max-w-full animate-pulse rounded bg-slate-200/70" />
-          <div className="h-[4.5rem] animate-pulse border-y border-slate-200 bg-slate-100/70" />
+          <Skeleton className="h-5 w-24 rounded" />
+          <Skeleton className="h-8 w-48 rounded" />
+          <Skeleton className="h-5 w-80 max-w-full rounded" />
+          <Skeleton className="h-[4.5rem] rounded-none border-y border-slate-200" />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="space-y-4">
-            <div className="h-80 animate-pulse rounded-lg bg-slate-200/70" />
-            <div className="h-56 animate-pulse rounded-lg bg-slate-200/70" />
+            <Skeleton className="h-80 rounded-lg" />
+            <Skeleton className="h-56 rounded-lg" />
           </div>
           <div className="space-y-4">
-            <div className="h-64 animate-pulse rounded-lg bg-slate-200/70" />
-            <div className="h-44 animate-pulse rounded-lg bg-slate-200/70" />
+            <Skeleton className="h-64 rounded-lg" />
+            <Skeleton className="h-44 rounded-lg" />
           </div>
         </div>
       </div>

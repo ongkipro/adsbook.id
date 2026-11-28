@@ -75,7 +75,9 @@ import {
   PanelsTopLeft,
   RotateCcw,
   Send,
+  Loader2,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
 
@@ -427,7 +429,7 @@ function OrderActionMenu({
         }
       >
         {isUpdating ? (
-          <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-800" aria-hidden="true" />
+          <Loader2 className="size-3.5 animate-spin text-slate-600" aria-hidden="true" />
         ) : (
           <MoreHorizontal className="size-4 text-slate-600" aria-hidden="true" />
         )}
@@ -1236,11 +1238,9 @@ export function OrdersTable({
   };
   if (loading)
     return (
-      <div
-        className="h-96 animate-pulse rounded-xl bg-slate-100"
+      <Skeleton className="h-96 rounded-xl"
         aria-label="Memuat daftar order"
-        aria-busy="true"
-      />
+        role="status" aria-busy="true" />
     );
   if (loadError && orders.length === 0)
     return (
@@ -1388,13 +1388,9 @@ export function OrdersTable({
             <p className="text-sm font-semibold text-slate-950">
               {selectedOrderIds.length} pesanan dipilih
             </p>
-            <button
-              type="button"
-              onClick={() => setSelectedOrderIds([])}
-              className="mt-1 text-xs font-semibold text-blue-700 hover:underline"
-            >
+            <Button type="button" variant="link" size="xs" onClick={() => setSelectedOrderIds([])} className="mt-1 px-0">
               Batalkan pilihan
-            </button>
+            </Button>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {!digitalView && (
@@ -1410,10 +1406,7 @@ export function OrdersTable({
                 className="w-full min-w-48 sm:w-auto"
               >
                 {bulkUpdating ? (
-                  <span
-                    className="size-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-700"
-                    aria-hidden="true"
-                  />
+                  <Loader2 className="animate-spin" aria-hidden="true" />
                 ) : null}
                 <SelectValue placeholder="Ubah status ke…" />
               </SelectTrigger>
@@ -1434,10 +1427,7 @@ export function OrdersTable({
                 className="w-full sm:w-auto"
               >
                 {dispatching ? (
-                  <span
-                    className="mr-2 size-4 shrink-0 animate-spin rounded-full border-2 border-slate-200 border-t-white"
-                    aria-hidden="true"
-                  />
+                  <Loader2 className="animate-spin" aria-hidden="true" />
                 ) : null}
                 Push {selectedDispatchIds.length} ke Mengantar
               </Button>

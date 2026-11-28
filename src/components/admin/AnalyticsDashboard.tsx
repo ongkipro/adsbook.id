@@ -111,7 +111,7 @@ function Delta({ current, previous, kind, invert = false }: { current: number; p
 
 function LoadingState() {
   return (
-    <div className="space-y-4" aria-label="Memuat dashboard" aria-busy="true">
+    <div className="space-y-4" aria-label="Memuat dashboard" role="status" aria-busy="true">
       <Skeleton className="h-11 rounded-xl" />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}
@@ -506,7 +506,7 @@ export function AnalyticsDashboard({
             <Button variant="outline" size="sm" onClick={() => void loadAttention()}>Coba lagi</Button>
           </div>
         ) : !attention ? (
-          <div className="space-y-1 p-1" aria-busy="true" aria-label="Memuat daftar tindakan">
+          <div className="space-y-1 p-1" role="status" aria-busy="true" aria-label="Memuat daftar tindakan">
             {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-9 rounded-md" />)}
           </div>
         ) : openItems.length === 0 ? (
@@ -744,7 +744,7 @@ export function AnalyticsDashboard({
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2 xl:grid-cols-1">
               {rankingsLoading ? (
-                <div className="space-y-2" aria-busy="true" aria-label="Memuat ranking">
+                <div className="space-y-2" role="status" aria-busy="true" aria-label="Memuat ranking">
                   {Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-6 rounded-md" />)}
                 </div>
               ) : rankingsError || !rankings ? (

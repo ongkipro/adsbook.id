@@ -44,6 +44,7 @@ import {
   SHIPPING_QUEUE_IDS,
   type ShippingQueueId,
 } from "../../lib/shipping-queue";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Shipment = {
   id: number;
@@ -280,17 +281,15 @@ function LoadingState() {
     <div
       className="space-y-5"
       aria-label="Memuat data pengiriman"
-      aria-busy="true"
+      role="status" aria-busy="true"
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div
-            key={index}
-            className="h-28 animate-pulse rounded-xl bg-slate-100"
-          />
+          <Skeleton className="h-28 rounded-xl"
+            key={index} />
         ))}
       </div>
-      <div className="h-96 animate-pulse rounded-xl bg-slate-100" />
+      <Skeleton className="h-96 rounded-xl" />
     </div>
   );
 }
@@ -575,7 +574,7 @@ export function ShippingOperations({
         </h2>
         <p className="mt-2 text-sm text-slate-600">{loadError}</p>
         <Button onClick={() => void loadData(true)} className="mt-5">
-          <RefreshCwIcon className="size-4 mr-2" aria-hidden="true" /> Coba lagi
+          <RefreshCwIcon aria-hidden="true" /> Coba lagi
         </Button>
       </section>
     );
@@ -640,7 +639,7 @@ export function ShippingOperations({
                 size="lg"
                 className="flex-1 sm:flex-none border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
               >
-                <RefreshCwIcon className={`mr-2 size-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
+                <RefreshCwIcon className={syncing ? "animate-spin" : undefined} aria-hidden="true" />
                 Sinkronkan status
               </Button>
             </div>
@@ -653,7 +652,7 @@ export function ShippingOperations({
               size="lg"
               className="w-full sm:w-auto"
             >
-              <CalendarClockIcon className="mr-2 size-4" aria-hidden="true" />
+              <CalendarClockIcon aria-hidden="true" />
               {pickupOpen
                 ? "Tutup jadwal"
                 : `Jadwalkan pickup (${data.readyPickupIds.length})`}
@@ -697,11 +696,11 @@ export function ShippingOperations({
             >
               {scheduling ? (
                 <LoaderCircleIcon
-                  className="size-4 animate-spin mr-2"
+                  className="animate-spin"
                   aria-hidden="true"
                 />
               ) : (
-                <TruckIcon className="size-4 mr-2" aria-hidden="true" />
+                <TruckIcon aria-hidden="true" />
               )}
               Konfirmasi {selectedOrderIds.length} paket
             </Button>

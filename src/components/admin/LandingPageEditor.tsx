@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
 import { Input } from "../ui/input";
-import { Button } from "../ui/button";
+import { Button, buttonVariants } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -740,42 +740,50 @@ export default function LandingPageEditor({ landingPageId }: Props) {
 
                         {/* Controls */}
                         <div className="flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity">
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => moveSection(index, "up")}
                             disabled={index === 0}
-                            className="p-1.5 hover:bg-slate-200/50 rounded-md disabled:opacity-30 text-slate-500 hover:text-slate-900 transition-colors"
-                            title="Geser Ke Atas"
+                            aria-label="Geser ke atas"
+                            title="Geser ke atas"
                           >
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
+                            <ArrowUp aria-hidden="true" />
+                          </Button>
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => moveSection(index, "down")}
                             disabled={index === sections.length - 1}
-                            className="p-1.5 hover:bg-slate-200/50 rounded-md disabled:opacity-30 text-slate-500 hover:text-slate-900 transition-colors"
-                            title="Geser Ke Bawah"
+                            aria-label="Geser ke bawah"
+                            title="Geser ke bawah"
                           >
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          </button>
-                          <button
+                            <ArrowDown aria-hidden="true" />
+                          </Button>
+                          <Button
                             type="button"
+                            size="icon-sm"
                             onClick={() => setEditingSectionId(isEditing ? null : section.id)}
-                            className={`p-1.5 rounded-md transition-colors ${
-                              isEditing ? "bg-blue-100 text-blue-700" : "hover:bg-slate-200/50 text-slate-500 hover:text-slate-900"
-                            }`}
-                            title="Edit Section"
+                            variant={isEditing ? "default" : "ghost"}
+                            aria-label="Edit section"
+                            title="Edit section"
+                            aria-pressed={isEditing}
                           >
-                            <Settings className="w-3.5 h-3.5" />
-                          </button>
-                          <button
+                            <Settings aria-hidden="true" />
+                          </Button>
+                          <Button
                             type="button"
+                            variant="ghost"
+                            className="text-slate-500 hover:text-destructive"
+                            size="icon-sm"
                             onClick={() => removeSection(index)}
-                            className="p-1.5 hover:bg-red-50 rounded-md text-slate-500 hover:text-red-600 transition-colors"
-                            title="Hapus Section"
+                            aria-label="Hapus section"
+                            title="Hapus section"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            <Trash2 aria-hidden="true" />
+                          </Button>
                         </div>
                       </div>
 
@@ -801,7 +809,7 @@ export default function LandingPageEditor({ landingPageId }: Props) {
                                         updateSection(section.id, { content_html: (section.content_html || "") + item.code });
                                       }
                                     }}
-                                    className="text-xs px-2 py-1 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-md font-mono border border-slate-200 shadow-sm transition-colors cursor-pointer"
+                                    className={buttonVariants({ variant: "outline", size: "xs", className: "font-mono" })}
                                   >
                                     {item.code}
                                   </button>

@@ -811,7 +811,7 @@ export function AbandonedOrders({ initialQuery = "", operator = "", splitByKind 
 
   if (loading) return (
     // Shaped like the page below: filters, status chips, then rows with the same four columns.
-    <div className="space-y-4" aria-label="Memuat pesanan tertinggal" aria-busy="true">
+    <div className="space-y-4" aria-label="Memuat pesanan tertinggal" role="status" aria-busy="true">
       <Skeleton className="h-[5.5rem] w-full rounded-lg" />
       <div className="flex gap-2">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-10 w-28 rounded-lg" />)}</div>
       <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
