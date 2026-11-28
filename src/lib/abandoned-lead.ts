@@ -4,6 +4,16 @@ import {
   normalizePaymentFeeBearer,
 } from "./payment-fee-policy.ts";
 import { isValidWa62, normalizePhone } from "./validation.ts";
+import { paymentBrandLabel } from "./payment-brand.ts";
+import type { PaymentSwitchTarget } from "./payment-switch.ts";
+
+// Restated, not imported: this module also feeds the lead list island (through
+// lead-follow-up.ts), and catalog.ts / order-persistence.ts pull server code
+// into that bundle. `abandoned-lead.test.ts` pins both to their owners.
+/** `CATALOG_MODE_FILTER_SQL` (catalog.ts): what the store sells in its mode. */
+export const LEAD_CATALOG_MODE_SQL = `COALESCE((SELECT catalog_mode FROM stores ORDER BY id LIMIT 1), 'hybrid') IN ('hybrid', p.product_type)`;
+/** `DIGITAL_ORDER_ADDRESS` (order-persistence.ts): '-', never a made-up place. */
+export const LEAD_DIGITAL_ADDRESS = { address: "-", province: "-", city: "-", district: "-" } as const;
 
 export const LEAD_FOLLOW_UP_STATUSES = [
   "new",
@@ -69,6 +79,23 @@ type AbandonedLeadRow = {
 type ActiveVariantRow = {
   id: number;
   price: number;
+  product_type: string | null;
+};
+
+/**
+ * A digital lead becomes a prepaid digital order (DIGITAL-PRODUCTS-SPEC §2.3):
+ * no address, courier or shipping, never COD. The buyer pays from the order's
+ * own /payment page; access opens when the payment settles.
+ */
+export type ConvertDigitalLeadInput = {
+  customerName: string;
+  customerPhone: string;
+  /** The address the payment provider is given; checkout mints the same one when the buyer gives none. */
+  customerEmail: string;
+  variantId: number;
+  quantity: number;
+  payment: PaymentSwitchTarget;
+  followedUpBy: string;
 };
 
 function normalizeLeadIdentity(customerName: string, customerPhone: string) {
@@ -109,13 +136,18 @@ export async function assertAbandonedLeadExists(
   return lead;
 }
 
-async function loadActiveVariant(database: D1Database, variantId: number) {
+/**
+ * An active variant the store sells in its catalog mode: a physical store
+ * converts no digital product and a digital store no physical one, as
+ * `persistOrder` refuses at checkout.
+ */
+export async function loadActiveVariant(database: D1Database, variantId: number) {
   return database
     .prepare(
-      `SELECT pv.id, pv.price
+      `SELECT pv.id, pv.price, p.product_type
        FROM product_variants pv
        INNER JOIN products p ON p.id = pv.product_id
-       WHERE pv.id = ? AND p.is_active = 1
+       WHERE pv.id = ? AND p.is_active = 1 AND ${LEAD_CATALOG_MODE_SQL}
        LIMIT 1`,
     )
     .bind(variantId)
@@ -308,6 +340,11 @@ export async function convertAbandonedLead(
   if (!variant) {
     throw new AbandonedLeadError("Varian produk aktif tidak ditemukan.", 404);
   }
+  // A digital product is never COD and ships nothing: it converts through
+  // `convertDigitalLead`, never into a COD order with a courier.
+  if (variant.product_type === "digital") {
+    throw new AbandonedLeadError("Produk digital dibayar di muka tanpa alamat dan kurir. Pilih metode pembayaran.", 422);
+  }
   if (!store) throw new AbandonedLeadError("Store belum dikonfigurasi.", 503);
 
   const orderNumber = completedNumberFromLead(lead.order_number);
@@ -356,6 +393,7 @@ export async function convertAbandonedLead(
              INNER JOIN products p ON p.id = pv.product_id
              WHERE pv.id = ?
                AND p.is_active = 1
+               AND p.product_type = 'physical'
            )`,
       )
       .bind(
@@ -429,4 +467,134 @@ export async function convertAbandonedLead(
     );
   }
   return { id: converted.id, orderNumber: converted.order_number };
+}
+
+export async function convertDigitalLead(
+  database: D1Database,
+  orderId: number,
+  input: ConvertDigitalLeadInput,
+) {
+  if (!Number.isInteger(orderId) || orderId < 1) {
+    throw new AbandonedLeadError("ID pesanan tertinggal tidak valid.");
+  }
+  const identity = normalizeLeadIdentity(input.customerName, input.customerPhone);
+  if (!Number.isInteger(input.quantity) || input.quantity < 1 || input.quantity > 100) {
+    throw new AbandonedLeadError("Jumlah produk harus 1 sampai 100.", 422);
+  }
+  const [lead, variant, store] = await Promise.all([
+    loadAbandonedLead(database, orderId),
+    loadActiveVariant(database, input.variantId),
+    database.prepare("SELECT id FROM stores ORDER BY id LIMIT 1").first<{ id: number }>(),
+  ]);
+  if (!lead) throw new AbandonedLeadError("Pesanan tertinggal tidak ditemukan.", 404);
+  if (!variant) throw new AbandonedLeadError("Varian produk aktif tidak ditemukan.", 404);
+  if (variant.product_type !== "digital") {
+    throw new AbandonedLeadError("Produk fisik perlu alamat dan kurir. Lengkapi pengiriman.", 422);
+  }
+  if (!store) throw new AbandonedLeadError("Store belum dikonfigurasi.", 503);
+
+  let bank: { id: number; bank_code: string; account_holder: string; account_number: string } | null = null;
+  if (input.payment.payment_method === "manual_transfer") {
+    bank = await database
+      .prepare(
+        `SELECT id, bank_code, account_holder, account_number FROM seller_bank_accounts
+         WHERE id = ? AND store_id = ? AND is_active = 1 LIMIT 1`,
+      )
+      .bind(input.payment.seller_bank_account_id, store.id)
+      .first<{ id: number; bank_code: string; account_holder: string; account_number: string }>();
+    if (!bank) throw new AbandonedLeadError("Rekening transfer tidak tersedia.", 422);
+  }
+
+  const orderNumber = completedNumberFromLead(lead.order_number);
+  const unitPrice = Number(variant.price);
+  const totalAmount = unitPrice * input.quantity;
+  const conversionToken = `admin_${crypto.randomUUID()}`;
+  const now = new Date().toISOString();
+  const results = await database.batch([
+    database
+      .prepare(
+        `UPDATE orders
+         SET order_number = ?,
+             submit_token = ?,
+             public_status_token = COALESCE(public_status_token, ?),
+             customer_name = ?,
+             customer_phone = ?,
+             customer_email = COALESCE(NULLIF(customer_email, ''), ?),
+             address = ?, district = ?, city = ?, province = ?,
+             postal_code = NULL, destination_area_id = NULL, warehouse_id = NULL,
+             courier_code = NULL, courier_service = NULL,
+             shipping_cost = 0, discount_amount = 0,
+             total_amount = ?,
+             cod_service_fee = 0, cod_service_fee_vat = 0,
+             payment_method = ?,
+             payment_status = 'pending',
+             shipping_status = 'pending',
+             fulfillment_type = 'digital',
+             shipping_channel = 'mengantar',
+             seller_bank_account_id = ?, seller_bank_code = ?, seller_bank_name = ?,
+             seller_account_holder = ?, seller_account_number = ?,
+             lead_follow_up_status = 'converted',
+             lead_followed_up_at = ?,
+             lead_followed_up_by = ?
+         WHERE id = ?
+           AND shipping_status = 'abandoned'
+           AND EXISTS (
+             SELECT 1
+             FROM product_variants pv
+             INNER JOIN products p ON p.id = pv.product_id
+             WHERE pv.id = ?
+               AND p.is_active = 1
+               AND p.product_type = 'digital'
+           )`,
+      )
+      .bind(
+        orderNumber,
+        conversionToken,
+        crypto.randomUUID(),
+        identity.name,
+        identity.phone,
+        input.customerEmail.trim().slice(0, 160) || null,
+        LEAD_DIGITAL_ADDRESS.address,
+        LEAD_DIGITAL_ADDRESS.district,
+        LEAD_DIGITAL_ADDRESS.city,
+        LEAD_DIGITAL_ADDRESS.province,
+        totalAmount,
+        input.payment.payment_method,
+        bank?.id ?? null,
+        bank?.bank_code ?? null,
+        bank ? paymentBrandLabel(bank.bank_code) : null,
+        bank?.account_holder ?? null,
+        bank?.account_number ?? null,
+        now,
+        input.followedUpBy.trim().slice(0, 100) || null,
+        orderId,
+        variant.id,
+      ),
+    database
+      .prepare(
+        `DELETE FROM order_items
+         WHERE order_id = ?
+           AND EXISTS (SELECT 1 FROM orders WHERE id = ? AND submit_token = ? AND shipping_status = 'pending')`,
+      )
+      .bind(orderId, orderId, conversionToken),
+    database
+      .prepare(
+        `INSERT INTO order_items (order_id, variant_id, quantity, unit_price, weight_grams)
+         SELECT id, ?, ?, ?, (SELECT weight_grams FROM product_variants WHERE id = ?)
+         FROM orders
+         WHERE id = ? AND submit_token = ? AND shipping_status = 'pending'`,
+      )
+      .bind(variant.id, input.quantity, unitPrice, variant.id, orderId, conversionToken),
+    database
+      .prepare(
+        `SELECT id, order_number, total_amount FROM orders
+         WHERE id = ? AND submit_token = ? AND shipping_status = 'pending'`,
+      )
+      .bind(orderId, conversionToken),
+  ]);
+  const converted = results.at(-1)?.results?.[0] as { id?: number; order_number?: string; total_amount?: number } | undefined;
+  if (!converted?.id || !converted.order_number) {
+    throw new AbandonedLeadError("Pesanan tertinggal sudah diproses oleh operator lain.", 409);
+  }
+  return { id: converted.id, orderNumber: converted.order_number, totalAmount: Number(converted.total_amount) || totalAmount };
 }

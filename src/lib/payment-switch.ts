@@ -170,7 +170,7 @@ export function parsePaymentSwitchTarget(value: unknown): PaymentSwitchTarget | 
 }
 
 /** The same readiness /api/payment-methods reports for one channel; null = usable. */
-async function autoLarisChannelUnavailable(
+export async function autoLarisChannelUnavailable(
   database: D1Database,
   locals: App.Locals,
   channel: AutoLarisCheckoutChannel,

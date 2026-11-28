@@ -74,6 +74,8 @@ type Lead = {
   customerName: string;
   customerPhone: string;
   productName: string;
+  /** null when the lead has no product yet. */
+  productType: "physical" | "digital" | null;
   variantName: string;
   variantId: number | null;
   quantity: number;
@@ -89,6 +91,7 @@ type Lead = {
 type Product = {
   id: number;
   title: string;
+  productType: "physical" | "digital";
   is_active: boolean;
   variants: Array<{
     id: number;
@@ -97,6 +100,17 @@ type Product = {
     price: number;
     stock: number | null;
   }>;
+};
+
+/** One row of /api/admin/payment-methods (the checkout's list); COD is left out for a digital lead. */
+type PaymentMethod = {
+  code: string;
+  payment_method: string;
+  channel_code: string | null;
+  seller_bank_account_id?: number;
+  name: string;
+  fee_description?: string;
+  is_active: boolean;
 };
 
 type LocationOption = {
@@ -136,6 +150,7 @@ function normalizeLead(row: Record<string, unknown>): Lead {
     customerName: String(row.customer_name ?? row.customerName ?? ""),
     customerPhone: String(row.customer_phone ?? row.customerPhone ?? ""),
     productName: String(row.product_title ?? row.product_name ?? row.productName ?? ""),
+    productType: row.product_type === "digital" ? "digital" : row.product_type === "physical" ? "physical" : null,
     variantName: String(row.variant_title ?? row.variant_name ?? row.variantName ?? ""),
     variantId: Number(row.variant_id ?? row.variantId) || null,
     quantity: Math.max(1, Number(row.quantity) || 1),
@@ -209,6 +224,7 @@ const leadRequest = {
       const product = productsById.get(productId) ?? {
         id: productId,
         title: String(row.product_title || "Produk"),
+        productType: row.product_type === "digital" ? "digital" : "physical",
         is_active: true,
         variants: [],
       };
@@ -270,7 +286,7 @@ function ConversionDialog({
 }: {
   lead: Lead | null;
   products: Product[];
-  onClose: (convertedOrderNumber?: string) => void;
+  onClose: (convertedOrderNumber?: string, message?: string) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -287,6 +303,9 @@ function ConversionDialog({
   }, []);
   const [rates, setRates] = useState<ShippingRate[]>([]);
   const [ratesLoading, setRatesLoading] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[] | null>(null);
+  const [paymentLoadError, setPaymentLoadError] = useState("");
+  const [paymentCode, setPaymentCode] = useState("");
   const errorRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
     customerName: "",
@@ -307,6 +326,7 @@ function ConversionDialog({
     setError("");
     setFieldError(null);
     setRates([]);
+    setPaymentCode("");
     setForm({
       customerName: lead.customerName,
       customerPhone: lead.customerPhone,
@@ -322,8 +342,29 @@ function ConversionDialog({
     });
   }, [lead]);
 
+  // The product decides the order (DIGITAL-PRODUCTS-SPEC §5.1): a digital one
+  // is paid first with no address or courier, a physical one ships COD.
+  const selectedVariant = products
+    .flatMap((product) => product.variants.map((variant) => ({ product, variant })))
+    .find(({ variant }) => String(variant.id) === form.variantId);
+  const digital = selectedVariant?.product.productType === "digital";
+
+  // The checkout's own list, loaded the first time a digital product is picked.
   useEffect(() => {
-    if (!lead || !form.destinationAreaId || !form.variantId) {
+    if (!lead || !digital || paymentMethods) return;
+    const controller = new AbortController();
+    void fetch("/api/admin/payment-methods", { cache: "no-store", signal: controller.signal })
+      .then(readJson)
+      .then((body: { data?: PaymentMethod[] }) =>
+        setPaymentMethods((body.data || []).filter((method) => method.is_active && method.payment_method !== "cod")))
+      .catch((reason) => {
+        if (!(reason instanceof Error && reason.name === "AbortError")) setPaymentLoadError("Metode pembayaran gagal dimuat.");
+      });
+    return () => controller.abort();
+  }, [digital, lead, paymentMethods]);
+
+  useEffect(() => {
+    if (!lead || digital || !form.destinationAreaId || !form.variantId) {
       setRates([]);
       return;
     }
@@ -356,14 +397,12 @@ function ConversionDialog({
         if (!controller.signal.aborted) setRatesLoading(false);
       });
     return () => controller.abort();
-  }, [form.destinationAreaId, form.province, form.quantity, form.variantId, lead]);
+  }, [digital, form.destinationAreaId, form.province, form.quantity, form.variantId, lead]);
 
   const selectedRate = rates.find(
     (rate) => String(rate.courier_service_id) === form.courierServiceId,
   );
-  const selectedVariant = products
-    .flatMap((product) => product.variants.map((variant) => ({ product, variant })))
-    .find(({ variant }) => String(variant.id) === form.variantId);
+  const chosenPayment = paymentMethods?.find((method) => method.code === paymentCode) ?? null;
   const submit = async (
     event: SyntheticEvent<HTMLFormElement, SubmitEvent>,
   ) => {
@@ -377,6 +416,10 @@ function ConversionDialog({
         ? ["lead-customer-name", "Nama pembeli minimal 2 karakter."]
         : !/^(08|628)\d{8,11}$/.test(form.customerPhone.replace(/\D/g, ""))
           ? ["lead-customer-phone", "Nomor WhatsApp belum valid."]
+          : digital
+            ? !chosenPayment
+              ? ["lead-payment", "Pilih metode pembayaran."]
+              : null
           : form.address.trim().length < 10
             ? ["lead-address", "Alamat lengkap minimal 10 karakter."]
             : !form.destinationAreaId
@@ -390,11 +433,26 @@ function ConversionDialog({
       window.requestAnimationFrame(() => document.getElementById(firstInvalid[0])?.focus());
       return;
     }
-    if (!selectedRate) return;
     setSaving(true);
     setError("");
     setFieldError(null);
     try {
+      if (digital) {
+        if (!chosenPayment) return;
+        const response = await leadRequest.convert({
+          order_id: lead.id,
+          customer_name: form.customerName.trim(),
+          customer_phone: form.customerPhone.replace(/\D/g, ""),
+          variant_id: Number(form.variantId),
+          quantity: Number(form.quantity),
+          payment: chosenPayment.payment_method === "manual_transfer"
+            ? { payment_method: "manual_transfer", seller_bank_account_id: chosenPayment.seller_bank_account_id }
+            : { payment_method: chosenPayment.payment_method, payment_channel: chosenPayment.channel_code },
+        });
+        onClose(String(response.data?.order_number || ""), response.message ? String(response.message) : undefined);
+        return;
+      }
+      if (!selectedRate) return;
       const response = await leadRequest.convert({
         order_id: lead.id,
         customer_name: form.customerName.trim(),
@@ -424,9 +482,11 @@ function ConversionDialog({
     <Dialog open={Boolean(lead)} onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-0 sm:max-w-3xl">
         <DialogHeader className="px-5 pt-5 text-left">
-          <DialogTitle>Edit & jadikan order</DialogTitle>
+          <DialogTitle>{digital ? "Jadikan order produk digital" : "Edit & jadikan order"}</DialogTitle>
           <DialogDescription>
-            Lengkapi pesanan {lead?.orderNumber}. Konversi membuat order COD, tetapi belum mengirimkannya ke Mengantar.
+            {digital
+              ? `Lengkapi pesanan ${lead?.orderNumber ?? ""}. Produk digital dibayar di muka tanpa alamat dan kurir; akses terbuka otomatis setelah lunas.`
+              : `Lengkapi pesanan ${lead?.orderNumber ?? ""}. Konversi membuat order COD, tetapi belum mengirimkannya ke Mengantar.`}
           </DialogDescription>
         </DialogHeader>
         <Separator />
@@ -464,15 +524,15 @@ function ConversionDialog({
               <div className="space-y-1.5">
                 <label htmlFor="lead-variant" className="text-sm font-medium">Produk & varian</label>
                 <Select
-                  items={Object.fromEntries(products.filter((product) => product.is_active).flatMap((product) => product.variants.map((variant) => [String(variant.id), `${product.title} · ${variant.title} (${formatIdr(variant.price)})`])))}
+                  items={Object.fromEntries(products.filter((product) => product.is_active).flatMap((product) => product.variants.map((variant) => [String(variant.id), `${product.title} · ${variant.title} (${formatIdr(variant.price)})${product.productType === "digital" ? " · Digital" : ""}`])))}
                   value={form.variantId}
-                  onValueChange={(value) => setForm({ ...form, variantId: value ?? "", courierServiceId: "" })}
+                  onValueChange={(value) => { setForm({ ...form, variantId: value ?? "", courierServiceId: "" }); setPaymentCode(""); }}
                 >
                   <SelectTrigger id="lead-variant" aria-invalid={fieldError?.id === "lead-variant"} aria-describedby={fieldError?.id === "lead-variant" ? "lead-variant-error" : undefined}><SelectValue placeholder="Pilih produk" /></SelectTrigger>
                   <SelectContent>
                     {products.filter((product) => product.is_active).flatMap((product) => product.variants.map((variant) => (
                       <SelectItem key={variant.id} value={String(variant.id)}>
-                        {product.title} · {variant.title} ({formatIdr(variant.price)})
+                        {product.title} · {variant.title} ({formatIdr(variant.price)}){product.productType === "digital" ? " · Digital" : ""}
                       </SelectItem>
                     )))}
                   </SelectContent>
@@ -487,6 +547,44 @@ function ConversionDialog({
             </div>
           </section>
           <Separator />
+          {digital ? (
+          <section aria-labelledby="lead-payment-heading" className="space-y-4">
+            <div>
+              <h3 id="lead-payment-heading" className="font-medium">Pembayaran</h3>
+              <p className="text-sm text-muted-foreground">Tanpa ongkir dan tanpa COD. Setelah order dibuat, kirim link pembayaran ke pembeli dari halaman order.</p>
+            </div>
+            {paymentLoadError ? (
+              <p role="alert" className="text-sm text-destructive">{paymentLoadError}</p>
+            ) : !paymentMethods ? (
+              <Skeleton className="h-14 w-full" />
+            ) : paymentMethods.length === 0 ? (
+              <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">
+                Belum ada metode non-COD yang aktif. <a className="font-medium text-foreground underline underline-offset-4" href="/admin/payments#rekening-bank-section">Tambahkan rekening toko</a> atau aktifkan AutoLaris.
+              </div>
+            ) : (
+              <div id="lead-payment" tabIndex={-1} className="grid grid-cols-1 gap-2 outline-none sm:grid-cols-2" role="radiogroup" aria-label="Metode pembayaran" aria-invalid={fieldError?.id === "lead-payment"} aria-describedby={fieldError?.id === "lead-payment" ? "lead-payment-error" : undefined}>
+                {paymentMethods.map((method) => {
+                  const selected = method.code === paymentCode;
+                  return (
+                    <Button key={method.code} type="button" variant={selected ? "secondary" : "outline"} role="radio" aria-checked={selected} className="h-auto items-start justify-start whitespace-normal p-3 text-left" onClick={() => setPaymentCode(method.code)}>
+                      <span>
+                        <span className="block font-semibold">{method.name}</span>
+                        {method.fee_description && <span className="mt-0.5 block text-xs text-muted-foreground">{method.fee_description}</span>}
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            )}
+            {fieldError?.id === "lead-payment" && <p id="lead-payment-error" className="text-xs text-destructive">{fieldError.message}</p>}
+            {selectedVariant && (
+              <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Total</span>
+                <strong>{formatIdr(selectedVariant.variant.price * Math.max(1, Number(form.quantity) || 1))}</strong>
+              </div>
+            )}
+          </section>
+          ) : (
           <section aria-labelledby="lead-shipping-heading" className="space-y-4">
             <div>
               <h3 id="lead-shipping-heading" className="font-medium">Alamat & pengiriman</h3>
@@ -542,11 +640,12 @@ function ConversionDialog({
               ) : <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">Pilih produk dan kecamatan untuk melihat kurir.</div>}
             </div>
           </section>
+          )}
           <DialogFooter className="mx-0 mb-0 border-t px-0 pt-5 pb-0">
             <Button type="button" variant="outline" onClick={() => onClose()} disabled={saving}>Batal</Button>
             <Button type="submit" disabled={saving}>
               {saving && <Loader2 className="animate-spin" aria-hidden="true" />}
-              Jadikan order
+              {digital ? "Jadikan order digital" : "Jadikan order"}
             </Button>
           </DialogFooter>
         </form>
@@ -827,7 +926,18 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
                   <p className="truncate font-mono text-xs text-slate-500">{lead.customerPhone}</p>
                 </div>
                 <div className="order-3 col-span-2 min-w-0 lg:order-none lg:col-span-1">
-                  <p className="truncate text-sm text-slate-900">{lead.productName || "Produk belum dipilih"}</p>
+                  <p className="flex min-w-0 items-center gap-1.5 text-sm text-slate-900">
+                    <span className="truncate">{lead.productName || "Produk belum dipilih"}</span>
+                    {/* The kind decides the conversion: digital is paid first with no address. */}
+                    {lead.productType && (
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-px text-xs font-medium ${lead.productType === "digital" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}
+                        data-lead-kind={lead.productType}
+                      >
+                        {lead.productType === "digital" ? "Digital" : "Fisik"}
+                      </span>
+                    )}
+                  </p>
                   <p className="truncate text-xs text-slate-500">
                     {lead.variantName || "Varian belum dipilih"} · {lead.orderNumber}
                     {lead.sourceLabel && <span title={lead.sourcePath ?? lead.sourceLabel}> · {lead.sourceLabel}</span>}
@@ -928,6 +1038,7 @@ export function AbandonedOrders({ initialQuery = "", operator = "" }: { initialQ
       )}
       <ConversionDialog lead={selectedLead} products={products} onClose={(orderNumber) => {
         setSelectedLead(null);
+        // The order page is where a digital order's payment link is sent from.
         if (orderNumber) window.location.assign(`/admin/orders/${encodeURIComponent(orderNumber)}`);
       }} />
     </div>

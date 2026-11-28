@@ -3,6 +3,8 @@ import {
   AbandonedLeadError,
   assertAbandonedLeadExists,
   convertAbandonedLead,
+  convertDigitalLead,
+  LEAD_CATALOG_MODE_SQL,
   updateAbandonedLead,
   type LeadFollowUpStatus,
 } from "../../../lib/abandoned-lead.ts";
@@ -10,6 +12,8 @@ import { jsonError, jsonOk } from "../../../lib/api.ts";
 import { abandonedListFilter } from "../../../lib/order-list-filter.ts";
 import { selectQuotedRate } from "../../../lib/courier-rules.ts";
 import { scheduleCodPurchase } from "../../../lib/paid-order-purchase.ts";
+import { autoLarisChannelUnavailable, parsePaymentSwitchTarget } from "../../../lib/payment-switch.ts";
+import { buyerEmail, createAutoLarisPaymentForOrder, recordFailedPaymentAttempt } from "../../../lib/autolaris-payment.ts";
 import {
   sourceFacetStatement,
   sourceFilterOptions,
@@ -25,6 +29,7 @@ import {
   ShippingQuoteError,
 } from "../../../lib/shipping-quote.ts";
 import { tenantDatabase } from "../../../lib/tenant-database.ts";
+import { normalizePhone } from "../../../lib/validation.ts";
 
 export const prerender = false;
 
@@ -44,6 +49,7 @@ type AbandonedLeadListRow = {
   source_slug: string | null;
   product_id: number | null;
   product_title: string | null;
+  product_type: string | null;
   variant_id: number | null;
   variant_title: string | null;
   quantity: number | null;
@@ -53,6 +59,7 @@ type AbandonedLeadListRow = {
 type ProductOptionRow = {
   product_id: number;
   product_title: string;
+  product_type: string | null;
   variant_id: number;
   variant_title: string;
   sku: string;
@@ -113,7 +120,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
            o.total_amount, o.lead_follow_up_status, o.lead_followed_up_at,
            o.lead_followed_up_by, o.lead_follow_up_note, o.created_at,
            o.source_page_path, o.source_slug,
-           p.id AS product_id, p.title AS product_title,
+           p.id AS product_id, p.title AS product_title, p.product_type,
            pv.id AS variant_id, pv.title AS variant_title,
            oi.quantity, oi.unit_price
          FROM orders o
@@ -135,12 +142,12 @@ export const GET: APIRoute = async ({ url, locals }) => {
       ),
       database.prepare(
         `SELECT
-           p.id AS product_id, p.title AS product_title,
+           p.id AS product_id, p.title AS product_title, p.product_type,
            pv.id AS variant_id, pv.title AS variant_title,
            pv.sku, pv.price, pv.stock
          FROM product_variants pv
          INNER JOIN products p ON p.id = pv.product_id
-         WHERE p.is_active = 1
+         WHERE p.is_active = 1 AND ${LEAD_CATALOG_MODE_SQL}
          ORDER BY p.title, pv.id
          LIMIT 500`,
       ),
@@ -182,6 +189,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
           customer_phone: row.customer_phone,
           product_id: row.product_id,
           product_title: row.product_title,
+          product_type: row.product_type === "digital" ? "digital" : row.product_type ? "physical" : null,
           variant_id: row.variant_id,
           variant_title: row.variant_title,
           quantity: row.quantity,
@@ -216,6 +224,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
         return {
           product_id: row.product_id,
           product_title: row.product_title,
+          product_type: row.product_type === "digital" ? "digital" : "physical",
           variant_id: row.variant_id,
           variant_title: row.variant_title,
           sku: row.sku,
@@ -273,6 +282,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const orderId = Number(body.order_id);
   const variantId = Number(body.variant_id);
   const quantity = Number(body.quantity);
+  // The dialog sends `payment` for a digital product and a courier for a
+  // physical one. Each path refuses the other kind (DIGITAL-PRODUCTS-SPEC
+  // §5.1: the product decides, never the request), so a mismatched request
+  // fails rather than making a COD digital order or a parcel without address.
+  if (body.payment !== undefined) return convertDigitalRequest(database, locals, body, orderId, variantId, quantity);
   const courierServiceId = Number(body.courier_service_id);
   const destinationAreaId = String(body.destination_area_id || "").trim();
   const city = String(body.city || "").trim();
@@ -369,3 +383,71 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return errorResponse(error, "admin-abandoned-orders-post");
   }
 };
+
+/**
+ * A digital lead: a prepaid order with no address or courier. A VA/QRIS
+ * instruction is created now, as checkout does, so the buyer's /payment page
+ * holds it; a manual transfer waits for "Transfer Diterima". Nothing is sent
+ * to Meta here: a prepaid order reports its Purchase when it is paid (ADR-036,
+ * `enqueuePurchaseForPaidOrder`), never on creation.
+ */
+async function convertDigitalRequest(
+  database: D1Database,
+  locals: App.Locals,
+  body: Record<string, unknown>,
+  orderId: number,
+  variantId: number,
+  quantity: number,
+) {
+  if (!Number.isSafeInteger(orderId) || orderId < 1 || !Number.isSafeInteger(variantId) || variantId < 1 || !Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+    return jsonError("Produk dan jumlah wajib dipilih.", 422);
+  }
+  const payment = parsePaymentSwitchTarget(body.payment);
+  if (!payment) return jsonError("Pilih metode pembayaran: QRIS, Virtual Account, atau transfer bank.", 422);
+  try {
+    await assertAbandonedLeadExists(database, orderId);
+    if (payment.payment_method !== "manual_transfer") {
+      const unavailable = await autoLarisChannelUnavailable(database, locals, payment.payment_channel);
+      if (unavailable) return jsonError(unavailable, 422);
+    }
+    const customerPhone = String(body.customer_phone || "");
+    const converted = await convertDigitalLead(database, orderId, {
+      customerName: String(body.customer_name || ""),
+      customerPhone,
+      // Minted from the stored (62…) number, as checkout does.
+      customerEmail: buyerEmail(null, normalizePhone(customerPhone), locals.tenant?.siteUrl ?? ""),
+      variantId,
+      quantity,
+      payment,
+      followedUpBy: locals.admin?.username || "",
+    });
+    let paymentError: string | null = null;
+    if (payment.payment_method !== "manual_transfer") {
+      try {
+        await createAutoLarisPaymentForOrder(database, locals, { orderId: converted.id, channelCode: payment.payment_channel });
+      } catch (error) {
+        console.error("lead-digital-autolaris-error", error);
+        paymentError = error instanceof Error ? error.message : String(error);
+        await recordFailedPaymentAttempt(
+          database,
+          { id: converted.id, orderNumber: converted.orderNumber, totalAmount: converted.totalAmount },
+          payment.payment_channel,
+          paymentError,
+        );
+      }
+    }
+    return jsonOk({
+      message: paymentError
+        ? `${converted.orderNumber} menjadi order digital, tetapi instruksi pembayaran gagal dibuat. Buat ulang dari halaman order.`
+        : `${converted.orderNumber} menjadi order digital. Kirim link pembayaran ke pembeli; akses terbuka otomatis setelah lunas.`,
+      data: {
+        id: converted.id,
+        order_number: converted.orderNumber,
+        shipping_status: "pending",
+        fulfillment_type: "digital",
+      },
+    });
+  } catch (error) {
+    return errorResponse(error, "admin-abandoned-orders-digital");
+  }
+}
