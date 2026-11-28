@@ -11,6 +11,7 @@ import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { useConfirm } from "./useConfirm";
 import type { WarehouseOrigin } from "./WarehouseOriginPicker";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Only the editor needs it; most visits read the list. The fallback holds the input's height.
 const WarehouseOriginPicker = lazy(() => import("./WarehouseOriginPicker"));
@@ -180,9 +181,9 @@ export default function Warehouses() {
   }
   if (!rows) {
     return (
-      <div role="status" aria-busy="true" className="h-64 animate-pulse rounded-xl bg-slate-100">
+      <Skeleton role="status" aria-busy="true" className="h-64 rounded-xl">
         <span className="sr-only">Memuat daftar gudang.</span>
-      </div>
+      </Skeleton>
     );
   }
 

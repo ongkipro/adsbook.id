@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useConfirm } from "./useConfirm";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type PluginItem = {
   id: string;
@@ -65,9 +66,9 @@ export function PluginManager({ mayManage }: { mayManage: boolean }) {
   }
   if (!plugins) {
     return (
-      <div className="h-40 animate-pulse rounded-xl bg-slate-100" role="status" aria-busy="true">
+      <Skeleton className="h-40 rounded-xl" role="status" aria-busy="true">
         <span className="sr-only">Memuat daftar plugin.</span>
-      </div>
+      </Skeleton>
     );
   }
 

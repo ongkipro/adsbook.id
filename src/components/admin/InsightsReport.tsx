@@ -32,7 +32,7 @@ const sectionClass = 'rounded-lg border border-border bg-card p-4 text-card-fore
 const metricLabels = { orders: 'Orders', leads: 'Leads', revenue: 'Revenue', meta_purchases: 'Purchase ke Meta' };
 type TrendMetric = keyof typeof metricLabels;
 
-function Loading() { return <div aria-busy="true" aria-label="Memuat laporan" className="flex flex-col gap-3"><Skeleton className="h-16 w-full" /><Skeleton className="h-64 w-full" /></div>; }
+function Loading() { return <div role="status" aria-busy="true" aria-label="Memuat laporan" className="flex flex-col gap-3"><Skeleton className="h-16 w-full" /><Skeleton className="h-64 w-full" /></div>; }
 /** RTS above this share is flagged for review on every Analitik screen. */
 const RTS_REVIEW_SHARE = 20;
 /** RTS as a figure: red with a dot above the review line, the reason on hover and for screen readers. */

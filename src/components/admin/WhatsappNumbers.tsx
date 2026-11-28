@@ -21,6 +21,7 @@ import {
 import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import { useConfirm } from "./useConfirm";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const ENDPOINT = "/api/admin/whatsapp-numbers";
 const PHONE_HINT = "Nomor Indonesia, contoh 081234567890.";
@@ -148,9 +149,9 @@ export default function WhatsappNumbers() {
   }
   if (!rows) {
     return (
-      <div role="status" aria-busy="true" className="h-64 animate-pulse rounded-xl bg-slate-100">
+      <Skeleton role="status" aria-busy="true" className="h-64 rounded-xl">
         <span className="sr-only">Memuat nomor WhatsApp.</span>
-      </div>
+      </Skeleton>
     );
   }
 

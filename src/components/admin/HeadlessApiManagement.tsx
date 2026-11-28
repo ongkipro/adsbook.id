@@ -14,6 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ApiKeyScope } from "@/lib/developer-api-keys";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type HeadlessScope = ApiKeyScope;
 
@@ -298,9 +300,9 @@ export function HeadlessApiManagement() {
         <CardContent>
           {loading ? (
             <div className="space-y-3" role="status" aria-label="Memuat API key">
-              <div className="h-11 animate-pulse rounded-lg bg-slate-100" />
-              <div className="h-11 animate-pulse rounded-lg bg-slate-100" />
-              <div className="h-11 animate-pulse rounded-lg bg-slate-100" />
+              <Skeleton className="h-11 rounded-lg" />
+              <Skeleton className="h-11 rounded-lg" />
+              <Skeleton className="h-11 rounded-lg" />
             </div>
           ) : keys.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
@@ -353,11 +355,9 @@ export function HeadlessApiManagement() {
                           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                             {SCOPE_OPTIONS.map((scope) => (
                               <label key={scope.value} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700">
-                                <input
-                                  type="checkbox"
+                                <Checkbox
                                   checked={draftScopes.includes(scope.value)}
-                                  onChange={() => toggleScope(scope.value, draftScopes, setDraftScopes)}
-                                  className="size-4"
+                                  onCheckedChange={() => toggleScope(scope.value, draftScopes, setDraftScopes)}
                                 />
                                 {scope.label}
                               </label>
@@ -479,11 +479,9 @@ export function HeadlessApiManagement() {
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
                 {SCOPE_OPTIONS.map((scope) => (
                   <label key={scope.value} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={scopes.includes(scope.value)}
-                      onChange={() => toggleScope(scope.value, scopes, setScopes)}
-                      className="size-4"
+                      onCheckedChange={() => toggleScope(scope.value, scopes, setScopes)}
                     />
                     {scope.label}
                   </label>

@@ -668,7 +668,7 @@ export function ProductCatalog({
                 setStatusFilter("all");
                 setCategoryFilter("all");
               }}
-              className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
+              className={buttonVariants({ variant: "link", size: "xs", className: "px-0" })}
             >
               Reset filter
             </button>
@@ -912,13 +912,14 @@ export function ProductCatalog({
                               "Product / Content ID",
                             )
                           }
-                          className="group inline-flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-slate-100 transition-colors text-left"
+                          className={buttonVariants({ variant: "ghost", size: "sm", className: "group -ml-2 font-normal" })}
                           title="Klik untuk menyalin Content ID"
+                          aria-label={`Salin Content ID ${catalogProductIdOrNull(product.id) ?? product.id}`}
                         >
                           <span className="font-mono text-xs font-semibold text-slate-700 group-hover:text-slate-950">
                             {catalogProductIdOrNull(product.id) ?? "—"}
                           </span>
-                          <Copy className="size-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <Copy className="text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden="true" />
                         </button>
                       </TableCell>
 

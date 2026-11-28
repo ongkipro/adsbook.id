@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type State = "preview" | "subscribed" | "grace" | "expired";
 type Cycle = { code: "1m" | "3m" | "6m" | "12m"; days: number; amount: number; label: string };
@@ -183,7 +184,7 @@ export function BillingManager() {
     );
   }
   if (!billing) {
-    return <div className="h-40 animate-pulse rounded-xl border border-slate-200 bg-white" aria-busy="true" aria-label="Memuat langganan" />;
+    return <Skeleton className="h-40 rounded-xl border border-slate-200" role="status" aria-busy="true" aria-label="Memuat langganan" />;
   }
 
   if (billing.demo) {
@@ -233,7 +234,7 @@ export function BillingManager() {
                 </div>
               )}
               {open.paymentUrl && !open.qr && !open.virtualAccount && (
-                <a className="btn-primary inline-block" href={open.paymentUrl} target="_blank" rel="noopener noreferrer">Buka halaman pembayaran</a>
+                <a className={buttonVariants()} href={open.paymentUrl} target="_blank" rel="noopener noreferrer">Buka halaman pembayaran</a>
               )}
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
                 <dt className="text-slate-600">Paket</dt>

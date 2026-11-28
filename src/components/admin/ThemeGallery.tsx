@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type ThemeState = { active: string; custom: boolean; accent: string };
 
@@ -105,8 +106,8 @@ export function ThemeGallery() {
   if (!state) {
     return (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2" role="status" aria-busy="true">
-        <div className="h-80 animate-pulse rounded-xl bg-slate-100" />
-        <div className="h-80 animate-pulse rounded-xl bg-slate-100" />
+        <Skeleton className="h-80 rounded-xl" />
+        <Skeleton className="h-80 rounded-xl" />
         <span className="sr-only">Memuat tema.</span>
       </div>
     );

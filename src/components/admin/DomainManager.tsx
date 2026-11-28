@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirm } from "./useConfirm";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Domain = {
   host: string;
@@ -163,9 +164,9 @@ export function DomainManager({ initial }: { initial?: { domains: Domain[]; enab
   }
   if (!domains) {
     return (
-      <div className="h-40 animate-pulse rounded-xl bg-slate-100" role="status" aria-busy="true">
+      <Skeleton className="h-40 rounded-xl" role="status" aria-busy="true">
         <span className="sr-only">Memuat domain.</span>
-      </div>
+      </Skeleton>
     );
   }
 

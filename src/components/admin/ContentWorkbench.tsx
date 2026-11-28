@@ -4,6 +4,8 @@ import { processImageUpload } from "../../lib/client-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 const pretty = (value: unknown) => JSON.stringify(value ?? {}, null, 2);
 
@@ -277,11 +279,12 @@ export function ContentWorkbench() {
           )}
           <label className="grid-cols-1 grid gap-2 text-xs font-semibold text-slate-700">
             Draft JSON
-            <textarea
+            <Textarea
+              data-code-editor
               value={editor}
               onChange={(event) => setEditor(event.target.value)}
               spellCheck={false}
-              className="admin-input-flat min-h-[30rem] resize-y bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100"
+              className="min-h-[30rem] resize-y bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100"
             />
           </label>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -331,7 +334,7 @@ export function ContentWorkbench() {
             </form>
             {mediaUrl && (
               <div className="space-y-2">
-                <input readOnly value={mediaUrl} className="admin-input-flat bg-slate-50 font-mono text-xs" />
+                <Input readOnly value={mediaUrl} aria-label="URL media" className="font-mono" />
                 <Button
                   type="button"
                   variant="secondary"
@@ -356,7 +359,7 @@ export function ContentWorkbench() {
               <p className="text-xs font-semibold text-slate-600">
                 Status: {index.instructionsConfigured ? "sudah dikonfigurasi" : "menggunakan guardrail repository"}
               </p>
-              <textarea
+              <Textarea
                 value={instructions}
                 onChange={(event) => setInstructions(event.target.value)}
                 minLength={20}
@@ -364,7 +367,7 @@ export function ContentWorkbench() {
                 rows={8}
                 placeholder="Tambahkan tone, istilah, dan batas klaim khusus tenant..."
                 aria-label="Instruksi konten tambahan"
-                className="admin-input-flat resize-y bg-white text-sm"
+                className="resize-y"
               />
               <Button
                 type="button"

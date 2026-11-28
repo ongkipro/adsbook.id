@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
 import { ImagePlus, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
+import { Button, buttonVariants } from "../ui/button";
 import { Input } from "../ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "../ui/input-group";
 import { Textarea } from "../ui/textarea";
@@ -11,6 +11,7 @@ import { catalogProductIdOrNull } from "../../lib/catalog-feed";
 import { formatKg } from "../../lib/weight";
 import { processImageUpload, uploadProcessedImage } from "../../lib/client-image";
 import { RadioGroup, RadioGroupOption, RADIO_SEGMENT_TRACK } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
 type Variant = {
   key: string;
   id?: number | string;
@@ -363,11 +364,9 @@ export function ProductForm({
 
   if (loading)
     return (
-      <div
-        className="h-96 animate-pulse rounded-xl bg-slate-100"
+      <Skeleton className="h-96 rounded-xl"
         aria-label="Memuat formulir produk"
-        aria-busy="true"
-      />
+        role="status" aria-busy="true" />
     );
   if (loadError)
     return (
@@ -379,10 +378,7 @@ export function ProductForm({
           Produk gagal dimuat
         </h2>
         <p className="mt-2 text-sm text-slate-600">{loadError}</p>
-        <a
-          href="/admin/products"
-          className="btn-primary mt-5 bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-700"
-        >
+        <a href="/admin/products" className={buttonVariants({ className: "mt-5" })}>
           Kembali ke katalog
         </a>
       </section>
@@ -747,7 +743,7 @@ export function ProductForm({
                 ID varian dibuat otomatis saat disimpan; atur nama, SKU, harga, dan berat.
               </p>
             </div>
-            <button
+            <Button
               type="button"
               onClick={() =>
                 setVariants((current) => [
@@ -755,10 +751,10 @@ export function ProductForm({
                   emptyVariant(`new-${nextVariantKey.current++}`),
                 ])
               }
-              className="btn-secondary"
+              variant="outline"
             >
               Tambah varian
-            </button>
+            </Button>
           </div>
           <div className={`p-5 ${digital ? "space-y-6" : "space-y-4"}`}>
             {variants.map((variant, index) => (
@@ -1003,17 +999,11 @@ export function ProductForm({
               Product ID menjadi <code>content_id</code> untuk tracking Meta
               dan Google.
             </p>
-            <button
-              type="submit"
-              disabled={saving || uploading}
-              className="btn-primary mt-6 w-full bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-700"
-            >
+            {/* The primary accent, as every other save in the admin (it was a one-off emerald). */}
+            <Button type="submit" disabled={saving || uploading} className="mt-6 w-full">
               {saving ? "Menyimpan…" : "Simpan Produk"}
-            </button>
-            <a
-              href="/admin/products"
-              className="btn-secondary mt-2 w-full"
-            >
+            </Button>
+            <a href="/admin/products" className={buttonVariants({ variant: "outline", className: "mt-2 w-full" })}>
               Batal
             </a>
             <p
