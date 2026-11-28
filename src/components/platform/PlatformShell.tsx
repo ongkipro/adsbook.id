@@ -271,7 +271,7 @@ export function PlatformShell({
             <div className="overflow-y-auto overscroll-contain px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
               {groups.map((group) => (
                 <section key={group.label} className="mb-3">
-                  <h2 className="px-2 pb-1.5 text-xs font-medium uppercase tracking-wider text-slate-400">{group.label}</h2>
+                  <h2 className="px-2 pb-1.5 text-xs font-medium uppercase tracking-wider text-slate-500">{group.label}</h2>
                   <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                     {group.items.map((item) => {
                       const isActive = active === item.id;

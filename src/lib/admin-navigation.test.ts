@@ -4,6 +4,7 @@ import {
   getSearchableNavItems,
   getVisibleNavGroups,
   isAdminNavHrefActive,
+  mobilePrimaryNavIds,
 } from "../components/admin/admin-navigation.ts";
 import { ADMIN_ROLES, canAccessAdminRoute } from "./auth.ts";
 import { SETTINGS_GROUPS, SETTINGS_INDEX, visibleSettingsGroups } from "../components/admin/settings-sections.ts";
@@ -217,4 +218,18 @@ test("Pesanan's submenu follows the catalog mode: hybrid splits by kind, a singl
   assert.ok(!getSearchableNavItems("owner", "physical").some((item) => item.href === "/admin/orders/digital"));
   assert.equal(canAccessAdminRoute("customer_service", "/admin/orders/digital"), true);
   assert.equal(canAccessAdminRoute("advertiser", "/admin/orders/digital"), false);
+});
+
+test("every role's phone bottom bar names four items its menu actually has", () => {
+  for (const mode of ["physical", "digital", "hybrid"] as const) {
+    for (const role of ADMIN_ROLES) {
+      const ids = mobilePrimaryNavIds(role, mode);
+      const visible = new Set(getVisibleNavGroups(role, mode).flatMap((group) => group.items.map((item) => item.id)));
+      for (const id of ids) assert.ok(visible.has(id), `${mode} ${role}: bottom bar item "${id}" is in the menu`);
+      // Four tabs before Menu wherever the role's menu has four items to offer.
+      assert.equal(ids.length, Math.min(4, visible.size), `${mode} ${role}: ${ids.join(", ")}`);
+    }
+  }
+  assert.deepEqual([...mobilePrimaryNavIds("owner", "digital")], ["dashboard", "orders", "products", "payments"]);
+  assert.deepEqual([...mobilePrimaryNavIds("advertiser")], ["dashboard", "products", "analytics", "ads"]);
 });

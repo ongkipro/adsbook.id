@@ -37,8 +37,6 @@ export default defineConfig({
         'tailwind-merge',
         'cmdk',
         'sonner',
-        'next-themes',
-        'radix-ui',
         '@base-ui/react',
         '@base-ui/react/button',
         '@base-ui/react/collapsible',

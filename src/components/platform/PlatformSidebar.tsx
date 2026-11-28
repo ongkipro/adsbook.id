@@ -40,10 +40,10 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 pb-20 group-data-[collapsible=icon]:pb-20">
+      <SidebarContent className="px-2 pb-3">
         {groups.map((group) => (
           <SidebarGroup key={group.label} className="py-1">
-            <SidebarGroupLabel className="mb-0.5 h-6 px-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-400">{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel className="mb-0.5 h-6 px-2 text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">{group.label}</SidebarGroupLabel>
             <SidebarMenu>
               {group.items.map((item) => {
                 const isActive = active === item.id;
@@ -65,15 +65,16 @@ export function PlatformSidebar({ active, role }: { active: PlatformMenu; role: 
           </SidebarGroup>
         ))}
       </SidebarContent>
-      {/* Before the first paint: the menu stays where the operator left it (src/lib/sidebar-scroll.ts). */}
-      <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCROLL_RESTORE }} />
-
-      <SidebarFooter className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-2 *:pointer-events-auto">
-        <div className="flex items-center justify-between gap-2.5 rounded-xl border border-white/70 bg-white/55 px-2.5 py-2 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/5 backdrop-blur-md backdrop-saturate-150 group-data-[collapsible=icon]:hidden">
+      {/* In flow, as the seller admin's (AppSidebar): it never covers the last menu item on a short screen. */}
+      <SidebarFooter className="shrink-0 border-t border-slate-200/70 p-2 group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center justify-between gap-2.5 px-2.5 py-1.5 group-data-[collapsible=icon]:hidden">
           <img src={BRAND_WORDMARK} alt="adsbook.id" width="94" height="15" className="h-[15px] w-auto shrink-0" />
           <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-mono text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/15">v{CMS_VERSION.version}</span>
         </div>
       </SidebarFooter>
+      {/* Before the first paint, after the footer is in the DOM, so the menu's
+          clientHeight is the clear height above it (as AppSidebar; src/lib/sidebar-scroll.ts). */}
+      <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCROLL_RESTORE }} />
     </Sidebar>
   );
 }

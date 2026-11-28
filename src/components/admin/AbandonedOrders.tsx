@@ -65,6 +65,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { DistrictCombobox, type DistrictOption } from "@/components/admin/DistrictCombobox";
+import { AdminRequestError, isSubscriptionError, SubscriptionLink } from "@/components/admin/subscription-error";
 
 type FollowUpStatus = "new" | "contacted" | "qualified" | "not_interested";
 type LeadKind = "all" | "physical" | "digital";
@@ -170,7 +171,7 @@ function normalizeLead(row: Record<string, unknown>): Lead {
 async function readJson(response: Response) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.success === false) {
-    throw new Error(payload.error || "Permintaan gagal diproses.");
+    throw new AdminRequestError(payload.error || "Permintaan gagal diproses.", payload.code);
   }
   return payload;
 }
@@ -299,6 +300,8 @@ function ConversionDialog({
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // The store is not live: converting a lead is a buyer order (ADR-041).
+  const [needsSubscription, setNeedsSubscription] = useState(false);
   const [fieldError, setFieldError] = useState<{ id: string; message: string } | null>(null);
   // The combobox shows labels; the order needs the full row behind one.
   const locationRows = useRef(new Map<string, LocationOption>());
@@ -333,6 +336,7 @@ function ConversionDialog({
   useEffect(() => {
     if (!lead) return;
     setError("");
+    setNeedsSubscription(false);
     setFieldError(null);
     setRates([]);
     setPaymentCode("");
@@ -402,6 +406,8 @@ function ConversionDialog({
       .catch((reason) => {
         if (!(reason instanceof Error && reason.name === "AbortError")) {
           setRates([]);
+          // A store that is not live gets no shipping quote either (402): the link to Langganan belongs here too.
+          setNeedsSubscription(isSubscriptionError(reason));
           setError(reason instanceof Error ? reason.message : "Ongkir gagal dimuat.");
         }
       })
@@ -483,6 +489,7 @@ function ConversionDialog({
       onClose(String(response.data?.order_number || response.order_number || ""));
     } catch (reason) {
       setFieldError(null);
+      setNeedsSubscription(isSubscriptionError(reason));
       setError(reason instanceof Error ? reason.message : "Lead gagal diubah menjadi order.");
       window.requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
@@ -505,7 +512,7 @@ function ConversionDialog({
         <form onSubmit={submit} noValidate className="space-y-5 px-5 pb-5">
           {error && (
             <div ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              {error}
+              {error}{needsSubscription && <> <SubscriptionLink /></>}
             </div>
           )}
           <section aria-labelledby="lead-buyer-heading" className="space-y-3">

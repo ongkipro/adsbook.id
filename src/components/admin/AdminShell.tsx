@@ -41,6 +41,7 @@ import {
   isAdminNavHrefActive,
   profileNavItem,
   type AdminRole,
+  mobilePrimaryNavIds,
 } from "./admin-navigation";
 
 interface AdminShellProps {
@@ -127,12 +128,7 @@ export function AdminShell({
   const docsHref = !mustChangePassword && (adminRole === "owner" || adminRole === "admin") ? "/admin/docs" : undefined;
   const searchItems = mustChangePassword ? [] : getSearchableNavItems(adminRole, catalogMode);
   const allItems = groups.flatMap((group) => group.items);
-  const mobilePrimaryIds = adminRole === "advertiser"
-    ? ["dashboard", "products", "content", "ads"]
-    : adminRole === "customer_service"
-      ? ["dashboard", "orders", "shipping", "scoring"]
-      : ["dashboard", "orders", "shipping", "products"];
-  const mobilePrimary = (mustChangePassword ? ["profile"] : mobilePrimaryIds)
+  const mobilePrimary = (mustChangePassword ? ["profile"] : mobilePrimaryNavIds(adminRole, catalogMode))
     .map((id) => [...allItems, profileNavItem].find((item) => item.id === id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
   const menuIsActive = !mobilePrimary.some((item) => item.id === activeMenu);
